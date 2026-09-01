@@ -1,7 +1,7 @@
 # RFF Super
 
 > **IMPORTANT NOTE:**
-> **This is an improved and extended version of the original [RFF-2.0](https://github.com/Merutilm/RFF-2.0) by Merutilm — a modified version of it, changed from 2026-07-05 onward. The changes are listed in [CHANGELOG.md](CHANGELOG.md), and each changed source file carries its own modification notice and date.**
+> **This is an improved and extended version of the original [RFF-2.0](https://github.com/Merutilm/RFF-2.0) by Merutilm — a modified version of it, changed from 2026-07-05 onward. Each changed source file carries its own modification notice and date.**
 > This project was developed using vibe coding. As I am not a mathematics major or a highly experienced programmer, there may be imperfections.
 >
 > The precision of the Mandelbrot set calculations may be lower than that of the original version.
@@ -18,10 +18,6 @@ direction, so "better" depends on what you are doing:
 | **Best for** | Reliable everyday exploration | Producing the most beautiful stills and videos |
 | **Strengths** | Simpler and easier to use; latest, faster, and stable releases; highest calculation precision | Custom formulas, extra shader types, palette settings, free rotation, presets |
 | **Trade-offs** || More settings to learn; precision may be lower than the original; more bugs |
-
-## Update History
-
-See **[CHANGELOG.md](CHANGELOG.md)** for the full update history.
 
 ## Building from Source
 
