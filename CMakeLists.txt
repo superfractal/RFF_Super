@@ -1,182 +1,376 @@
-cmake_minimum_required(VERSION 3.30)
+cmake_minimum_required(VERSION 3.31)
 project(RFF)
-
-
-if (WIN32)
-    if (DEFINED ENV{MSYS2_ROOT})
-        set(CLANG64_DIRS "$ENV{MSYS2_ROOT}/clang64")
-        set(CLANG64_LIBS "${CLANG64_DIRS}/lib")
-    else()
-        message(FATAL_ERROR "Environment Variable of MSYS2 is not set")
-    endif ()
-endif ()
-
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-set(CMAKE_BUILD_RPATH "$ORIGIN")
+
+
 
 add_executable(
         RFF
-        extern/imgui/misc/cpp/imgui_stdlib.cpp
-        src/rff2/app/Main.cpp
+        res/resources.rc
+        src/rff2/ui/Main.cpp
+        src/rff2/calc/fp_complex_calculator.cpp
+        src/rff2/calc/fp_complex_calculator.h
+        src/rff2/constants/Constants.hpp
+        src/rff2/attr/Attribute.h
+        src/rff2/attr/FractalAttribute.h
+        src/rff2/attr/RenderAttribute.h
+        src/rff2/attr/ShaderAttribute.h
+        src/rff2/attr/ShdSlopeAttribute.h
+        src/rff2/attr/ShdStripeAttribute.h
+        src/rff2/attr/ShdColorAttribute.h
+        src/rff2/attr/ShdPaletteAttribute.h
+        src/rff2/attr/ShdFogAttribute.h
+        src/rff2/attr/VideoAttribute.h
+        src/rff2/attr/ShdBloomAttribute.h
+        src/rff2/attr/VidDataAttribute.h
+        src/rff2/attr/VidExportAttribute.h
+        src/rff2/attr/FrtMPAAttribute.h
+        src/rff2/calc/fp_complex.cpp
+        src/rff2/calc/fp_complex.h
+        src/rff2/attr/FrtDecimalizeIterationMethod.h
+        src/rff2/attr/FrtReferenceCompAttribute.h
+        src/rff2/attr/FrtReuseReferenceMethod.h
+        src/rff2/attr/Selectable.h
+        src/rff2/calc/fp_decimal_calculator.cpp
+        src/rff2/calc/fp_decimal_calculator.h
+        src/rff2/calc/fp_decimal.cpp
+        src/rff2/calc/fp_decimal.h
+        src/rff2/formula/Perturbator.h
         src/rff2/io/RFFDynamicMapBinary.cpp
+        src/rff2/io/RFFDynamicMapBinary.h
+        src/rff2/data/Matrix.h
+        src/rff2/attr/ShdPalColorSmoothingMethod.h
+        src/rff2/data/ColorUtils.h
+        src/rff2/attr/ShdStripeType.h
+        src/rff2/attr/VidAnimationAttribute.h
+        src/rff2/formula/LightMandelbrotReference.cpp
+        src/rff2/formula/LightMandelbrotReference.h
         src/rff2/parallel/ParallelRenderState.cpp
+        src/rff2/parallel/ParallelRenderState.h
+        src/rff2/calc/rff_math.h
+        src/rff2/mrthy/ArrayCompressionTool.h
+        src/rff2/mrthy/ArrayCompressor.h
+        src/rff2/parallel/ParallelArrayDispatcher.h
+        src/rff2/ui/Utilities.h
+        src/rff2/formula/LightMandelbrotPerturbator.cpp
+        src/rff2/formula/LightMandelbrotPerturbator.h
+        src/rff2/mrthy/LightPA.h
+        src/rff2/mrthy/LightMPATable.h
         src/rff2/mrthy/MPAPeriod.cpp
-        src/rff2/app/FnFile.cpp
-        src/rff2/app/FnFractal.cpp
-        src/rff2/app/FnRender.cpp
-        src/rff2/app/FnShader.cpp
-        src/rff2/mb/MB2Locator.cpp
-        src/rff2/app/FnExplore.cpp
+        src/rff2/mrthy/MPAPeriod.h
+        src/rff2/ui/SettingsWindow.cpp
+        src/rff2/ui/SettingsWindow.hpp
+        src/rff2/ui/SettingsMenu.cpp
+        src/rff2/ui/SettingsMenu.hpp
+        src/rff2/ui/CallbackFile.cpp
+        src/rff2/ui/CallbackFile.hpp
+        src/rff2/ui/CallbackFractal.cpp
+        src/rff2/ui/CallbackFractal.hpp
+        src/rff2/ui/CallbackRender.cpp
+        src/rff2/ui/CallbackRender.hpp
+        src/rff2/ui/CallbackShader.cpp
+        src/rff2/ui/CallbackShader.hpp
+        src/rff2/locator/MandelbrotLocator.cpp
+        src/rff2/locator/MandelbrotLocator.h
+        src/rff2/ui/CallbackExplore.cpp
+        src/rff2/ui/CallbackExplore.hpp
+        src/rff2/calc/dex.h
+        src/rff2/formula/DeepMandelbrotReference.cpp
+        src/rff2/formula/DeepMandelbrotReference.h
+        src/rff2/formula/MandelbrotReference.h
+        src/rff2/calc/dex_std.h
+        src/rff2/calc/double_exp_math.h
+        src/rff2/formula/DeepMandelbrotPerturbator.cpp
+        src/rff2/formula/DeepMandelbrotPerturbator.h
+        src/rff2/formula/MandelbrotPerturbator.h
+        src/rff2/mrthy/DeepPA.h
+        src/rff2/mrthy/DeepMPATable.h
+        src/rff2/mrthy/MPATable.h
+        src/rff2/mrthy/PA.h
+        src/rff2/ui/Callback.hpp
+        src/rff2/mrthy/PAGenerator.h
+        src/rff2/mrthy/LightPAGenerator.cpp
+        src/rff2/mrthy/LightPAGenerator.h
+        src/rff2/mrthy/DeepPAGenerator.cpp
+        src/rff2/mrthy/DeepPAGenerator.h
+        src/rff2/data/ApproxTableCache.h
+        src/rff2/preset/shader/palette/ShdPalettePresets.h
+        src/rff2/preset/shader/color/ShdColorPresets.h
+        src/rff2/preset/shader/bloom/ShdBloomPresets.h
+        src/rff2/preset/shader/fog/ShdFogPresets.h
+        src/rff2/preset/shader/slope/ShdSlopePresets.h
+        src/rff2/preset/shader/stripe/ShdStripePresets.h
         src/rff2/preset/shader/palette/ShdPalettePresets.cpp
         src/rff2/preset/shader/fog/ShdFogPresets.cpp
         src/rff2/preset/shader/color/ShdColorPresets.cpp
         src/rff2/preset/shader/slope/ShdSlopePresets.cpp
         src/rff2/preset/shader/stripe/ShdStripePresets.cpp
         src/rff2/preset/shader/bloom/ShdBloomPresets.cpp
+        src/rff2/preset/Presets.h
         src/rff2/preset/resolution/ResolutionPresets.cpp
+        src/rff2/preset/resolution/ResolutionPresets.h
         src/rff2/preset/render/RenderPresets.cpp
+        src/rff2/preset/render/RenderPresets.h
         src/rff2/preset/calc/CalculationPresets.cpp
-        src/rff2/app/FnVideo.cpp
-        src/rff2/app/IOUtilities.cpp
+        src/rff2/preset/calc/CalculationPresets.h
+        src/rff2/ui/CallbackVideo.cpp
+        src/rff2/ui/CallbackVideo.hpp
+        src/rff2/ui/IOUtilities.cpp
+        src/rff2/ui/IOUtilities.h
+        src/rff2/parallel/BackgroundThreads.h
+        src/rff2/parallel/BackgroundThread.h
         src/rff2/io/RFFStaticMapBinary.cpp
+        src/rff2/io/RFFStaticMapBinary.h
         src/rff2/io/RFFBinary.cpp
+        src/rff2/io/RFFBinary.h
         src/rff2/io/RFFLocationBinary.cpp
+        src/rff2/io/RFFLocationBinary.h
         src/rff2/io/KFRColorLoader.cpp
+        src/rff2/io/KFRColorLoader.hpp
         extern/stb_image.c
+        extern/stb_image.h
+        src/vulkan_helper/handle/Handler.hpp
+        src/vulkan_helper/impl/GraphicsContextWindow.cpp
+        src/vulkan_helper/impl/GraphicsContextWindow.hpp
+        src/vulkan_helper/impl/ValidationLayer.cpp
+        src/vulkan_helper/impl/ValidationLayer.hpp
+        src/vulkan_helper/core/exception.hpp
+        src/vulkan_helper/impl/Instance.cpp
+        src/vulkan_helper/impl/Instance.hpp
+        src/vulkan_helper/impl/Surface.cpp
+        src/vulkan_helper/impl/Surface.hpp
+        src/vulkan_helper/impl/PhysicalDeviceLoader.cpp
+        src/vulkan_helper/impl/PhysicalDeviceLoader.hpp
+        src/vulkan_helper/struct/QueueFamilyIndices.hpp
+        src/vulkan_helper/impl/LogicalDevice.cpp
+        src/vulkan_helper/impl/LogicalDevice.hpp
+        src/vulkan_helper/struct/StringHasher.hpp
+        src/vulkan_helper/impl/Swapchain.cpp
+        src/vulkan_helper/impl/Swapchain.hpp
+        src/vulkan_helper/impl/CommandPool.cpp
+        src/vulkan_helper/impl/CommandPool.hpp
+        src/vulkan_helper/impl/CommandBuffer.cpp
+        src/vulkan_helper/impl/CommandBuffer.hpp
+        src/vulkan_helper/impl/Descriptor.cpp
+        src/vulkan_helper/impl/Descriptor.hpp
+        src/vulkan_helper/manage/HostDataObjectManager.hpp
+        src/vulkan_helper/impl/BufferObject.cpp
+        src/vulkan_helper/impl/BufferObject.hpp
+        src/vulkan_helper/util/BufferImageUtils.hpp
+        src/vulkan_helper/manage/DescriptorManager.hpp
+        src/vulkan_helper/impl/Pipeline.hpp
+        src/vulkan_helper/impl/RenderPass.cpp
+        src/vulkan_helper/impl/RenderPass.hpp
+        src/vulkan_helper/manage/PipelineManager.hpp
+        src/vulkan_helper/impl/DescriptorSetLayout.hpp
+        src/vulkan_helper/struct/DescriptorSetLayoutBuildType.hpp
+        src/vulkan_helper/impl/PipelineLayout.hpp
+        src/vulkan_helper/impl/DescriptorSetLayout.cpp
+        src/vulkan_helper/impl/PipelineLayout.cpp
+        src/vulkan_helper/impl/PushConstant.hpp
+        src/vulkan_helper/impl/ShaderModule.hpp
+        src/vulkan_helper/impl/ShaderModule.cpp
+        src/vulkan_helper/manage/RenderPassManager.hpp
+        src/vulkan_helper/struct/RenderPassAttachmentType.hpp
+        src/vulkan_helper/impl/Core.cpp
+        src/vulkan_helper/impl/Core.hpp
+        src/vulkan_helper/handle/CoreHandler.hpp
+        src/vulkan_helper/impl/Framebuffer.cpp
+        src/vulkan_helper/impl/Framebuffer.hpp
+        src/vulkan_helper/struct/RenderPassAttachment.hpp
+        src/vulkan_helper/struct/ImageInitInfo.hpp
+        src/vulkan_helper/impl/SyncObject.cpp
+        src/vulkan_helper/impl/SyncObject.hpp
+        src/vulkan_helper/executor/RenderPassFullscreenRecorder.cpp
+        src/vulkan_helper/executor/RenderPassFullscreenRecorder.hpp
+        src/vulkan_helper/struct/Vertex.hpp
+        src/vulkan_helper/impl/VertexBuffer.cpp
+        src/vulkan_helper/impl/VertexBuffer.hpp
+        src/vulkan_helper/impl/HostDataObject.hpp
+        src/vulkan_helper/impl/Uniform.cpp
+        src/vulkan_helper/impl/Uniform.hpp
+        src/vulkan_helper/repo/GlobalShaderModuleRepo.hpp
+        src/vulkan_helper/context/WindowContext.hpp
+        src/vulkan_helper/context/RenderContext.hpp
+        src/vulkan_helper/hash/VectorHasher.hpp
+        src/vulkan_helper/hash/PointerDerefEquals.hpp
+        src/vulkan_helper/repo/Repository.hpp
+        src/vulkan_helper/repo/Repositories.hpp
+        src/vulkan_helper/repo/RepoAbstract.hpp
+        src/vulkan_helper/manage/PipelineLayoutManager.hpp
+        src/vulkan_helper/hash/BoostHasher.hpp
+        src/vulkan_helper/repo/GlobalPipelineLayoutRepo.hpp
+        src/vulkan_helper/impl/IndexBuffer.cpp
+        src/vulkan_helper/impl/IndexBuffer.hpp
+        src/vulkan_helper/impl/CombinedImageSampler.cpp
+        src/vulkan_helper/impl/CombinedImageSampler.hpp
+        src/vulkan_helper/configurator/GeneralGraphicsPipelineConfigurator.cpp
+        src/vulkan_helper/configurator/GeneralGraphicsPipelineConfigurator.hpp
+        src/vulkan_helper/repo/WindowLocalDescriptorRepo.hpp
+        src/vulkan_helper/struct/DescriptorTemplateInfo.hpp
+        src/rff2/vulkan/SharedDescriptorTemplate.hpp
+        src/vulkan_helper/impl/Engine.cpp
+        src/vulkan_helper/impl/Engine.hpp
+        src/vulkan_helper/executor/ScopedNewCommandBufferExecutor.cpp
+        src/vulkan_helper/executor/ScopedNewCommandBufferExecutor.hpp
+        src/vulkan_helper/struct/PushConstantReserve.hpp
+        src/vulkan_helper/configurator/RenderContextConfigurator.hpp
+        src/rff2/vulkan/RCC1.hpp
+        src/vulkan_helper/hash/DescriptorSetLayoutBuildTypeHasher.hpp
+        src/vulkan_helper/context/ImageContext.hpp
+        src/vulkan_helper/util/SwapchainUtils.hpp
         src/rff2/vulkan/GPCIterationPalette.cpp
-        src/rff2/app/RFF2.cpp
-        src/rff2/vulkan/CPCIterate.cpp
+        src/rff2/vulkan/GPCIterationPalette.hpp
+        src/vulkan_helper/context/DescriptorUpdateContext.hpp
+        src/vulkan_helper/core/safe_array.hpp
+        src/vulkan_helper/util/BufferImageContextUtils.hpp
+        src/vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.cpp
+        src/vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp
+        src/rff2/ui/RenderScene.cpp
+        src/rff2/ui/RenderScene.hpp
+        src/rff2/ui/Application.cpp
+        src/rff2/ui/Application.hpp
+        src/rff2/constants/Win32Constants.hpp
+        src/rff2/constants/FractalConstants.hpp
+        src/rff2/constants/NumConstants.hpp
+        src/rff2/constants/NullConstants.hpp
+        src/rff2/constants/VideoConstants.hpp
+        src/rff2/constants/ExtensionConstants.hpp
+        src/rff2/constants/StatusConstants.hpp
+        src/vulkan_helper/configurator/GraphicsPipelineConfigurator.hpp
+        src/rff2/constants/VulkanWindowConstants.hpp
+        src/vulkan_helper/struct/DescriptorTemplate.hpp
+        src/vulkan_helper/impl/Sampler.cpp
+        src/vulkan_helper/impl/Sampler.hpp
+        src/vulkan_helper/repo/GlobalSamplerRepo.hpp
+        src/vulkan_helper/hash/SamplerCreateInfoHasher.hpp
+        src/vulkan_helper/hash/SamplerCreateInfoEquals.hpp
+        src/vulkan_helper/impl/ShaderStorage.cpp
+        src/vulkan_helper/impl/ShaderStorage.hpp
+        src/vulkan_helper/struct/BufferLock.hpp
+        src/vulkan_helper/core/logger.hpp
+        src/vulkan_helper/util/DescriptorUpdater.hpp
         src/rff2/vulkan/GPCStripe.cpp
+        src/rff2/vulkan/GPCStripe.hpp
         src/rff2/vulkan/GPCSlope.cpp
+        src/rff2/vulkan/GPCSlope.hpp
         src/rff2/vulkan/GPCColor.cpp
+        src/rff2/vulkan/GPCColor.hpp
         src/rff2/vulkan/GPCFog.cpp
+        src/rff2/vulkan/GPCFog.hpp
         src/rff2/vulkan/GPCDownsampleForBlur.cpp
+        src/rff2/vulkan/GPCDownsampleForBlur.hpp
         src/rff2/vulkan/GPCBloomThreshold.cpp
+        src/rff2/vulkan/GPCBloomThreshold.hpp
+        src/vulkan_helper/core/Factory.hpp
+        src/vulkan_helper/util/Debugger.hpp
+        src/vulkan_helper/util/PhysicalDeviceUtils.hpp
+        src/vulkan_helper/util/GraphicsContextWindowProc.hpp
+        src/vulkan_helper/impl/ComputeShaderPipeline.cpp
+        src/vulkan_helper/impl/ComputeShaderPipeline.hpp
+        src/vulkan_helper/impl/GraphicsPipeline.cpp
+        src/vulkan_helper/impl/GraphicsPipeline.hpp
+        src/vulkan_helper/configurator/PipelineConfigurator.hpp
+        src/vulkan_helper/executor/ScopedCommandBufferExecutor.cpp
+        src/vulkan_helper/executor/ScopedCommandBufferExecutor.hpp
+        src/vulkan_helper/configurator/ComputePipelineConfigurator.cpp
+        src/vulkan_helper/configurator/ComputePipelineConfigurator.hpp
+        src/vulkan_helper/struct/InputAttachment.hpp
         src/rff2/vulkan/CPCBoxBlur.cpp
+        src/rff2/vulkan/CPCBoxBlur.hpp
+        src/rff2/vulkan/RCCPresent.hpp
+        src/vulkan_helper/core/Config.hpp
+        src/vulkan_helper/impl/Fence.cpp
+        src/vulkan_helper/impl/Fence.hpp
+        src/rff2/vulkan/RCCDownsampleForBlur.hpp
+        src/rff2/vulkan/RCC3.hpp
         src/rff2/vulkan/GPCBloom.cpp
-        src/rff2/vulkan/GPCNoiseReduction.cpp
+        src/rff2/vulkan/GPCBloom.hpp
+        src/rff2/vulkan/RCC4.hpp
+        src/rff2/vulkan/GPCLinearInterpolation.cpp
+        src/rff2/vulkan/GPCLinearInterpolation.hpp
+        src/rff2/vulkan/RCC5.hpp
+        src/vulkan_helper/core/vkh_base.hpp
+        src/vulkan_helper/core/vkh.hpp
+        src/vulkan_helper/core/vkh_core.hpp
+        src/vulkan_helper/hash/PipelineLayoutManagerEquals.hpp
+        src/vulkan_helper/hash/VariantHasher.hpp
+        src/vulkan_helper/impl/Semaphore.cpp
+        src/vulkan_helper/impl/Semaphore.hpp
+        src/vulkan_helper/context/SharedImageContext.hpp
+        src/rff2/vulkan/SharedImageContextIndices.hpp
+        src/vulkan_helper/util/BarrierUtils.hpp
+        src/vulkan_helper/context/BufferContext.hpp
+        src/vulkan_helper/struct/BufferInitInfo.hpp
+        src/rff2/ui/RenderSceneRequests.hpp
+        src/rff2/ui/RenderSceneRenderer.hpp
         src/rff2/vulkan/GPCPresent.cpp
-        src/rff2/app/VideoWindow.cpp
-        src/rff2/app/VideoWindowRenderManager.cpp
+        src/rff2/vulkan/GPCPresent.hpp
+        src/rff2/ui/VideoWindow.cpp
+        src/rff2/ui/VideoWindow.hpp
+        src/rff2/ui/VideoRenderScene.cpp
+        src/rff2/ui/VideoRenderScene.hpp
+        src/rff2/ui/VideoRenderSceneRenderer.hpp
         src/rff2/vulkan/CPC2MapIterationStripe.cpp
+        src/rff2/vulkan/CPC2MapIterationStripe.hpp
+        src/rff2/vulkan/RCC1Vid.hpp
+        src/rff2/vulkan/RCC2Vid.hpp
+        src/rff2/vulkan/RCC3Vid.hpp
+        src/rff2/vulkan/RCC4Vid.hpp
+        src/rff2/vulkan/RCCDownsampleForBlurVid.hpp
+        src/vulkan_helper/context/WindowContext.cpp
+        src/vulkan_helper/impl/Renderer.hpp
+        src/rff2/vulkan/RCC0.hpp
+        src/vulkan_helper/core/allocator.hpp
         src/rff2/vulkan/GPCStaticImage2Map.cpp
+        src/rff2/vulkan/GPCStaticImage2Map.hpp
         src/rff2/vulkan/CPCImageRGBA2BGR.cpp
-        src/rff2/app/FnPreset.cpp
-        src/rff2/vulkan/GPC3DFractal.cpp
-        src/rff2/vulkan/GPCSmoothZoom.cpp
-        src/rff2/vulkan/CPCInterpolateIsolated.cpp
-        src/rff2/vulkan/CPCInterpolateIsolated.hpp
-        include/vulkan_helper/engine/wrapped/DescriptorTemplateManager.hpp
+        src/rff2/vulkan/CPCImageRGBA2BGR.hpp
+        src/rff2/ui/VideoBufferCache.hpp
 )
+
+find_package(Vulkan REQUIRED)
 
 target_compile_options(RFF PRIVATE
         #Debug options
         $<$<CONFIG:Debug>:-O0>
         #Release options
-        $<$<CONFIG:Release>:-O3 -ffast-math -fno-associative-math -funroll-loops -march=native -mllvm -inline-threshold=4000>
+        $<$<CONFIG:Release>:-Ofast -funroll-loops -march=native>
 )
 
-add_subdirectory(src/vulkan_helper)
-
-
-target_link_libraries(RFF PRIVATE
-        # Vulkan Helper
-        vulkan_helper
+target_compile_definitions(RFF
+        PRIVATE
+        VK_USE_PLATFORM_WIN32_KHR
 )
 
 target_include_directories(RFF PRIVATE
+        # standard include
+        ${CMAKE_SOURCE_DIR}/include
         # extern sources
         ${CMAKE_SOURCE_DIR}/extern
-        # clang include dirs
-        ${CMAKE_SOURCE_DIR}/include
-)
-if (WIN32)
-    target_link_libraries(
-            RFF PRIVATE
-            # GMP Linker
-            ${CLANG64_LIBS}/libgmp.a
-            # OpenCV Linkers
-            ${CLANG64_LIBS}/libopencv_core.dll.a
-            ${CLANG64_LIBS}/libopencv_imgcodecs.dll.a
-            ${CLANG64_LIBS}/libopencv_imgproc.dll.a
-            ${CLANG64_LIBS}/libopencv_videoio.dll.a
-            ${CLANG64_LIBS}/libopencv_highgui.dll.a
-    )
-
-
-    target_include_directories(RFF PRIVATE
-            # clang include dirs
-            ${CLANG64_DIRS}/include
-            # opencv4 include dirs
-            ${CLANG64_DIRS}/include/opencv4
-    )
-elseif (APPLE)
-    target_link_libraries(RFF PRIVATE "-framework Cocoa")
-    # TODO non compilable
-elseif (UNIX)
-
-    macro(find_static_library OUT_VAR LIB_NAME)
-        find_library(${OUT_VAR}
-                NAMES lib${LIB_NAME}.a
-                PATHS
-                /usr/local/lib
-                /usr/lib
-                /usr/lib/x86_64-linux-gnu
-                REQUIRED
-        )
-    endmacro()
-
-    find_package(OpenCV REQUIRED)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
-
-
-    find_static_library(GMP_STATIC gmp)
-
-    target_link_directories(RFF PRIVATE ${GTK3_LIBRARY_DIRS})
-    target_compile_options(RFF PRIVATE ${GTK3_CFLAGS_OTHER})
-
-    target_link_libraries(RFF PRIVATE
-            # GMP Linker
-            ${GMP_STATIC}
-            # gtk libraries
-            ${GTK3_LIBRARIES}
-            # OpenCV Linkers
-            ${OpenCV_LIBS}
-    )
-    target_include_directories(RFF PRIVATE
-            # opencv4 include dirs
-            ${OpenCV_INCLUDE_DIRS}
-            # gtk
-            ${GTK3_INCLUDE_DIRS}
-    )
-
-endif ()
-
-macro(RFF_DEFINITION def str flag)
-    option(${def} ${str} ${flag})
-    if (${def})
-        message(STATUS "${def} is Enabled. ${str}")
-        target_compile_definitions(RFF PUBLIC ${def})
-    else ()
-        message(STATUS "${def} is Disabled. Skipping")
-    endif ()
-endmacro()
-
-
-
-include(FetchContent)
-
-FetchContent_Declare(
-        nfd
-        GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
-        GIT_TAG master
+        # vulkan sdk directory
+        ${Vulkan_INCLUDE_DIRS}
 )
 
-FetchContent_MakeAvailable(nfd)
+target_link_directories(RFF PRIVATE ${CMAKE_SOURCE_DIR}/lib)
 
-target_link_libraries(RFF PRIVATE nfd)
+target_link_libraries(RFF PRIVATE
+        # GMP Linker
+        gmp
+        # Win32 Linker
+        comctl32
+        # OpenCV Linkers
+        opencv_core4110
+        opencv_imgcodecs4110
+        opencv_imgproc4110
+        opencv_videoio4110
+        opencv_highgui4110
+        # Vulkan
+        Vulkan::Vulkan
+)
 
-RFF_DEFINITION(SAFE_DEX_OPERATOR "Better Quality, Slower Speed for Deep Zoom" OFF)
+
+add_custom_target(spirv ALL COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/compile.ps1")
+add_dependencies(RFF spirv)

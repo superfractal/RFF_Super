@@ -64,7 +64,7 @@ namespace merutilm::rff2 {
          * @return The index of the given list. returns @code UINT64_MAX()@endcode if the given index is un-rebase-able.
          * @see ArrayCompressor#binarySearch(long, int, int, int) binarySearch
          */
-        static const ArrayCompressionTool * find(const std::vector<ArrayCompressionTool> &tools, uint64_t index);
+        static uint64_t containedIndex(const std::vector<ArrayCompressionTool> &tools, uint64_t index);
 
         /**
          * Gets the compressed index of compressed array.
@@ -81,9 +81,13 @@ namespace merutilm::rff2 {
         *
         * @param tools        The Compression tools
         * @param index        To checking index
+        * @param compIndex    The index of given list
+        * @param indexGap     The index gap
+        * @param lastIndexGap The last index Gap
         * @return The index of the given list. returns @code UINT64_MAX@endcode if the given index is un-rebase-able.
         */
-        static const ArrayCompressionTool * binarySearch(const std::vector<ArrayCompressionTool> &tools, uint64_t index);
+        static uint64_t binarySearch(const std::vector<ArrayCompressionTool> &tools, uint64_t index,
+                                     uint64_t compIndex, uint64_t indexGap, uint64_t lastIndexGap);
     };
 
     // DEFINITION OF ARRAY_COMPRESSOR  DEFINITION OF ARRAY_COMPRESSOR  DEFINITION OF ARRAY_COMPRESSOR  DEFINITION OF ARRAY_COMPRESSOR  DEFINITION OF ARRAY_COMPRESSOR  DEFINITION OF ARRAY_COMPRESSOR
@@ -94,7 +98,7 @@ namespace merutilm::rff2 {
 
 
     inline bool ArrayCompressor::isIndependent(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
-        return find(tools, index) == nullptr;
+        return containedIndex(tools, index) == UINT64_MAX;
     }
 
     inline uint64_t ArrayCompressor::rebase(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
@@ -164,8 +168,8 @@ namespace merutilm::rff2 {
         return compressed;
     }
 
-    inline const ArrayCompressionTool * ArrayCompressor::find(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
-        return binarySearch(tools, index);
+    inline uint64_t ArrayCompressor::containedIndex(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
+        return binarySearch(tools, index, 0, (tools.size() + 1) / 2, tools.size());
     }
 
     inline uint64_t ArrayCompressor::compress(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
@@ -173,30 +177,28 @@ namespace merutilm::rff2 {
         return pull(tools, rebased);
     }
 
-    inline const ArrayCompressionTool * ArrayCompressor::binarySearch(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
-        if (tools.empty() || tools.front().start > index || tools.back().end < index) {
-            return nullptr;
+    inline uint64_t ArrayCompressor::binarySearch(const std::vector<ArrayCompressionTool> &tools, const uint64_t index,
+                                                  const uint64_t compIndex, uint64_t const indexGap,
+                                                  const uint64_t lastIndexGap) {
+        if (compIndex >= tools.size() || tools.front().start > index) {
+            return UINT64_MAX;
         }
 
-        uint64_t min = 0;
-        uint64_t max = tools.size() - 1;
-        const ArrayCompressionTool *result = nullptr;
+        const auto &current = tools[compIndex];
+        const bool requiredSmallerIndex = current.start > index;
+        const bool requiredLargerIndex = current.end < index;
 
-        while (min <= max) {
-            const uint64_t mid = (min + max) / 2;
-            const auto &current = tools[mid];
-
-            if (current.start > index) {
-                if (mid == 0) break;
-                max = mid - 1;
-            }else if (current.end < index) {
-                min = mid + 1;
-            }else {
-                result = &current;
-                break;
-            }
+        if (indexGap == lastIndexGap && (requiredLargerIndex || requiredSmallerIndex)) {
+            return UINT64_MAX;
         }
 
-        return result;
+        if (requiredSmallerIndex) {
+            return binarySearch(tools, index, compIndex - indexGap, (indexGap + 1) / 2, indexGap);
+        }
+        if (requiredLargerIndex) {
+            return binarySearch(tools, index, compIndex + indexGap, (indexGap + 1) / 2, indexGap);
+        }
+
+        return compIndex;
     }
 }

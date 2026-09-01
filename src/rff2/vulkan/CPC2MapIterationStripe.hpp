@@ -3,9 +3,9 @@
 //
 
 #pragma once
-#include <vulkan_helper/engine/configurator/ComputePipelineConfigurator.hpp>
-#include "../settings/ShdPaletteSettings.h"
-#include "../settings/ShdStripeSettings.h"
+#include "../../vulkan_helper/configurator/ComputePipelineConfigurator.hpp"
+#include "../attr/ShdPaletteAttribute.h"
+#include "../attr/ShdStripeAttribute.h"
 
 namespace merutilm::rff2 {
     struct CPC2MapIterationStripe final : public vkh::ComputePipelineConfigurator {
@@ -23,8 +23,8 @@ namespace merutilm::rff2 {
         static constexpr uint32_t SET_OUTPUT_ITERATION = 5;
         static constexpr uint32_t SET_STRIPE = 6;
 
-        explicit CPC2MapIterationStripe(vkh::Engine &engine, vkh::WindowContext &wc)
-            : ComputePipelineConfigurator(engine, wc, "vk_2_map_iter_stripe.comp") {
+        explicit CPC2MapIterationStripe(vkh::EngineRef engine, const uint32_t windowContextIndex)
+            : ComputePipelineConfigurator(engine, windowContextIndex, "vk_2_map_iter_stripe.comp") {
         }
 
         ~CPC2MapIterationStripe() override = default;
@@ -47,13 +47,25 @@ namespace merutilm::rff2 {
 
         void renderContextRefreshed() override;
 
+        void setCurrentFrame(float currentFrame, uint32_t frameIndex) const;
+
+        void setPalette(const ShdPaletteAttribute &palette) const;
+
+        void setStripe(const ShdStripeAttribute &stripe) const;
+
+        void setDefaultZoomIncrement(float defaultZoomIncrement) const;
+
         void setAllIterations(const std::vector<double> &normal, const std::vector<double> &zoomed) const;
 
         void set2MapSize(const VkExtent2D &extent);
 
-    protected:
-        void configurePushConstant(vkh::PipelineLayoutManager &pipelineLayoutManager) override;
+        void setInfo(double maxIteration) const;
 
-        void configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) override;
+        void setTime(float currentSec, uint32_t frameIndex) const;
+
+    protected:
+        void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;
+
+        void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
     };
 }

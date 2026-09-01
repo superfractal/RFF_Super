@@ -5,8 +5,9 @@
 #include "CPCBoxBlur.hpp"
 
 #include "SharedImageContextIndices.hpp"
-#include <vulkan_helper/engine/executor/ScopedCommandBufferExecutor.hpp>
-#include "vulkan_helper/util/BarrierUtils.hpp"
+#include "../../vulkan_helper/executor/ScopedCommandBufferExecutor.hpp"
+#include "../../vulkan_helper/util/BarrierUtils.hpp"
+#include "../constants/VulkanWindowConstants.hpp"
 
 namespace merutilm::rff2 {
     void CPCBoxBlur::updateQueue(vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
@@ -29,7 +30,7 @@ namespace merutilm::rff2 {
 
 
     void CPCBoxBlur::cmdGaussianBlur(const uint32_t frameIndex, const uint32_t blurSizeDescIndex) {
-        const VkCommandBuffer cbh = wc.getCommandBufferGroup().getCommandBuffer(frameIndex).getCommandBufferHandle();
+        const VkCommandBuffer cbh = wc.getCommandBuffer().getCommandBufferHandle(frameIndex);
         auto &blurDesc = getDescriptor(SET_BLUR_IMAGE);
 
         auto ctxGetter = [&blurDesc, &frameIndex](const uint32_t descIndex, const uint32_t binding) {
@@ -40,16 +41,16 @@ namespace merutilm::rff2 {
 
         vkh::BarrierUtils::cmdImageMemoryBarrier(cbh, dst.image, 0,
                                                  VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+                                                 VK_IMAGE_LAYOUT_GENERAL, 0, 1,
                                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
         cmdRender(cbh, frameIndex, {0u, blurSizeDescIndex});
-        vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(cbh, dst.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+        vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(cbh, dst.image, VK_IMAGE_LAYOUT_GENERAL, 0, 1,
                                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         cmdRender(cbh, frameIndex, {1u, blurSizeDescIndex});
-        vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(cbh, dst.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT, 0, 1,
+        vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(cbh, dst.image, VK_IMAGE_LAYOUT_GENERAL, 0, 1,
                                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
         cmdRender(cbh, frameIndex, {2u, blurSizeDescIndex});
@@ -59,7 +60,7 @@ namespace merutilm::rff2 {
 
     void CPCBoxBlur::initSize() const {
         auto &desc = getDescriptor(SET_BLUR_IMAGE);
-        const uint32_t maxFramesInFlight = wc.core.getPhysicalDeviceLoader().getMaxFramesInFlight();
+        const uint32_t maxFramesInFlight = wc.core.getPhysicalDevice().getMaxFramesInFlight();
         for (uint32_t i = 0; i < BOX_BLUR_COUNT; ++i) {
             desc.get<vkh::StorageImage>(i, BINDING_BLUR_IMAGE_SRC).ctx = std::vector<vkh::ImageContext>(
                 maxFramesInFlight);
@@ -82,55 +83,66 @@ namespace merutilm::rff2 {
     }
 
 
-    void CPCBoxBlur::setBlurInfo(const uint32_t blurSizeDescIndex, const float blurSize, const uint32_t frameIndex) const {
+    void CPCBoxBlur::setBlurInfo(uint32_t blurSizeDescIndex, const float blurSize) const {
         auto &desc = getDescriptor(SET_BLUR_RADIUS);
 
-        auto &ubo = desc.get<vkh::Uniform>(blurSizeDescIndex, BINDING_BLUR_RADIUS_UBO);
+        const auto &ubo = *desc.get<vkh::Uniform>(blurSizeDescIndex, BINDING_BLUR_RADIUS_UBO);
         ubo.getHostObject().set<float>(TARGET_BLUR_UBO_BLUR_SIZE, blurSize);
-        ubo.updateMF(frameIndex);
+        ubo.update();
+
+        writeDescriptorMF(
+            [&desc, &blurSizeDescIndex](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                desc.queue(queue, frameIndex, {blurSizeDescIndex}, {BINDING_BLUR_RADIUS_UBO});
+            });
     }
 
     void CPCBoxBlur::pipelineInitialized() {
-
-        auto &desc = getDescriptor(SET_BLUR_RADIUS);
-        writeDescriptorMF(
-            [&desc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-                desc.queue(queue, frameIndex, {}, {BINDING_BLUR_RADIUS_UBO});
-            });
+        //no operation
     }
 
     void CPCBoxBlur::renderContextRefreshed() {
         using namespace SharedImageContextIndices;
         auto &sic = wc.getSharedImageContext();
-        setGaussianBlur(sic.getImageContextMF(MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
+        switch (wc.getAttachmentIndex()) {
+            case Constants::VulkanWindow::MAIN_WINDOW_ATTACHMENT_INDEX: {
+                setGaussianBlur(sic.getImageContextMF(MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
                                 sic.getImageContextMF(MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_SECONDARY));
+                break;
+            }
+            case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
+                setGaussianBlur(sic.getImageContextMF(MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
+                                sic.getImageContextMF(MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_SECONDARY));
+                break;
+            }
+            default: {
+                //noop
+            }
+        }
     }
 
 
-    void CPCBoxBlur::configurePushConstant(vkh::PipelineLayoutManager &pipelineLayoutManager) {
+    void CPCBoxBlur::configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) {
         //no operation
     }
 
-    void CPCBoxBlur::configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) {
-        auto imgDesc = std::vector<vkh::DescriptorManager>();
-        imgDesc.reserve(BOX_BLUR_COUNT);
+    void CPCBoxBlur::configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) {
+        auto imgDesc = std::vector<vkh::DescriptorManager>(BOX_BLUR_COUNT);
         for (uint32_t i = 0; i < BOX_BLUR_COUNT; ++i) {
-            auto descManager = vkh::DescriptorManager();
-            descManager.appendStorageImage(BINDING_BLUR_IMAGE_SRC, VK_SHADER_STAGE_COMPUTE_BIT);
-            descManager.appendStorageImage(BINDING_BLUR_IMAGE_DST, VK_SHADER_STAGE_COMPUTE_BIT);
-            imgDesc.emplace_back(std::move(descManager));
+            auto descManager = vkh::factory::create<vkh::DescriptorManager>();
+            descManager->appendStorageImage(BINDING_BLUR_IMAGE_SRC, VK_SHADER_STAGE_COMPUTE_BIT);
+            descManager->appendStorageImage(BINDING_BLUR_IMAGE_DST, VK_SHADER_STAGE_COMPUTE_BIT);
+            imgDesc[i] = std::move(descManager);
         }
 
-        auto radDesc = std::vector<vkh::DescriptorManager>();
-        radDesc.reserve(BOX_BLUR_COUNT);
+        auto radDesc = std::vector<vkh::DescriptorManager>(DESC_COUNT_BLUR_TARGET);
         for (uint32_t i = 0; i < DESC_COUNT_BLUR_TARGET; ++i) {
-            auto descManager = vkh::DescriptorManager();
-            auto bufferManager = vkh::HostDataObjectManager();
-            bufferManager.reserve<float>(TARGET_BLUR_UBO_BLUR_SIZE);
-            auto descUBO = std::make_unique<vkh::Uniform>(wc.core, std::move(bufferManager),
-                                                              vkh::BufferLocalization::BIDIRECTIONAL, true);
-            descManager.appendUBO(BINDING_BLUR_RADIUS_UBO, VK_SHADER_STAGE_COMPUTE_BIT, std::move(descUBO));
-            radDesc.emplace_back(std::move(descManager));
+            auto descManager = vkh::factory::create<vkh::DescriptorManager>();
+            auto bufferManager = vkh::factory::create<vkh::HostDataObjectManager>();
+            bufferManager->reserve<float>(TARGET_BLUR_UBO_BLUR_SIZE);
+            auto descUBO = vkh::factory::create<vkh::Uniform>(wc.core, std::move(bufferManager),
+                                                              vkh::BufferLock::LOCK_UNLOCK, false);
+            descManager->appendUBO(BINDING_BLUR_RADIUS_UBO, VK_SHADER_STAGE_COMPUTE_BIT, std::move(descUBO));
+            radDesc[i] = std::move(descManager);
         }
 
         appendUniqueDescriptor(SET_BLUR_IMAGE, descriptors, std::move(imgDesc));

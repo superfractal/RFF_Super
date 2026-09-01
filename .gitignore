@@ -7,13 +7,11 @@
 *.o
 *.obj
 
-/.idea
-/cmake-build-debug
-/cmake-build-release
-
-/extern/imgui
-/bin
-/out
+.idea
+cmake-build-debug
+cmake-build-release
+cmake-build-relwithdebinfo
+bin
 
 # Precompiled Headers
 *.gch
@@ -40,8 +38,5 @@
 *.app
 
 # Others
-/apply_vkh.ps1
-/apply_vkh.sh
-/update.ps1
-/update.sh
+*.ps1
 *.zip

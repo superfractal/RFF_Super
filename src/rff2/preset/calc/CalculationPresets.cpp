@@ -6,112 +6,99 @@
 
 
 namespace merutilm::rff2 {
-    std::string CalculationPresets::UltraFast::getName() const { return "Ultra Fast"; }
-
-    FrtReferenceSyncSettings CalculationPresets::UltraFast::genRefSync() const {
-        return FrtReferenceSyncSettings{16, 3};
+    std::string CalculationPresets::UltraFast::getName() const {
+        return "Ultra Fast";
     }
 
-
-    FrtMPASettings CalculationPresets::UltraFast::genMPA() const {
-        return FrtMPASettings{4, 2, -3, FrtMPASelectionMethod::HIGHEST, false, true};
+    FrtMPAAttribute CalculationPresets::UltraFast::genMPA() const {
+        return FrtMPAAttribute{4, 2, -3, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::NO_COMPRESSION};
     }
 
-    FrtReferenceCompSettings CalculationPresets::UltraFast::genRefComp() const {
-        return FrtReferenceCompSettings{0, 0};
+    FrtReferenceCompAttribute CalculationPresets::UltraFast::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{0, 0, false};
     }
 
-    std::string CalculationPresets::Fast::getName() const { return "Fast"; }
-
-
-    FrtReferenceSyncSettings CalculationPresets::Fast::genRefSync() const { return FrtReferenceSyncSettings{8, 3}; }
-
-    FrtMPASettings CalculationPresets::Fast::genMPA() const {
-        return FrtMPASettings{8, 2, -4, FrtMPASelectionMethod::HIGHEST, false, true};
+    std::string CalculationPresets::Fast::getName() const {
+        return "Fast";
     }
 
-    FrtReferenceCompSettings CalculationPresets::Fast::genRefComp() const {
-        return FrtReferenceCompSettings{1000000, 7};
+    FrtMPAAttribute CalculationPresets::Fast::genMPA() const {
+        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::NO_COMPRESSION};
     }
 
-
-    FrtReferenceSyncSettings CalculationPresets::Normal::genRefSync() const { return FrtReferenceSyncSettings{8, 2}; }
-
-    std::string CalculationPresets::Normal::getName() const { return "Normal"; }
-
-    FrtMPASettings CalculationPresets::Normal::genMPA() const {
-        return FrtMPASettings{8, 2, -5, FrtMPASelectionMethod::HIGHEST, false, true};
+    FrtReferenceCompAttribute CalculationPresets::Fast::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{1000000, 7, false};
     }
 
-    FrtReferenceCompSettings CalculationPresets::Normal::genRefComp() const {
-        return FrtReferenceCompSettings{1000000, 11};
+    std::string CalculationPresets::Normal::getName() const {
+        return "Normal";
     }
 
-    std::string CalculationPresets::Best::getName() const { return "Best"; }
-
-
-    FrtReferenceSyncSettings CalculationPresets::Best::genRefSync() const { return FrtReferenceSyncSettings{4, 2}; }
-
-    FrtMPASettings CalculationPresets::Best::genMPA() const {
-        return FrtMPASettings{8, 2, -6, FrtMPASelectionMethod::HIGHEST, false, true};
+    FrtMPAAttribute CalculationPresets::Normal::genMPA() const {
+        return FrtMPAAttribute{8, 2, -5, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
     }
 
-    FrtReferenceCompSettings CalculationPresets::Best::genRefComp() const {
-        return FrtReferenceCompSettings{1000000, 15};
+    FrtReferenceCompAttribute CalculationPresets::Normal::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{1000000, 11, false};
     }
 
-    std::string CalculationPresets::UltraBest::getName() const { return "Ultra Best"; }
-
-    FrtReferenceSyncSettings CalculationPresets::UltraBest::genRefSync() const {
-        return FrtReferenceSyncSettings{1, 0};
+    std::string CalculationPresets::Best::getName() const {
+        return "Best";
     }
 
-    FrtMPASettings CalculationPresets::UltraBest::genMPA() const {
-        return FrtMPASettings{8, 2, -7, FrtMPASelectionMethod::HIGHEST, false, true};
+    FrtMPAAttribute CalculationPresets::Best::genMPA() const {
+        return FrtMPAAttribute{8, 2, -6, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
     }
 
-    FrtReferenceCompSettings CalculationPresets::UltraBest::genRefComp() const {
-        return FrtReferenceCompSettings{1000000, 19};
+    FrtReferenceCompAttribute CalculationPresets::Best::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{1000000, 15, false};
     }
 
-    std::string CalculationPresets::Stable::getName() const { return "Stable"; }
-
-
-    FrtReferenceSyncSettings CalculationPresets::Stable::genRefSync() const { return FrtReferenceSyncSettings{16, 3}; }
-
-    FrtMPASettings CalculationPresets::Stable::genMPA() const {
-        return FrtMPASettings{4, 2, -3, FrtMPASelectionMethod::HIGHEST, true, true};
+    std::string CalculationPresets::UltraBest::getName() const {
+        return "Ultra Best";
     }
 
-    FrtReferenceCompSettings CalculationPresets::Stable::genRefComp() const {
-        return FrtReferenceCompSettings{1000000, 6};
+    FrtMPAAttribute CalculationPresets::UltraBest::genMPA() const {
+        return FrtMPAAttribute{8, 2, -7, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
     }
 
-    std::string CalculationPresets::MoreStable::getName() const { return "More Stable"; }
-
-    FrtReferenceSyncSettings CalculationPresets::MoreStable::genRefSync() const {
-        return FrtReferenceSyncSettings{16, 3};
+    FrtReferenceCompAttribute CalculationPresets::UltraBest::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{1000000, 19, false};
     }
 
-    FrtMPASettings CalculationPresets::MoreStable::genMPA() const {
-        return FrtMPASettings{4, 2, -4, FrtMPASelectionMethod::HIGHEST, true, true};
+    std::string CalculationPresets::Stable::getName() const {
+        return "Stable";
     }
 
-    FrtReferenceCompSettings CalculationPresets::MoreStable::genRefComp() const {
-        return FrtReferenceCompSettings{100000, 6};
+    FrtMPAAttribute CalculationPresets::Stable::genMPA() const {
+        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
     }
 
-    FrtReferenceSyncSettings CalculationPresets::UltraStable::genRefSync() const {
-        return FrtReferenceSyncSettings{16, 3};
+    FrtReferenceCompAttribute CalculationPresets::Stable::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{1000000, 6, false};
     }
 
-    std::string CalculationPresets::UltraStable::getName() const { return "Ultra Stable"; }
-
-    FrtMPASettings CalculationPresets::UltraStable::genMPA() const {
-        return FrtMPASettings{8, 2, -4, FrtMPASelectionMethod::HIGHEST, true, true};
+    std::string CalculationPresets::MoreStable::getName() const {
+        return "More Stable";
     }
 
-    FrtReferenceCompSettings CalculationPresets::UltraStable::genRefComp() const {
-        return FrtReferenceCompSettings{10000, 6};
+    FrtMPAAttribute CalculationPresets::MoreStable::genMPA() const {
+        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
     }
-} // namespace merutilm::rff2
+
+    FrtReferenceCompAttribute CalculationPresets::MoreStable::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{100000, 6, false};
+    }
+
+    std::string CalculationPresets::UltraStable::getName() const {
+        return "Ultra Stable";
+    }
+
+    FrtMPAAttribute CalculationPresets::UltraStable::genMPA() const {
+        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
+    }
+
+    FrtReferenceCompAttribute CalculationPresets::UltraStable::genReferenceCompression() const {
+        return FrtReferenceCompAttribute{10000, 6, true};
+    }
+}

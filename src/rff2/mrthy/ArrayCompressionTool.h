@@ -32,7 +32,7 @@ namespace merutilm::rff2 {
         * Gets the range of current tool : @code end - start + 1@endcode
         * @return The range of current tool.
         */
-        [[nodiscard]] uint64_t range() const;
+        uint64_t range() const;
     };
 
 

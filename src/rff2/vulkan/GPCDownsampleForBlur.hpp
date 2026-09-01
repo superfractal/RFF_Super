@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "vulkan_helper/engine/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
+#include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 
 namespace merutilm::rff2 {
     struct GPCDownsampleForBlur final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
@@ -18,8 +18,11 @@ namespace merutilm::rff2 {
         static constexpr uint32_t BINDING_RESAMPLE_UBO = 1;
         static constexpr uint32_t TARGET_RESAMPLE_UBO_EXTENT = 0;
 
-        explicit GPCDownsampleForBlur(vkh::Engine &engine, vkh::WindowContext &wc) :
-            GeneralPostProcessGraphicsPipelineConfigurator(engine, wc, "vk_resample.frag") {}
+        explicit GPCDownsampleForBlur(vkh::EngineRef engine, const uint32_t windowContextIndex,
+                             const uint32_t renderContextIndex,
+                             const uint32_t primarySubpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
+            engine, windowContextIndex, renderContextIndex, primarySubpassIndex, "vk_resample.frag") {
+        }
 
         ~GPCDownsampleForBlur() override = default;
 
@@ -40,8 +43,8 @@ namespace merutilm::rff2 {
         void renderContextRefreshed() override;
 
     protected:
-        void configurePushConstant(vkh::PipelineLayoutManager &pipelineLayoutManager) override;
+        void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;
 
-        void configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) override;
+        void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
     };
-} // namespace merutilm::rff2
+}

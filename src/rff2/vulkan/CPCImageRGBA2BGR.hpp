@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "vulkan_helper/engine/configurator/ComputePipelineConfigurator.hpp"
+#include "../../vulkan_helper/configurator/ComputePipelineConfigurator.hpp"
 
 namespace merutilm::rff2{
     struct CPCImageRGBA2BGR final : public vkh::ComputePipelineConfigurator {
@@ -12,8 +12,8 @@ namespace merutilm::rff2{
         static constexpr uint32_t BINDING_OUTPUT_SSBO = 1;
         static constexpr uint32_t TARGET_OUTPUT_SSBO_DATA = 0;
 
-        explicit CPCImageRGBA2BGR(vkh::Engine &engine, vkh::WindowContext &wc) : ComputePipelineConfigurator(
-            engine, wc, "vk_image_rgba2bgr.comp") {
+        explicit CPCImageRGBA2BGR(vkh::EngineRef engine, const uint32_t windowContextIndex) : ComputePipelineConfigurator(
+            engine, windowContextIndex, "vk_image_rgba2bgr.comp") {
         }
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
@@ -25,9 +25,9 @@ namespace merutilm::rff2{
         [[nodiscard]] const vkh::BufferContext &getBufferContext(uint32_t frameIndex) const;
 
     protected:
-        void configurePushConstant(vkh::PipelineLayoutManager & pipelineLayoutManager) override;
+        void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;
 
-        void configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) override;
+        void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
     };
 
 }

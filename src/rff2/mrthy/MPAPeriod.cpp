@@ -9,14 +9,11 @@
 
 
 namespace merutilm::rff2 {
-    MPAPeriod::MPAPeriod(std::vector<uint64_t> &&tablePeriod, std::vector<bool> &&isArtificial,
-                         std::vector<uint64_t> &&skippableIterationCounts, std::vector<uint64_t> &&tableElementCounts) :
-        tablePeriods(std::move(tablePeriod)), isArtificial(std::move(isArtificial)),
-        skippableIterationCounts(std::move(skippableIterationCounts)),
-        tableElementCounts(std::move(tableElementCounts)) {}
+    MPAPeriod::MPAPeriod(std::vector<uint64_t> &&tablePeriod, std::vector<bool> &&isArtificial, std::vector<uint64_t> &&tableElements) : tablePeriod(std::move(tablePeriod)), isArtificial(std::move(isArtificial)), tableElements(std::move(tableElements)){
+    }
 
 
-    void MPAPeriod::generateCountInfos(const std::vector<uint64_t> &tablePeriod, std::vector<uint64_t> &skippableIterationCounts, std::vector<uint64_t> &tableElementCounts) {
+    std::vector<uint64_t> MPAPeriod::generatePeriodElements(const std::vector<uint64_t> &tablePeriod) {
         // index compression : [3, 11, 26, 77] // index compression : [3, 11, 26, 77]
         // startIteration : 1  4  7 12 15 18 23 27
         // index :          0  1  2  3  4  5  6  7
@@ -28,47 +25,36 @@ namespace merutilm::rff2 {
         // the remainder of [2]/[1] can also be divided by smaller period.
         // it can be recursive.
         //
-        // skippable iteration counts
-        // period 11 : 11/3 =3.xxx (3 elements) elements = 3,
-        // period 26 : 26/11=2.xxx (3*2 elements), 26%11 = 4, 4/3 = 1.xxx (1 element) elements = 3*2+1=7
-        // period 77 : 77/26=2.xxx (7*2 elements), 77%26 = 25,25/11= 2.xxx (3*2 elements), 25%11=4, 4/3 = 1.xxx (1
-        // element), elements = 7*2+3*2+1=21
-        //
-        // period element counts
-        // period 11 : 11/3 =3.xxx (3 elements) elements = 3 + 1(self) = 4,
-        // period 26 : 26/11=2.xxx (4*2 elements), 26%11 = 4, 4/3 = 1.xxx (1 element) elements = 4*2+1+1(self)=10
-        // period 77 : 77/26=2.xxx (10*2 elements), 77%26 = 25,25/11= 2.xxx (4*2 elements), 25%11=4, 4/3 = 1.xxx (1
-        // element), elements = 10*2+4*2+1+1(self)=30
-        //
+        // period 11 : 11/3 =3.xxx (3 elements)                                                                              elements = 3
+        // period 26 : 26/11=2.xxx (3*2 elements), 26%11 = 4, 4/3 = 1.xxx (1 element)                                        elements = 3*2+1=7
+        // period 77 : 77/26=2.xxx (7*2 elements), 77%26 = 25,25/11= 2.xxx (3*2 elements), 25%11=4, 4/3 = 1.xxx (1 element), elements = 7*2+3*2+1=21
         // Stored elements to memory
 
         const size_t size = tablePeriod.size();
-        tableElementCounts = std::vector<uint64_t>(size, 0);
-        skippableIterationCounts = std::vector<uint64_t>(size, 0);
-        tableElementCounts[0] = 1;
-        skippableIterationCounts[0] = 1;
+        auto tablePeriodElements = std::vector<uint64_t>(size, 0);
 
-        for (int i = 1; i < size; ++i) {
-            uint64_t tableElement = 0;
-            uint64_t skippableIterationCount = 0;
+        for (int i = 0; i < size; ++i) {
+            if (i == 0) {
+                tablePeriodElements[i] = 1;
+                continue;
+            }
+            uint64_t elements = 0;
             uint64_t remainder = tablePeriod[i];
-            for (int j = i - 1; j >= 0; --j) {
+            for (int j = i - 1; j >= 0; j--) {
                 const uint64_t groupAmount = remainder / tablePeriod[j];
                 remainder %= tablePeriod[j];
-                tableElement += groupAmount * tableElementCounts[j]; // lower level pa
-                skippableIterationCount += groupAmount * skippableIterationCounts[j];
+                elements += groupAmount * tablePeriodElements[j];
             }
-            tableElementCounts[i] = tableElement + 1; // current level pa
-            skippableIterationCounts[i] = skippableIterationCount;
+            tablePeriodElements[i] = elements;
         }
+        return tablePeriodElements;
     }
 
-    void MPAPeriod::generateTablePeriod(const std::vector<uint64_t> &referencePeriod, const FrtMPASettings &mpaSettings,
-                                        std::vector<uint64_t> &tablePeriods, std::vector<bool> &isArtificial) {
+    MPAPeriod::Temp MPAPeriod::generateTablePeriod(const std::vector<uint64_t> &referencePeriod, const FrtMPAAttribute &mpaSettings) {
         // example
         // period : [3, 11, 26]
         //
-        // -- : The space of MPA
+        // -- : The space of R3A
         //
         // It : 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 ... longestPeriod
         //
@@ -92,54 +78,51 @@ namespace merutilm::rff2 {
         const int minSkip = mpaSettings.minSkipReference;
         const uint64_t longestPeriod = referencePeriod[referencePeriod.size() - 1];
 
+
+        std::vector<uint64_t> tablePeriod;
+        std::vector<bool> isArtificial;
+
         uint64_t currentRefPeriod = minSkip;
 
-        tablePeriods = {};
-        isArtificial = {};
-        tablePeriods.push_back(currentRefPeriod);
+        tablePeriod.push_back(currentRefPeriod);
         isArtificial.push_back(!std::ranges::binary_search(referencePeriod, currentRefPeriod));
 
-        // first period is always minimum skip iteration when the longest period is larger than this,
-        // and it is artificially-created period if generated period is not an element of generated period.
+        //first period is always minimum skip iteration when the longest period is larger than this,
+        //and it is artificially-created period if generated period is not an element of generated period.
 
         for (uint64_t p: referencePeriod) {
-            // Generate Period Array
+            //Generate Period Array
 
-            if (p >= minSkip &&
-                (p == longestPeriod && currentRefPeriod != longestPeriod || currentRefPeriod * maxMultiplier <= p)) {
-                // If next valid period is "maxMultiplierBetweenLevel^2" times larger than "currentPeriod",
-                // add currentPeriod * "maxMultiplierBetweenLevel" period
-                // until the multiplier between level is lower than the square of "maxMultiplierBetweenLevel".
-                // It is artificially-created period.
+            if (p >= minSkip && (p == longestPeriod && currentRefPeriod != longestPeriod || currentRefPeriod * maxMultiplier
+                                 <= p)) {
+                //If next valid period is "maxMultiplierBetweenLevel^2" times larger than "currentPeriod",
+                //add currentPeriod * "maxMultiplierBetweenLevel" period
+                //until the multiplier between level is lower than the square of "maxMultiplierBetweenLevel".
+                //It is artificially-created period.
 
                 while (currentRefPeriod >= minSkip && currentRefPeriod * maxMultiplier * maxMultiplier < p) {
 
-                    tablePeriods.push_back(currentRefPeriod * maxMultiplier);
+                    tablePeriod.push_back(currentRefPeriod * maxMultiplier);
                     isArtificial.push_back(true);
 
                     currentRefPeriod *= maxMultiplier;
                 }
 
-                // Otherwise, add generated period to period array.
+                //Otherwise, add generated period to period array.
 
-                tablePeriods.push_back(p);
+                tablePeriod.push_back(p);
                 isArtificial.push_back(false);
                 currentRefPeriod = p;
-            }
+                                 }
         }
+
+        return Temp{std::move(tablePeriod), std::move(isArtificial)};
     }
 
-    std::unique_ptr<MPAPeriod> MPAPeriod::generate(const std::vector<uint64_t> &referencePeriod,
-                                                   const FrtMPASettings &mpaSettings) {
-        std::vector<uint64_t> tablePeriods;
-        std::vector<bool> isArtificial;
-        std::vector<uint64_t> skippableIterationCounts;
-        std::vector<uint64_t> tableElementCounts;
-
-        generateTablePeriod(referencePeriod, mpaSettings, tablePeriods, isArtificial);
-        generateCountInfos(tablePeriods, skippableIterationCounts, tableElementCounts);
-
-        return std::make_unique<MPAPeriod>(std::move(tablePeriods), std::move(isArtificial), std::move(skippableIterationCounts),
-                                           std::move(tableElementCounts));
+    std::unique_ptr<MPAPeriod> MPAPeriod::create(const std::vector<uint64_t> &referencePeriod,
+                                                 const FrtMPAAttribute &mpaSettings) {
+        auto [tablePeriod, isArtificial] = generateTablePeriod(referencePeriod, mpaSettings);
+        auto tablePeriodElements = generatePeriodElements(tablePeriod);
+        return std::make_unique<MPAPeriod>(std::move(tablePeriod), std::move(isArtificial), std::move(tablePeriodElements));
     }
-} // namespace merutilm::rff2
+}

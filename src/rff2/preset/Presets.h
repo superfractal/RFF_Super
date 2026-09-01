@@ -3,18 +3,17 @@
 //
 
 #pragma once
-#include <array>
 #include <string>
-#include "../settings/FrtMPASettings.h"
-#include "../settings/FrtReferenceSyncSettings.hpp"
-#include "../settings/FrtReferenceCompSettings.h"
-#include "../settings/RenderSettings.h"
-#include "../settings/ShdBloomSettings.h"
-#include "../settings/ShdColorSettings.h"
-#include "../settings/ShdFogSettings.h"
-#include "../settings/ShdPaletteSettings.h"
-#include "../settings/ShdSlopeSettings.h"
-#include "../settings/ShdStripeSettings.h"
+#include <array>
+#include "../attr/FrtMPAAttribute.h"
+#include "../attr/FrtReferenceCompAttribute.h"
+#include "../attr/RenderAttribute.h"
+#include "../attr/ShdPaletteAttribute.h"
+#include "../attr/ShdStripeAttribute.h"
+#include "../attr/ShdSlopeAttribute.h"
+#include "../attr/ShdColorAttribute.h"
+#include "../attr/ShdFogAttribute.h"
+#include "../attr/ShdBloomAttribute.h"
 
 
 namespace merutilm::rff2 {
@@ -29,17 +28,15 @@ namespace merutilm::rff2 {
         struct CalculationPreset : public Preset {
             ~CalculationPreset() override = default;
 
-            virtual FrtReferenceSyncSettings genRefSync() const = 0;
+            virtual FrtMPAAttribute genMPA() const = 0;
 
-            virtual FrtMPASettings genMPA() const = 0;
-
-            virtual FrtReferenceCompSettings genRefComp() const = 0;
+            virtual FrtReferenceCompAttribute genReferenceCompression() const = 0;
         };
 
         struct RenderPreset : public Preset {
             ~RenderPreset() override = default;
 
-            virtual RenderSettings genRender() const = 0;
+            virtual RenderAttribute genRender() const = 0;
         };
 
         struct ResolutionPreset : public Preset {
@@ -56,37 +53,37 @@ namespace merutilm::rff2 {
             struct PalettePreset : public ShaderPreset {
                 ~PalettePreset() override = default;
 
-                virtual ShdPaletteSettings genPalette() const = 0;
+                virtual ShdPaletteAttribute genPalette() const = 0;
             };
 
             struct StripePreset : public ShaderPreset {
                 ~StripePreset() override = default;
 
-                virtual ShdStripeSettings genStripe() const = 0;
+                virtual ShdStripeAttribute genStripe() const = 0;
             };
 
             struct SlopePreset : public ShaderPreset {
                 ~SlopePreset() override = default;
 
-                virtual ShdSlopeSettings genSlope() const = 0;
+                virtual ShdSlopeAttribute genSlope() const = 0;
             };
 
             struct ColorPreset : public ShaderPreset {
                 ~ColorPreset() override = default;
 
-                virtual ShdColorSettings genColor() const = 0;
+                virtual ShdColorAttribute genColor() const = 0;
             };
 
             struct FogPreset : public ShaderPreset {
                 ~FogPreset() override = default;
 
-                virtual ShdFogSettings genFog() const = 0;
+                virtual ShdFogAttribute genFog() const = 0;
             };
 
             struct BloomPreset : public ShaderPreset {
                 ~BloomPreset() override = default;
 
-                virtual ShdBloomSettings genBloom() const = 0;
+                virtual ShdBloomAttribute genBloom() const = 0;
             };
         }
     }

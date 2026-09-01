@@ -8,88 +8,52 @@
 
 
 namespace merutilm::rff2 {
-    std::string RenderPresets::Potato::getName() const { return "Potato"; }
+    std::string RenderPresets::Potato::getName() const {
+        return "Potato";
+    }
 
-    RenderSettings RenderPresets::Potato::genRender() const {
-        return RenderSettings{0.125f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    RenderAttribute RenderPresets::Potato::genRender() const {
+        return RenderAttribute{0.1f, 60, true, std::thread::hardware_concurrency()};
     }
 
 
-    std::string RenderPresets::Low::getName() const { return "Low"; }
-
-    RenderSettings RenderPresets::Low::genRender() const {
-        return RenderSettings{0.25f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    std::string RenderPresets::Low::getName() const {
+        return "Low";
     }
 
-    std::string RenderPresets::Medium::getName() const { return "Medium"; }
-
-    RenderSettings RenderPresets::Medium::genRender() const {
-        return RenderSettings{0.5f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    RenderAttribute RenderPresets::Low::genRender() const {
+        return RenderAttribute{0.3f, 60, true, std::thread::hardware_concurrency()};
     }
 
-    std::string RenderPresets::High::getName() const { return "High"; }
-
-    RenderSettings RenderPresets::High::genRender() const {
-        return RenderSettings{1.0f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    std::string RenderPresets::Medium::getName() const {
+        return "Medium";
     }
 
-    std::string RenderPresets::Ultra::getName() const { return "Ultra"; }
-
-    RenderSettings RenderPresets::Ultra::genRender() const {
-        return RenderSettings{2.0f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    RenderAttribute RenderPresets::Medium::genRender() const {
+        return RenderAttribute{0.5f, 60, true, std::thread::hardware_concurrency()};
     }
 
-    std::string RenderPresets::Extreme::getName() const { return "Extreme (DANGER)"; }
-
-    RenderSettings RenderPresets::Extreme::genRender() const {
-        return RenderSettings{4.0f,
-                              60,
-                              RndPixelRenderPriority::SEQUENTIAL,
-                              {.use = false,
-                               .preferredBatchDuration = 0.1f,
-                               .allowedGlitchPixelCount = 0,
-                               .completelyIgnoreMpa = false,
-                               .automaticAcceptMpaBatches = 32,
-                               .interpolateIsolated = true}};
+    std::string RenderPresets::High::getName() const {
+        return "High";
     }
-} // namespace merutilm::rff2
+
+    RenderAttribute RenderPresets::High::genRender() const {
+        return RenderAttribute{1.0f, 60, true, std::thread::hardware_concurrency()};
+    }
+
+    std::string RenderPresets::Ultra::getName() const {
+        return "Ultra";
+    }
+
+    RenderAttribute RenderPresets::Ultra::genRender() const {
+        return RenderAttribute{2.0f, 60, true, std::thread::hardware_concurrency()};
+    }
+
+    std::string RenderPresets::Extreme::getName() const {
+        return "Extreme (DANGER)";
+    }
+
+    RenderAttribute RenderPresets::Extreme::genRender() const {
+        return RenderAttribute{4.0f,  60, true, std::thread::hardware_concurrency()};
+    }
+}

@@ -3,8 +3,8 @@
 //
 
 #pragma once
-#include "vulkan_helper/engine/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
-#include "../settings/ShdColorSettings.h"
+#include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
+#include "../attr/ShdColorAttribute.h"
 
 namespace merutilm::rff2 {
     struct GPCColor final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
@@ -13,8 +13,10 @@ namespace merutilm::rff2 {
 
         static constexpr uint32_t SET_COLOR = 1;
 
-        explicit GPCColor(vkh::Engine &engine, vkh::WindowContext &wc) : GeneralPostProcessGraphicsPipelineConfigurator(
-            engine, wc, "vk_color.frag") {
+        explicit GPCColor(vkh::EngineRef engine, const uint32_t windowContextIndex,
+                                           const uint32_t renderContextIndex,
+                                           const uint32_t primarySubpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
+            engine, windowContextIndex, renderContextIndex, primarySubpassIndex, "vk_color.frag") {
         }
 
         ~GPCColor() override = default;
@@ -29,13 +31,15 @@ namespace merutilm::rff2 {
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
 
+        void setColor(const ShdColorAttribute &color) const;
+
         void pipelineInitialized() override;
 
         void renderContextRefreshed() override;
 
     protected:
-        void configurePushConstant(vkh::PipelineLayoutManager &pipelineLayoutManager) override;
+        void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;
 
-        void configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) override;
+        void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
     };
 }

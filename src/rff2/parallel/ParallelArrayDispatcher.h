@@ -3,78 +3,73 @@
 //
 
 #pragma once
-#include <vector>
-#include "../constants/FractalConstants.hpp"
 #include "ParallelRenderState.h"
+#include "../data/Matrix.h"
 namespace merutilm::rff2 {
     template<typename T>
-    using ParallelArrayRenderer = std::function<T(uint16_t x, uint16_t y, uint16_t xRes, uint16_t yRes, float xRat,
-                                                  float yRat, uint32_t index, T value)>;
+    using ParallelArrayRenderer = std::function<T(uint16_t x, uint16_t y, uint16_t xRes, uint16_t yRes, float xRat, float yRat, uint32_t index,
+                                                  T value)>;
 
 
     template<typename T>
     class ParallelArrayDispatcher {
         ParallelRenderState &state;
-        std::vector<T> &arr;
+        Matrix<T> &matrix;
+        ParallelArrayRenderer<T> renderer;
         uint32_t threads;
-        uint16_t xRes;
-        uint16_t yRes;
-        RndPixelRenderPriority priority;
-        ParallelArrayRenderer<T> func;
 
     public:
-        ParallelArrayDispatcher(ParallelRenderState &state, std::vector<T> &arr, uint16_t xRes, uint16_t yRes,
-                                uint32_t threads, RndPixelRenderPriority priority, ParallelArrayRenderer<T> func);
+        ParallelArrayDispatcher(ParallelRenderState &state, Matrix<T> &matrix, uint32_t threads,
+                                ParallelArrayRenderer<T> renderer);
 
 
-        void dispatch() const;
+        void dispatch();
 
     private:
-        std::vector<uint32_t> getRenderPriority(uint32_t count) const;
+        static std::vector<uint16_t> getRenderPriority(uint16_t rpy);
 
 
-        void renderForward(uint32_t start, const std::vector<uint32_t> &indexOff,
-                           std::vector<std::atomic<bool>> &rendered) const;
+        void renderForward(uint16_t xRes, uint16_t yRes, uint16_t y, std::vector<std::atomic<bool> > &rendered);
 
 
-        void renderBackward(uint32_t len, std::vector<std::atomic<bool>> &rendered) const;
+        void renderBackward(uint16_t xRes, uint16_t yRes, uint32_t len, std::vector<std::atomic<bool> > &rendered);
     };
 
-    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY
-    // DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF
-    // PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
-    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY
-    // DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF
-    // PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
-    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY
-    // DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
+    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
+    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
+    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
+    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
+    // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
 
 
     template<typename T>
-    ParallelArrayDispatcher<T>::ParallelArrayDispatcher(ParallelRenderState &state, std::vector<T> &arr,
-                                                        const uint16_t xRes, const uint16_t yRes,
-                                                        const uint32_t threads, const RndPixelRenderPriority priority,
-                                                        ParallelArrayRenderer<T> func) :
-        state(state), arr(arr), threads(threads), xRes(xRes), yRes(yRes), priority(priority), func(std::move(func)) {}
+    ParallelArrayDispatcher<T>::ParallelArrayDispatcher(ParallelRenderState &state, Matrix<T> &matrix, const uint32_t threads,
+                                                        ParallelArrayRenderer<T> renderer) : state(state), matrix(matrix),
+        renderer(std::move(renderer)), threads(threads) {
+    }
 
     template<typename T>
-    void ParallelArrayDispatcher<T>::dispatch() const {
+    void ParallelArrayDispatcher<T>::dispatch() {
+        const uint16_t rpy = matrix.getHeight() / threads + 1;
         if (state.interruptRequested()) {
             return;
         }
 
+
+        const std::vector<uint16_t> rpyIndices = getRenderPriority(rpy);
         auto threadPool = std::vector<std::jthread>();
         threadPool.reserve(threads);
-        auto len = arr.size();
-        auto rendered = std::vector<std::atomic<bool>>(len);
-        auto batchSize = len / threads + 1;
+        auto xRes = matrix.getWidth();
+        auto yRes = matrix.getHeight();
+        auto len = matrix.getLength();
+        auto rendered = std::vector<std::atomic<bool> >(len);
 
-        std::vector<uint32_t> indexOff = getRenderPriority(batchSize);
-
-        for (uint32_t start = 0; start < len; start += batchSize) {
-            threadPool.emplace_back([start, &indexOff, this, &rendered, len] {
-                renderForward(start, indexOff, rendered);
-                renderBackward(len, rendered);
+        for (uint16_t sy = 0; sy < matrix.getHeight(); sy += rpy) {
+            threadPool.emplace_back([sy, &rpyIndices, xRes, yRes, this, &rendered, len] {
+                for (const auto vy: rpyIndices) {
+                    renderForward(xRes, yRes, sy + vy, rendered);
+                }
+                renderBackward(xRes, yRes, len, rendered);
             });
         }
 
@@ -88,91 +83,76 @@ namespace merutilm::rff2 {
 
 
     template<typename T>
-    std::vector<uint32_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint32_t count) const {
+    std::vector<uint16_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint16_t rpy) {
+        auto result = std::vector<uint16_t>(rpy, 0);
+        uint16_t count = rpy >> 1;
+        uint16_t repetition = 1;
+        uint16_t index = 1;
 
-        auto result = std::vector<uint32_t>(count, 0);
-        if (priority == RndPixelRenderPriority::SEQUENTIAL) {
-            std::iota(result.begin(), result.end(), 0);
-            return result;
-        }
-
-
-        uint32_t countDiv = count >> 1;
-        uint32_t repetition = 1;
-        uint32_t index = 1;
-
-        while (countDiv > 0) {
-            for (uint32_t j = 0; j < repetition; ++j) {
-                result[index] = result[j] + countDiv;
+        while (count > 0) {
+            for (uint16_t j = 0; j < repetition; ++j) {
+                result[index] = result[j] + count;
                 ++index;
             }
 
             repetition <<= 1;
-            countDiv >>= 1;
+            count >>= 1;
         }
 
         auto cpy = result;
         cpy.resize(index);
         std::ranges::sort(cpy);
 
-        uint32_t ci = 0;
+        uint16_t cpyIndex = 0;
         while (index < result.size()) {
-            if (const uint32_t missing = ci + countDiv; cpy.size() <= ci || cpy[ci] != missing) {
+            if (
+                const uint16_t missing = cpyIndex + count;
+                cpy.size() <= cpyIndex || cpy[cpyIndex] != missing) {
                 result[index] = missing;
                 ++index;
-                ++countDiv;
-            } else
-                ++ci;
+                ++count;
+                } else ++cpyIndex;
         }
         return result;
     }
 
 
     template<typename T>
-    void ParallelArrayDispatcher<T>::renderForward(const uint32_t start, const std::vector<uint32_t> &indexOff,
-                                                   std::vector<std::atomic<bool>> &rendered) const {
-        if (start >= rendered.size()) {
+    void ParallelArrayDispatcher<T>::renderForward(const uint16_t xRes, const uint16_t yRes, const uint16_t y,
+                                                   std::vector<std::atomic<bool> > &rendered) {
+        if (y >= yRes) {
             return;
         }
 
-
-        for (const uint32_t i: indexOff) {
-            if (i % Constants::Fractal::PARALLEL_OPERATION_INTERRUPT_CHECK_INTERVAL == 0 &&
-                state.interruptRequested()) {
+        for (uint16_t x = 0; x < xRes; ++x) {
+            if (x % Constants::Fractal::EXIT_CHECK_INTERVAL == 0 && state.interruptRequested()) {
                 return;
             }
 
-            uint32_t index = start + i;
-            if (index >= arr.size())
-                continue;
+            uint32_t i = static_cast<uint32_t>(xRes) * y + x;
 
-            auto x = static_cast<uint16_t>(index % xRes);
-            auto y = static_cast<uint16_t>(index / xRes);
-
-            if (!rendered[index].exchange(true)) {
-                arr[index] = func(x, y, xRes, yRes, static_cast<float>(x) / xRes, static_cast<float>(y) / yRes,
-                                      index, arr[index]);
+            if (!rendered[i].exchange(true)) {
+                matrix[i] = renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
+                                     static_cast<float>(y) / yRes, i, matrix[i]);
             }
         }
     }
 
 
     template<typename T>
-    void ParallelArrayDispatcher<T>::renderBackward(const uint32_t len,
-                                                    std::vector<std::atomic<bool>> &rendered) const {
+    void ParallelArrayDispatcher<T>::renderBackward(const uint16_t xRes, const uint16_t yRes, const uint32_t len,
+                                                    std::vector<std::atomic<bool> > &rendered) {
         for (uint32_t i = len - 1; i > 0; --i) {
-            if (i % Constants::Fractal::PARALLEL_OPERATION_INTERRUPT_CHECK_INTERVAL == 0 &&
-                state.interruptRequested()) {
+            if (i % Constants::Fractal::EXIT_CHECK_INTERVAL == 0 && state.interruptRequested()) {
                 return;
             }
-            auto px = static_cast<uint16_t>(i % xRes);
-            auto py = static_cast<uint16_t>(i / xRes);
+            const auto [px, py] = matrix.getLocation(i);
 
             if (!rendered[i].exchange(true)) {
-                T c = func(px, py, xRes, yRes, static_cast<float>(px) / xRes, static_cast<float>(py) / yRes, i,
-                               arr[i]);
-                arr[i] = std::move(c);
+                T c = renderer(px, py, xRes, yRes, static_cast<float>(px) / xRes, static_cast<float>(py) / yRes, i,
+                                    matrix[i]);
+                matrix[i] = std::move(c);
             }
         }
     }
-} // namespace merutilm::rff2
+}

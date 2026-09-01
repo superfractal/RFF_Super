@@ -3,8 +3,8 @@
 //
 
 #pragma once
-#include "vulkan_helper/engine/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
-#include "../settings/ShdStripeSettings.h"
+#include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
+#include "../attr/ShdStripeAttribute.h"
 
 namespace merutilm::rff2 {
     struct GPCStripe final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
@@ -16,8 +16,10 @@ namespace merutilm::rff2 {
         static constexpr uint32_t SET_STRIPE = 2;
         static constexpr uint32_t SET_TIME = 3;
 
-        explicit GPCStripe(vkh::Engine &engine, vkh::WindowContext &wc) : GeneralPostProcessGraphicsPipelineConfigurator(
-            engine, wc, "vk_stripe.frag") {
+        explicit GPCStripe(vkh::EngineRef engine, const uint32_t windowContextIndex,
+                                   const uint32_t renderContextIndex,
+                                   const uint32_t primarySubpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
+            engine, windowContextIndex, renderContextIndex, primarySubpassIndex, "vk_stripe.frag") {
         }
 
         ~GPCStripe() override = default;
@@ -33,13 +35,15 @@ namespace merutilm::rff2 {
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
 
+        void setStripe(const ShdStripeAttribute &stripe) const;
+
         void pipelineInitialized() override;
 
         void renderContextRefreshed() override;
 
     protected:
-        void configurePushConstant(vkh::PipelineLayoutManager &pipelineLayoutManager) override;
+        void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;
 
-        void configureDescriptors(std::vector<vkh::Descriptor *> &descriptors) override;
+        void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
     };
 }
