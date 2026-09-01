@@ -1,8 +1,11 @@
 //
 // Created by Merutilm on 2025-09-05.
+// Modified by Opus 5 on 2026-08-10, 2026-08-31
+// Modified by GPT-5 on 2026-08-31
 //
 
 #pragma once
+#include "GpuPassTimer.hpp"
 #include "../../vulkan_helper/impl/Renderer.hpp"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
 #include "../data/GraphicsMatrixStagingBuffer.h"
@@ -43,7 +46,15 @@ namespace merutilm::rff2 {
 
         std::unique_ptr<GraphicsMatrixBuffer<double> > iterationStagingBufferContext = nullptr;
 
-        explicit RenderSceneRenderer(vkh::EngineRef engine, const uint32_t windowContextIndex) : RendererAbstract(engine, windowContextIndex) {
+        // Off unless the Debug menu turns it on, and pushed in by RenderScene before each frame: the
+        // renderer is thrown away and rebuilt on every resize, so the switch cannot live here.
+        bool passTimingEnabled = false;
+        // One slot per frame in flight. A frame is still on the GPU while the next is being recorded,
+        // and its timestamps have to survive that long to be read at all.
+        GpuPassTimer passTimer;
+
+        explicit RenderSceneRenderer(vkh::EngineRef engine, const uint32_t windowContextIndex) : RendererAbstract(engine, windowContextIndex),
+            passTimer(engine.getCore(), engine.getCore().getPhysicalDevice().getMaxFramesInFlight()) {
             RenderSceneRenderer::init();
         }
 
@@ -130,6 +141,12 @@ namespace merutilm::rff2 {
         }
 
         void beforeCmdRender() override {
+            // The fence for this frame index has already been waited on, so the marks the last frame
+            // at this index wrote are readable now, and the slot they sit in is not reset until the
+            // command buffer recorded below actually runs.
+            if (passTimingEnabled) {
+                passTimer.collect(frameIndex);
+            }
             vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), iterationStagingBufferContext->getContext());
         }
 
@@ -143,6 +160,17 @@ namespace merutilm::rff2 {
 
 
 
+            // Each mark is one timestamp write, so none is recorded unless the timing was asked for.
+            const auto mark = [this, cbh](const char *label) {
+                if (passTimingEnabled) {
+                    passTimer.cmdMark(cbh, label, frameIndex);
+                }
+            };
+            if (passTimingEnabled) {
+                passTimer.cmdReset(cbh, frameIndex);
+                mark("start");
+            }
+
             rendererIteration->cmdRefreshIterations(
                 wc.getCommandBuffer().getCommandBufferHandle(frameIndex), iterationStagingBufferContext->getContext());
 
@@ -154,6 +182,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC0>(
                 wc, frameIndex, {rendererIteration}, {{}});
+            mark("iteration");
 
             // [IN] EXTERNAL
             // [SUBPASS OUT] SECONDARY (iteration)
@@ -163,13 +192,14 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             // [BARRIER] SECONDARY
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC1>(
                            wc, frameIndex, {
                                rendererStripe
                            }, {{}});
+            mark("stripe");
 
 
             // [IN] SECONDARY
@@ -180,7 +210,7 @@ namespace merutilm::rff2 {
                                                                               SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY),
                                                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                                           0, 1,
-                                                                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             // [BARRIER] PRIMARY
 
@@ -188,6 +218,7 @@ namespace merutilm::rff2 {
                 wc, frameIndex, {
                     rendererSlope, rendererColor
                 }, {{}, {}});
+            mark("slope+color");
 
             // [IN] PRIMARY
             // [SUBPASS OUT] SECONDARY (slope)
@@ -199,7 +230,7 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             // [BARRIER] PRIMARY
 
@@ -217,12 +248,13 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_GENERAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
             // [BARRIER] DOWNSAMPLED_PRIMARY
 
             rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG);
+            mark("downsample+blur fog");
 
             // [IN] DOWNSAMPLED_PRIMARY
             // [OUT] DOWNSAMPLED_SECONDARY
@@ -232,7 +264,7 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             vkh::BarrierUtils::cmdImageMemoryBarrier(
                 cbh, mfg(SharedImageContextIndices::MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_SECONDARY),
@@ -246,6 +278,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC3>(
                 wc, frameIndex, {rendererFog, rendererBloomThreshold}, {{}, {}});
+            mark("fog+bloomThreshold");
 
             // [IN] PRIMARY
             // [IN] DOWNSAMPLED_SECONDARY
@@ -258,7 +291,7 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
             // [BARRIER] PRIMARY
@@ -275,11 +308,12 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_GENERAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
             // [BARRIER] DOWNSAMPLED_PRIMARY
 
             rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM);
+            mark("downsample+blur bloom");
 
             // [IN] DOWNSAMPLED_PRIMARY
             // [OUT] DOWNSAMPLED_SECONDARY
@@ -289,7 +323,7 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             vkh::BarrierUtils::cmdImageMemoryBarrier(
                 cbh, mfg(SharedImageContextIndices::MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_SECONDARY),
@@ -305,6 +339,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC4>(
                 wc, frameIndex, {rendererBloom}, {{}});
+            mark("bloom");
 
             // [IN] SECONDARY
             // [IN] DOWNSAMPLED_SECONDARY
@@ -315,11 +350,12 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC5>(
                 wc, frameIndex, {rendererLinearInterpolation}, {{}});
+            mark("linearInterpolation");
 
             // [IN] PRIMARY
             // [OUT] SECONDARY
@@ -329,13 +365,19 @@ namespace merutilm::rff2 {
                                                                   SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY),
                                                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                               0, 1,
-                                                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                               VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
             // [BARRIER] SECONDARY
 
+            // An offscreen frame holds no swapchain image, and its caller reads SECONDARY back directly.
+            if (offscreenPass) {
+                return;
+            }
+
             vkh::RenderPassFullscreenRecorder::cmdFullscreenPresentOnlyRenderPass<RCCPresent>(
                 wc, frameIndex, swapchainImageIndex, {rendererPresent}, {{}});
+            mark("present");
 
             // [IN] SECONDARY
             // [OUT] EXTERNAL

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-06-09.
+// Modified by Opus 5 on 2026-08-31
 //
 
 #pragma once
@@ -8,7 +9,7 @@
 
 namespace merutilm::rff2 {
     class BackgroundThreads final {
-        std::mutex mutex;
+        mutable std::mutex mutex;
         std::vector<std::unique_ptr<BackgroundThread>> threads;
 
     public:
@@ -36,6 +37,19 @@ namespace merutilm::rff2 {
             for (const auto &thread : threads) {
                 thread->notify();
             }
+        }
+
+        // How many of the slots hold a worker that has not run out yet. Finished ones are kept until
+        // the next createThread reuses the slot, so counting the vector alone would over-report.
+        [[nodiscard]] size_t runningCount() const {
+            std::scoped_lock lock(mutex);
+            size_t running = 0;
+            for (const auto &thread : threads) {
+                if (thread != nullptr && !thread->isFinished()) {
+                    ++running;
+                }
+            }
+            return running;
         }
     };
 

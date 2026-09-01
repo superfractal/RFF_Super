@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-08.
+// Modified by Opus 5 on 2026-08-31
 //
 
 #include "ValidationLayer.hpp"
@@ -20,10 +21,14 @@ namespace merutilm::vkh {
         setupDebugMessenger();
     }
     void ValidationLayerImpl::checkValidationLayerSupport() {
-        uint32_t layerCount;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+        uint32_t layerCount = 0;
+        if (vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS) {
+            throw exception_init("No validation layers available");
+        }
         std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+        if (layerCount > 0 && vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()) != VK_SUCCESS) {
+            throw exception_init("No validation layers available");
+        }
 
         const bool support = std::ranges::any_of(availableLayers, [](const VkLayerProperties &layerProperties) {
             return strcmp(Debugger::VALIDATION_LAYER, layerProperties.layerName) == 0;

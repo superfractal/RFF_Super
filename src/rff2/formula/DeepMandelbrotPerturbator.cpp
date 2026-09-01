@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-18.
+// Modified by GPT-5 on 2026-07-11
 //
 
 #include "DeepMandelbrotPerturbator.h"
@@ -183,7 +184,7 @@ namespace merutilm::rff2 {
         const double fpd = sqrt(pd);
         const double fcd = sqrt(cd);
 
-        return getDoubleValueIteration(iteration, fpd, fcd, calc.decimalizeIterationMethod, bailout);
+        return getQuadraticDoubleValueIteration(iteration, fpd, fcd, calc.decimalizeIterationMethod, bailout);
     }
 
 

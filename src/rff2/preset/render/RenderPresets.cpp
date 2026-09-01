@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-05-31.
+// Modified by AI; earlier exact modification date unavailable.
+// Modified by GPT-5 on 2026-08-21.
 //
 
 #include "RenderPresets.h"
@@ -13,7 +15,7 @@ namespace merutilm::rff2 {
     }
 
     RenderAttribute RenderPresets::Potato::genRender() const {
-        return RenderAttribute{0.1f, 60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{0.1f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 
 
@@ -22,7 +24,7 @@ namespace merutilm::rff2 {
     }
 
     RenderAttribute RenderPresets::Low::genRender() const {
-        return RenderAttribute{0.3f, 60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{0.3f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 
     std::string RenderPresets::Medium::getName() const {
@@ -30,7 +32,7 @@ namespace merutilm::rff2 {
     }
 
     RenderAttribute RenderPresets::Medium::genRender() const {
-        return RenderAttribute{0.5f, 60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{0.5f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 
     std::string RenderPresets::High::getName() const {
@@ -38,7 +40,7 @@ namespace merutilm::rff2 {
     }
 
     RenderAttribute RenderPresets::High::genRender() const {
-        return RenderAttribute{1.0f, 60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{1.0f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 
     std::string RenderPresets::Ultra::getName() const {
@@ -46,14 +48,14 @@ namespace merutilm::rff2 {
     }
 
     RenderAttribute RenderPresets::Ultra::genRender() const {
-        return RenderAttribute{2.0f, 60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{2.0f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 
     std::string RenderPresets::Extreme::getName() const {
-        return "Extreme (DANGER)";
+        return "Extreme [DANGER]";
     }
 
     RenderAttribute RenderPresets::Extreme::genRender() const {
-        return RenderAttribute{4.0f,  60, true, std::thread::hardware_concurrency()};
+        return RenderAttribute{4.0f, 1, 60, true, std::thread::hardware_concurrency(), false, false, true};
     }
 }

@@ -1,15 +1,254 @@
-OpenCV copyright
+RFF Super - Third-Party Notices
 
+RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
+GNU General Public License v3; see LICENSE. This file records the third-party
+components it uses and their license terms.
 
-Copyright (C) 2000-2022, Intel Corporation, all rights reserved.
-Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
-Copyright (C) 2009-2016, NVIDIA Corporation, all rights reserved.
-Copyright (C) 2010-2013, Advanced Micro Devices, Inc., all rights reserved.
-Copyright (C) 2015-2023, OpenCV Foundation, all rights reserved.
-Copyright (C) 2008-2016, Itseez Inc., all rights reserved.
-Copyright (C) 2019-2023, Xperience AI, all rights reserved.
-Copyright (C) 2019-2022, Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
-Copyright (C) 2022-2023, Southern University of Science And Technology, all rights reserved.
+Copyright (C) 2025-2026 Merutilm     - original RFF-2.0
+Copyright (C) 2025-2026 SuperFractal - RFF Super, modifications from 2026-07-05 onward
 
+The full texts of the licenses of the components this program links are
+reproduced in LICENSE: the GNU GPL v3, the Apache License 2.0 (OpenCV, and the
+Vulkan headers and loader), the GNU LGPL v3 (GMP), the BSD 3-Clause License
+(zstd), and the MIT License (GLM).
 
-Third party copyrights are property of their respective owners.
+Distribution status: except for stb_image, the third-party libraries listed
+below are not redistributed in this repository and are expected to be installed
+separately by the user - see BUILDING.md. Their licenses may nevertheless impose
+conditions on distribution of binaries that link to or otherwise incorporate
+them. The applicable license terms should therefore be reviewed when
+distributing prebuilt binaries.
+
+FFmpeg is neither linked nor distributed; see the entry at the end.
+
+================================================================================
+Algorithms and technical acknowledgements
+================================================================================
+
+The following entries acknowledge short algorithms and mathematical techniques
+implemented in the project source. They are not separately bundled libraries,
+and these acknowledgements do not alter the project's GNU GPL v3 licensing.
+
+Björn Ottosson - Oklab
+
+The linear-sRGB/Oklab conversion matrices are from "A perceptual color space
+for image processing". The accompanying conversion code is offered by its
+author in the public domain or, alternatively, under the MIT License.
+https://bottosson.github.io/posts/oklab/
+
+Krzysztof Narkowicz - ACES curve fit
+
+The ACES (Narkowicz fit) tone-map option uses Narkowicz's compact curve fit
+to the ACES RRT+ODT, not the ACES transform itself. The published curve code is
+offered under CC0 or the MIT License.
+https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+
+Jorge Jimenez - Interleaved Gradient Noise
+
+The dithering noise constants follow "Next Generation Post Processing in Call
+of Duty: Advanced Warfare", presented at SIGGRAPH 2014.
+https://www.advances.realtimerendering.com/s2014/index.html
+
+John Hable - Uncharted 2 filmic curve
+
+The Filmic tone-map option follows the curve presented in "Uncharted 2: HDR
+Lighting" at GDC 2010.
+https://gdcvault.com/play/1012459/Uncharted-2-HDR
+
+Erik Reinhard, Michael Stark, Peter Shirley, and James Ferwerda
+
+The extended Reinhard tone-map option follows "Photographic Tone Reproduction
+for Digital Images", SIGGRAPH 2002.
+https://doi.org/10.1145/566654.566575
+
+Chris Wellons - lowbias32
+
+The pattern-noise integer hash uses lowbias32 from hash-prospector, distributed
+under the Unlicense.
+https://github.com/skeeto/hash-prospector
+
+Iñigo Quilez - cosine palettes
+
+Procedural palette presets use the cosine-palette technique described in
+"Palettes".
+https://iquilezles.org/articles/palettes/
+
+Boost C++ Libraries - hash_combine
+
+The one-line seed-mixing expression in src/vulkan_helper/hash/BoostHasher.hpp
+follows the boost::hash_combine form and is used under the Boost Software
+License 1.0.
+https://www.boost.org/LICENSE_1_0.txt
+
+Kalles Fraktaler format compatibility
+
+The .kfr palette reader is an independent implementation that parses the
+format's "Colors: " field; no Kalles Fraktaler source code is bundled. The
+Kalles Fraktaler and KFR names identify file-format compatibility and related
+palette functionality only and do not imply endorsement, sponsorship,
+certification, or trademark approval.
+
+HDR and display transfer functions - IEC, ITU-R, SMPTE, and ARIB
+
+The HDR video export implements published colorimetry and transfer functions
+from openly documented standards. Only the parameters needed to implement the
+functions are used; no standards text is reproduced, and none of these bodies
+endorses, sponsors, or certifies this program.
+
+  ITU-R BT.709 and BT.2020    Primaries behind the linear-light matrix in
+                              shdsrc/vk_linear_interpolation.frag, and the
+                              bt2020 / bt2020nc tags on the encoder.
+  IEC 61966-2-1 (sRGB)        EOTF and its inverse, used to move between stored
+                              code values and linear light in
+                              shdsrc/vk_linear_interpolation.frag,
+                              shdsrc/vk_bloom.frag,
+                              shdsrc/vk_static_2_image.frag, and
+                              src/rff2/video/TimelineEvaluator.cpp.
+  SMPTE ST 2084 (PQ)          Inverse EOTF in vk_linear_interpolation.frag and
+                              src/rff2/ui/VideoWindow.cpp. Also published as
+                              ITU-R BT.2100.
+  SMPTE ST 2086               Form of the master-display metadata the PQ export
+                              passes to the encoder.
+  ARIB STD-B67 (HLG)          OETF in the same two files, developed by the BBC
+                              and NHK and also published as ITU-R BT.2100.
+
+The "HDR10 (PQ)" option is named for the profile it targets - 10-bit BT.2020
+with the ST 2084 transfer and static ST 2086 metadata. HDR10 is an open profile
+with no certification mark; nothing here claims conformance testing.
+
+================================================================================
+Tailwind CSS v3 color palette - MIT License
+================================================================================
+
+Selected default Slate, Blue, Amber, Sky, Orange, Purple, Teal, Red, and Green
+color values from Tailwind CSS v3 are used as UI colors in
+src/rff2/constants/Win32Constants.hpp and src/rff2/ui/TimelineWindow.cpp. The
+Tailwind CSS framework and its source code are not bundled. This use does not
+imply endorsement, sponsorship, or certification by Tailwind Labs, Inc.
+
+Copyright (c) Tailwind Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+stb_image 1.33 - Public Domain
+================================================================================
+
+Sean Barrett and contributors.  http://nothings.org/stb_image.c
+
+Redistributed in this repository as extern/stb_image.c and extern/stb_image.h.
+Declared public domain by its author. No warranty implied; use at your own risk.
+
+================================================================================
+OpenCV - Apache License, Version 2.0
+================================================================================
+
+OpenCV 4.5.0 and later are licensed under the Apache License, Version 2.0. A
+copy of the license is available at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+(Releases before 4.5.0 used the 3-clause BSD license. This project builds
+against OpenCV 4.13, resolved by find_package, and uses only the core,
+imgcodecs, and imgproc modules.)
+
+The attribution notices below are reproduced from the OpenCV distribution:
+
+    Copyright (C) 2000-2022, Intel Corporation, all rights reserved.
+    Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
+    Copyright (C) 2009-2016, NVIDIA Corporation, all rights reserved.
+    Copyright (C) 2010-2013, Advanced Micro Devices, Inc., all rights reserved.
+    Copyright (C) 2015-2023, OpenCV Foundation, all rights reserved.
+    Copyright (C) 2008-2016, Itseez Inc., all rights reserved.
+    Copyright (C) 2019-2023, Xperience AI, all rights reserved.
+    Copyright (C) 2019-2022, Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
+    Copyright (C) 2022-2023, Southern University of Science And Technology, all rights reserved.
+
+    Third party copyrights are property of their respective owners.
+
+Note on license compatibility: the Apache License 2.0 is compatible with the
+GNU GPL v3, and the combined work is distributed under the GPL v3. It is not
+compatible with the GPL v2, so this project cannot be relicensed to GPL v2 while
+it links OpenCV 4.5.0 or later.
+
+================================================================================
+GMP - GNU LGPL v3 or later, or GNU GPL v2 or later, at your option
+================================================================================
+
+The GNU Multiple Precision Arithmetic Library.  https://gmplib.org/
+Used for the high-precision math behind deep zooms.
+
+================================================================================
+Zstandard (zstd) - BSD 3-Clause or GNU GPL v2, at your option
+================================================================================
+
+Copyright (c) Meta Platforms, Inc. and affiliates.
+https://github.com/facebook/zstd
+Used as the entropy coder of the compressed map format.
+
+================================================================================
+OpenGL Mathematics (GLM) - MIT License
+================================================================================
+
+Copyright (c) 2005 G-Truc Creation.  https://github.com/g-truc/glm
+GLM is offered under the MIT License and the Happy Bunny License; this project
+relies on the MIT terms.
+
+================================================================================
+Vulkan-Headers and Vulkan-Loader - Apache License, Version 2.0
+================================================================================
+
+The Khronos Group.  https://www.vulkan.org/
+
+BUILDING.md builds against the MSYS2 mingw-w64-x86_64-vulkan-devel package.
+CMake's find_package(Vulkan) accepts whichever install it finds, however, so on a
+machine that has the LunarG Vulkan SDK the headers and the vulkan-1 import
+library may come from there instead. Either way the headers and loader are the
+Khronos Apache-2.0 sources, no part of them is redistributed here, and the
+program loads the system vulkan-1.dll at run time.
+
+The LunarG SDK as a whole is a bundle of many components under several different
+open-source licenses. Nothing here should be read as a statement about that
+bundle beyond the headers and loader named above.
+
+================================================================================
+shaderc (glslc) - Apache License, Version 2.0
+================================================================================
+
+https://github.com/google/shaderc
+
+Build-time only: glslc compiles the GLSL sources in shdsrc/ to the SPIR-V modules
+in shaders/. It is not linked into the program and not distributed with it.
+compile.ps1 takes the first glslc on PATH and falls back to a Vulkan SDK
+installation, so the binary may come from either mingw-w64-x86_64-shaderc or the
+SDK; both are Google's shaderc under the Apache License 2.0. The .spv files in
+shaders/ are compiled from this project's own GLSL and carry no shaderc code.
+
+================================================================================
+FFmpeg - not linked, not distributed
+================================================================================
+
+Video export launches ffmpeg.exe as a separate process and streams raw frames to
+it over a pipe; see src/rff2/ui/VideoWindow.cpp. FFmpeg is neither linked into
+nor distributed with this program, and the user supplies the binary.
+
+The license of that binary, and of any codecs it was built with, is a matter
+between the user and its distributor. Note that the encoders this program asks
+for by name - libx264 and libx265 - implement patented video coding standards
+whose patent licensing is administered separately from their source licenses.

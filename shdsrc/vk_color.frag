@@ -1,3 +1,7 @@
+//
+// Modified by Opus 5 on 2026-08-06
+//
+
 #version 450
 
 layout (input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput canvas;
@@ -92,7 +96,8 @@ vec3 add_hue(vec3 col, float add) {
     // ---------------------------------
 
 
-    vec3 result;
+    // Seeded with the input so a non-finite hue leaves the color untouched instead of undefined.
+    vec3 result = col;
     switch (ioff) {
         case 0: {
                     result = vec3(high, low - (low - high) * doff, low);
@@ -126,12 +131,17 @@ void main() {
 
     vec3 c = subpassLoad(canvas).rgb;
 
-    c = fix_color(pow(c, vec3(1 / color_attr.gamma)));
-    c = fix_color(c * (1 + color_attr.exposure) / (1 - color_attr.exposure));
+    // Every divisor is bounded away from zero: the UI accepts any float, so gamma 0 and exposure/contrast 1 are reachable.
+    float gamma = max(color_attr.gamma, 1e-3);
+    float exposure = min(color_attr.exposure, 0.999);
+    float contrast = min(color_attr.contrast, 0.999);
+
+    c = fix_color(pow(c, vec3(1 / gamma)));
+    c = fix_color(c * (1 + exposure) / (1 - exposure));
     c = fix_color(add_hue(c, color_attr.hue));
     float gray = grayscale(c);
     c = fix_color(c + (c - vec3(gray, gray, gray)) * color_attr.saturation);
     c = fix_color(c + color_attr.brightness);
-    c = fix_color((c - 0.5) / (1 - color_attr.contrast) * (1 + color_attr.contrast) + 0.5);
+    c = fix_color((c - 0.5) / (1 - contrast) * (1 + contrast) + 0.5);
     color = vec4(c, 1);
 }

@@ -1,6 +1,8 @@
 //
 // Created by Merutilm on 2025-08-15.
 //
+// Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
+//
 
 #include "GPCFog.hpp"
 
@@ -23,6 +25,18 @@ namespace merutilm::rff2 {
         auto &fogUBOHost = fogUBO.getHostObject();
         fogUBOHost.set<float>(DescFog::TARGET_FOG_RADIUS, fog.radius);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_OPACITY, fog.opacity);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_RIM_MASK, fog.rimMask);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_RIM_MASK_BOOST, fog.rimMaskBoost);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_RIM_BLUR, fog.rimBlur);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CENTER_START, fog.centerStart);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CENTER_INVERT, fog.centerInvert ? 1.0f : 0.0f);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_AMOUNT, fog.focusAmount);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_RATIO, fog.focusRatio);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_RANGE, fog.focusRange);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_FALLOFF, fog.focusFalloff);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_BLUR, fog.focusBlur);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_BLUR_QUALITY,
+                              fog.blurQuality == ShdFogBlurQuality::APPEARANCE ? 1.0f : 0.0f);
         fogUBO.update();
     }
 
@@ -106,5 +120,8 @@ namespace merutilm::rff2 {
                                                             wc.core, sampler, true));
         appendUniqueDescriptor(SET_FOG_CANVAS, descriptors, std::move(descManager));
         appendDescriptor<DescFog>(SET_FOG, descriptors);
+        // Both sets are shared instances already written by the iteration and slope passes.
+        appendDescriptor<DescIteration>(SET_ITERATION, descriptors);
+        appendDescriptor<DescSlope>(SET_SLOPE, descriptors);
     }
 }

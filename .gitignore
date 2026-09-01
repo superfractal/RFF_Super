@@ -37,6 +37,26 @@ bin
 *.out
 *.app
 
+# Python (debug / test scripts — this is a C++/Vulkan project, no tracked .py)
+*.py
+*.py[cod]
+__pycache__/
+
 # Others
-*.ps1
 *.zip
+/backup/
+/bin/
+/build/
+/.claude/
+/.codex/
+/debug/
+/docs/
+/include/
+
+# Written by the Vulkan layers that run_with_validation.bat enables
+/validation.log
+/crash_diagnostic.log
+# Crash-diagnostic dump folders (YYYY-MM-DD-HHMMSS)
+/20??-??-??-??????/
+# The running session's kept location / settings, and what a crashed one left behind
+/recovery/

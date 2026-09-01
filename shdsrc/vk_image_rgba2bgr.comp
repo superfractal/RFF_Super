@@ -1,23 +1,72 @@
+//
+// Modified by Opus 5 on 2026-08-10, 2026-08-12, 2026-08-19.
+// Modified by GPT-5 on 2026-08-31.
+//
+
 #version 450
 
 layout (set = 0, binding = 0) uniform sampler2D srcImage;
 layout (set = 0, binding = 1) writeonly buffer BGRSSBO {
     uint data[];
 } bgr_ssbo_attr;
+layout (set = 0, binding = 2) uniform DstExtentUBO {
+    uvec2 extent;
+// Nonzero packs 16 bits per channel with alpha (rgba64le) instead of the 8-bit BGR24 the SDR encoder takes.
+    uint hdr;
+} dst_attr;
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-ivec4 get_color255(int index, ivec2 extent) {
-    return ivec4(texelFetch(srcImage, ivec2(index % extent.x, index / extent.x), 0) * 255);
+// Area average of the source region covering one destination pixel, matching cv::INTER_AREA. ratio 1 = single texel.
+vec4 get_color(int index, ivec2 dstExtent, ivec2 srcExtent, vec2 ratio) {
+    ivec2 p = ivec2(index % dstExtent.x, index / dstExtent.x);
+    vec2 f1 = vec2(p) * ratio;
+    vec2 f2 = f1 + ratio;
+    ivec2 s1 = max(ivec2(floor(f1)), ivec2(0));
+    ivec2 s2 = min(ivec2(ceil(f2)), srcExtent);
+
+    vec4 sum = vec4(0.0);
+    float weightSum = 0.0;
+
+    for (int y = s1.y; y < s2.y; ++y) {
+        float wy = min(float(y + 1), f2.y) - max(float(y), f1.y);
+        if (wy <= 0.0) {
+            continue;
+        }
+        for (int x = s1.x; x < s2.x; ++x) {
+            float wx = min(float(x + 1), f2.x) - max(float(x), f1.x);
+            if (wx <= 0.0) {
+                continue;
+            }
+            float w = wx * wy;
+            sum += texelFetch(srcImage, ivec2(x, y), 0) * w;
+            weightSum += w;
+        }
+    }
+
+    return sum / max(weightSum, 1e-6);
+}
+
+ivec4 get_color255(int index, ivec2 dstExtent, ivec2 srcExtent, vec2 ratio) {
+    return ivec4(clamp(get_color(index, dstExtent, srcExtent, ratio) * 255.0 + 0.5, 0.0, 255.0));
+}
+
+ivec4 get_color65535(int index, ivec2 dstExtent, ivec2 srcExtent, vec2 ratio) {
+    return ivec4(clamp(get_color(index, dstExtent, srcExtent, ratio) * 65535.0 + 0.5, 0.0, 65535.0));
 }
 
 void main() {
 
 
 
-    ivec2 extent = textureSize(srcImage, 0);
+    ivec2 srcExtent = textureSize(srcImage, 0);
+    ivec2 dstExtent = ivec2(dst_attr.extent);
+    vec2 ratio = vec2(srcExtent) / vec2(dstExtent);
     ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
-    int index = gid.y * extent.x + gid.x;
+    if (any(greaterThanEqual(gid, dstExtent))) {
+        return;
+    }
+    int index = gid.y * dstExtent.x + gid.x;
 
 
 
@@ -31,8 +80,21 @@ void main() {
     //  B R G B  G B R G  R G B R  B R G B ...
     //  1 0 0 0  2 2 1 1  3 3 3 2  5 4 4 4
 
-    int size = extent.x * extent.y;
-    int arr_len = size * 3 / 4;
+    int size = dstExtent.x * dstExtent.y;
+
+    // One invocation writes one whole pixel here, so the three-into-four word packing below is not needed.
+    if (dst_attr.hdr != 0u) {
+        if (index >= size) {
+            return;
+        }
+        ivec4 c = get_color65535(index, dstExtent, srcExtent, ratio);
+        bgr_ssbo_attr.data[index * 2] = c.g << 16 | c.r;
+        bgr_ssbo_attr.data[index * 2 + 1] = 65535 << 16 | c.b;
+        return;
+    }
+
+    // Rounded up: flooring dropped the final partial word, leaving the last pixel's bytes never written.
+    int arr_len = (size * 3 + 3) / 4;
 
 
     int i1 = index * 4 / 3;
@@ -42,8 +104,9 @@ void main() {
         return;
     }
 
-    ivec4 c1 = get_color255(i1, extent);
-    ivec4 c2 = i1 == arr_len - 1 ? ivec4(0, 0, 0, 255) : get_color255(i2, extent);
+    ivec4 c1 = get_color255(i1, dstExtent, srcExtent, ratio);
+    // i2 is a pixel index, so it has to be bounded by the pixel count: comparing it against the word count blacked out a real pixel at 3/4 of the image.
+    ivec4 c2 = i2 >= size ? ivec4(0, 0, 0, 255) : get_color255(i2, dstExtent, srcExtent, ratio);
 
     switch (index % 3) {
         case 0:

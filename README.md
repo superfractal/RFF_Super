@@ -1,76 +1,66 @@
-# RFF 2.0
+# RFF Super
 
+> **IMPORTANT NOTE:**
+> **This is an improved and extended version of the original [RFF-2.0](https://github.com/Merutilm/RFF-2.0) by Merutilm — a modified version of it, changed from 2026-07-05 onward. The changes are listed in [CHANGELOG.md](CHANGELOG.md), and each changed source file carries its own modification notice and date.**
+> This project was developed using vibe coding. As I am not a mathematics major or a highly experienced programmer, there may be imperfections.
+>
+> The precision of the Mandelbrot set calculations may be lower than that of the original version.
 
-## What is RFF?
+## The Original and This Fork
 
-**RFF** is an abbreviation for <u>**Ridiculously Fast Fractal**</u>.
+RFF-2.0 by Merutilm is the original. This repository is a fork of it, pulled in a different
+direction, so "better" depends on what you are doing:
 
-- As the name suggests, its priority is ONLY Speed, and defaulted for the fastest settings.
+| | **RFF-2.0** (Original) | **RFF_Super** (this fork) |
+| --- | --- | --- |
+| **Priority** | Stability | Features and visual quality |
+| **Availability** | Public [Merutilm/RFF-2.0](https://github.com/Merutilm/RFF-2.0) | Public |
+| **Best for** | Reliable everyday exploration | Producing the most beautiful stills and videos |
+| **Strengths** | Simpler and easier to use; latest, faster, and stable releases; highest calculation precision | Custom formulas, extra shader types, palette settings, free rotation, presets |
+| **Trade-offs** || More settings to learn; precision may be lower than the original; more bugs |
 
+## Update History
 
-## Overview
-### Important : This program is **NOT COMPATIBLE** with **RFF(Java)** file extensions!
+See **[CHANGELOG.md](CHANGELOG.md)** for the full update history.
 
-- A program that achieves extremely fast `Power-2 Mandelbrot set`.
+## Building from Source
 
-- The application is built with the Vulkan API.
+See **[BUILDING.md](BUILDING.md)** for the full compile guide.
 
-- This program uses `Fast-period-guessing`*(a.k.a. FPG)* which I developed. It automatically generates the `longest period` of the selected location.
-This value is unmodifiable.
+## Features of the Improved Version
 
-- This program uses an `Multilevel Periodic Approximation` algorithm which I developed.
-It completely replaces traditional `BLA`, achieving speedups of more than 2 times. \
-To put it simply, it skips to the `Periodic point` directly.
+### Differences from Standard RFF
 
+Based on RFF 2.1.2.3, the following features have been added or improved:
 
-- You can specify a compressor to render even extremely long period using less memory. \
-Of course, the approximation table can also be compressed using this algorithm, and jumps a <u>**HUGE**</u> process! \
-Therefore, If you are trying to render long periods (over `10,000,000` or so), You should compress the references. \
-This will be <u>**SIGNIFICANTLY**</u> faster because it <u>**SUPERJUMPS**</u> process of table creation. 
+* Added custom formulas (zoomable up to e14)
+* Added new Shader types
+* Added palette settings
+* Boundary tracing
+* Freely adjustable fractal Rotation
+* Improved User Interface (UI)
+* Settings save / load (`.rfc`): store and recall the full configuration — location, Fractal/Render/Resolution/Shader/Video — in one file
+* Shader preset save / load (`.rfsp`): store and recall the full Palette/Stripe/Slope/Color/Fog/Bloom setup
+* Supersampling
+* etc...
 
+## Known Issues & Areas for Improvement
 
-- Save amazing images using shaders!
+The following issues are currently known:
 
-## Get Started
+* The precision may be lower than that of the original.
+* Unintended black or white lines may appear on the screen.
+  * **Fix:** Lower `Precision Level` until the lines disappear. This is most common cause, but the lines may rarely appear for other reasons too.
+* A long video export at a high resolution can abort part-way with `Failed to submit queue! VK_ERROR_DEVICE_LOST`, killing the process and leaving a truncated `.mp4`. The GPU is lost after tens of minutes of sustained load; where it stops varies from run to run. Validation layers report no errors during a full run, so the cause may lie in the driver or the hardware — but a bug in this application has not been ruled out.
+  * **Workaround:** lower `Supersampling (SSAA)` before generating keyframes. Per-frame GPU load is `window client size x Clarity x SSAA`, but the video output size is only `window client size x Clarity` — so lowering SSAA cuts the load without changing the output resolution.
 
-- It's very simple. Just go into the `releases`, 
-download the zip, 
-unzip it and run it from the `bin` directory.
+## License
 
+RFF Super is free software under the **GNU General Public License v3**; the full text is in
+[LICENSE](LICENSE), which also reproduces the licenses of the components this program links.
 
-## Features
-- The status bar on the window means the following (from left to right):
-
-1. The iterations of the pixel pointed to by the mouse cursor
-2. The zoom of current location.
-3. The estimated period of this location. (The number in parentheses is the length of the Reference and `MPA` array.)
-4. The elapsed time since the calculation started
-5. The Process
-
-- Video renderer is built-in!
-1. Use `Dynamic Map` or `Static Map` to generate video `keyframes`. \
-This option is in `Data Settings` in `Video` menu.
-2. `Dynamic Map` stores whole iteration data each pixel. It requires large capacity. \
-the extension is `.rfm`.
-3. `Static Map` stores as `image` and `info` files. It requires less capacity but also the most `shaders` are disabled. \
-the extension of `info` file is `.rfsm`.
-4. Export your own Video using existing `keyframes`.
-
-
-- Find the nearest Minibrot with `Locate Minibrot` in `Explore` menu.
-
-- More features will be added soon.
-
-
-## Known Issues & Problems
-- The program was compiled with -Ofast, so sometimes results incorrect image at some location.
-- This is weak for complex spiral patterns and mandelbrot plane, because there are only formulas for the  recursive julia sets.  
-  I will add that formulas in the future.
-- The `Locate Minibrot` algorithm is currently inefficient. It is 50% slower than `kf2`.
-
-- An issue occurs where the reference calculation slows down unusually at the certain very deep locations.
-
-- No viable algorithms for interior detection(Coming soon). 
-it will slow down the speed for interior pixels.
-
-- I will do my best to accelerate as reference calculations account for more than 90% of the total
+Third-party components, the named algorithms implemented in the source, and the license each one
+is taken under are recorded in [NOTICE](NOTICE). The libraries other than stb_image are not
+redistributed here and are installed separately; see [BUILDING.md](BUILDING.md). Their license
+terms still apply to any prebuilt binary that links them, so review NOTICE before distributing
+one.

@@ -1,11 +1,13 @@
 //
 // Created by Merutilm on 2025-05-05.
+// Modified by GPT-5 on 2026-08-31.
 //
 
 #include "fp_decimal_calculator.h"
 
 #include <cfloat>
 #include <cmath>
+#include <stdexcept>
 
 #include "fp_complex_calculator.h"
 #include "../constants/Constants.hpp"
@@ -67,6 +69,9 @@ namespace merutilm::rff2 {
     }
 
     fp_decimal_calculator::fp_decimal_calculator(const std::string &str, const int exp10) {
+        if (!isValidString(str)) {
+            throw std::invalid_argument("Invalid decimal string");
+        }
         mpz_init(value);
         mpz_init(temp);
 
@@ -85,6 +90,17 @@ namespace merutilm::rff2 {
 
         mpz_set_f(value, d1);
         mpf_clear(d1);
+    }
+
+    bool fp_decimal_calculator::isValidString(const std::string &str) {
+        if (str.empty()) {
+            return false;
+        }
+        mpf_t value;
+        mpf_init(value);
+        const bool valid = mpf_set_str(value, str.c_str(), 10) == 0;
+        mpf_clear(value);
+        return valid;
     }
 
 

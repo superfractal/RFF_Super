@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-05.
+// Modified by GPT-5 on 2026-08-31.
 //
 
 #pragma once
@@ -22,6 +23,8 @@ namespace merutilm::rff2 {
         explicit fp_decimal_calculator(double d, int exp10);
 
         explicit fp_decimal_calculator(const std::string &str, int exp10);
+
+        [[nodiscard]] static bool isValidString(const std::string &str);
 
         ~fp_decimal_calculator();
 

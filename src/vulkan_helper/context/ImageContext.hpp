@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-07-26.
+// Modified by Opus 5 on 2026-08-15, 2026-08-26
+// Modified by GPT-5 on 2026-08-23.
 //
 
 #pragma once
@@ -61,14 +63,14 @@ namespace merutilm::vkh {
         static MultiframeImageContext fromSwapchain(CoreRef core, SwapchainRef swapchain) {
             const auto images = swapchain.getSwapchainImages();
             const auto imageViews = swapchain.getSwapchainImageViews();
-            const auto maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
-            const auto extent = swapchain.populateSwapchainExtent();
+            // The size these images were created at, not the one the window is at now: a stale window size here is what puts an attachment into a framebuffer too large for it.
+            const auto extent = swapchain.getCurrentExtent();
 
-            std::vector<ImageContext> result(maxFramesInFlight);
+            std::vector<ImageContext> result(images.size());
 
-            for (uint32_t i = 0; i < maxFramesInFlight; ++i) {
+            for (uint32_t i = 0; i < images.size(); ++i) {
                 result[i].image = images[i];
-                result[i].imageFormat = config::SWAPCHAIN_IMAGE_FORMAT,
+                result[i].imageFormat = swapchain.getImageFormat(),
                 result[i].imageMemory = VK_NULL_HANDLE;
                 result[i].imageView = imageViews[i];
                 result[i].mipmappedImageView = imageViews[i];

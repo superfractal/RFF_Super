@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-09-03.
+// Modified by GPT-5 on 2026-08-31.
 //
 
 #pragma once
@@ -46,7 +47,10 @@ namespace merutilm::vkh {
                                           const VkPipelineStageFlags srcStageMask,
                                           const VkPipelineStageFlags dstStageMask) {
 
-            cmdImageMemoryBarrier(commandBuffer, image, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            const VkAccessFlags srcAccessMask = srcStageMask & VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                                    ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                    : VK_ACCESS_SHADER_WRITE_BIT;
+            cmdImageMemoryBarrier(commandBuffer, image, srcAccessMask, VK_ACCESS_SHADER_READ_BIT,
                                   currentLayout, currentLayout, mipLevel, mipLevelCount, srcStageMask, dstStageMask);
         }
 

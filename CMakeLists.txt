@@ -1,13 +1,15 @@
-cmake_minimum_required(VERSION 3.31)
-project(RFF)
+# Modified by AI; earlier exact modification date unavailable.
+# Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-26, 2026-09-01.
+# Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01
+
+cmake_minimum_required(VERSION 4.1.2)
+project(RFF_Super)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-
-
 add_executable(
-        RFF
+        RFF_Super
         res/resources.rc
         src/rff2/ui/Main.cpp
         src/rff2/calc/fp_complex_calculator.cpp
@@ -40,11 +42,31 @@ add_executable(
         src/rff2/formula/Perturbator.h
         src/rff2/io/RFFDynamicMapBinary.cpp
         src/rff2/io/RFFDynamicMapBinary.h
+        src/rff2/io/RFFMapCompression.cpp
+        src/rff2/io/RFFMapCompression.h
         src/rff2/data/Matrix.h
         src/rff2/attr/ShdPalColorSmoothingMethod.h
+        src/rff2/attr/ShdPalColorInterpolationMethod.h
+        src/rff2/attr/ShdSlopeShadingBlend.h
+        src/rff2/attr/ShdWarpSource.h
+        src/rff2/attr/ShdWarpAttribute.h
         src/rff2/data/ColorUtils.h
         src/rff2/attr/ShdStripeType.h
         src/rff2/attr/VidAnimationAttribute.h
+        src/rff2/attr/VidKeyInterpolation.h
+        src/rff2/attr/VidTimelineAttribute.h
+        src/rff2/attr/VidTimelineSlotSelection.h
+        src/rff2/attr/VidTimelineTarget.h
+        src/rff2/io/TimelineIO.cpp
+        src/rff2/io/TimelineIO.h
+        src/rff2/video/TimelineSchedule.cpp
+        src/rff2/video/TimelineSchedule.hpp
+        src/rff2/video/VideoFrameSource.cpp
+        src/rff2/video/VideoFrameSource.hpp
+        src/rff2/video/TimelineParams.cpp
+        src/rff2/video/TimelineParams.hpp
+        src/rff2/video/TimelineEvaluator.cpp
+        src/rff2/video/TimelineEvaluator.hpp
         src/rff2/formula/LightMandelbrotReference.cpp
         src/rff2/formula/LightMandelbrotReference.h
         src/rff2/parallel/ParallelRenderState.cpp
@@ -55,6 +77,10 @@ add_executable(
         src/rff2/parallel/ParallelArrayDispatcher.h
         src/rff2/ui/Utilities.h
         src/rff2/formula/LightMandelbrotPerturbator.cpp
+        src/rff2/formula/CustomFormulaPerturbator.cpp
+        src/rff2/formula/ExpressionParser.cpp
+        src/rff2/formula/CustomFormulaPerturbator.h
+        src/rff2/formula/ExpressionParser.h
         src/rff2/formula/LightMandelbrotPerturbator.h
         src/rff2/mrthy/LightPA.h
         src/rff2/mrthy/LightMPATable.h
@@ -62,6 +88,7 @@ add_executable(
         src/rff2/mrthy/MPAPeriod.h
         src/rff2/ui/SettingsWindow.cpp
         src/rff2/ui/SettingsWindow.hpp
+        src/rff2/ui/SettingsTheme.hpp
         src/rff2/ui/SettingsMenu.cpp
         src/rff2/ui/SettingsMenu.hpp
         src/rff2/ui/CallbackFile.cpp
@@ -76,6 +103,8 @@ add_executable(
         src/rff2/locator/MandelbrotLocator.h
         src/rff2/ui/CallbackExplore.cpp
         src/rff2/ui/CallbackExplore.hpp
+        src/rff2/ui/CallbackDebug.cpp
+        src/rff2/ui/CallbackDebug.hpp
         src/rff2/calc/dex.h
         src/rff2/formula/DeepMandelbrotReference.cpp
         src/rff2/formula/DeepMandelbrotReference.h
@@ -102,12 +131,14 @@ add_executable(
         src/rff2/preset/shader/fog/ShdFogPresets.h
         src/rff2/preset/shader/slope/ShdSlopePresets.h
         src/rff2/preset/shader/stripe/ShdStripePresets.h
+        src/rff2/preset/shader/example/ShdExamplePresets.h
         src/rff2/preset/shader/palette/ShdPalettePresets.cpp
         src/rff2/preset/shader/fog/ShdFogPresets.cpp
         src/rff2/preset/shader/color/ShdColorPresets.cpp
         src/rff2/preset/shader/slope/ShdSlopePresets.cpp
         src/rff2/preset/shader/stripe/ShdStripePresets.cpp
         src/rff2/preset/shader/bloom/ShdBloomPresets.cpp
+        src/rff2/preset/shader/example/ShdExamplePresets.cpp
         src/rff2/preset/Presets.h
         src/rff2/preset/resolution/ResolutionPresets.cpp
         src/rff2/preset/resolution/ResolutionPresets.h
@@ -129,6 +160,16 @@ add_executable(
         src/rff2/io/RFFLocationBinary.h
         src/rff2/io/KFRColorLoader.cpp
         src/rff2/io/KFRColorLoader.hpp
+        src/rff2/io/ShaderPresetIO.cpp
+        src/rff2/io/ShaderPresetIO.h
+        src/rff2/io/ConfigIO.cpp
+        src/rff2/io/ConfigIO.h
+        src/rff2/io/RecoveryIO.cpp
+        src/rff2/io/RecoveryIO.h
+        src/rff2/io/PreferencesIO.cpp
+        src/rff2/io/PreferencesIO.h
+        src/rff2/ui/RecoveryPrompt.cpp
+        src/rff2/ui/RecoveryPrompt.hpp
         extern/stb_image.c
         extern/stb_image.h
         src/vulkan_helper/handle/Handler.hpp
@@ -211,6 +252,7 @@ add_executable(
         src/vulkan_helper/repo/WindowLocalDescriptorRepo.hpp
         src/vulkan_helper/struct/DescriptorTemplateInfo.hpp
         src/rff2/vulkan/SharedDescriptorTemplate.hpp
+        src/rff2/vulkan/ShaderAnimationPhases.hpp
         src/vulkan_helper/impl/Engine.cpp
         src/vulkan_helper/impl/Engine.hpp
         src/vulkan_helper/executor/ScopedNewCommandBufferExecutor.cpp
@@ -223,6 +265,12 @@ add_executable(
         src/vulkan_helper/util/SwapchainUtils.hpp
         src/rff2/vulkan/GPCIterationPalette.cpp
         src/rff2/vulkan/GPCIterationPalette.hpp
+        src/rff2/vulkan/PaletteBandLine.hpp
+        src/rff2/vulkan/TextureDescriptor.cpp
+        src/rff2/vulkan/TextureDescriptor.hpp
+        src/rff2/attr/ShdTextureAttribute.h
+        src/rff2/attr/ShdTextureBlendMode.h
+        src/rff2/attr/ShdTextureUVMode.h
         src/vulkan_helper/context/DescriptorUpdateContext.hpp
         src/vulkan_helper/core/safe_array.hpp
         src/vulkan_helper/util/BufferImageContextUtils.hpp
@@ -264,7 +312,7 @@ add_executable(
         src/rff2/vulkan/GPCDownsampleForBlur.hpp
         src/rff2/vulkan/GPCBloomThreshold.cpp
         src/rff2/vulkan/GPCBloomThreshold.hpp
-        src/vulkan_helper/core/Factory.hpp
+        src/vulkan_helper/core/factory.hpp
         src/vulkan_helper/util/Debugger.hpp
         src/vulkan_helper/util/PhysicalDeviceUtils.hpp
         src/vulkan_helper/util/GraphicsContextWindowProc.hpp
@@ -281,7 +329,7 @@ add_executable(
         src/rff2/vulkan/CPCBoxBlur.cpp
         src/rff2/vulkan/CPCBoxBlur.hpp
         src/rff2/vulkan/RCCPresent.hpp
-        src/vulkan_helper/core/Config.hpp
+        src/vulkan_helper/core/config.hpp
         src/vulkan_helper/impl/Fence.cpp
         src/vulkan_helper/impl/Fence.hpp
         src/rff2/vulkan/RCCDownsampleForBlur.hpp
@@ -310,6 +358,9 @@ add_executable(
         src/rff2/vulkan/GPCPresent.hpp
         src/rff2/ui/VideoWindow.cpp
         src/rff2/ui/VideoWindow.hpp
+        src/rff2/ui/TimelineWindow.cpp
+        src/rff2/ui/TimelineWindow.hpp
+        src/rff2/ui/NumericExpression.hpp
         src/rff2/ui/VideoRenderScene.cpp
         src/rff2/ui/VideoRenderScene.hpp
         src/rff2/ui/VideoRenderSceneRenderer.hpp
@@ -331,46 +382,95 @@ add_executable(
         src/rff2/ui/VideoBufferCache.hpp
 )
 
-find_package(Vulkan REQUIRED)
+# The Debug binary is a different program - unoptimized, bounds-checked, sanitized where the
+# toolchain allows - so it is named apart rather than dropped over the Release one. It still has to
+# sit in bin/ itself: the shader loader resolves ../shaders/ from the folder the exe is in.
+set_target_properties(RFF_Super PROPERTIES OUTPUT_NAME "RFF_Super" OUTPUT_NAME_DEBUG "RFF_Super_Debug")
 
-target_compile_options(RFF PRIVATE
+find_package(Vulkan REQUIRED)
+# Only the three modules the code actually calls; this also pins headers and libraries to one
+# OpenCV install instead of letting a hand-placed copy in include/ shadow the linked one.
+find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
+
+# Debug is a debugging build and nothing else: nothing optimized away, full symbols, and a stack
+# that can always be walked back to the frame that did it. AddressSanitizer is asked for here too,
+# but probed rather than assumed: the MSYS2 mingw-w64 GCC this is normally built with ships no
+# libasan, and hard-coding the flag would turn every Debug build on that toolchain into a link
+# error. Configure with the MSYS2 clang64 toolchain to get the sanitizer itself.
+option(RFF_ASAN "Use AddressSanitizer in the Debug configuration when the toolchain can link it" ON)
+
+set(RFF_DEBUG_COMPILE_OPTIONS -O0 -g3 -fno-omit-frame-pointer -fno-optimize-sibling-calls)
+set(RFF_DEBUG_LINK_OPTIONS "")
+
+if (RFF_ASAN)
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_FLAGS -fsanitize=address)
+    set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=address)
+    check_cxx_source_compiles("int main() { return 0; }" RFF_ASAN_LINKS)
+    unset(CMAKE_REQUIRED_FLAGS)
+    unset(CMAKE_REQUIRED_LINK_OPTIONS)
+    if (RFF_ASAN_LINKS)
+        list(APPEND RFF_DEBUG_COMPILE_OPTIONS -fsanitize=address)
+        list(APPEND RFF_DEBUG_LINK_OPTIONS -fsanitize=address)
+    else ()
+        message(WARNING "RFF_ASAN is on, but this toolchain cannot link -fsanitize=address "
+                "(mingw-w64 GCC ships no libasan). Building Debug without it.")
+    endif ()
+endif ()
+
+target_compile_options(RFF_Super PRIVATE
         #Debug options
-        $<$<CONFIG:Debug>:-O0>
+        $<$<CONFIG:Debug>:${RFF_DEBUG_COMPILE_OPTIONS}>
         #Release options
-        $<$<CONFIG:Release>:-Ofast -funroll-loops -march=native>
+        $<$<CONFIG:Release>:-O3 -ffast-math -funroll-loops -march=native>
 )
 
-target_compile_definitions(RFF
+target_link_options(RFF_Super PRIVATE
+        $<$<CONFIG:Debug>:${RFF_DEBUG_LINK_OPTIONS}>
+)
+
+# Palette generation must stay bit-reproducible so saved recipes ({presetId, seed}) regenerate the
+# same colors regardless of build. -Ofast/-march=native enable fast-math and FMA contraction, which
+# perturb the float math; disable both for this one TU (appended flags win).
+set_source_files_properties(src/rff2/preset/shader/palette/ShdPalettePresets.cpp PROPERTIES
+        COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off"
+)
+
+target_compile_definitions(RFF_Super
         PRIVATE
         VK_USE_PLATFORM_WIN32_KHR
+        # Bounds-checked libstdc++ containers, so an index past the end of a vector stops where it
+        # happens instead of reading on. ABI-compatible, unlike _GLIBCXX_DEBUG, so OpenCV and GMP
+        # do not have to be rebuilt to match.
+        $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS>
 )
 
-target_include_directories(RFF PRIVATE
+target_include_directories(RFF_Super PRIVATE
         # standard include
         ${CMAKE_SOURCE_DIR}/include
         # extern sources
         ${CMAKE_SOURCE_DIR}/extern
         # vulkan sdk directory
         ${Vulkan_INCLUDE_DIRS}
+        # opencv, from the install find_package resolved
+        ${OpenCV_INCLUDE_DIRS}
 )
 
-target_link_directories(RFF PRIVATE ${CMAKE_SOURCE_DIR}/lib)
+target_link_directories(RFF_Super PRIVATE ${CMAKE_SOURCE_DIR}/lib)
 
-target_link_libraries(RFF PRIVATE
+target_link_libraries(RFF_Super PRIVATE
         # GMP Linker
         gmp
         # Win32 Linker
         comctl32
+        comdlg32
+        # Entropy coder of the compressed map format
+        zstd
         # OpenCV Linkers
-        opencv_core4110
-        opencv_imgcodecs4110
-        opencv_imgproc4110
-        opencv_videoio4110
-        opencv_highgui4110
+        ${OpenCV_LIBS}
         # Vulkan
         Vulkan::Vulkan
 )
 
-
 add_custom_target(spirv ALL COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/compile.ps1")
-add_dependencies(RFF spirv)
+add_dependencies(RFF_Super spirv)

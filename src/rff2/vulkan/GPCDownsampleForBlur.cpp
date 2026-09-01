@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-27.
+// Modified by GPT-5 on 2026-08-23.
 //
 
 #include "GPCDownsampleForBlur.hpp"
@@ -76,9 +77,9 @@ namespace merutilm::rff2 {
                 .magFilter = VK_FILTER_LINEAR,
                 .minFilter = VK_FILTER_LINEAR,
                 .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-                .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                 .mipLodBias = 0,
                 .anisotropyEnable = VK_FALSE,
                 .maxAnisotropy = 0,

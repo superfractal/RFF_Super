@@ -1,13 +1,16 @@
 //
 // Created by Merutilm on 2025-08-27.
+// Modified by Opus 5 on 2026-08-23
+// Modified by GPT-5 on 2026-08-23.
 //
 
 #include "ComputeShaderPipeline.hpp"
 
 namespace merutilm::vkh {
     ComputeShaderPipelineImpl::ComputeShaderPipelineImpl(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
-                                                         PipelineManager &&pipelineManager) : PipelineAbstract(
-        wc, pipelineLayout, std::move(pipelineManager)) {
+                                                         PipelineManager &&pipelineManager,
+                                                         const VkPipelineCreateFlags pipelineCreateFlags) : PipelineAbstract(
+        wc, pipelineLayout, std::move(pipelineManager)), pipelineCreateFlags(pipelineCreateFlags) {
         ComputeShaderPipelineImpl::init();
     }
 
@@ -30,7 +33,7 @@ namespace merutilm::vkh {
         const VkComputePipelineCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .pNext = nullptr,
-            .flags = 0,
+            .flags = pipelineCreateFlags,
             .stage = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .pNext = nullptr,
@@ -45,7 +48,8 @@ namespace merutilm::vkh {
             .basePipelineIndex = -1
         };
 
-        if (allocator::invoke(vkCreateComputePipelines, wc.core.getLogicalDevice().getLogicalDeviceHandle(), nullptr, 1, &info,
+        if (allocator::invoke(vkCreateComputePipelines, wc.core.getLogicalDevice().getLogicalDeviceHandle(),
+                                     wc.core.getLogicalDevice().getPipelineCacheHandle(), 1, &info,
                                      nullptr, &pipeline) != VK_SUCCESS) {
             throw exception_init("Failed to create compute pipeline!");
         }

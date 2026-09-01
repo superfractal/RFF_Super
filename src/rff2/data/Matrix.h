@@ -1,9 +1,11 @@
 //
 // Created by Merutilm on 2025-05-08.
+// Modified by Opus 5 on 2026-08-26
 //
 
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <vector>
 #include <array>
 
@@ -61,6 +63,23 @@ namespace merutilm::rff2 {
 
         uint32_t getLength() const {
             return static_cast<uint32_t>(width) * height;
+        }
+
+        // Element access for a matrix one thread is filling while another reads it as it fills, as
+        // the progressive preview does. Relaxed is all that is wanted - each element stands alone
+        // and no other memory is being published through it - so on the targets this runs on these
+        // compile to the same plain load and store. What they buy is that the concurrent access is
+        // defined instead of a race the optimizer is entitled to assume never happens.
+        T loadRelaxed(const uint32_t i) const {
+            return std::atomic_ref(const_cast<T &>(canvas[i])).load(std::memory_order_relaxed);
+        }
+
+        void storeRelaxed(const uint32_t i, const T value) {
+            std::atomic_ref(canvas[i]).store(value, std::memory_order_relaxed);
+        }
+
+        void storeRelaxed(const uint16_t x, const uint16_t y, const T value) {
+            storeRelaxed(getIndex(x, y), value);
         }
 
         const std::vector<T> &getCanvas() const {

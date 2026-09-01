@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by Opus 5 on 2026-08-31
+// Modified by GPT-5 on 2026-09-01
 //
 
 #include "PhysicalDeviceLoader.hpp"
@@ -18,8 +20,12 @@ namespace merutilm::vkh {
     }
 
     VkSurfaceCapabilitiesKHR PhysicalDeviceLoaderImpl::populateSurfaceCapabilities(const VkSurfaceKHR surface) const {
-        VkSurfaceCapabilitiesKHR surfaceCapabilities;
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+        // Zeroed and checked: the query writes nothing when it fails, and the struct it would leave
+        // behind is what decides how many frames are in flight and how large the swapchain is made.
+        VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
+        if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities) != VK_SUCCESS) {
+            throw exception_init("Failed to query the surface capabilities!");
+        }
         return surfaceCapabilities;
     }
 
@@ -61,9 +67,15 @@ namespace merutilm::vkh {
     void PhysicalDeviceLoaderImpl::init() {
 
         uint32_t physicalDeviceCount = 0;
-        vkEnumeratePhysicalDevices(instance.getInstanceHandle(), &physicalDeviceCount, nullptr);
+        if (vkEnumeratePhysicalDevices(instance.getInstanceHandle(), &physicalDeviceCount, nullptr) != VK_SUCCESS) {
+            throw exception_init("Failed to enumerate the physical devices!");
+        }
         std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
-        vkEnumeratePhysicalDevices(instance.getInstanceHandle(), &physicalDeviceCount, physicalDevices.data());
+        if (physicalDeviceCount > 0 &&
+            vkEnumeratePhysicalDevices(instance.getInstanceHandle(), &physicalDeviceCount,
+                                       physicalDevices.data()) != VK_SUCCESS) {
+            throw exception_init("Failed to enumerate the physical devices!");
+        }
         const HWND dummyWindow = createDummyWindow();
         const VkSurfaceKHR surface = createDummySurface(dummyWindow);
 

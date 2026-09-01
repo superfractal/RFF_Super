@@ -1,15 +1,21 @@
 //
 // Created by Merutilm on 2025-06-25.
+// Modified by GPT-5 on 2026-08-23, 2026-08-31, 2026-09-01
 //
 
 #include "RFFLocationBinary.h"
 
+#include <cmath>
 #include <utility>
 
 #include "../../vulkan_helper/core/logger.hpp"
+#include "../calc/fp_decimal_calculator.h"
 #include "../ui/IOUtilities.h"
 
 namespace merutilm::rff2 {
+    namespace {
+        constexpr uint64_t MAX_COORDINATE_BYTES = 16ULL * 1024 * 1024;
+    }
     inline const RFFLocationBinary RFFLocationBinary::DEFAULT = RFFLocationBinary(0, "", "", 0);
 
     RFFLocationBinary::RFFLocationBinary(const float logZoom, std::string real, std::string imag,
@@ -32,17 +38,22 @@ namespace merutilm::rff2 {
         IOUtilities::readAndDecode(in, &maxIteration);
         uint64_t len;
         IOUtilities::readAndDecode(in, &len);
-        std::vector<char> re(len);
-        IOUtilities::readAndDecode(in, len, re.data());
+        if (!IOUtilities::validateReadCount(in, len, sizeof(char), MAX_COORDINATE_BYTES)) {
+            return DEFAULT;
+        }
+        std::string real(static_cast<size_t>(len), '\0');
+        IOUtilities::readAndDecode(in, len, real.data());
         IOUtilities::readAndDecode(in, &len);
-        std::vector<char> im(len);
-        IOUtilities::readAndDecode(in, len, im.data());
-
-        re.push_back('\0');
-        im.push_back('\0');
-
-        std::string real = re.data();
-        std::string imag = im.data();
+        if (!IOUtilities::validateReadCount(in, len, sizeof(char), MAX_COORDINATE_BYTES)) {
+            return DEFAULT;
+        }
+        std::string imag(static_cast<size_t>(len), '\0');
+        IOUtilities::readAndDecode(in, len, imag.data());
+        if (!in || !std::isfinite(logZoom) || logZoom < 0.0f ||
+            logZoom > static_cast<float>(MAX_COORDINATE_BYTES) ||
+            !fp_decimal_calculator::isValidString(real) || !fp_decimal_calculator::isValidString(imag)) {
+            return DEFAULT;
+        }
 
         return RFFLocationBinary(logZoom, std::move(real), std::move(imag), maxIteration);
     }
@@ -59,7 +70,8 @@ namespace merutilm::rff2 {
 
 
     void RFFLocationBinary::exportFile(const std::filesystem::path &path) const {
-        if (std::ofstream out(path, std::ios::out | std::ios::binary | std::ios::trunc); out.is_open()) {
+        const std::filesystem::path temporary = IOUtilities::temporaryFilePath(path);
+        if (std::ofstream out(temporary, std::ios::out | std::ios::binary | std::ios::trunc); out.is_open()) {
             uint64_t len = 0;
             IOUtilities::encodeAndWrite(out, getLogZoom());
             IOUtilities::encodeAndWrite(out, maxIteration);
@@ -70,6 +82,10 @@ namespace merutilm::rff2 {
             IOUtilities::encodeAndWrite(out, len);
             IOUtilities::encodeAndWrite(out, imag.data(), imag.length());
             out.close();
+            if (out.fail() || !IOUtilities::commitTemporaryFile(temporary, path)) {
+                IOUtilities::discardTemporaryFile(temporary);
+                vkh::logger::w_log(L"ERROR : Cannot save file");
+            }
         } else {
             vkh::logger::w_log(L"ERROR : Cannot save file");
         }

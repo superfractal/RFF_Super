@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-10.
+// Modified by Opus 5 on 2026-08-26
 //
 
 #pragma once
@@ -65,14 +66,18 @@ namespace merutilm::vkh {
 
         template<typename T> requires std::is_trivially_copyable_v<T>
         void addArray(const uint32_t targetExpected, const std::vector<T> &t, const uint32_t paddingPerElem = 0) {
-            const auto raw = reinterpret_cast<const std::byte *>(t.data());
             offsets.push_back(static_cast<uint32_t>(data.size()));
-            elements.push_back(t.size());
+            elements.push_back(static_cast<uint32_t>(t.size()));
             safe_array::check_index_equal(targetExpected, static_cast<uint32_t>(sizes.size()),
                                               "Shader Object Vector Add");
-            data.insert(data.end(), raw, raw + sizeof(T) * t.size());
-            data.resize(data.size() + paddingPerElem * t.size());
-            sizes.push_back(sizeof(T) * t.size());
+            // The padding sits behind each element rather than behind the array: that is the layout
+            // reserveArray lays out and the one every accessor steps through.
+            for (const auto &element: t) {
+                const auto raw = reinterpret_cast<const std::byte *>(&element);
+                data.insert(data.end(), raw, raw + sizeof(T));
+                data.resize(data.size() + paddingPerElem);
+            }
+            sizes.push_back(static_cast<uint32_t>(sizeof(T) * t.size()));
             paddingsPerElem.push_back(paddingPerElem);
         }
     };

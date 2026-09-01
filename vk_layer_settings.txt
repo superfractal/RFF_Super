@@ -1,0 +1,43 @@
+# Layer settings for diagnosing the video-export "Failed to submit queue!" crash.
+# Used only by run_with_validation.bat (via VK_LAYER_SETTINGS_PATH).
+#
+# Paths are relative on purpose, so this file is not tied to one machine. The
+# launcher does "cd /d %~dp0" first, so they resolve next to the script.
+
+# ---------------------------------------------------------------------------
+# Crash diagnostic (VK_LAYER_LUNARG_crash_diagnostic)
+# Purpose-built for VK_ERROR_DEVICE_LOST: on a lost device it dumps which queue
+# submit and which command buffer were in flight. Defaults are the light mode --
+# instrument_all_commands / sync_after_commands stay off because this app pushes
+# 101 Mpx per frame and a full export already takes ~29 minutes.
+# ---------------------------------------------------------------------------
+lunarg_crash_diagnostic.output_path = .
+lunarg_crash_diagnostic.log_file = crash_diagnostic.log
+lunarg_crash_diagnostic.message_severity = error
+lunarg_crash_diagnostic.track_semaphores = true
+lunarg_crash_diagnostic.dump_queue_submits = running
+lunarg_crash_diagnostic.dump_command_buffers = running
+lunarg_crash_diagnostic.dump_commands = running
+lunarg_crash_diagnostic.dump_shaders = off
+lunarg_crash_diagnostic.instrument_all_commands = false
+lunarg_crash_diagnostic.sync_after_commands = false
+# Also catches a hang that never resolves into a device loss.
+lunarg_crash_diagnostic.watchdog_timeout_ms = 30000
+
+# ---------------------------------------------------------------------------
+# Validation (VK_LAYER_KHRONOS_validation)
+# Left configured but NOT enabled by the launcher: it already ran clean across a
+# full 28-minute export, so re-running it only costs time. Set RFF_VALIDATION=1
+# before running the .bat to switch it back on.
+# ---------------------------------------------------------------------------
+khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG
+khronos_validation.log_filename = validation.log
+khronos_validation.report_flags = error,warn
+khronos_validation.validate_core = true
+khronos_validation.thread_safety = true
+khronos_validation.object_lifetime = true
+khronos_validation.validate_sync = false
+khronos_validation.gpuav_enable = false
+khronos_validation.validate_best_practices = false
+khronos_validation.enable_message_limit = true
+khronos_validation.duplicate_message_limit = 50

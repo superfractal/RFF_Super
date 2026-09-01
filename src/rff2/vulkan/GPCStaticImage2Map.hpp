@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-09-09.
+// Modified by Opus 5 on 2026-08-24
 //
 
 #pragma once
@@ -13,6 +14,9 @@ namespace merutilm::rff2{
         static constexpr uint32_t BINDING_IMAGES_ZOOMED = 1;
 
         static constexpr uint32_t SET_VIDEO = 1;
+
+        // Shared with the bloom pass, which is the pass a keyframe frame does not run.
+        static constexpr uint32_t SET_BLOOM = 2;
 
         explicit GPCStaticImage2Map(vkh::EngineRef engine, const uint32_t windowContextIndex,
                                    const uint32_t renderContextIndex,

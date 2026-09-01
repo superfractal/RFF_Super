@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-07-10.
+// Modified by Opus 5 on 2026-08-31
+// Modified by GPT-5 on 2026-09-01
 //
 
 #pragma once
@@ -30,7 +32,11 @@ namespace merutilm::vkh {
             createImage(device, iii, mipLevels, image);
             allocateImageMemory(device, memProperties, iii, *image,
                                 imageMemory, capacity);
-            allocator::invoke(vkBindImageMemory, device, *image, *imageMemory, 0);
+            // Every other step here refuses to go on when it fails; an image left with no memory
+            // behind it is the one that goes on to be rendered into.
+            if (allocator::invoke(vkBindImageMemory, device, *image, *imageMemory, 0) != VK_SUCCESS) {
+                throw exception_init("Failed to bind image memory!");
+            }
             createImageView(device, *image, iii.imageViewType, iii.imageFormat, imageView);
             if (mipLevels == 1) {
                 *mipmappedImageView = *imageView;
@@ -77,7 +83,7 @@ namespace merutilm::vkh {
             };
             *capacity = memRequirements.size;
             if (allocator::invoke(vkAllocateMemory, device, &allocInfo, nullptr,
-                                 imageMemory)) {
+                                  imageMemory)) {
                 throw exception_init("Failed to allocate memory!");
             }
         }
@@ -161,7 +167,9 @@ namespace merutilm::vkh {
             createBuffer(device, bii.size, bii.usage, buffer);
             allocateBufferMemory(device, memProperties, bii.properties, *buffer,
                                  bufferMemory);
-            allocator::invoke(vkBindBufferMemory, device, *buffer, *bufferMemory, 0);
+            if (allocator::invoke(vkBindBufferMemory, device, *buffer, *bufferMemory, 0) != VK_SUCCESS) {
+                throw exception_init("Failed to bind buffer memory!");
+            }
         }
 
         static void createBuffer(const VkDevice device, const VkDeviceSize size, const VkBufferUsageFlags usage,
@@ -196,7 +204,7 @@ namespace merutilm::vkh {
                                                        properties)
             };
             if (allocator::invoke(vkAllocateMemory, device, &allocInfo, nullptr,
-                                 bufferMemory) != VK_SUCCESS) {
+                                  bufferMemory) != VK_SUCCESS) {
                 throw exception_init("failed to allocate memory!");
             }
         }

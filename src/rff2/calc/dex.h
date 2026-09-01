@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-17.
+// Modified by Opus 5 on 2026-08-08
 //
 
 #pragma once
@@ -350,13 +351,32 @@ namespace merutilm::rff2 {
     inline dex::dex(const int exp2, const double mantissa) : exp2(exp2), mantissa(mantissa) {
     }
 
+    // A zero mantissa leaves exp2 meaningless, so max() below would adopt it and shift the other operand out of range.
     inline void dex::add(dex *result, const dex &a, const dex &b) {
+        if (b.mantissa == 0) {
+            cpy(result, a);
+            return;
+        }
+        if (a.mantissa == 0) {
+            cpy(result, b);
+            return;
+        }
         const int d_exp2 = a.exp2 - b.exp2;
         result->exp2 = std::max(a.exp2, b.exp2);
         result->mantissa = ldexp_neg(a.mantissa, std::min(0, d_exp2)) + ldexp_neg(b.mantissa, std::min(0, -d_exp2));
     }
 
+    // Same zero-operand guard as add(): a zero must never dictate the result's exponent.
     inline void dex::sub(dex *result, const dex &a, const dex &b) {
+        if (b.mantissa == 0) {
+            cpy(result, a);
+            return;
+        }
+        if (a.mantissa == 0) {
+            result->exp2 = b.exp2;
+            result->mantissa = -b.mantissa;
+            return;
+        }
         const int d_exp2 = a.exp2 - b.exp2;
         result->exp2 = std::max(a.exp2, b.exp2);
         result->mantissa = ldexp_neg(a.mantissa, std::min(0, d_exp2)) - ldexp_neg(b.mantissa, std::min(0, -d_exp2));

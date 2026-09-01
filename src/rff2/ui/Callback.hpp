@@ -1,11 +1,16 @@
 //
 // Created by Merutilm on 2025-05-19.
+// Modified by AI; earlier exact modification date unavailable.
+// Modified by GPT-5 on 2026-08-21, 2026-08-23.
+// Modified by Opus 5 on 2026-08-06
 //
 #pragma once
 #include <codecvt>
+#include <cmath>
 #include <locale>
 #include <windows.h>
 #include <string>
+#include <cwchar>
 
 namespace merutilm::rff2 {
     namespace ValidCondition {
@@ -39,7 +44,7 @@ namespace merutilm::rff2 {
         constexpr auto ALL_U_LONG_LONG = [](const unsigned long long) { return true; };
         constexpr auto FLOAT_ZERO_TO_ONE = [](const float &e) { return e >= 0 && e <= 1; };
         constexpr auto FLOAT_DEGREE = [](const float &e) { return e >= 0 && e < 360; };
-        constexpr auto ALL_FLOAT = [](const float &) { return true; };
+        constexpr auto ALL_FLOAT = [](const float &e) { return std::isfinite(e); };
         constexpr auto POSITIVE_FLOAT = [](const float &e) { return e > 0; };
         constexpr auto NEGATIVE_FLOAT = [](const float &e) { return e < 0; };
         constexpr auto POSITIVE_FLOAT_ZERO = [](const float &e) { return e >= 0; };
@@ -55,6 +60,13 @@ namespace merutilm::rff2 {
         constexpr auto NEGATIVE_LONG_DOUBLE = [](const long double &e) { return e < 0; };
         constexpr auto POSITIVE_LONG_DOUBLE_ZERO = [](const long double &e) { return e >= 0; };
         constexpr auto NEGATIVE_LONG_DOUBLE_ZERO = [](const long double &e) { return e <= 0; };
+
+        // Bounds a slider's text field to that slider's own range. Without it a typed number
+        // outside the range is stored while the thumb stays clamped at an end, so the thumb no
+        // longer reflects the value and the next drag jumps it.
+        inline auto floatInRange(const float min, const float max) {
+            return [min, max](const float &e) { return std::isfinite(e) && e >= min && e <= max; };
+        }
     }
 
     namespace Callback {
@@ -107,6 +119,27 @@ namespace merutilm::rff2 {
         constexpr auto U_LONG = [](const unsigned long &s) { return std::to_wstring(s); };
         constexpr auto U_LONG_LONG = [](const unsigned long long &s) { return std::to_wstring(s); };
         constexpr auto FLOAT = [](const float &s) { return std::to_wstring(s); };
+        // Formats a float with a fixed number of decimals (decimals match the arrow-key step).
+        inline auto floatFixed(const int decimals) {
+            return [decimals](const float &s) {
+                wchar_t buf[32];
+                swprintf(buf, 32, L"%.*f", decimals, s == 0.0f ? 0.0f : s);
+                return std::wstring(buf);
+            };
+        }
+        // Formats a float with up to `decimals` decimals, trimming trailing zeros and a bare decimal point.
+        inline auto floatTrim(const int decimals) {
+            return [decimals](const float &s) {
+                wchar_t buf[32];
+                swprintf(buf, 32, L"%.*f", decimals, s == 0.0f ? 0.0f : s);
+                std::wstring str(buf);
+                if (str.find(L'.') != std::wstring::npos) {
+                    str.erase(str.find_last_not_of(L'0') + 1);
+                    if (!str.empty() && str.back() == L'.') str.pop_back();
+                }
+                return str;
+            };
+        }
         constexpr auto DOUBLE = [](const double &s) { return std::to_wstring(s); };
         constexpr auto LONG_DOUBLE = [](const long double &s) { return std::to_wstring(s); };
     }

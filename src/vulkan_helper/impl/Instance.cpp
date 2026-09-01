@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-08.
+// Modified by Opus 5 on 2026-08-09
 //
 
 #include "Instance.hpp"
@@ -43,9 +44,13 @@ namespace merutilm::vkh {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
         VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo = Debugger::populateDebugMessengerCreateInfo();
+        // VUID-VkInstanceCreateInfo-pNext-04926: the messenger may only be chained when
+        // VK_EXT_debug_utils is enabled, which only happens under ENABLE_VALIDATION. Chaining it
+        // unconditionally made every release build violate the spec and silently disabled the
+        // application's own debug callback.
         const VkInstanceCreateInfo instanceCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            .pNext = &debugMessengerCreateInfo,
+            .pNext = config::ENABLE_VALIDATION ? &debugMessengerCreateInfo : nullptr,
             .flags = 0,
             .pApplicationInfo = &applicationInfo,
             .enabledLayerCount = config::ENABLE_VALIDATION ? 1u : 0,

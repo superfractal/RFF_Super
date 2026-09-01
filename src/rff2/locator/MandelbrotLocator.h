@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-05-16.
+// Modified by AI; earlier exact modification date unavailable.
+// Modified by GPT-5 on 2026-08-21.
 //
 
 #pragma once
@@ -11,6 +13,8 @@ namespace merutilm::rff2 {
     struct MandelbrotLocator {
         static constexpr float MINIBROT_LOG_ZOOM_OFFSET = 1.5f;
         static constexpr float ZOOM_INCREMENT_LIMIT = 0.01f;
+        static constexpr int CENTER_FIX_COUNT_LIMIT = 50;
+        static constexpr long long CENTER_FIX_FAST_FAIL_MS = 10000000;
 
         std::unique_ptr<MandelbrotPerturbator> perturbator;
 

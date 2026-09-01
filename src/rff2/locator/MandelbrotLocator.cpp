@@ -1,8 +1,12 @@
 //
 // Created by Merutilm on 2025-05-16.
+// Modified by AI; earlier exact modification date unavailable.
+// Modified by GPT-5 on 2026-08-21.
 //
 
 #include "MandelbrotLocator.h"
+
+#include <chrono>
 
 #include "../formula/Perturbator.h"
 #include "../calc/dex_exp.h"
@@ -14,7 +18,11 @@ namespace merutilm::rff2 {
     std::unique_ptr<fp_complex> MandelbrotLocator::findCenter(const MandelbrotPerturbator *perturbator) {
         const int exp10 = Perturbator::logZoomToExp10(perturbator->getCalculationSettings().logZoom);
         fp_complex_calculator center = perturbator->getReference()->center.edit(exp10);
-        const fp_complex_calculator dc = findCenterOffset(*perturbator)->edit(exp10);
+        auto offset = findCenterOffset(*perturbator);
+        if (offset == nullptr) {
+            return nullptr;
+        }
+        const fp_complex_calculator dc = offset->edit(exp10);
         const double dr = dc.getRealClone().double_value();
         const double di = dc.getImagClone().double_value();
         if (const dex dcMax = perturbator->getDcMaxAsDoubleExp();
@@ -134,6 +142,7 @@ namespace merutilm::rff2 {
 
 
         int centerFixCount = 0;
+        const auto locateStart = std::chrono::steady_clock::now();
 
         std::unique_ptr<MandelbrotPerturbator> doubledZoomPerturbator = nullptr;
 
@@ -141,6 +150,14 @@ namespace merutilm::rff2 {
             if (state.interruptRequested()) {
                 return nullptr;
                 //try to save the vector
+            }
+
+            if (centerFixCount >= CENTER_FIX_COUNT_LIMIT) {
+                const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - locateStart).count();
+                if (elapsedMs < CENTER_FIX_FAST_FAIL_MS) {
+                    return nullptr;
+                }
             }
 
             fp_complex off = *findCenterOffset(doubledZoomPerturbator == nullptr ? *perturbator : *doubledZoomPerturbator);

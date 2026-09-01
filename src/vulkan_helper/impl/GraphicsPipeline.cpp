@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-27.
+// Modified by Opus 5 on 2026-08-23
 //
 
 #include "GraphicsPipeline.hpp"
@@ -180,7 +181,8 @@ namespace merutilm::vkh {
         };
 
 
-        if (allocator::invoke(vkCreateGraphicsPipelines, wc.core.getLogicalDevice().getLogicalDeviceHandle(), nullptr, 1, &info,
+        if (allocator::invoke(vkCreateGraphicsPipelines, wc.core.getLogicalDevice().getLogicalDeviceHandle(),
+                                      wc.core.getLogicalDevice().getPipelineCacheHandle(), 1, &info,
                                       nullptr,
                                       &pipeline) != VK_SUCCESS) {
             throw exception_init("Failed to create graphics pipeline!");

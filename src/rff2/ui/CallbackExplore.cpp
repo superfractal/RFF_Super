@@ -1,5 +1,8 @@
 //
 // Created by Merutilm on 2025-05-16.
+// Modified by AI; earlier exact modification date unavailable.
+// Modified by GPT-5 on 2026-08-21.
+// Modified by Opus 5 on 2026-08-14, 2026-08-26
 //
 
 #include "CallbackExplore.hpp"
@@ -16,6 +19,9 @@
 namespace merutilm::rff2 {
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RECOMPUTE = [
             ](const SettingsMenu &, RenderScene &scene) {
+        // Asking for the view outright is also how a recovery that is waiting for approval is
+        // answered, so it releases the hold: the panel carrying it may be closed by then.
+        scene.setComputeHold(false);
         scene.getRequests().requestRecompute();
     };
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RESET = [
@@ -31,6 +37,14 @@ namespace merutilm::rff2 {
     };
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::FIND_CENTER = [
             ](const SettingsMenu &, RenderScene &scene) {
+        if (scene.getAttribute().fractal.formulaType != FractalFormulaType::MANDELBROT) {
+            MessageBox(nullptr, "Find Center is only available for the Mandelbrot formula.", "Caution", MB_OK | MB_ICONWARNING);
+            return;
+        }
+        // The reference this reads belongs to the calculation, which builds a new one and destroys
+        // this one as it goes. Stopped first, as Locate Minibrot does, so what is walked below is
+        // still there to walk; a calculation running alongside would pull it away mid-search.
+        scene.getState().cancel();
         const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
         if (perturbator == nullptr || perturbator->getReference() == Constants::NullPointer::PROCESS_TERMINATED_REFERENCE) {
             return;
@@ -46,6 +60,11 @@ namespace merutilm::rff2 {
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::LOCATE_MINIBROT = [
             ](const SettingsMenu &, RenderScene &scene) {
         Attribute &settings = scene.getAttribute();
+
+        if (settings.fractal.formulaType != FractalFormulaType::MANDELBROT) {
+            MessageBox(nullptr, "Locate Minibrot is only available for the Mandelbrot formula.", "Caution", MB_OK | MB_ICONWARNING);
+            return;
+        }
 
         if (settings.fractal.reuseReferenceMethod != FrtReuseReferenceMethod::DISABLED) {
             MessageBox(nullptr, "Do not reuse reference!", "Caution", MB_OK | MB_ICONWARNING);
@@ -72,7 +91,16 @@ namespace merutilm::rff2 {
                 );
 
                 if (locator == nullptr) {
-                    vkh::logger::w_log(L"Locate Minibrot Cancelled.");
+                    if (scene.getState().interruptRequested()) {
+                        vkh::logger::w_log(L"Locate Minibrot Cancelled.");
+                    } else {
+                        // The center never converged (status stuck at e.g. "0.000%[100]").
+                        vkh::logger::w_log(L"Locate Minibrot Failed : center did not converge.");
+                        MessageBox(nullptr,
+                                   "Failed to locate the minibrot : the center did not converge.\n"
+                                   "Zoom closer to the minibrot and try again.",
+                                   "Locate Minibrot Failed", MB_OK | MB_ICONERROR);
+                    }
                     return;
                 }
                 const FractalAttribute &locatorCalc = locator->perturbator->getCalculationSettings();

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-19.
+// Modified by Opus 5 on 2026-08-26
 //
 
 #include "Engine.hpp"
@@ -18,10 +19,12 @@ namespace merutilm::vkh {
     }
 
     bool EngineImpl::isValidWindowContext(const uint32_t windowAttachmentIndex) const {
+        std::scoped_lock lock(windowContextsMutex);
         return windowContexts.size() > windowAttachmentIndex && windowContexts[windowAttachmentIndex] != nullptr;
     }
 
     WindowContextPtr EngineImpl::attachWindowContext(HWND hwnd, uint32_t windowAttachmentIndexExpected) {
+        std::scoped_lock lock(windowContextsMutex);
         if (windowAttachmentIndexExpected >= windowContexts.size()) {
             windowContexts.resize(windowAttachmentIndexExpected + 1);
         }
@@ -36,6 +39,7 @@ namespace merutilm::vkh {
     }
 
     void EngineImpl::detachWindowContext(const uint32_t windowAttachmentIndex) {
+        std::scoped_lock lock(windowContextsMutex);
         if (windowAttachmentIndex >= windowContexts.size()) {
             throw exception_invalid_args(std::format("window attachment index out of range : {}, size = {}", windowAttachmentIndex, windowContexts.size()));
         }
@@ -60,7 +64,10 @@ namespace merutilm::vkh {
 
 
     void EngineImpl::destroy() {
-        windowContexts.clear();
+        {
+            std::scoped_lock lock(windowContextsMutex);
+            windowContexts.clear();
+        }
         globalRepositories = nullptr;
         core = nullptr;
     }

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-09.
+// Modified by Opus 5 on 2026-08-26
 //
 
 #pragma once
@@ -132,8 +133,10 @@ namespace merutilm::rff2 {
             uint32_t i = static_cast<uint32_t>(xRes) * y + x;
 
             if (!rendered[i].exchange(true)) {
-                matrix[i] = renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
-                                     static_cast<float>(y) / yRes, i, matrix[i]);
+                // Relaxed: the preview reads this matrix as it fills, so the elements are written
+                // the same way it reads them.
+                matrix.storeRelaxed(i, renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
+                                                static_cast<float>(y) / yRes, i, matrix.loadRelaxed(i)));
             }
         }
     }
@@ -150,8 +153,8 @@ namespace merutilm::rff2 {
 
             if (!rendered[i].exchange(true)) {
                 T c = renderer(px, py, xRes, yRes, static_cast<float>(px) / xRes, static_cast<float>(py) / yRes, i,
-                                    matrix[i]);
-                matrix[i] = std::move(c);
+                                    matrix.loadRelaxed(i));
+                matrix.storeRelaxed(i, c);
             }
         }
     }

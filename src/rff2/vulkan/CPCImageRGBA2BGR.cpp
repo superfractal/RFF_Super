@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-09-10.
+// Modified by Opus 5 on 2026-08-10, 2026-08-19.
 //
 
 #include "CPCImageRGBA2BGR.hpp"
@@ -19,19 +20,58 @@ namespace merutilm::rff2 {
 
     void CPCImageRGBA2BGR::renderContextRefreshed() {
         using namespace SharedImageContextIndices;
-        auto &desc = getDescriptor(SET_INFO);
-        auto &prevImg = *desc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_IMAGE_SAMPLER);
+        auto &prevImg = *getDescriptor(SET_INFO).get<vkh::CombinedImageSampler>(0, BINDING_PREV_IMAGE_SAMPLER);
         prevImg.setImageContextMF(wc.getSharedImageContext().getImageContextMF(MF_VIDEO_RENDER_IMAGE_SECONDARY));
-        const auto &extent = prevImg.getImageContextMF()[0].extent;
+        applyOutputSize();
+    }
+
+    void CPCImageRGBA2BGR::setDownsample(const uint32_t factor) {
+        const uint32_t clamped = std::max<uint32_t>(1, factor);
+        if (clamped == downsample) {
+            return;
+        }
+        downsample = clamped;
+        applyOutputSize();
+    }
+
+    void CPCImageRGBA2BGR::setHdr(const bool use) {
+        if (use == hdr) {
+            return;
+        }
+        hdr = use;
+        applyOutputSize();
+    }
+
+    void CPCImageRGBA2BGR::applyOutputSize() {
+        auto &desc = getDescriptor(SET_INFO);
+        const auto &prevImg = *desc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_IMAGE_SAMPLER);
+        const auto &srcExtent = prevImg.getImageContextMF()[0].extent;
+        outputExtent = VkExtent2D{
+            std::max<uint32_t>(1, srcExtent.width / downsample),
+            std::max<uint32_t>(1, srcExtent.height / downsample)
+        };
+
         auto &ssbo = *desc.get<vkh::ShaderStorage>(0, BINDING_OUTPUT_SSBO);
-        ssbo.getHostObject().resizeAndClear<uint32_t>(TARGET_OUTPUT_SSBO_DATA,
-                                                      extent.width * extent.height * 3 / 4 + 1);
+        // Two words per pixel for rgba64le; the BGR24 path packs three bytes into every word instead.
+        const uint32_t words = hdr
+                                   ? outputExtent.width * outputExtent.height * 2
+                                   : outputExtent.width * outputExtent.height * 3 / 4 + 1;
+        ssbo.getHostObject().resizeAndClear<uint32_t>(TARGET_OUTPUT_SSBO_DATA, words);
         ssbo.reloadBuffer();
         ssbo.lock(wc.getCommandPool());
-        setExtent(extent);
+
+        const auto &ubo = *desc.get<vkh::Uniform>(0, BINDING_OUTPUT_EXTENT_UBO);
+        ubo.getHostObject().set<glm::uvec2>(TARGET_OUTPUT_EXTENT_UBO_EXTENT,
+                                            glm::uvec2(outputExtent.width, outputExtent.height));
+        ubo.getHostObject().set<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_HDR, hdr ? 1u : 0u);
+        ubo.update();
+
+        // One invocation per destination pixel; the shader averages the source region it covers.
+        setExtent(outputExtent);
         writeDescriptorMF(
             [&desc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-                desc.queue(queue, frameIndex, {}, {BINDING_PREV_IMAGE_SAMPLER, BINDING_OUTPUT_SSBO});
+                desc.queue(queue, frameIndex, {},
+                           {BINDING_PREV_IMAGE_SAMPLER, BINDING_OUTPUT_SSBO, BINDING_OUTPUT_EXTENT_UBO});
             });
     }
 
@@ -76,6 +116,13 @@ namespace merutilm::rff2 {
         descManager->appendSSBO(BINDING_OUTPUT_SSBO, VK_SHADER_STAGE_COMPUTE_BIT,
                                 vkh::factory::create<vkh::ShaderStorage>(
                                     wc.core, std::move(hdm), vkh::BufferLock::LOCK_UNLOCK, true));
+
+        auto uboManager = vkh::factory::create<vkh::HostDataObjectManager>();
+        uboManager->reserve<glm::uvec2>(TARGET_OUTPUT_EXTENT_UBO_EXTENT);
+        uboManager->reserve<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_HDR);
+        descManager->appendUBO(BINDING_OUTPUT_EXTENT_UBO, VK_SHADER_STAGE_COMPUTE_BIT,
+                               vkh::factory::create<vkh::Uniform>(wc.core, std::move(uboManager),
+                                                                  vkh::BufferLock::LOCK_UNLOCK, false));
 
         appendUniqueDescriptor(SET_INFO, descriptors, std::move(descManager));
     }

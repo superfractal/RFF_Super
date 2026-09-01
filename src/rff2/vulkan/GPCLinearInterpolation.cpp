@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-31.
+// Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-31
 //
 
 #include "GPCLinearInterpolation.hpp"
@@ -21,6 +22,38 @@ namespace merutilm::rff2 {
             0, DescLinearInterpolation::BINDING_UBO_LINEAR_INTERPOLATION);
         auto &interUBOHost = interUBO.getHostObject();
         interUBOHost.set<bool>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_USE, use);
+        interUBO.update();
+    }
+
+    void GPCLinearInterpolation::setDither(const bool use) const {
+        using namespace SharedDescriptorTemplate;
+        auto &interDesc = getDescriptor(SET_LINEAR_INTERPOLATION);
+        const auto &interUBO = *interDesc.get<vkh::Uniform>(
+            0, DescLinearInterpolation::BINDING_UBO_LINEAR_INTERPOLATION);
+        auto &interUBOHost = interUBO.getHostObject();
+        interUBOHost.set<bool>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_DITHER, use);
+        interUBO.update();
+    }
+
+    void GPCLinearInterpolation::setToneMap(const ShdHdrAttribute &hdr, const VidHdrTransfer transfer,
+                                            const float peakNits) const {
+        using namespace SharedDescriptorTemplate;
+        auto &interDesc = getDescriptor(SET_LINEAR_INTERPOLATION);
+        const auto &interUBO = *interDesc.get<vkh::Uniform>(
+            0, DescLinearInterpolation::BINDING_UBO_LINEAR_INTERPOLATION);
+        auto &interUBOHost = interUBO.getHostObject();
+        // Only the float chain carries light above white, so an HDR curve without it would encode nothing extra.
+        const VidHdrTransfer effective = hdr.use ? transfer : VidHdrTransfer::SDR;
+        interUBOHost.set<bool>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_HDR, hdr.use);
+        interUBOHost.set<float>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_EXPOSURE, hdr.exposure);
+        interUBOHost.set<float>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_HEADROOM,
+                                std::max(hdr.headroom, 1e-3f));
+        interUBOHost.set<uint32_t>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_TONE_MAP,
+                                   static_cast<uint32_t>(hdr.method));
+        interUBOHost.set<uint32_t>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_TRANSFER,
+                                   static_cast<uint32_t>(effective));
+        interUBOHost.set<float>(DescLinearInterpolation::TARGET_LINEAR_INTERPOLATION_PEAK_NITS,
+                                std::max(peakNits, 1.0f));
         interUBO.update();
     }
 

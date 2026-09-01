@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-09-05.
+// Modified by Opus 5 on 2026-08-31
+// Modified by GPT-5 on 2026-08-31, 2026-09-01
 //
 
 #pragma once
@@ -46,8 +48,16 @@ namespace merutilm::vkh {
 
 
         static void mapMemory(CoreRef core, BufferContext &context) {
-            vkMapMemory(core.getLogicalDevice().getLogicalDeviceHandle(), context.bufferMemory, 0, context.bufferSize,
-                        0, reinterpret_cast<void **>(&context.mappedMemory));
+            // A failed map leaves the out-pointer untouched, so what stays behind is the address of
+            // whatever this context was mapped to last - long unmapped, and written straight through
+            // by every fill and set below as though it were still live.
+            context.mappedMemory = nullptr;
+            const VkResult result = vkMapMemory(core.getLogicalDevice().getLogicalDeviceHandle(),
+                                                context.bufferMemory, 0, VK_WHOLE_SIZE, 0,
+                                                reinterpret_cast<void **>(&context.mappedMemory));
+            if (result != VK_SUCCESS) {
+                throw exception_init("Failed to map buffer memory!");
+            }
         }
 
         static void unmapMemory(CoreRef core, const MultiframeBufferContext &context) {
@@ -75,7 +85,7 @@ namespace merutilm::vkh {
                 .pNext = nullptr,
                 .memory = bufCtx.bufferMemory,
                 .offset = 0,
-                .size = bufCtx.bufferSize
+                .size = VK_WHOLE_SIZE
 
             };
             vkFlushMappedMemoryRanges(device, 1, &mappedMemoryRange);

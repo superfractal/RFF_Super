@@ -1,10 +1,13 @@
 //
 // Created by Merutilm on 2025-08-30.
+// Modified by GPT-5 on 2026-08-18
+// Modified by Opus 5 on 2026-08-19
 //
 
 #pragma once
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 #include "../attr/ShdBloomAttribute.h"
+#include "../attr/ShdHdrAttribute.h"
 
 namespace merutilm::rff2 {
     struct GPCBloom final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
@@ -22,7 +25,11 @@ namespace merutilm::rff2 {
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
 
-        void setBloom(const ShdBloomAttribute &bloom) const;
+        // The HDR block rides along because this is the pass that makes light brighter than white,
+        // so it is the one that has to know the headroom it is stored against.
+        void setBloom(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const;
+
+        void setBloomDynamic(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const;
 
         void pipelineInitialized() override;
 

@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-05-10.
+// Modified by Sonnet 5 on 2026-07-06
+// Modified by GPT-5 on 2026-07-11
 //
 
 #include "LightMandelbrotPerturbator.h"
@@ -151,7 +153,7 @@ namespace merutilm::rff2 {
         pd = sqrt(pd);
         cd = sqrt(cd);
 
-        return getDoubleValueIteration(iteration, pd, cd, calc.decimalizeIterationMethod, bailout);
+        return getQuadraticDoubleValueIteration(iteration, pd, cd, calc.decimalizeIterationMethod, bailout);
     }
 
 

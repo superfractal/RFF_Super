@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-08-04.
+// Modified by Opus 5 on 2026-08-26, 2026-08-31
+// Modified by GPT-5 on 2026-08-31
 //
 
 #pragma once
@@ -50,7 +52,9 @@ namespace merutilm::vkh {
                 .arrayLayers = 1,
                 .samples = VK_SAMPLE_COUNT_1_BIT,
                 .imageTiling = VK_IMAGE_TILING_OPTIMAL,
-                .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                .usage = static_cast<VkImageUsageFlags>(VK_IMAGE_USAGE_SAMPLED_BIT |
+                         VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                         (useMipmap ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0)),
                 .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
             };
@@ -84,13 +88,13 @@ namespace merutilm::vkh {
                 vkCmdCopyBufferToImage(sce.getCommandBufferHandle(), staging.buffer, context.image,
                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-                if (useMipmap) {
+                if (useMipmap && BufferImageUtils::getAvailableMipLevels(context.extent) > 1) {
                     BarrierUtils::cmdImageMemoryBarrier(sce.getCommandBufferHandle(), context.image,
                                                         VK_ACCESS_TRANSFER_WRITE_BIT,
-                                                        VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                        VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                                         0, 1, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                                                        VK_PIPELINE_STAGE_TRANSFER_BIT);
                     cmdGenerateMipmaps(sce.getCommandBufferHandle(), context, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                 } else {
                     BarrierUtils::cmdImageMemoryBarrier(sce.getCommandBufferHandle(), context.image,
@@ -115,12 +119,31 @@ namespace merutilm::vkh {
             stbi_uc *data = nullptr;
             int width = 0;
             int height = 0;
-            int texChannels = 0;
-            data = stbi_load(path.data(), &width, &height, &texChannels, STBI_rgb_alpha);
-            if (data == nullptr) {
+            int fileChannels = 0;
+            data = stbi_load(path.data(), &width, &height, &fileChannels, STBI_rgb_alpha);
+            if (data == nullptr || width <= 0 || height <= 0) {
+                if (data != nullptr) {
+                    stbi_image_free(data);
+                }
                 throw exception_init("Failed to load texture");
             }
-            const ImageContext result = imageFromByteColorArray(core, commandPool, format, width, height, texChannels,
+            // Whatever the file claims its size to be, the image has to be one the device will
+            // actually make: past this limit the create fails with the whole decoded picture, and
+            // the staging copy of it, already resident.
+            if (const VkPhysicalDeviceLimits &limits = core.getPhysicalDevice().getPhysicalDeviceProperties().limits;
+                static_cast<uint32_t>(width) > limits.maxImageDimension2D ||
+                static_cast<uint32_t>(height) > limits.maxImageDimension2D) {
+                stbi_image_free(data);
+                throw exception_init("Texture is larger than this device allows");
+            }
+            // The count stb hands back is how many channels the file had, not how many it decoded
+            // to: the load above asks for four whatever the file holds. Sizing the staging buffer
+            // by the file's count leaves it short of the image being filled from it, so the copy
+            // reads past the end of the buffer. Four is what is in memory, and four is what is
+            // copied.
+            const ImageContext result = imageFromByteColorArray(core, commandPool, format,
+                                                                static_cast<uint32_t>(width),
+                                                                static_cast<uint32_t>(height), STBI_rgb_alpha,
                                                                 8, useMipmap,
                                                                 reinterpret_cast<std::byte *>(data));
             stbi_image_free(data);
@@ -174,8 +197,6 @@ namespace merutilm::vkh {
          */
         static void cmdGenerateMipmaps(const VkCommandBuffer commandBuffer, const ImageContext &imageContext,
                                        const VkImageLayout dstLayout) {
-            uint32_t mipWidth = imageContext.extent.width;
-            uint32_t mipHeight = imageContext.extent.height;
             const auto mipLevels = BufferImageUtils::getAvailableMipLevels(imageContext.extent);
 
             for (uint32_t i = 1; i < mipLevels; ++i) {
@@ -187,7 +208,7 @@ namespace merutilm::vkh {
 
                 cmdBlitImage(commandBuffer, imageContext, i - 1, i);
 
-                BarrierUtils::cmdImageMemoryBarrier(commandBuffer, imageContext.image, VK_ACCESS_TRANSFER_WRITE_BIT,
+                BarrierUtils::cmdImageMemoryBarrier(commandBuffer, imageContext.image, VK_ACCESS_TRANSFER_READ_BIT,
                                                     VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                                     dstLayout, i - 1,  1, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
@@ -200,9 +221,6 @@ namespace merutilm::vkh {
                                                         VK_PIPELINE_STAGE_TRANSFER_BIT,
                                                         VK_PIPELINE_STAGE_TRANSFER_BIT);
                 }
-
-                mipWidth = std::max(mipWidth / 2, static_cast<uint32_t>(1));
-                mipHeight = std::max(mipHeight / 2, static_cast<uint32_t>(1));
             }
             BarrierUtils::cmdImageMemoryBarrier(commandBuffer, imageContext.image, VK_ACCESS_TRANSFER_WRITE_BIT,
                                                 VK_ACCESS_SHADER_READ_BIT,
@@ -247,11 +265,11 @@ namespace merutilm::vkh {
         */
         static void cmdBlitImage(const VkCommandBuffer commandBuffer, const ImageContext &imageContext,
                                  const uint32_t srcMipLevel, const uint32_t dstMipLevel) {
-            const int32_t srcWidth = static_cast<int32_t>(imageContext.extent.width) >> srcMipLevel;
-            const int32_t srcHeight = static_cast<int32_t>(imageContext.extent.height) >> srcMipLevel;
+            const int32_t srcWidth = std::max(1, static_cast<int32_t>(imageContext.extent.width) >> srcMipLevel);
+            const int32_t srcHeight = std::max(1, static_cast<int32_t>(imageContext.extent.height) >> srcMipLevel);
 
-            const int32_t dstWidth = static_cast<int32_t>(imageContext.extent.width) >> dstMipLevel;
-            const int32_t dstHeight = static_cast<int32_t>(imageContext.extent.height) >> dstMipLevel;
+            const int32_t dstWidth = std::max(1, static_cast<int32_t>(imageContext.extent.width) >> dstMipLevel);
+            const int32_t dstHeight = std::max(1, static_cast<int32_t>(imageContext.extent.height) >> dstMipLevel);
 
             const VkImageBlit blit = {
                 .srcSubresource = {

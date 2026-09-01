@@ -1,6 +1,8 @@
 //
 // Created by Merutilm on 2025-08-15.
 //
+// Modified by Opus 5 on 2026-08-07
+//
 
 #pragma once
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
@@ -13,6 +15,10 @@ namespace merutilm::rff2 {
         static constexpr uint32_t BINDING_FOG_CANVAS_BLURRED = 1;
 
         static constexpr uint32_t SET_FOG = 1;
+        // The rim mask rebuilds the slope pass's rim footprint, so fog needs the same iteration
+        // buffer and slope settings that vk_slope.frag reads.
+        static constexpr uint32_t SET_ITERATION = 2;
+        static constexpr uint32_t SET_SLOPE = 3;
 
         explicit GPCFog(vkh::EngineRef engine, const uint32_t windowContextIndex, const uint32_t renderContextIndex,
                         const uint32_t subpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(

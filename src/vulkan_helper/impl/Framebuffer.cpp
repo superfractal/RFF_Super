@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-14.
+// Modified by GPT-5 on 2026-08-23.
 //
 
 #include "Framebuffer.hpp"
@@ -15,12 +16,17 @@ namespace merutilm::vkh {
     }
 
     void FramebufferImpl::init() {
-        const uint32_t maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
         const auto [width, height] = extent;
-        framebuffer.resize(maxFramesInFlight);
         auto & attachments = renderPass.getAttachments();
+        const size_t imageCount = attachments.empty() ? 0 : attachments.front().imageContext.size();
+        if (imageCount == 0 || std::ranges::any_of(attachments, [imageCount](const RenderPassAttachment &attachment) {
+                return attachment.imageContext.size() != imageCount;
+            })) {
+            throw exception_init("Framebuffer attachments have inconsistent image counts");
+        }
+        framebuffer.resize(imageCount);
 
-        for (uint32_t i = 0; i < maxFramesInFlight; ++i) {
+        for (uint32_t i = 0; i < imageCount; ++i) {
             auto attachmentWriteImageViews = std::vector<VkImageView>(attachments.size());
             std::ranges::transform(attachments, attachmentWriteImageViews.begin(), [i](const RenderPassAttachment &v) {
                 return v.imageContext[i].imageView;
@@ -50,9 +56,8 @@ namespace merutilm::vkh {
 
     void FramebufferImpl::destroy() {
         const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();
-        const uint32_t maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
-        for (uint32_t i = 0; i < maxFramesInFlight; ++i) {
-            allocator::invoke(vkDestroyFramebuffer, device, framebuffer[i], nullptr);
+        for (const VkFramebuffer handle: framebuffer) {
+            allocator::invoke(vkDestroyFramebuffer, device, handle, nullptr);
         }
     }
 

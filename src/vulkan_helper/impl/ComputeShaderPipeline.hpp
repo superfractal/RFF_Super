@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-27.
+// Modified by GPT-5 on 2026-08-23.
 //
 
 #pragma once
@@ -9,9 +10,12 @@
 
 namespace merutilm::vkh {
     class ComputeShaderPipelineImpl final : public PipelineAbstract {
+        VkPipelineCreateFlags pipelineCreateFlags;
+
     public:
         explicit ComputeShaderPipelineImpl(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
-                                           PipelineManager &&pipelineManager);
+                                           PipelineManager &&pipelineManager,
+                                           VkPipelineCreateFlags pipelineCreateFlags = 0);
 
         ~ComputeShaderPipelineImpl() override;
 

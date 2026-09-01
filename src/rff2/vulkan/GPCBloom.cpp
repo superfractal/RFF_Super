@@ -1,5 +1,7 @@
 //
 // Created by Merutilm on 2025-08-30.
+// Modified by GPT-5 on 2026-08-18
+// Modified by Opus 5 on 2026-08-19, 2026-08-24
 //
 
 #include "GPCBloom.hpp"
@@ -16,12 +18,14 @@ namespace merutilm::rff2 {
         //no operation
     }
 
-    void GPCBloom::setBloom(const ShdBloomAttribute &bloom) const {
+    void GPCBloom::setBloom(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const {
         using namespace SharedDescriptorTemplate;
         auto &bloomDesc = getDescriptor(SET_BLOOM);
         auto &bloomUBO = *bloomDesc.get<vkh::Uniform>(0, DescBloom::BINDING_UBO_BLOOM);
         auto &bloomUBOHost = bloomUBO.getHostObject();
 
+        const bool lockAfterUpdate = wc.getAttachmentIndex() ==
+                                     Constants::VulkanWindow::MAIN_WINDOW_ATTACHMENT_INDEX;
         if (bloomUBO.isLocked()) {
             bloomUBO.unlock(wc.getCommandPool());
         }
@@ -30,12 +34,31 @@ namespace merutilm::rff2 {
         bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_RADIUS, bloom.radius);
         bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_SOFTNESS, bloom.softness);
         bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_INTENSITY, bloom.intensity);
+        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_HDR, hdr.use ? 1.0f : 0.0f);
+        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_HEADROOM, std::max(hdr.headroom, 1e-3f));
+        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_LINEAR_ADD, bloom.linearAdd ? 1.0f : 0.0f);
         bloomUBO.update();
-        bloomUBO.lock(wc.getCommandPool());
+        if (lockAfterUpdate) {
+            bloomUBO.lock(wc.getCommandPool());
+        }
 
         writeDescriptorMF([&bloomDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
             bloomDesc.queue(queue, frameIndex, {}, {DescBloom::BINDING_UBO_BLOOM});
         });
+    }
+
+    void GPCBloom::setBloomDynamic(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const {
+        using namespace SharedDescriptorTemplate;
+        const auto &bloomUBO = *getDescriptor(SET_BLOOM).get<vkh::Uniform>(0, DescBloom::BINDING_UBO_BLOOM);
+        auto &host = bloomUBO.getHostObject();
+        host.set<float>(DescBloom::TARGET_BLOOM_THRESHOLD, bloom.threshold);
+        host.set<float>(DescBloom::TARGET_BLOOM_RADIUS, bloom.radius);
+        host.set<float>(DescBloom::TARGET_BLOOM_SOFTNESS, bloom.softness);
+        host.set<float>(DescBloom::TARGET_BLOOM_INTENSITY, bloom.intensity);
+        host.set<float>(DescBloom::TARGET_BLOOM_HDR, hdr.use ? 1.0f : 0.0f);
+        host.set<float>(DescBloom::TARGET_BLOOM_HEADROOM, std::max(hdr.headroom, 1e-3f));
+        host.set<float>(DescBloom::TARGET_BLOOM_LINEAR_ADD, bloom.linearAdd ? 1.0f : 0.0f);
+        bloomUBO.update();
     }
 
     void GPCBloom::pipelineInitialized() {

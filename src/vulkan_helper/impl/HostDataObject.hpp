@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-15.
+// Modified by Opus 5 on 2026-08-26
 //
 
 #pragma once
@@ -48,10 +49,12 @@ namespace merutilm::vkh {
 
         template<typename T> requires std::is_trivially_copyable_v<T>
         const T &get(const uint32_t target, const uint32_t index) const {
-            const uint32_t size = sizeof(T) * elements.size();
-            safe_array::check_size_equal(sizes[target], size, "Buffer Object Vector get");
-            auto view = std::span(data.begin() + offsets[target] + sizeof(T) * index,
-                                  data.begin() + offsets[target] + sizeof(T) * (index + 1));
+            // Against this target's own element count, not against how many targets there are, and
+            // stepped by the stride the elements were reserved at rather than by the bare type.
+            safe_array::check_size_equal(sizes[target], sizeof(T) * elements[target], "Buffer Object Vector get");
+            safe_array::check_index(index, elements[target], "Buffer Object Vector get");
+            const size_t offset = offsets[target] + elementStride<T>(target) * static_cast<size_t>(index);
+            auto view = std::span(data.begin() + offset, data.begin() + offset + sizeof(T));
             return *reinterpret_cast<const T *>(view.data());
         }
 
@@ -65,33 +68,48 @@ namespace merutilm::vkh {
 
         template<typename T> requires std::is_trivially_copyable_v<T>
         void set(const uint32_t target, const std::vector<T> &arr) {
-            const uint32_t size = sizeof(T) * arr.size();
+            const uint32_t size = sizeof(T) * static_cast<uint32_t>(arr.size());
             safe_array::check_size_equal(sizes[target], size, "Buffer Object Vector set");
-            const uint32_t offset = offsets[target];
-            memcpy(&data[offset], arr.data(), size);
+            const size_t stride = elementStride<T>(target);
+            if (stride == sizeof(T)) {
+                memcpy(&data[offsets[target]], arr.data(), size);
+                return;
+            }
+            // Padded elements do not sit end to end, so they are written one stride apart rather
+            // than as one block, which would lay the whole array over the first few elements.
+            for (size_t i = 0; i < arr.size(); ++i) {
+                memcpy(&data[offsets[target] + stride * i], &arr[i], sizeof(T));
+            }
         }
 
         template<typename T> requires std::is_trivially_copyable_v<T>
-        void set(const uint32_t target, const uint32_t arrIndex, T &t) {
-            const uint32_t offset = offsets[target] + arrIndex * sizeof(T);
+        void set(const uint32_t target, const uint32_t arrIndex, const T &t) {
+            safe_array::check_index(arrIndex, elements[target], "Buffer Object Vector set");
+            const size_t offset = offsets[target] + elementStride<T>(target) * static_cast<size_t>(arrIndex);
             memcpy(&data[offset], &t, sizeof(T));
         }
 
         void reset(const uint32_t target) {
-            std::fill_n(data.begin() + offsets[target], sizes[target], static_cast<std::byte>(0));
+            // The padding belongs to the target as much as its values do; leaving it behind would
+            // keep whatever an earlier, longer array left in the gaps.
+            std::fill_n(data.begin() + offsets[target], reservedByte(target), static_cast<std::byte>(0));
         }
 
         template<typename T> requires std::is_trivially_copyable_v<T>
         void resizeArray(const uint32_t target, const uint32_t elementCount) {
+            // Measured in whole strides, padding included: the offsets recomputed below count the
+            // padding, so growing or shrinking by the bare type would leave every later target
+            // pointing at the wrong place - the last of them past the end of the buffer.
+            const size_t stride = elementStride<T>(target);
             if (elementCount < elements[target]) {
                 data.erase(
-                    data.begin() + offsets[target] + elementCount * sizeof(T),
-                    data.begin() + offsets[target] + elements[target] * sizeof(T)
+                    data.begin() + offsets[target] + stride * elementCount,
+                    data.begin() + offsets[target] + stride * elements[target]
                 );
             }
             if (elementCount > elements[target]) {
-                const auto fill = std::vector<std::byte>((elementCount - elements[target]) * sizeof(T));
-                data.insert(data.begin() + offsets[target] + elements[target] * sizeof(T),
+                const auto fill = std::vector<std::byte>(stride * (elementCount - elements[target]));
+                data.insert(data.begin() + offsets[target] + stride * elements[target],
                             fill.begin(), fill.end());
             }
 
@@ -108,7 +126,7 @@ namespace merutilm::vkh {
         template<typename T> requires std::is_trivially_copyable_v<T>
         void resizeAndClear(const uint32_t target, const uint32_t elementCount) {
             resizeArray<T>(target, elementCount);
-            std::fill_n(data.begin() + offsets[target], sizes[target], static_cast<std::byte>(0));
+            reset(target);
         }
 
         [[nodiscard]] const std::vector<std::byte> &getData() const { return data; }
@@ -125,6 +143,20 @@ namespace merutilm::vkh {
 
         [[nodiscard]] uint32_t getElementCount(const uint32_t target) const {
             return elements[target];
+        }
+
+    private:
+        // How far apart two elements of this target sit, which is the type plus whatever padding
+        // the target was reserved with.
+        template<typename T>
+        [[nodiscard]] size_t elementStride(const uint32_t target) const {
+            return sizeof(T) + paddingsPerElem[target];
+        }
+
+        // Every byte the target owns in the buffer, its padding included.
+        [[nodiscard]] size_t reservedByte(const uint32_t target) const {
+            return static_cast<size_t>(sizes[target]) +
+                   static_cast<size_t>(paddingsPerElem[target]) * elements[target];
         }
     };
 
