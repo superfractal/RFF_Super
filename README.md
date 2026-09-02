@@ -47,6 +47,18 @@ The following issues are currently known:
 * The precision may be lower than that of the original.
 * Unintended black or white lines may appear on the screen.
   * **Fix:** Lower `Precision Level` until the lines disappear. This is most common cause, but the lines may rarely appear for other reasons too.
+* Moving the mouse from one menu to the next can show the opening menu as an empty bordered
+  rectangle for a single frame, with the picture visible straight through it.
+  * **Cause:** Windows makes a fresh popup window for every menu, shows it, and only paints it
+    about 2 ms later — measured with message hooks. A frame composited inside that gap goes out
+    with the window on screen and nothing drawn in it. A stock Win32 program with a plain menu
+    bar reproduces this exactly, so it is not specific to RFF Super; it is only conspicuous here
+    because what sits behind the menu is a picture rather than a still, pale window. Nothing on
+    the menu API side changes it — the menu background brush, the fade and animation settings,
+    and the DWM window attributes were all measured and made no difference.
+  * **Status:** the picture now keeps rendering while a menu is open, which halves the exposure
+    from two frames to one. Removing it entirely needs menus that are drawn by this program
+    instead of by Windows; see [docs/custom-menu-popup-plan.md](docs/custom-menu-popup-plan.md).
 * A long video export at a high resolution can abort part-way with `Failed to submit queue! VK_ERROR_DEVICE_LOST`, killing the process and leaving a truncated `.mp4`. The GPU is lost after tens of minutes of sustained load; where it stops varies from run to run. Validation layers report no errors during a full run, so the cause may lie in the driver or the hardware — but a bug in this application has not been ruled out.
   * **Workaround:** lower `Supersampling (SSAA)` before generating keyframes. Per-frame GPU load is `window client size x Clarity x SSAA`, but the video output size is only `window client size x Clarity` — so lowering SSAA cuts the load without changing the output resolution.
 

@@ -5,6 +5,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-29, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #include "Callback.hpp"
@@ -1318,6 +1319,7 @@ namespace merutilm::rff2 {
             HWND rimPower = nullptr;
             HWND rimColor = nullptr;
             std::vector<HWND> glossSource;
+            HWND glossRelief = nullptr;
             HWND glossBands = nullptr;
             HWND glossSharpness = nullptr;
             HWND glossPhase = nullptr;
@@ -1619,7 +1621,15 @@ namespace merutilm::rff2 {
             L"Gloss Source", &slope_attr.glossSource, [requestSlopeShader] {
                 requestSlopeShader();
             }, L"Gloss Source",
-            L"Which reading of the relief the bands are laid along.\nShading uses the surface's own answer to the light, so the bands ring every curved form and read as light travelling over a rounded surface.\nRelief Detail uses the fine slope with no Shading Depth on it, which is the one reading of the relief that is not driven past its range, so the bands pick out levels of detail density instead: the filigree lights and a smooth expanse stays dark. This is the one that carries between locations most nearly unchanged.\nSlope Facing uses the direction the surface points, so the bands run out radially from every spiral and swirl and read as a brushed, drawn-out sheen.");
+            L"Which reading of the relief the bands are laid along.\nFine Shading uses the surface's answer to the light on a relief of its own, read at Gloss Relief rather than Shading Depth, so the bands ring every curved form from its crest outward and hold their place however deep the shading is set.\nShading uses the same answer on the shaded surface itself. At the usual Shading Depth almost every point faces fully toward or away from the light, so the bands gather on the line between lit and shadow; Gloss Phase 0.25 seats one on the lit side instead.\nRelief Detail uses the fine slope with no Shading Depth on it, which is the one reading of the relief that is not driven past its range, so the bands pick out levels of detail density instead: the filigree lights and a smooth expanse stays dark. This is the one that carries between locations most nearly unchanged.\nSlope Facing uses the direction the surface points, so the bands run out radially from every spiral and swirl and read as a brushed, drawn-out sheen.");
+
+        controls->glossRelief = window->registerSliderInput(L"Gloss Relief", &slope_attr.glossRelief, 0.0f, 16.0f,
+                                         Unparser::floatFixed(1), Parser::FLOAT,
+                                         ValidCondition::floatInRange(0.0f, 16.0f), [requestSlopeShader] {
+                                             requestSlopeShader();
+                                         }, L"Set Gloss Relief",
+                                         L"How steeply the relief is read for Fine Shading, in doublings: each step of 1 doubles the slope the bands answer to, so 8 reads it 256 times steeper than the raw height and 16 reads it 65536 times steeper.\nIt is the gloss's own Shading Depth and is not moved by that control, so the bands stay in their place when the shading is deepened.\nLow values spread the bands wide over the broad forms; high values pull them in tight around the fine relief.");
+        window->setSliderFractionalSteps(controls->glossRelief);
 
         controls->glossBands = window->registerSliderInput(L"Gloss Bands", &slope_attr.glossBands, 1.0f, 32.0f,
                                          Unparser::floatFixed(1), Parser::FLOAT,
@@ -1697,6 +1707,7 @@ namespace merutilm::rff2 {
             for (const HWND item : controls->glossSource) {
                 enable(item, glossActive);
             }
+            enable(controls->glossRelief, glossActive && slope_attr.glossSource == ShdSlopeGlossSource::SHADING_FINE);
             enable(controls->glossBands, glossActive);
             enable(controls->glossSharpness, glossActive);
             enable(controls->glossPhase, glossActive);

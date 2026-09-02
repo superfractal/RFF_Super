@@ -92,7 +92,6 @@ namespace merutilm::rff2 {
         RECT stopButton = {};
         RECT loopButton = {};
         RECT zoomPresetButton = {};
-        RECT fitButton = {};
         // The transport readouts. Dragging the distance, keyframe or time box moves the playhead.
         RECT distanceField = {};
         RECT keyframeField = {};
@@ -138,7 +137,6 @@ namespace merutilm::rff2 {
         bool hoverStop = false;
         bool hoverLoop = false;
         bool hoverZoomPreset = false;
-        bool hoverFit = false;
         // Playback walks the schedule in real time and the preview follows wherever it lands.
         bool playing = false;
         bool loopPlayback = false;

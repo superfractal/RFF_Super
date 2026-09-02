@@ -4,6 +4,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-27, 2026-08-29, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #include "ConfigIO.h"
@@ -230,6 +231,8 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, fr.panoramaPitch);
         IOUtilities::encodeAndWrite(out, fr.panoramaFov);
         IOUtilities::encodeAndWrite(out, static_cast<int32_t>(fr.panoramaLayout));
+        // Appended last, behind a marker of its own for the reason the block above it carries one: the gloss's Relief. An older config lacks it and keeps the session's value.
+        ShaderPresetIO::writeGlossRelief(out, attr.shader);
 
         out.close();
         if (out.fail()) {
@@ -603,6 +606,10 @@ namespace merutilm::rff2 {
             if (in.fail() && !recognized) {
                 in.clear();
             }
+        }
+
+        if (hasMore()) {
+            ShaderPresetIO::readGlossRelief(in, t.shader);
         }
 
         if (in.fail() || !validateConfig(t)) {

@@ -1,8 +1,8 @@
 //
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01.
-// Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02.
+// Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03
 //
 
 #include "Application.hpp"
@@ -94,15 +94,16 @@ namespace merutilm::rff2 {
         // After setProcedure: an owner-drawn menu is measured and drawn through listeners that are
         // only registered there, so dressing the window any earlier would ask for both too soon.
         applyMainWindowTheme();
+        // Recovery takes the compute hold before any startup frame can begin the default view.
+        const bool recoveryPending = offerRecovery();
         // Shown last, once everything it wears is settled. Recoloring the frame changes it, and a
         // frame change on a window already on screen resizes the client under the canvas: a
         // swapchain rebuilt and a compute restarted right where the first picture was arriving,
         // which is the blink seen at startup.
-        prepareWindow();
-        offerRecovery();
+        prepareWindow(!recoveryPending);
     }
 
-    void Application::offerRecovery() const {
+    bool Application::offerRecovery() const {
         // Taken before this run marks itself live, so a leftover of a run that held the same process
         // id cannot be mistaken for this one's.
         const std::optional<RecoveredSnapshot> kept = RecoveryIO::takeSnapshot();
@@ -110,6 +111,7 @@ namespace merutilm::rff2 {
         if (kept.has_value()) {
             RecoveryPrompt::offer(*settingsMenu, *scene, kept->path, kept->reason);
         }
+        return kept.has_value();
     }
 
     void Application::endRecoverySession() const {
@@ -239,18 +241,21 @@ namespace merutilm::rff2 {
         SetBkMode(draw->hDC, TRANSPARENT);
         SetBkColor(draw->hDC, settingsTheme().background);
         SetTextColor(draw->hDC, settingsTheme().text);
-        rc.left += GetSystemMetrics(SM_CXEDGE) * 2;
         DrawTextW(draw->hDC, text.c_str(), -1, &rc,
                   DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SelectObject(draw->hDC, previousFont);
     }
 
     void Application::createMasterWindow(const HMENU hMenubar) {
+        // WS_CLIPCHILDREN: the class paints its background in black, and the canvas and the status
+        // bar are children of this window that repaint on their own clock rather than on a WM_PAINT.
+        // Without it an erase of this window covers both in black until each puts itself back, which
+        // is the canvas blacking out for a frame as the theme is switched.
         masterWindow = CreateWindowExW(
             0,
             Constants::Win32::CLASS_MASTER_WINDOW,
             L"RFF Super",
-            WS_OVERLAPPEDWINDOW | WS_SYSMENU,
+            WS_OVERLAPPEDWINDOW | WS_SYSMENU | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -310,11 +315,36 @@ namespace merutilm::rff2 {
         if (message == WM_NCDESTROY) {
             RemoveWindowSubclass(window, statusBarProc, id);
         }
-        // The control draws the grip after its parts, so the cover goes on once it has finished.
+        // The native control keeps the original part geometry while its complete result is transferred in one paint.
         if (message == WM_PAINT && darkSettingsMode()) {
-            const LRESULT painted = DefSubclassProc(window, message, wParam, lParam);
+            PAINTSTRUCT paint;
+            const HDC target = BeginPaint(window, &paint);
+            RECT client;
+            GetClientRect(window, &client);
+            const int width = client.right - client.left;
+            const int height = client.bottom - client.top;
+            const HDC mem = CreateCompatibleDC(target);
+            const HBITMAP bitmap = mem != nullptr && width > 0 && height > 0
+                                       ? CreateCompatibleBitmap(target, width, height)
+                                       : nullptr;
+            if (bitmap != nullptr) {
+                const auto previousBitmap = SelectObject(mem, bitmap);
+                FillRect(mem, &client, statusBarBrush());
+                DefSubclassProc(window, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(mem),
+                                PRF_CLIENT | PRF_ERASEBKGND);
+                BitBlt(target, client.left, client.top, width, height, mem, 0, 0, SRCCOPY);
+                SelectObject(mem, previousBitmap);
+                DeleteObject(bitmap);
+            } else {
+                DefSubclassProc(window, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(target),
+                                PRF_CLIENT | PRF_ERASEBKGND);
+            }
+            if (mem != nullptr) {
+                DeleteDC(mem);
+            }
+            EndPaint(window, &paint);
             paintStatusBarGrip(window);
-            return painted;
+            return 0;
         }
         // Read from the press rather than from the click the status bar reports: a dialog closing
         // over this window sends the release of the button that dismissed it down here, and that
@@ -377,6 +407,42 @@ namespace merutilm::rff2 {
                 windowResizing = false;
                 resolveWindowResizeEnd();
             }
+            return static_cast<LRESULT>(0);
+        });
+        // The system's popup fade samples the canvas the popup is about to cover, and what it
+        // finds there is the frame before the last present: one stale frame flashes through the
+        // popup as it opens. The animation is held off while a menu is up and put back on the way
+        // out. Both fire for the bar's own loop and for any popup tracked over this window.
+        // The menu runs a modal loop of its own, so the main loop stops for as long as one is open
+        // and the canvas presents nothing at all. Everything the compositor has of the client area
+        // while the popup goes up is then whatever it kept from the last present, which is the
+        // stale picture that shows through the popup for its first frame. A timer is the one thing
+        // that still reaches this window from inside the menu's loop, so the canvas is driven off
+        // one for the length of it and the compositor always has the frame it is drawing over.
+        window.setListener(WM_ENTERMENULOOP, [](vkh::GraphicsContextWindowRef, const HWND hwnd, WPARAM, LPARAM) {
+            SetTimer(hwnd, Constants::Win32::TIMER_MENU_LOOP_RENDER,
+                     Constants::Win32::TIMER_MENU_LOOP_RENDER_INTERVAL, nullptr);
+            return static_cast<LRESULT>(0);
+        });
+        window.setListener(WM_EXITMENULOOP, [](vkh::GraphicsContextWindowRef, const HWND hwnd, WPARAM, LPARAM) {
+            KillTimer(hwnd, Constants::Win32::TIMER_MENU_LOOP_RENDER);
+            return static_cast<LRESULT>(0);
+        });
+        // The menu runs a modal loop of its own, so the main loop stops for as long as one is open
+        // and the canvas presents nothing at all. Driving it from a timer - the one thing that still
+        // reaches this window from inside that loop - halves how long the swap between two popups
+        // leaves the canvas uncovered, from two frames to one.
+        window.setListener(WM_TIMER, [this](vkh::GraphicsContextWindowRef menuWindow, const HWND hwnd,
+                                            const WPARAM wparam, const LPARAM lparam) {
+            if (wparam != Constants::Win32::TIMER_MENU_LOOP_RENDER) {
+                return DefWindowProcW(hwnd, WM_TIMER, wparam, lparam);
+            }
+            // Same guard the menu's own commands carry: a long job holds this thread and owns the
+            // images a present would read.
+            if (scene->isLongJobBusy()) {
+                return static_cast<LRESULT>(0);
+            }
+            menuWindow.renderOnce();
             return static_cast<LRESULT>(0);
         });
         window.setListener(
@@ -613,14 +679,16 @@ namespace merutilm::rff2 {
         }
     }
 
-    void Application::prepareWindow() const {
+    void Application::prepareWindow(const bool awaitPicture) const {
         // Shown cloaked, drawn, then revealed. A window is not rendered into until it is visible, so
         // uncloaking is the only point at which both are true: without it the canvas is on screen as
         // black for the frame it takes the first picture to arrive, which is the blink at startup.
         setWindowCloaked(masterWindow, true);
         ShowWindow(masterWindow, SW_SHOW);
         UpdateWindow(masterWindow);
-        awaitFirstPicture();
+        if (awaitPicture) {
+            awaitFirstPicture();
+        }
         setWindowCloaked(masterWindow, false);
     }
 

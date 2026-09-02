@@ -4,6 +4,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-08, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-27, 2026-08-29, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #include "ShaderPresetIO.h"
@@ -70,13 +71,13 @@ namespace merutilm::rff2 {
                      s.specularAnisotropyAngle, s.macroRelief, s.macroRadius, s.reliefResponse,
                      s.terminatorSoftness, s.highlightKnee, s.lumaAmount, s.tintResponse, s.shadowChroma,
                      s.fillIntensity, s.fillZenith, s.fillAzimuth, s.glossIntensity, s.glossBands,
-                     s.glossSharpness, s.glossPhase}) || !finiteVec4(s.rimColor) ||
+                     s.glossSharpness, s.glossPhase, s.glossRelief}) || !finiteVec4(s.rimColor) ||
             !finiteVec4(s.specularColor) || !finiteVec4(s.skyColor) || !finiteVec4(s.groundColor) ||
             !finiteVec4(s.glossColor) ||
             !(s.shadingBlend == ShdSlopeShadingBlend::OVERLAY ||
               s.shadingBlend == ShdSlopeShadingBlend::OKLAB_LIGHTNESS) ||
             !enumInRange(s.lightBlend, 0, 1) || !enumInRange(s.tintBlend, 0, 1) ||
-            !enumInRange(s.glossSource, 0, 2)) {
+            !enumInRange(s.glossSource, 0, 3)) {
             return false;
         }
 
@@ -932,7 +933,7 @@ namespace merutilm::rff2 {
                 int32_t source = 0;
                 IOUtilities::readAndDecode(in, &source);
                 // A file may name a coordinate this build no longer has; fall back to the shading.
-                s.glossSource = source >= 0 && source <= 2
+                s.glossSource = source >= 0 && source <= 3
                                     ? static_cast<ShdSlopeGlossSource>(source)
                                     : ShdSlopeGlossSource::SHADING;
             }
@@ -984,6 +985,32 @@ namespace merutilm::rff2 {
             out.palette.iterationColoring = mode >= 0 && mode <= 6
                                                 ? static_cast<ShdPalIterationColoringMode>(mode)
                                                 : ShdPalIterationColoringMode::LINEAR;
+        }
+        // Short of what the block asked for means it is simply not in this file, which is not corruption.
+        if (in.fail() && !recognized) {
+            in.clear();
+        }
+    }
+
+    void ShaderPresetIO::writeGlossRelief(std::ofstream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, GLOSS_RELIEF_MAGIC);
+        IOUtilities::encodeAndWrite(out, shader.slope.glossRelief);
+    }
+
+    void ShaderPresetIO::readGlossRelief(std::ifstream &in, ShaderAttribute &out) {
+        // A read that already failed is a truncated file, and the caller has to keep hearing about it.
+        if (in.fail()) {
+            return;
+        }
+        uint32_t magic = 0;
+        IOUtilities::readAndDecode(in, &magic);
+        const bool recognized = !in.fail() && magic == GLOSS_RELIEF_MAGIC;
+        if (recognized) {
+            float relief = 0.0f;
+            IOUtilities::readAndDecode(in, &relief);
+            if (!in.fail()) {
+                out.slope.glossRelief = relief;
+            }
         }
         // Short of what the block asked for means it is simply not in this file, which is not corruption.
         if (in.fail() && !recognized) {
@@ -1058,6 +1085,8 @@ namespace merutilm::rff2 {
         writeGloss(out, shader);
         // Appended last, behind a marker of its own: the palette's iteration coloring. Older presets lack it and load on the straight count they were written under.
         writePaletteColoring(out, shader);
+        // Appended last, behind a marker of its own: the gloss's Relief. Older presets lack it and load on its default.
+        writeGlossRelief(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -1205,6 +1234,9 @@ namespace merutilm::rff2 {
         }
         if (hasMore()) {
             readPaletteColoring(in, s);
+        }
+        if (hasMore()) {
+            readGlossRelief(in, s);
         }
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");

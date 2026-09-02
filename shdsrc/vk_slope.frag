@@ -1,9 +1,10 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23.
+// Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-09-02.
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-07, 2026-08-08, 2026-08-11, 2026-08-12, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-29
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #version 450
@@ -17,6 +18,7 @@
 #define GLOSS_SOURCE_SHADING 0
 #define GLOSS_SOURCE_RELIEF 1
 #define GLOSS_SOURCE_ASPECT 2
+#define GLOSS_SOURCE_SHADING_FINE 3
 
 layout (set = 0, binding = 0) uniform sampler2D canvas;
 
@@ -89,6 +91,8 @@ layout (set = 2, binding = 0) uniform SlopeUBO {
     float gloss_color_r;
     float gloss_color_g;
     float gloss_color_b;
+    // Appended at the tail like the block above it.
+    float gloss_relief;          // log2 gain on the gloss's own normal; GLOSS_SOURCE_SHADING_FINE only
 } slope_attr;
 
 layout (location = 0) in vec3 fragColor;
@@ -597,6 +601,8 @@ void main() {
     if (slope_attr.gloss_intensity > 0.0) {
         int glossSource = int(slope_attr.gloss_source + 0.5);
         float bands = max(slope_attr.gloss_bands, 0.01);
+        float glossSlope = length(vec2(dzDx, dzDy));
+        float glossFacing = shade;
         float g;
         if (glossSource == GLOSS_SOURCE_RELIEF) {
             // The Sobel with no depth gain on it, which is the one relief term this shader does not
@@ -608,6 +614,17 @@ void main() {
             // itself, so a fractional band count would leave a seam along the half turn.
             g = atan(dzDy, -dzDx) * (0.5 / PI) + 0.5;
             bands = max(floor(bands + 0.5), 1.0);
+        } else if (glossSource == GLOSS_SOURCE_SHADING_FINE) {
+            // The same Lambert term as SHADING, but on a normal with a gain of its own in place of
+            // Shading Depth's. That gain saturates the gradient and leaves rawShade at 0 or 1 almost
+            // everywhere, so the bands had only the terminator to sit on; this one keeps the
+            // mid-range wide, so they ring every form from its crest outward.
+            vec2 gz = vec2(dx, dy) * exp2(clamp(slope_attr.gloss_relief, 0.0, 16.0)) * multiplier;
+            float inv = inversesqrt(1.0 + dot(gz, gz));
+            g = clamp((cos(zRad) - sin(zRad) * (cos(aRad) * gz.x + sin(aRad) * gz.y)) * inv, 0.0, 1.0);
+            // Fine Shading keeps both its flat-patch fade and shadow mask independent of Shading Depth.
+            glossSlope = length(gz);
+            glossFacing = g;
         } else {
             // What the surface itself answers the light with, taken before the floor and the curve
             // shape it, so the bands follow the form rather than where the shading was clipped.
@@ -617,10 +634,9 @@ void main() {
         gloss = pow(band, max(slope_attr.gloss_sharpness, 1.0)) * slope_attr.gloss_intensity;
         // All three coordinates are noise on a flat patch, so the gloss fades out with the slope it
         // was read from, exactly as the specular highlight does.
-        float glossSlope = length(vec2(dzDx, dzDy));
         gloss *= glossSlope / (glossSlope + 0.05);
         // It is a highlight, so it dies in shadow rather than lighting the side turned away.
-        gloss *= clamp(shade * slope_attr.brightness, 0.0, 1.0);
+        gloss *= clamp(glossFacing * slope_attr.brightness, 0.0, 1.0);
     }
 
     // Ambient occlusion darkens the diffuse/base term only; the specular highlight and

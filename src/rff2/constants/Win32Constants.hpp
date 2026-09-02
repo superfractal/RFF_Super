@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-09.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-27.
-// Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02, 2026-09-03
 // Modified by SuperFractal on 2026-08-24, 2026-08-25
 //
 
@@ -31,7 +31,7 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v2.2.0";
+        constexpr auto APPLICATION_VERSION = "v2.2.0.1";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";
@@ -83,6 +83,13 @@ namespace merutilm::rff2::Constants::Win32 {
         // Posted to the master window when the dark-mode flag has been flipped, so the frame, the
         // menu bar and the status bar are redressed after the flip rather than before it.
         constexpr UINT WM_MAIN_THEME_CHANGED = WM_APP + 1;
+        // Drives the canvas while a menu is up. The menu runs a modal loop of its own, so the main
+        // loop - and with it every present - stops for as long as the menu is open; a timer is the
+        // one thing that still reaches the master window from inside that loop.
+        constexpr UINT_PTR TIMER_MENU_LOOP_RENDER = 1;
+        // Roughly one frame at 60 Hz. The menu's loop delivers timer messages at its own pace, so
+        // this is a ceiling on how fresh the canvas is kept, not a promise of a rate.
+        constexpr UINT TIMER_MENU_LOOP_RENDER_INTERVAL = 16;
         // Selected UI colors use Tailwind CSS v3's MIT-licensed palette; see NOTICE.
         constexpr COLORREF COLOR_PROGRESS_BACKGROUND_PROG = RGB(37, 99, 235);
         constexpr COLORREF COLOR_PROGRESS_BACKGROUND_BACK = RGB(15, 23, 42);

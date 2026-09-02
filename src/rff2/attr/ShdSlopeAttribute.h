@@ -4,6 +4,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-08, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-20, 2026-08-22, 2026-08-29
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #pragma once
@@ -70,11 +71,14 @@ namespace merutilm::rff2 {
         // These lay the same bands along a coordinate the relief owns instead, so they sit on the
         // surface itself and neither the colors nor the location move them. 0 intensity is every
         // earlier version's picture, so a settings file or preset from one is unmoved.
+        // The defaults below are the ones a fresh gloss starts on; a file that carries the gloss
+        // block carries every one of them, so no saved picture is moved by them.
         float glossIntensity = 0.0f;
-        ShdSlopeGlossSource glossSource = ShdSlopeGlossSource::SHADING;
-        float glossBands = 3.0f;       // bright bands across the coordinate's whole range
-        float glossSharpness = 20.0f;  // exponent on each band; higher is a narrower line
-        float glossPhase = 0.0f;       // 0 - 1 slide of the bands along the coordinate
+        ShdSlopeGlossSource glossSource = ShdSlopeGlossSource::SHADING_FINE;
+        float glossBands = 2.0f;       // bright bands across the coordinate's whole range
+        float glossSharpness = 6.0f;   // exponent on each band; higher is a narrower line
+        float glossPhase = 0.25f;      // 0 - 1 slide of the bands along the coordinate; 0.25 seats a crest at g = 1
         glm::vec4 glossColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        float glossRelief = 8.0f;      // log2 gain on the gloss's own normal, independent of depth; Fine Shading only
     };
 }

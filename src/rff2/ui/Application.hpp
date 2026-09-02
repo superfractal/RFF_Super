@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-08-08.
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-27, 2026-09-01
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23, 2026-09-02.
 //
 
 #pragma once
@@ -79,9 +79,8 @@ namespace merutilm::rff2 {
 
         void createScene();
 
-        // Opens the recovery panel when the last run ended without shutting down, and marks this run
-        // live either way. Runs once the window is up, which is what the panel places itself against.
-        void offerRecovery() const;
+        // Opens the recovery panel when the last run ended without shutting down, marks this run live, and reports whether generation must stay held.
+        bool offerRecovery() const;
 
         void setProcedure();
 
@@ -97,7 +96,7 @@ namespace merutilm::rff2 {
         // waiting further would be worse than opening without it.
         void awaitFirstPicture() const;
 
-        void prepareWindow() const;
+        void prepareWindow(bool awaitPicture) const;
 
         void createMasterWindow(HMENU hMenubar);
 

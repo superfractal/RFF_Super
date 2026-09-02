@@ -620,23 +620,6 @@ namespace merutilm::rff2 {
         }
 
         // The bracket mark of a fit-to-window control.
-        void drawFitIcon(const HDC hdc, const RECT &rect, const COLORREF color) {
-            const int arm = std::max(static_cast<int>(rect.right - rect.left) / 4, sc(3));
-            const HPEN pen = CreatePen(PS_SOLID, sc(2), color);
-            const HGDIOBJ oldPen = SelectObject(hdc, pen);
-            const POINT corners[4] = {{rect.left, rect.top}, {rect.right, rect.top}, {rect.right, rect.bottom},
-                                      {rect.left, rect.bottom}};
-            const int dirX[4] = {1, -1, -1, 1};
-            const int dirY[4] = {1, 1, -1, -1};
-            for (int i = 0; i < 4; ++i) {
-                MoveToEx(hdc, corners[i].x + arm * dirX[i], corners[i].y, nullptr);
-                LineTo(hdc, corners[i].x, corners[i].y);
-                LineTo(hdc, corners[i].x, corners[i].y + arm * dirY[i]);
-            }
-            SelectObject(hdc, oldPen);
-            DeleteObject(pen);
-        }
-
         void registerTimelineWindowClass() {
             static const bool registered = [] {
                 WNDCLASSEXW wc = {};
@@ -2875,11 +2858,11 @@ namespace merutilm::rff2 {
         const int rowIconLeft = timeline.left + sc(18);
         const int rowIconWidth = sc(24);
         const int rowTextLeft = rowIconLeft + rowIconWidth + sc(12);
-        // The column at the right end carries the track scrollbar with the fit button below it in the
-        // zoom row, and the axis stops short of it. The button sets the width, the bar is centred in
-        // it, and the horizontal bar ends a whole gap before the button rather than a few pixels.
+        // The column at the right end carries the track scrollbar and nothing else, and the axis
+        // stops short of it. The bar sets the width, so the corner where the two bars meet is the
+        // two bars and the gap between them rather than a control wedged in with them.
         const int rowRightPad = sc(18);
-        const int rightColumnWidth = sc(26);
+        const int rightColumnWidth = sc(12);
         const int rightColumnLeft = timeline.right - rowRightPad - rightColumnWidth;
         // The rows are the tracks the timeline holds, stacked in the order the file keeps them, so
         // a row carried over another one keeps the place it was dropped in.
@@ -3136,8 +3119,8 @@ namespace merutilm::rff2 {
         SelectClipRgn(canvas, nullptr);
         DeleteObject(trackClip);
 
-        // Centred in the right column, so the bar stands over the fit button rather than leaning on the axis.
-        trackScrollTrack = {rightColumnLeft + sc(7), axis.top, rightColumnLeft + sc(19), axis.bottom};
+        // The right column is the bar's own width, so it stands clear of the axis without a gutter.
+        trackScrollTrack = {rightColumnLeft, axis.top, rightColumnLeft + rightColumnWidth, axis.bottom};
         fillRect(canvas, trackScrollTrack, theme.panelRaised);
         frameRect(canvas, trackScrollTrack, theme.border);
         {
@@ -3179,10 +3162,6 @@ namespace merutilm::rff2 {
         drawText(canvas, L"\x25BE", {zoomPresetButton.left, zoomPresetButton.top,
                                      zoomPresetButton.right - sc(9), zoomPresetButton.bottom},
                  theme.text, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
-        fitButton = {rightColumnLeft, zoomMid - sc(13), rightColumnLeft + rightColumnWidth, zoomMid + sc(13)};
-        drawButton(canvas, fitButton, L"", hoverFit, false, smallFont, theme);
-        drawFitIcon(canvas, {fitButton.left + sc(7), fitButton.top + sc(7), fitButton.right - sc(7),
-                             fitButton.bottom - sc(7)}, hoverFit ? theme.text : theme.mutedText);
         scrollTrack = {axis.left, zoomMid - scrollHeight / 2, axis.right, zoomMid + scrollHeight / 2};
         fillRect(canvas, scrollTrack, theme.panelRaised);
         frameRect(canvas, scrollTrack, theme.border);
@@ -3472,7 +3451,6 @@ namespace merutilm::rff2 {
                 const bool stop = contains(self->stopButton, point);
                 const bool loop = contains(self->loopButton, point);
                 const bool zoomPreset = contains(self->zoomPresetButton, point);
-                const bool fit = contains(self->fitButton, point);
                 const FieldEdit formulaField = contains(self->distanceField, point) ? FieldEdit::DISTANCE
                                                : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
                                                                                      : FieldEdit::NONE;
@@ -3483,7 +3461,7 @@ namespace merutilm::rff2 {
                     thumb != self->hoverScrollThumb || theme != self->hoverTheme ||
                     trackThumb != self->hoverTrackScrollThumb || full != self->hoverFullscreen ||
                     play != self->hoverPlay || pause != self->hoverPause || stop != self->hoverStop ||
-                    loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset || fit != self->hoverFit ||
+                    loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset ||
                     formulaField != self->hoveredFieldEdit) {
                     self->hoveredTrackKey = hoveredKey;
                     self->hoverFrames = frames;
@@ -3499,7 +3477,6 @@ namespace merutilm::rff2 {
                     self->hoverStop = stop;
                     self->hoverLoop = loop;
                     self->hoverZoomPreset = zoomPreset;
-                    self->hoverFit = fit;
                     self->hoveredFieldEdit = formulaField;
                     InvalidateRect(hwnd, nullptr, FALSE);
                 }
@@ -3591,11 +3568,6 @@ namespace merutilm::rff2 {
                     self->fieldDragOriginX = point.x;
                     self->fieldDragDepth = self->previewDepth;
                     SetCapture(hwnd);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->fitButton, point)) {
-                    self->resetView();
                     InvalidateRect(hwnd, nullptr, FALSE);
                     return 0;
                 }

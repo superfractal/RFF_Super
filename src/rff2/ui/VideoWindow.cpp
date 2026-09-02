@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-09-06.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01
+// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01, 2026-09-02
 // Modified by Fable 5 on 2026-07-06
 // Modified by Opus 5 on 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-21, 2026-08-25
 //
@@ -30,6 +30,18 @@ namespace merutilm::rff2 {
 
     namespace {
         std::atomic<uint64_t> ffmpegPipeCounter{0};
+        constexpr UINT WM_VIDEO_FIRST_FRAME_READY = WM_APP + 1;
+
+        void setWindowCloaked(const HWND window, const bool cloaked) {
+            using DwmSetWindowAttributeFn = HRESULT (WINAPI *)(HWND, DWORD, LPCVOID, DWORD);
+            static const auto dwmSetWindowAttribute = reinterpret_cast<DwmSetWindowAttributeFn>(
+                GetProcAddress(LoadLibraryW(L"dwmapi.dll"), "DwmSetWindowAttribute"));
+            if (dwmSetWindowAttribute == nullptr || window == nullptr) {
+                return;
+            }
+            const BOOL value = cloaked;
+            dwmSetWindowAttribute(window, 13, &value, sizeof(value));
+        }
 
         // SMPTE ST 2084 and ARIB STD-B67 transfer functions, acknowledged in NOTICE.
         float decodeHdrCode(const float code, const VidHdrTransfer transfer) {
@@ -465,6 +477,12 @@ namespace merutilm::rff2 {
         }
         auto &window = *windowPtr;
         switch (message) {
+            case WM_VIDEO_FIRST_FRAME_READY: {
+                setWindowCloaked(hwnd, false);
+                SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                SetForegroundWindow(hwnd);
+                return 0;
+            }
             case WM_CLOSE: {
                 if (!window.allowClose.load()) {
                     window.closeRequested.store(true);
@@ -625,6 +643,7 @@ namespace merutilm::rff2 {
         std::atomic<bool> exitFlag{false};
         std::atomic<bool> encoderFailed{false};
         std::atomic<bool> pipeAbort{false};
+        std::atomic<bool> firstFrameReadyPosted{false};
         std::mutex workerFailureMutex;
         std::wstring workerFailure;
         const auto failVideo = [&](const std::wstring_view message) noexcept {
@@ -1057,6 +1076,9 @@ namespace merutilm::rff2 {
                 } else {
                     renderSub(0.0f, 0.0f, 0.0f, 1);
                 }
+                if (!firstFrameReadyPosted.exchange(true)) {
+                    PostMessageW(windowRef->videoWindow, WM_VIDEO_FIRST_FRAME_READY, 0, 0);
+                }
 
                 // Depth no longer advances at a constant rate, so how far along the export is
                 // comes from the time the schedule says has passed, not from the depth left to go.
@@ -1215,17 +1237,10 @@ namespace merutilm::rff2 {
         SetWindowLongPtr(videoWindow, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
         setClientSize(width, height);
+        // A cloaked visible window can receive Vulkan presents without exposing its empty surface before the first one completes.
+        setWindowCloaked(videoWindow, true);
+        ShowWindow(videoWindow, SW_SHOWNA);
         UpdateWindow(videoWindow);
-        ShowWindow(videoWindow, SW_SHOW);
-        // Raised after the show, not before it. This window is built on the export's worker thread,
-        // and a show from a thread that does not hold the foreground leaves the window wherever the
-        // z-order had it - underneath the main window, which the save dialog that ran a moment
-        // earlier handed the foreground back to on its way out. Ordering the z-order call before the
-        // window was visible did nothing about that. The foreground belongs to this process, so it
-        // is allowed to move it; the window is not made topmost, so anything switched to afterwards
-        // still covers it.
-        SetWindowPos(videoWindow, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        SetForegroundWindow(videoWindow);
     }
 
     void VideoWindow::createScene(const VkExtent2D &videoExtent, const Attribute &targetAttribute) {

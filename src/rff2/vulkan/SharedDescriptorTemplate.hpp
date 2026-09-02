@@ -5,6 +5,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-26, 2026-08-29, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #pragma once
@@ -290,6 +291,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_SLOPE_GLOSS_COLOR_R = 49;
         static constexpr uint32_t TARGET_SLOPE_GLOSS_COLOR_G = 50;
         static constexpr uint32_t TARGET_SLOPE_GLOSS_COLOR_B = 51;
+        static constexpr uint32_t TARGET_SLOPE_GLOSS_RELIEF = 52;
 
         void configure(const vkh::CoreRef core,
                                       std::vector<vkh::DescriptorManager> &managers) override {
@@ -346,6 +348,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_SLOPE_GLOSS_COLOR_R);
             bufferManager->reserve<float>(TARGET_SLOPE_GLOSS_COLOR_G);
             bufferManager->reserve<float>(TARGET_SLOPE_GLOSS_COLOR_B);
+            bufferManager->reserve<float>(TARGET_SLOPE_GLOSS_RELIEF);
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
             auto descManager = vkh::factory::create<vkh::DescriptorManager>();
             descManager->appendUBO(BINDING_UBO_SLOPE, STAGE, std::move(ubo));

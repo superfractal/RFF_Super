@@ -5,6 +5,7 @@
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-08, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-20, 2026-08-22, 2026-08-29
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #include "GPCSlope.hpp"
@@ -84,6 +85,7 @@ namespace merutilm::rff2 {
         slopeUBOHost.set<float>(DescSlope::TARGET_SLOPE_GLOSS_COLOR_R, slope.glossColor.r);
         slopeUBOHost.set<float>(DescSlope::TARGET_SLOPE_GLOSS_COLOR_G, slope.glossColor.g);
         slopeUBOHost.set<float>(DescSlope::TARGET_SLOPE_GLOSS_COLOR_B, slope.glossColor.b);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SLOPE_GLOSS_RELIEF, slope.glossRelief);
         slopeUBO->update();
     }
 

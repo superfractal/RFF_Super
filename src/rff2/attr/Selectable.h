@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-08-16, 2026-08-21.
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-29, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #pragma once
@@ -155,6 +156,7 @@ namespace merutilm::rff2 {
             if constexpr (std::is_same_v<E, ShdSlopeGlossSource>) {
                 using enum ShdSlopeGlossSource;
                 return {
+                    SHADING_FINE,
                     SHADING,
                     RELIEF,
                     ASPECT
@@ -425,6 +427,7 @@ namespace merutilm::rff2 {
             if constexpr (std::is_same_v<E, ShdSlopeGlossSource>) {
                 switch (value) {
                     using enum ShdSlopeGlossSource;
+                    case SHADING_FINE: return L"Fine Shading";
                     case SHADING: return L"Shading";
                     case RELIEF: return L"Relief Detail";
                     case ASPECT: return L"Slope Facing";

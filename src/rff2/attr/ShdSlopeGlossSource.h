@@ -1,5 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-29.
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #pragma once
@@ -10,6 +11,7 @@ namespace merutilm::rff2 {
     enum class ShdSlopeGlossSource {
         SHADING = 0,
         RELIEF = 1,
-        ASPECT = 2
+        ASPECT = 2,
+        SHADING_FINE = 3
     };
 }

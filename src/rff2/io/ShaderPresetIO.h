@@ -2,6 +2,7 @@
 // Created and modified by AI; earlier exact dates unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-31.
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-27, 2026-08-29, 2026-08-31
+// Modified by Fable 5.1 on 2026-09-02
 //
 
 #pragma once
@@ -130,6 +131,14 @@ namespace merutilm::rff2 {
         static void writePaletteColoring(std::ofstream &out, const ShaderAttribute &shader);
 
         static void readPaletteColoring(std::ifstream &in, ShaderAttribute &out);
+
+        // Marks the gloss relief block below, for the reason the blocks above carry one: in a config the projection block ends the stream before it, and its last field is a legal int.
+        static constexpr uint32_t GLOSS_RELIEF_MAGIC = 0x474C524C; // "GLRL"
+
+        // The gloss's Relief, one float behind that marker. It is the last block of a shader preset and of a config. A file whose next four bytes are not the marker is treated as carrying none, the destination is left alone, and nothing further is read.
+        static void writeGlossRelief(std::ofstream &out, const ShaderAttribute &shader);
+
+        static void readGlossRelief(std::ifstream &in, ShaderAttribute &out);
 
         // "Layer N: <path>" for every texture layer whose saved image is not on disk. Only the path
         // is stored, so a file written on another machine - or one whose image has since moved -
