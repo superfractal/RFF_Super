@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01.
-// Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 //
 
 #pragma once
@@ -13,6 +13,7 @@
 #include <functional>
 #include <mutex>
 
+#include "ImageCanvas.hpp"
 #include "RenderSceneRequests.hpp"
 #include "RenderSceneRenderer.hpp"
 #include "../../vulkan_helper/handle/EngineHandler.hpp"
@@ -130,6 +131,13 @@ namespace merutilm::rff2 {
         // A place in the folder is being typed toward a jump, and the digits given for it so far.
         bool browsedMapTyping = false;
         std::wstring browsedMapTyped = {};
+
+        // The same for Load Image: the pictures in the folder it opened from, which of them is over the
+        // canvas, and the window holding it there. The two walks are exclusive - each one owns what
+        // the canvas shows - so beginning either ends the other.
+        std::vector<std::filesystem::path> browsedImages = {};
+        int browsedImageIndex = -1;
+        std::unique_ptr<ImageCanvas> imageCanvas = nullptr;
 
         BackgroundThreads backgroundThreads = BackgroundThreads();
 
@@ -291,6 +299,20 @@ namespace merutilm::rff2 {
 
         // Forgets that folder, which is what a recompute does: nothing of it is on the canvas any more.
         void endMapBrowse();
+
+        // Puts the picture over the canvas and lists the pictures beside it, so the arrow keys step
+        // through the folder as they do for maps. The fractal keeps whatever it had underneath.
+        void beginImageBrowse(const std::filesystem::path &loaded);
+
+        // Takes the picture away and forgets that folder, which puts the fractal back on screen.
+        void endImageBrowse();
+
+        // True while a picture is over the canvas.
+        [[nodiscard]] bool isImageBrowsing() const { return browsedImageIndex >= 0; }
+
+        // Keeps that picture on the canvas as the window is resized. Called from where the canvas
+        // itself is sized, because the two must land on the same rectangle.
+        void layoutImageCanvas(const RECT &area) const;
 
         // Moves that selection by delta maps, stopping at the ends.
         void stepBrowsedMap(int delta);
@@ -514,6 +536,19 @@ namespace merutilm::rff2 {
 
         // The status bar's line for the map of that index: its place in the folder.
         [[nodiscard]] std::wstring browsedMapStatus(int index) const;
+
+        // The same three for the pictures Load Image walks. There is no typed jump among them: a
+        // picture is put up whole by the arrow keys alone.
+        void applyBrowsedImage(int index);
+
+        [[nodiscard]] std::wstring browsedImageStatus(int index) const;
+
+        void stepBrowsedImage(int delta);
+
+        void jumpBrowsedImage(bool last);
+
+        // The canvas rectangle the picture is laid over, in the canvas's own coordinates.
+        [[nodiscard]] RECT imageCanvasArea() const;
 
         // Puts the number being typed in the status bar, in place of the position it will replace.
         void showTypedBrowsedMapPosition() const;

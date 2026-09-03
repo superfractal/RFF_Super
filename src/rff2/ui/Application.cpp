@@ -158,6 +158,12 @@ namespace merutilm::rff2 {
 
     void Application::adjustClient(const RECT &rect) const {
         SetWindowPos(renderWindow, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER);
+        // A picture put up by Load Image stands over the canvas, so it takes the rectangle the canvas
+        // was just given. Does nothing while no picture is up.
+        if (scene != nullptr) {
+            const RECT canvas = {0, 0, rect.right - rect.left, rect.bottom - rect.top};
+            scene->layoutImageCanvas(canvas);
+        }
         SetWindowPos(statusBar, nullptr, 0, rect.bottom - rect.top, rect.right - rect.left, statusHeight, SWP_NOZORDER);
 
         auto rightEdges = std::array<int, Constants::Status::LENGTH>{};

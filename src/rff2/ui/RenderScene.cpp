@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
-// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 //
 
 #include "RenderScene.hpp"
@@ -16,6 +16,7 @@
 
 #include "CallbackExplore.hpp"
 #include "IOUtilities.h"
+#include "../io/RFFStaticMapBinary.h"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
 #include "../vulkan/RCC1.hpp"
 #include "../vulkan/GPCIterationPalette.hpp"
@@ -1190,7 +1191,7 @@ namespace merutilm::rff2 {
     void RenderScene::applyCreateImage(RenderSceneRequests::CreateImageRequest request) {
         // The dialog runs before the fence wait so cancelling costs nothing, and returns nullptr when closed.
         if (request.filename.empty()) {
-            const auto path = IOUtilities::ioFileDialog(L"Save image", Constants::Extension::DESC_IMAGE,
+            const auto path = IOUtilities::ioFileDialog(L"Save Image", Constants::Extension::DESC_IMAGE,
                                                         IOUtilities::SAVE_FILE, Constants::Extension::IMAGE);
             if (path == nullptr) {
                 return;
@@ -1776,42 +1777,6 @@ namespace merutilm::rff2 {
         std::wstring zoomStatus(const float logZoom) {
             return std::format(L"Z : {:.06f}E{:d}", pow(10, fmod(logZoom, 1)), static_cast<int>(logZoom));
         }
-
-        // Orders names the way a file manager does: a run of digits counts as its value, so 0009
-        // comes before 0010 and map2 before map10, whatever padding the names carry.
-        bool naturalLess(const std::wstring &a, const std::wstring &b) {
-            size_t i = 0;
-            size_t j = 0;
-            while (i < a.size() && j < b.size()) {
-                if (std::iswdigit(a[i]) && std::iswdigit(b[j])) {
-                    size_t ea = i;
-                    size_t eb = j;
-                    while (ea < a.size() && std::iswdigit(a[ea])) ++ea;
-                    while (eb < b.size() && std::iswdigit(b[eb])) ++eb;
-                    // Leading zeros carry no value, so they are dropped before the digits are compared.
-                    std::wstring_view na(a.data() + i, ea - i);
-                    std::wstring_view nb(b.data() + j, eb - j);
-                    na.remove_prefix(std::min(na.find_first_not_of(L'0'), na.size() - 1));
-                    nb.remove_prefix(std::min(nb.find_first_not_of(L'0'), nb.size() - 1));
-                    if (na.size() != nb.size()) {
-                        return na.size() < nb.size();
-                    }
-                    if (na != nb) {
-                        return na < nb;
-                    }
-                    i = ea;
-                    j = eb;
-                    continue;
-                }
-                const wchar_t ca = std::towlower(a[i]);
-                if (const wchar_t cb = std::towlower(b[j]); ca != cb) {
-                    return ca < cb;
-                }
-                ++i;
-                ++j;
-            }
-            return a.size() - i < b.size() - j;
-        }
     }
 
     void RenderScene::cancelRunningCompute() {
@@ -1832,6 +1797,10 @@ namespace merutilm::rff2 {
                                  map.getMatrix().getWidth(), map.getMatrix().getHeight());
             return false;
         }
+        // Both walks put something of their own on the canvas, so only one may hold it. Taken away
+        // before the zoom below is written, because that is the line this would otherwise restore
+        // over: the map's zoom is what belongs on the bar once the map is what is being shown.
+        endImageBrowse();
         // A compute still running owns this buffer through its preview snapshots: the map opened
         // here would be back under the half-finished view within the next frame or two, so the run
         // it belongs to is stopped rather than raced with.
@@ -1864,7 +1833,7 @@ namespace merutilm::rff2 {
             }
         }
         std::ranges::sort(browsedMaps, [](const std::filesystem::path &x, const std::filesystem::path &y) {
-            return naturalLess(x.filename().wstring(), y.filename().wstring());
+            return Utilities::naturalLess(x.filename().wstring(), y.filename().wstring());
         });
 
         // Case-folded: the dialog may hand back a name spelled differently from the one on disk.
@@ -1885,6 +1854,125 @@ namespace merutilm::rff2 {
         if (browsedMapIndex >= 0) {
             setStatusMessage(Constants::Status::RENDER_STATUS, browsedMapStatus(browsedMapIndex));
         }
+    }
+
+    void RenderScene::beginImageBrowse(const std::filesystem::path &loaded) {
+        // Both walks put something of their own on the canvas, so only one of them may hold it.
+        endMapBrowse();
+        browsedImages.clear();
+        browsedImageIndex = -1;
+
+        const std::wstring imageExt = std::format(L".{}", Constants::Extension::IMAGE);
+        std::error_code ec;
+        for (const auto &entry: std::filesystem::directory_iterator(loaded.parent_path(), ec)) {
+            if (entry.is_regular_file(ec) && Utilities::lowerExtension(entry.path()) == imageExt) {
+                browsedImages.push_back(entry.path());
+            }
+        }
+        std::ranges::sort(browsedImages, [](const std::filesystem::path &x, const std::filesystem::path &y) {
+            return Utilities::naturalLess(x.filename().wstring(), y.filename().wstring());
+        });
+
+        // Case-folded: the dialog may hand back a name spelled differently from the one on disk.
+        const auto folded = [](const std::filesystem::path &p) {
+            std::wstring name = p.filename().wstring();
+            std::ranges::transform(name, name.begin(), [](const wchar_t c) { return std::towlower(c); });
+            return name;
+        };
+        const std::wstring target = folded(loaded);
+        for (size_t i = 0; i < browsedImages.size(); ++i) {
+            if (folded(browsedImages[i]) == target) {
+                browsedImageIndex = static_cast<int>(i);
+                break;
+            }
+        }
+        // A folder that cannot be walked still shows the one file the dialog was answered with.
+        if (browsedImageIndex < 0) {
+            browsedImages.clear();
+            browsedImages.push_back(loaded);
+            browsedImageIndex = 0;
+        }
+        applyBrowsedImage(browsedImageIndex);
+    }
+
+    void RenderScene::endImageBrowse() {
+        if (browsedImageIndex < 0) {
+            return;
+        }
+        browsedImages.clear();
+        browsedImageIndex = -1;
+        if (imageCanvas != nullptr) {
+            imageCanvas->hide();
+        }
+        setStatusMessage(Constants::Status::RENDER_STATUS, L"");
+        // The zoom on the bar belonged to the picture, not to what is on the canvas again now.
+        setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(attr.fractal.logZoom));
+    }
+
+    std::wstring RenderScene::browsedImageStatus(const int index) const {
+        return std::format(L"I : {}/{}", index + 1, browsedImages.size());
+    }
+
+    RECT RenderScene::imageCanvasArea() const {
+        RECT area = {};
+        GetClientRect(wc.getWindow().getWindowHandle(), &area);
+        return area;
+    }
+
+    void RenderScene::layoutImageCanvas(const RECT &area) const {
+        if (imageCanvas != nullptr) {
+            imageCanvas->layout(area);
+        }
+    }
+
+    void RenderScene::applyBrowsedImage(const int index) {
+        browsedImageIndex = index;
+        if (imageCanvas == nullptr) {
+            imageCanvas = std::make_unique<ImageCanvas>();
+        }
+        const HWND canvas = wc.getWindow().getWindowHandle();
+        const HWND host = GetParent(canvas);
+        RECT area = imageCanvasArea();
+        // The picture sits over the canvas, so it is placed in the coordinates of what holds both.
+        MapWindowPoints(canvas, host, reinterpret_cast<POINT *>(&area), 2);
+        imageCanvas->show(host, area, browsedImages[index]);
+        setStatusMessage(Constants::Status::RENDER_STATUS, browsedImageStatus(index));
+
+        // A keyframe run writes 0002.rfsm beside 0002.png and that header carries the zoom, so a
+        // picture sitting next to its keyframe can say where it stands. One saved on its own has no
+        // such file, and the bar keeps naming the view the canvas holds underneath.
+        std::filesystem::path keyframe = browsedImages[index];
+        keyframe.replace_extension(std::format(L".{}", Constants::Extension::STATIC_MAP));
+        if (const RFFStaticMapBinary map = RFFStaticMapBinary::read(keyframe); map.hasData()) {
+            setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(map.getLogZoom()));
+        } else {
+            setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(attr.fractal.logZoom));
+        }
+    }
+
+    void RenderScene::stepBrowsedImage(const int delta) {
+        if (browsedImageIndex < 0) {
+            return;
+        }
+        const int last = static_cast<int>(browsedImages.size()) - 1;
+        const int target = std::clamp(browsedImageIndex + delta, 0, last);
+        if (target == browsedImageIndex) {
+            setStatusMessage(Constants::Status::RENDER_STATUS, browsedImageStatus(browsedImageIndex));
+            return;
+        }
+        applyBrowsedImage(target);
+    }
+
+    void RenderScene::jumpBrowsedImage(const bool last) {
+        if (browsedImageIndex < 0) {
+            return;
+        }
+        const int target = last ? static_cast<int>(browsedImages.size()) - 1 : 0;
+        if (target == browsedImageIndex) {
+            setStatusMessage(Constants::Status::RENDER_STATUS, browsedImageStatus(browsedImageIndex));
+            return;
+        }
+        applyBrowsedImage(target);
     }
 
     void RenderScene::endMapBrowse() {
@@ -2012,7 +2100,27 @@ namespace merutilm::rff2 {
         if (isVideoGenerationActive || isVideoExportActive || longJobBusy.load()) {
             return false;
         }
-        // Every key handled here walks a folder of maps, so without one they all pass through.
+        // A picture over the canvas takes the same keys first, because it is what is being looked at.
+        if (browsedImageIndex >= 0) {
+            switch (key) {
+                case VK_LEFT: stepBrowsedImage(-1);
+                    return true;
+                case VK_RIGHT: stepBrowsedImage(1);
+                    return true;
+                case VK_UP: stepBrowsedImage(-Constants::Win32::MAP_BROWSE_COARSE_STEP);
+                    return true;
+                case VK_DOWN: stepBrowsedImage(Constants::Win32::MAP_BROWSE_COARSE_STEP);
+                    return true;
+                case VK_HOME: jumpBrowsedImage(false);
+                    return true;
+                case VK_END: jumpBrowsedImage(true);
+                    return true;
+                case VK_ESCAPE: endImageBrowse();
+                    return true;
+                default: return false;
+            }
+        }
+        // Every key left walks a folder of maps, so without one they all pass through.
         if (browsedMapIndex < 0) {
             return false;
         }
@@ -2266,6 +2374,8 @@ namespace merutilm::rff2 {
         // A recompute puts a freshly computed view where the loaded map was, so the folder it came
         // from is no longer what the canvas holds: the keys and the status bar stop answering for it.
         endMapBrowse();
+        // A picture standing over the canvas would hide the very view being computed.
+        endImageBrowse();
         // createThread cancels and joins the running compute, so its afterCompute lands after the render
         // loop has already cleared idleCompute for this one. Each compute carries the generation it started
         // with and only the newest may declare the scene idle, or a waiter (the keyframe writer) would be

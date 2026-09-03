@@ -31,13 +31,14 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v2.2.0.1";
+        constexpr auto APPLICATION_VERSION = "v2.2.0.2";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";
         constexpr auto CLASS_VIDEO_RENDER_WINDOW = L"RFF2VRW";
         constexpr auto CLASS_VK_RENDER_SCENE = L"RFF2VRS";
         constexpr auto CLASS_BOX_ZOOM_OVERLAY = L"RFF2BZO";
+        constexpr auto CLASS_IMAGE_VIEWER_WINDOW = L"RFF2IVW";
         // Windows 11's own UI face, hinted for the 12-16px band these windows draw at. Windows 10
         // and earlier do not have it, and the GDI font mapper answers a face name it cannot resolve
         // with a silent substitution (a gothic face, on a Japanese system) instead of an error - so

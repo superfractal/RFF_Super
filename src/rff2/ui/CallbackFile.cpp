@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-14.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-31.
-// Modified by Opus 5 on 2026-08-08, 2026-08-10, 2026-08-14, 2026-08-24, 2026-08-26
+// Modified by Opus 5 on 2026-08-08, 2026-08-10, 2026-08-14, 2026-08-24, 2026-08-26, 2026-09-03
 //
 
 #include "CallbackFile.hpp"
@@ -139,6 +139,16 @@ namespace merutilm::rff2 {
         // The arrow keys walk the rest of the folder from here, so a keyframe run can be looked
         // through without reopening the dialog for every map.
         scene.beginMapBrowse(*path);
+    };
+    const std::function<void(SettingsMenu&, RenderScene&)> CallbackFile::LOAD_IMAGE = [](const SettingsMenu&, RenderScene& scene) {
+        const auto path = IOUtilities::ioFileDialog(L"Load Image", Constants::Extension::DESC_IMAGE,
+                                                    IOUtilities::OPEN_FILE, Constants::Extension::IMAGE);
+        if (path == nullptr) {
+            return;
+        }
+        // The arrow keys walk the rest of the folder from here, so a keyframe run can be looked
+        // through without reopening the dialog for every picture.
+        scene.beginImageBrowse(*path);
     };
     const std::function<void(SettingsMenu&, RenderScene&)> CallbackFile::SAVE_CONFIG = [](const SettingsMenu&, RenderScene& scene) {
         const auto path = IOUtilities::ioFileDialogMulti(L"Save Location / Settings", IOUtilities::SAVE_FILE, {

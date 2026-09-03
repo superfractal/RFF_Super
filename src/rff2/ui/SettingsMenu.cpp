@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-14.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01.
-// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31
+// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 //
 
 #include "SettingsMenu.hpp"
@@ -332,14 +332,17 @@ namespace merutilm::rff2 {
         HMENU subMenu2 = nullptr;
 
         currentMenu = addChildMenu(menubar, "File");
+        // Every save first, then every load, each group in the same order of kind:
+        // the map, the picture, then the settings.
         addChildItem(currentMenu, "Save Map", CallbackFile::SAVE_MAP);
         addChildItem(currentMenu, "Save Image", CallbackFile::SAVE_IMAGE);
 #ifndef NDEBUG
         // Tiled export is still being worked on, so a release build does not offer it.
         addChildItem(currentMenu, "Export Tiled Image", CallbackFile::EXPORT_HIGHRES);
 #endif
-        addChildItem(currentMenu, "Load Map", CallbackFile::LOAD_MAP);
         addChildItem(currentMenu, "Save Location / Settings", CallbackFile::SAVE_CONFIG);
+        addChildItem(currentMenu, "Load Map", CallbackFile::LOAD_MAP);
+        addChildItem(currentMenu, "Load Image", CallbackFile::LOAD_IMAGE);
         addChildItem(currentMenu, "Load Location / Settings", CallbackFile::LOAD_CONFIG);
 
         currentMenu = addChildMenu(menubar, "Fractal");
@@ -357,10 +360,10 @@ namespace merutilm::rff2 {
         currentMenu = addChildMenu(menubar, "Render");
         addChildItem(currentMenu, "Render Properties", CallbackRender::SET_CLARITY);
         addChildCheckbox(currentMenu, "Linear Interpolation", CallbackRender::LINEAR_INTERPOLATION);
-        addChildCheckbox(currentMenu, "Dither", CallbackRender::DITHER);
         addChildCheckbox(currentMenu, "Boundary Trace Fill", CallbackRender::BOUNDARY_TRACE_FILL);
         addChildCheckbox(currentMenu, "2-Color Preview Mode", CallbackRender::PREVIEW_2COLOR);
         addChildCheckbox(currentMenu, "Coarse Preview", CallbackRender::COARSE_PREVIEW);
+        addChildCheckbox(currentMenu, "Dither", CallbackRender::DITHER);
         currentMenu = addChildMenu(menubar, "Shader");
         addChildItem(currentMenu, "Palette", CallbackShader::PALETTE);
         addChildItem(currentMenu, "Texture", CallbackShader::TEXTURE);

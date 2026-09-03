@@ -1,6 +1,14 @@
 # Update History
 
-### 2026/09/03
+## 2026/09/03
+
+* **2.2.0.2 - Image Viewer**
+  * Added Load Image (File menu): a saved `.png` is put on the canvas of the main window, and the arrow keys walk the rest of the pictures in its folder, the way Load Map walks the maps beside the one it opened.
+    * Left and Right step one picture, Up and Down step ten, Home and End go to the ends of the folder, and Escape takes the picture off and puts the fractal back.
+    * The status bar names the place in the folder. A picture from a keyframe run made under Render from PNG images also names the zoom it stands at, taken from the `.rfsm` of the same number beside it. A picture saved on its own has no such file, and the bar keeps naming the view underneath.
+    * The picture is fitted to the canvas and is never blown up past its own size. The fractal is left as it was beneath it, and loading a map or computing again brings it back.
+  * The File menu now lists every save first and every load after it, each group in the same order of kind: Save Map, Save Image, Save Location / Settings, then Load Map, Load Image, Load Location / Settings.
+  * Dither now sits at the bottom of the Render menu, below Coarse Preview.
 
 * **2.2.0.1 - Fine Shading Gloss**
   * Added Fine Shading (Slope menu, Gloss Source): the gloss bands follow how far the surface faces the light on a relief of the gloss's own, so they ring every form from its crest outward and stay in place at any Shading Depth.

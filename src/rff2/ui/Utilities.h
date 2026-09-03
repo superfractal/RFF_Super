@@ -1,12 +1,15 @@
 //
 // Created by Merutilm on 2025-05-10.
 // Modified by GPT-5 on 2026-08-23, 2026-08-27.
+// Modified by Opus 5 on 2026-09-03
 //
 
 #pragma once
 
 #include <algorithm>
+#include <cwctype>
 #include <string>
+#include <string_view>
 #include <ctime>
 #include <filesystem>
 #include <system_error>
@@ -77,6 +80,49 @@ namespace merutilm::rff2 {
             }
 
             return split;
+        }
+
+        // Orders names the way a file manager does: a run of digits counts as its value, so 0009
+        // comes before 0010 and map2 before map10, whatever padding the names carry.
+        static bool naturalLess(const std::wstring &a, const std::wstring &b) {
+            size_t i = 0;
+            size_t j = 0;
+            while (i < a.size() && j < b.size()) {
+                if (std::iswdigit(a[i]) && std::iswdigit(b[j])) {
+                    size_t ea = i;
+                    size_t eb = j;
+                    while (ea < a.size() && std::iswdigit(a[ea])) ++ea;
+                    while (eb < b.size() && std::iswdigit(b[eb])) ++eb;
+                    // Leading zeros carry no value, so they are dropped before the digits are compared.
+                    std::wstring_view na(a.data() + i, ea - i);
+                    std::wstring_view nb(b.data() + j, eb - j);
+                    na.remove_prefix(std::min(na.find_first_not_of(L'0'), na.size() - 1));
+                    nb.remove_prefix(std::min(nb.find_first_not_of(L'0'), nb.size() - 1));
+                    if (na.size() != nb.size()) {
+                        return na.size() < nb.size();
+                    }
+                    if (na != nb) {
+                        return na < nb;
+                    }
+                    i = ea;
+                    j = eb;
+                    continue;
+                }
+                const wchar_t ca = std::towlower(a[i]);
+                if (const wchar_t cb = std::towlower(b[j]); ca != cb) {
+                    return ca < cb;
+                }
+                ++i;
+                ++j;
+            }
+            return a.size() - i < b.size() - j;
+        }
+
+        // The lower-cased extension of a path, with its dot, for comparing against a fixed list.
+        static std::wstring lowerExtension(const std::filesystem::path &path) {
+            std::wstring ext = path.extension().wstring();
+            std::ranges::transform(ext, ext.begin(), [](const wchar_t c) { return std::towlower(c); });
+            return ext;
         }
 
         static int getRefreshInterval(const float logZoom) {

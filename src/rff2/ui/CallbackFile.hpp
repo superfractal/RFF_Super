@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-14.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21.
-// Modified by Opus 5 on 2026-08-14, 2026-08-24
+// Modified by Opus 5 on 2026-08-14, 2026-08-24, 2026-09-03
 //
 
 #pragma once
@@ -17,6 +17,7 @@ namespace merutilm::rff2 {
         static const std::function<void(SettingsMenu &, RenderScene &)> SAVE_IMAGE;
         static const std::function<void(SettingsMenu &, RenderScene &)> EXPORT_HIGHRES;
         static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_MAP;
+        static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_IMAGE;
         static const std::function<void(SettingsMenu &, RenderScene &)> SAVE_CONFIG;
         static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_CONFIG;
 

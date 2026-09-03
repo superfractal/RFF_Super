@@ -58,7 +58,7 @@ The following issues are currently known:
     and the DWM window attributes were all measured and made no difference.
   * **Status:** the picture now keeps rendering while a menu is open, which halves the exposure
     from two frames to one. Removing it entirely needs menus that are drawn by this program
-    instead of by Windows; see [docs/custom-menu-popup-plan.md](docs/custom-menu-popup-plan.md).
+    instead of by Windows.
 * A long video export at a high resolution can abort part-way with `Failed to submit queue! VK_ERROR_DEVICE_LOST`, killing the process and leaving a truncated `.mp4`. The GPU is lost after tens of minutes of sustained load; where it stops varies from run to run. Validation layers report no errors during a full run, so the cause may lie in the driver or the hardware — but a bug in this application has not been ruled out.
   * **Workaround:** lower `Supersampling (SSAA)` before generating keyframes. Per-frame GPU load is `window client size x Clarity x SSAA`, but the video output size is only `window client size x Clarity` — so lowering SSAA cuts the load without changing the output resolution.
 
