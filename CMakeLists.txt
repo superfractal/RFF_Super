@@ -1,6 +1,6 @@
 # Modified by AI; earlier exact modification date unavailable.
 # Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-26, 2026-09-01.
-# Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01
+# Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 
 cmake_minimum_required(VERSION 4.1.2)
 project(RFF_Super)
@@ -170,6 +170,8 @@ add_executable(
         src/rff2/io/PreferencesIO.h
         src/rff2/ui/RecoveryPrompt.cpp
         src/rff2/ui/RecoveryPrompt.hpp
+        src/rff2/ui/ImageCanvas.cpp
+        src/rff2/ui/ImageCanvas.hpp
         extern/stb_image.c
         extern/stb_image.h
         src/vulkan_helper/handle/Handler.hpp
