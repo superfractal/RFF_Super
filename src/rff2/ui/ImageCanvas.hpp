@@ -1,10 +1,12 @@
 //
 // Created by Opus 5 on 2026-09-03.
+// Modified by Opus 5 on 2026-09-04
 //
 
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <windows.h>
 #include <opencv2/core/mat.hpp>
@@ -25,6 +27,10 @@ namespace merutilm::rff2 {
         HFONT messageFont = nullptr;
         // What is said in place of a picture that could not be read.
         std::wstring message;
+        // Called when the mouse is used on the picture, which is what takes it away again. Held here
+        // because this window is what the pointer lands on while a picture is up: the canvas below it
+        // never sees the press.
+        std::function<void()> dismiss;
 
         void releaseScaled();
 
@@ -47,6 +53,10 @@ namespace merutilm::rff2 {
         ImageCanvas(ImageCanvas &&) = delete;
 
         ImageCanvas &operator=(ImageCanvas &&) = delete;
+
+        // The picture answers the mouse by getting out of the way, the way Load Map's view answers it
+        // by being worked on: this is what is run then.
+        void setDismissCallback(std::function<void()> callback);
 
         // Reads the file and puts it over the canvas, creating the child window the first time.
         // False when the file is not a picture this build can decode, which still shows the window

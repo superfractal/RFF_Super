@@ -31,7 +31,7 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v2.2.0.2";
+        constexpr auto APPLICATION_VERSION = "v2.2.0.3";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";

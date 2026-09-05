@@ -2,7 +2,7 @@
 // Created and modified by AI; earlier exact dates unavailable.
 // Modified by GPT-5 on 2026-08-16.,2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by Opus 4.8 on 2026-07-05
-// Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-27, 2026-08-29, 2026-08-31
+// Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-27, 2026-08-29, 2026-08-31, 2026-09-04
 // Modified by ox-alpha on 2026-08-22.
 // Modified by Fable 5.1 on 2026-09-02
 //
@@ -37,7 +37,7 @@ namespace merutilm::rff2 {
             const auto &vi = attr.video;
             if (!std::isfinite(fr.logZoom) || fr.logZoom < 0.0f ||
                 fr.logZoom > static_cast<float>(MAX_CONFIG_STRING_BYTES) ||
-                !std::isfinite(fr.bailout) || fr.bailout < 2.0f || fr.bailout > 1000000.0f ||
+                !std::isfinite(fr.bailout) || fr.bailout < 2.0f || fr.bailout > 1e38f ||
                 !std::isfinite(fr.mpaAttribute.epsilonPower) || fr.mpaAttribute.epsilonPower < -15.0f ||
                 fr.mpaAttribute.epsilonPower > -3.0f || fr.mpaAttribute.minSkipReference < 4 ||
                 fr.mpaAttribute.maxMultiplierBetweenLevel == 0 || !std::isfinite(fr.rotation) ||

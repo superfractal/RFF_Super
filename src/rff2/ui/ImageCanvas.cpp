@@ -1,5 +1,6 @@
 //
 // Created by Opus 5 on 2026-09-03.
+// Modified by Opus 5 on 2026-09-04
 //
 
 #include "ImageCanvas.hpp"
@@ -101,6 +102,10 @@ namespace merutilm::rff2 {
         }
     }
 
+    void ImageCanvas::setDismissCallback(std::function<void()> callback) {
+        dismiss = std::move(callback);
+    }
+
     bool ImageCanvas::visible() const {
         return window != nullptr && IsWindowVisible(window);
     }
@@ -144,8 +149,12 @@ namespace merutilm::rff2 {
         if (window == nullptr) {
             return;
         }
-        SetWindowPos(window, HWND_TOP, area.left, area.top, area.right - area.left,
-                     area.bottom - area.top, SWP_NOACTIVATE);
+        // The z-order is left alone: this window is created after the canvas and so already stands
+        // over it, and re-inserting it at the top on every step of the folder asks the window
+        // manager to work out what is in front of what while the canvas is presenting into the same
+        // pixels. Only where it sits and how large it is is set here.
+        SetWindowPos(window, nullptr, area.left, area.top, area.right - area.left,
+                     area.bottom - area.top, SWP_NOACTIVATE | SWP_NOZORDER);
     }
 
     void ImageCanvas::hide() {
@@ -267,6 +276,21 @@ namespace merutilm::rff2 {
             case WM_SIZE:
                 InvalidateRect(hwnd, nullptr, TRUE);
                 return 0;
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+            case WM_XBUTTONDOWN:
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+                // Reaching for the fractal is how the picture is left: the press that would have
+                // panned or zoomed takes this away instead, and the one after it lands on the canvas
+                // and works as it always does. The message itself goes no further - it is spent on
+                // getting here, so the view underneath is never moved by the press that uncovered it.
+                if (self->dismiss) {
+                    self->dismiss();
+                    return 0;
+                }
+                break;
             case WM_NCDESTROY:
                 SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 self->window = nullptr;

@@ -1,5 +1,5 @@
 // Modified by GPT-5 on 2026-08-26, 2026-08-27
-// Modified by Opus 5 on 2026-08-27, 2026-09-01
+// Modified by Opus 5 on 2026-08-27, 2026-09-01, 2026-09-03
 
 #pragma once
 
@@ -48,6 +48,7 @@ namespace merutilm::rff2 {
         COLORREF buttonBorder;
     };
 
+    // Selected UI colors use Tailwind CSS v3's MIT-licensed palette; see NOTICE.
     inline constexpr SettingsThemeColors LIGHT_SETTINGS_THEME = {
         .background = RGB(248, 250, 252), .text = RGB(30, 41, 59), .textDisabled = RGB(148, 163, 184),
         .textError = RGB(255, 0, 0), .textEdited = RGB(146, 64, 14), .textModified = RGB(3, 105, 161),

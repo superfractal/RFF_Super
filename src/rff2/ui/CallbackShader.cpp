@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-08-26, 2026-08-27, 2026-08-31.
 // Modified by Opus 4.8 on 2026-07-05
-// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-29, 2026-08-31
+// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-29, 2026-08-31, 2026-09-04
 // Modified by ox-alpha on 2026-08-22.
 // Modified by Fable 5.1 on 2026-09-02
 //
@@ -181,14 +181,7 @@ namespace merutilm::rff2 {
         constexpr float intervalSliderMin = 1.0f;
         constexpr float intervalSliderMax = 1.0e18f;
         // Use %.2e for large values (consistent width, e.g. 1.00e+05); %g for small ones.
-        auto intervalUnparser = [](const float &v) -> std::wstring {
-            wchar_t buf[32];
-            if (v >= 1e3f)
-                swprintf(buf, 32, L"%.2e", v);
-            else
-                swprintf(buf, 32, L"%.3g", v);
-            return buf;
-        };
+        auto intervalUnparser = Unparser::FLOAT_SCIENTIFIC;
         // Cycle Length stops at the slider's own range: anything beyond it (or a non-finite value
         // from an overflowing entry) is refused with the standard "Invalid value!" error.
         auto intervalValidCondition = ValidCondition::floatInRange(intervalSliderMin, intervalSliderMax);

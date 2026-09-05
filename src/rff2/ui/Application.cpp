@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02.
-// Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03
+// Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 //
 
 #include "Application.hpp"
@@ -614,6 +614,14 @@ namespace merutilm::rff2 {
                 if (scene->getRequests().shaderRequested.load()) {
                     scene->render();
                 }
+            } else if (scene->isImageBrowsing()) {
+                // A picture covers the canvas whole, margins and all, so there is nothing of the
+                // fractal to show while it is up. Presenting under it puts the swapchain and the
+                // window holding the picture on the same pixels every frame, which is the one-frame
+                // blackout seen while the arrow keys walk a folder. The requests are still resolved
+                // here - only the drawing is held - and the frame already presented stays on the
+                // canvas underneath, so taking the picture away brings it straight back.
+                scene->render(false);
             } else {
                 scene->render();
             }

@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-14.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21.
-// Modified by Opus 5 on 2026-08-13, 2026-08-16, 2026-08-31
+// Modified by Opus 5 on 2026-08-13, 2026-08-16, 2026-08-31, 2026-09-04
 //
 
 #include "CallbackFractal.hpp"
@@ -141,9 +141,17 @@ namespace merutilm::rff2 {
                                                         Callback::NOTHING, L"Set Auto Iteration Multiplier",
                                                         L"Set auto iteration multiplier. It is disabled when Automatic Iterations is disabled.");
 
-        window->registerTextInput<float>(L"Bailout", &calc.bailout, Unparser::FLOAT,
-                                         Parser::FLOAT, [](const float &v) { return v >= 2 && v <= 1000000; },
-                                         Callback::NOTHING, L"Set Bailout", L"Sets the bailout radius. Valid range: 2 to 1000000."
+        window->registerTextInput<float>(L"Bailout", &calc.bailout, Unparser::FLOAT_SCIENTIFIC,
+                                         Parser::FLOAT, [](const float &v) { return v >= 2 && v <= 1e38f; },
+                                         Callback::NOTHING, L"Set Bailout",
+                                         L"Sets the bailout radius. Valid range: 2 to 1e38.\n"
+                                         L"The smoothed iteration divides by log(bailout), so raising it does not "
+                                         L"change a single band width: every value shifts by the constant "
+                                         L"log2(log(new) / log(old)), which reads as a palette offset. Going from "
+                                         L"1e6 to 1e30 shifts by 2.32 iterations and costs about that many more "
+                                         L"steps per escaping pixel.\n"
+                                         L"A larger radius does make the smoothing itself more exact, since the "
+                                         L"error of the potential falls off as 1/bailout."
         );
         window->registerSectionHeader(L"Color Detail");
         window->registerRadioButtonInput<FrtDecimalizeIterationMethod>(L"Decimalize Iteration",

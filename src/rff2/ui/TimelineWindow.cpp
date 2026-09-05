@@ -1,5 +1,5 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
-// Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01
+// Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 
 #include "TimelineWindow.hpp"
 
@@ -1702,9 +1702,21 @@ namespace merutilm::rff2 {
                       });
         const size_t before = settingsMenu->activeSettingsWindows.size();
         CallbackVideo::EXPORT_SETTINGS(*settingsMenu, *renderScene);
-        if (settingsMenu->activeSettingsWindows.size() > before) {
-            adoptPanel(*settingsMenu->activeSettingsWindows.back().window);
+        if (settingsMenu->activeSettingsWindows.size() <= before) {
+            return;
         }
+        SettingsWindow &window = *settingsMenu->activeSettingsWindows.back().window;
+        if (sourceAttribute != nullptr) {
+            // The editor exports from keyframes that already exist, so the rows steering keyframe generation are greyed rather than left offering an edit this export never reads.
+            VidExportAttribute &exportation = sourceAttribute->video.exportation;
+            const std::unordered_set<const void *> kept = {
+                &exportation.fps, &exportation.bitrate, &exportation.lossless,
+                &exportation.keyframeAA, &exportation.colorAA, &exportation.pauseMainPreview,
+                &exportation.hdrTransfer, &exportation.hdrPeakNits,
+            };
+            window.disableRowsInObjectExcept(&exportation, sizeof(VidExportAttribute), kept);
+        }
+        adoptPanel(window);
     }
 
     void TimelineWindow::openExportMenu() {

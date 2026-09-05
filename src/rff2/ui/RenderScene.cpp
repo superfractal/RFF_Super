@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
-// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
+// Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 //
 
 #include "RenderScene.hpp"
@@ -223,7 +223,7 @@ namespace merutilm::rff2 {
                                      Perturbator::logZoomToExp10(2)),
                 .logZoom = 2, //186.47, //85.190033f,
                 .maxIteration = 300,
-                .bailout = 1000000,
+                .bailout = 1e30f,
                 .decimalizeIterationMethod = FrtDecimalizeIterationMethod::LOG_LOG,
                 .mpaAttribute = CalculationPresets::UltraFast().genMPA(),
                 .referenceCompAttribute = CalculationPresets::UltraFast().genReferenceCompression(),
@@ -1903,6 +1903,14 @@ namespace merutilm::rff2 {
         browsedImageIndex = -1;
         if (imageCanvas != nullptr) {
             imageCanvas->hide();
+            // Hiding it hands the uncovered strip back to the canvas as an area to repaint, and the
+            // canvas answers a repaint with the black brush of its class - one black frame, in the
+            // gap before the next present. Nothing has to be painted there at all: the canvas holds
+            // the finished view and presents it again within the frame, so the area is marked
+            // painted and the pixels are left to that present. No compute is asked for here: the
+            // fractal underneath was never taken down, only covered.
+            RedrawWindow(wc.getWindow().getWindowHandle(), nullptr, nullptr,
+                         RDW_VALIDATE | RDW_NOERASE | RDW_NOCHILDREN);
         }
         setStatusMessage(Constants::Status::RENDER_STATUS, L"");
         // The zoom on the bar belonged to the picture, not to what is on the canvas again now.
@@ -1929,6 +1937,10 @@ namespace merutilm::rff2 {
         browsedImageIndex = index;
         if (imageCanvas == nullptr) {
             imageCanvas = std::make_unique<ImageCanvas>();
+            // A picture is left the way a loaded map is: by reaching for the fractal with the mouse.
+            // The press lands on the window holding the picture, never on the canvas under it, so
+            // that window is what hands the canvas back.
+            imageCanvas->setDismissCallback([this] { endImageBrowse(); });
         }
         const HWND canvas = wc.getWindow().getWindowHandle();
         const HWND host = GetParent(canvas);

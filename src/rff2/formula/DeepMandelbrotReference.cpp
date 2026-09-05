@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-18.
 // Modified by Sonnet 5 on 2026-07-06
+// Modified by Opus 5 on 2026-09-04
 //
 
 #include "DeepMandelbrotReference.h"
@@ -54,7 +55,10 @@ namespace merutilm::rff2 {
         auto z = fp_complex_calculator(0, 0, exp10);
         auto fpgBn = fp_complex_calculator(0, 0, exp10);
         auto one = fp_complex_calculator(1.0, 0.0, exp10);
-        double bailoutSqr = calc.bailout * calc.bailout;
+        // Widened before the multiply, not after: calc.bailout is a float, so a float square
+        // is infinite above sqrt(FLT_MAX) (~1.8e19) and the escape test below can never be
+        // met, leaving the reference orbit to run to the max iteration on a diverged z.
+        const double bailoutSqr = static_cast<double>(calc.bailout) * static_cast<double>(calc.bailout);
 
         dex fpgBnr = dex::ONE;
         dex fpgBni = dex::ZERO;

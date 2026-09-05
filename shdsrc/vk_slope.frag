@@ -6,6 +6,7 @@
 // Modified by ox-alpha on 2026-08-22.
 // Modified by Fable 5.1 on 2026-09-02
 //
+// Modified by GPT-6 on 2026-09-05
 
 #version 450
 #define PI 3.141592653589793238
@@ -392,6 +393,15 @@ void main() {
     const float DEPTH_GAIN = 1.0e5 * 0.69314718;
     float dzDx = dx * DEPTH_GAIN * slope_attr.depth * multiplier;
     float dzDy = dy * DEPTH_GAIN * slope_attr.depth * multiplier;
+    // Preserve slopes through 45 degrees, then approach atan(2) smoothly without changing their direction.
+    float slopeMagnitude = length(vec2(dzDx, dzDy));
+    if (slopeMagnitude > 1.0) {
+        float excess = slopeMagnitude - 1.0;
+        float softenedMagnitude = 1.0 + excess / (1.0 + excess);
+        float slopeScale = softenedMagnitude / slopeMagnitude;
+        dzDx *= slopeScale;
+        dzDy *= slopeScale;
+    }
     float aoFactor = 1.0;
     if (slope_attr.ao_intensity > 0.0) {
         double mv = iteration_info_attr.max_value;

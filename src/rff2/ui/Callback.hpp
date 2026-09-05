@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-19.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21, 2026-08-23.
-// Modified by Opus 5 on 2026-08-06
+// Modified by Opus 5 on 2026-08-06, 2026-09-04
 //
 #pragma once
 #include <codecvt>
@@ -119,6 +119,18 @@ namespace merutilm::rff2 {
         constexpr auto U_LONG = [](const unsigned long &s) { return std::to_wstring(s); };
         constexpr auto U_LONG_LONG = [](const unsigned long long &s) { return std::to_wstring(s); };
         constexpr auto FLOAT = [](const float &s) { return std::to_wstring(s); };
+        // Exponent notation for fields whose range spans many decades: %.2e above 1e3 keeps a
+        // large value one short token (1.00e+06) where std::to_wstring writes the whole 30-digit
+        // expansion plus six decimals, %.3g below it. Shared with the Cycle Length fields.
+        constexpr auto FLOAT_SCIENTIFIC = [](const float &s) {
+            wchar_t buf[32];
+            if (s >= 1e3f || s <= -1e3f) {
+                swprintf(buf, 32, L"%.2e", s);
+            } else {
+                swprintf(buf, 32, L"%.3g", s);
+            }
+            return std::wstring(buf);
+        };
         // Formats a float with a fixed number of decimals (decimals match the arrow-key step).
         inline auto floatFixed(const int decimals) {
             return [decimals](const float &s) {

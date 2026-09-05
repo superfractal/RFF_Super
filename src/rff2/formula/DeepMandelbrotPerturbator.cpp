@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-18.
 // Modified by GPT-5 on 2026-07-11
+// Modified by Opus 5 on 2026-09-04
 //
 
 #include "DeepMandelbrotPerturbator.h"
@@ -67,7 +68,10 @@ namespace merutilm::rff2 {
         const bool isAbs = calc.absoluteIterationMode;
         const uint64_t maxIteration = calc.maxIteration;
         const float bailout = calc.bailout;
-        const float bailout2 = bailout * bailout;
+        // Squared in double: a float square overflows to infinity once the bailout passes
+        // sqrt(FLT_MAX) (~1.8e19), and an infinite threshold makes "cd > bailout2" never true, so
+        // every pixel would come back as max iteration.
+        const double bailout2 = static_cast<double>(bailout) * static_cast<double>(bailout);
         auto temps = std::array<dex, 4>();
 
 
