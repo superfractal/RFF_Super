@@ -6,6 +6,10 @@
 
 ## 2026/09/06
 
+* **2.2.1 - Faster Coloring**
+  * Video frames and the preview are colored faster, with the picture unchanged down to the last bit. A frame of a video export takes about a fifth less time than before, and a frame with frozen colors about a sixth less; the preview pass is about a tenth faster.
+    * The coloring is now built for the palette, stripe and animation settings in use, and rebuilt when one of them changes. A change to those settings therefore pauses the picture for a moment while the next one is built.
+
 * **2.2.0.3 - Timeline Export Settings**
   * Export Settings opened from the Timeline Editor now offers only the settings its own Export Video reads. Compress keyframes, Auto-create video after keyframes and Pause keyframe preview stand greyed out there, since the editor exports from keyframes that already exist.
     * The same panel opened from the Video menu keeps every setting editable, and the values themselves are shared either way.

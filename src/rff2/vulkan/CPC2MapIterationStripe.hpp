@@ -3,6 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23.
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-24, 2026-08-25, 2026-08-26
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #pragma once
@@ -10,6 +11,7 @@
 #include <string>
 
 #include "ShaderAnimationPhases.hpp"
+#include "ShaderModeSpecialization.hpp"
 #include "../../vulkan_helper/configurator/ComputePipelineConfigurator.hpp"
 #include "../attr/ShdPaletteAttribute.h"
 #include "../attr/ShdPatternAttribute.h"
@@ -93,7 +95,7 @@ namespace merutilm::rff2 {
 
         void setSampleJitter(float jitterX, float jitterY) const;
 
-        void setDither(bool use) const;
+        void setDither(bool use);
 
         void setAllIterations(const std::vector<double> &normal, const std::vector<double> &zoomed) const;
 
@@ -108,10 +110,14 @@ namespace merutilm::rff2 {
         // it was not running. A backwards or long jump is a seek, and re-derives them instead.
         void advanceAnimationTo(float sec);
 
+        [[nodiscard]] std::vector<uint32_t> specializationConstants() const override;
+
     private:
         // Every animation phase this pass draws with. The shaders are handed the phase rather than
         // the speed, so a timeline track on a speed no longer jumps what it drives.
         ShaderAnimationPhases phases = {};
+        // The modes the pipeline is specialized on; every setter that moves one rebuilds the pipeline.
+        ShaderModeSpecialization specModes = {};
 
     protected:
         void configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) override;

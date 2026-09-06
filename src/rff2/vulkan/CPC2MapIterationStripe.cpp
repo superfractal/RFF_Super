@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21.
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "CPC2MapIterationStripe.hpp"
@@ -120,10 +121,7 @@ namespace merutilm::rff2 {
         // Same packing as GPCIterationPalette: low 8 bits = smoothing method, bit 8 = interpolation space.
         // Bit 9 carries the cycle curve choice, and bits 10-13 the iteration coloring mode.
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_SMOOTHING,
-                                      (static_cast<uint32_t>(palette.colorSmoothing) & 0xFFu) |
-                                      (static_cast<uint32_t>(palette.colorInterpolation) << 8) |
-                                      (static_cast<uint32_t>(palette.cycleCurve) << 9) |
-                                      ((static_cast<uint32_t>(palette.iterationColoring) & 0xFu) << 10));
+                                      ShaderModeSpecialization::smoothingWord(palette));
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ANIMATION_SPEED, palette.animationSpeed);
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_ANIMATION_MODE, static_cast<uint32_t>(palette.animationMode));
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ANIMATION_FLOW_AMOUNT, palette.animationFlowAmount);
@@ -152,6 +150,8 @@ namespace merutilm::rff2 {
             [&paletteDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
                 paletteDesc.queue(queue, frameIndex, {}, {DescPalette::BINDING_SSBO_PALETTE});
             });
+        specModes.setPalette(palette);
+        respecialize();
     }
 
     void CPC2MapIterationStripe::setPaletteDynamic(const ShdPaletteAttribute &palette) {
@@ -172,10 +172,7 @@ namespace merutilm::rff2 {
         host.set<float>(DescPalette::TARGET_PALETTE_CYCLE_BIAS, palette.cycleBias);
         // The cycle curve and the iteration coloring ride in the smoothing word, so the whole word is rewritten to carry them.
         host.set<uint32_t>(DescPalette::TARGET_PALETTE_SMOOTHING,
-                           (static_cast<uint32_t>(palette.colorSmoothing) & 0xFFu) |
-                           (static_cast<uint32_t>(palette.colorInterpolation) << 8) |
-                           (static_cast<uint32_t>(palette.cycleCurve) << 9) |
-                           ((static_cast<uint32_t>(palette.iterationColoring) & 0xFu) << 10));
+                           ShaderModeSpecialization::smoothingWord(palette));
         paletteSSBO.update(DescPalette::TARGET_PALETTE_INTERVAL);
         paletteSSBO.update(DescPalette::TARGET_PALETTE_OFFSET);
         paletteSSBO.update(DescPalette::TARGET_PALETTE_ANIMATION_SPEED);
@@ -187,6 +184,8 @@ namespace merutilm::rff2 {
         paletteSSBO.update(DescPalette::TARGET_PALETTE_MANDELBROT_COLOR);
         paletteSSBO.update(DescPalette::TARGET_PALETTE_CYCLE_BIAS);
         paletteSSBO.update(DescPalette::TARGET_PALETTE_SMOOTHING);
+        specModes.setPaletteDynamic(palette);
+        respecialize();
     }
 
     void CPC2MapIterationStripe::setStripe(const ShdStripeAttribute &stripe) {
@@ -205,6 +204,8 @@ namespace merutilm::rff2 {
         stripeUBOHost.set(DescStripe::TARGET_STRIPE_ANIMATION_SPEED,
                           stripe.animationSpeed);
         stripeUBO.update();
+        specModes.setStripe(stripe);
+        respecialize();
     }
 
     void CPC2MapIterationStripe::setTextures(const std::array<ShdTextureAttribute, TEXTURE_LAYER_COUNT> &textures,
@@ -223,6 +224,8 @@ namespace merutilm::rff2 {
             phases.setTextureSpeed(layer, texture);
             TextureDescriptor::updateParams(textureDesc, layer, texture, !loadedTexturePaths[layer].empty());
         }
+        specModes.setTextures(textures);
+        respecialize();
         if (changedBindings.empty()) {
             return;
         }
@@ -241,6 +244,8 @@ namespace merutilm::rff2 {
             TextureDescriptor::updateParams(textureDesc, layer, textures[layer],
                                             !loadedTexturePaths[layer].empty());
         }
+        specModes.setTextures(textures);
+        respecialize();
     }
 
 
@@ -250,6 +255,8 @@ namespace merutilm::rff2 {
             phases.setPatternSpeed(layer, patterns[layer]);
             TextureDescriptor::updatePatternParams(getDescriptor(SET_TEXTURE), layer, patterns[layer]);
         }
+        specModes.setPattern(patterns);
+        respecialize();
     }
 
     void CPC2MapIterationStripe::setWarp(const ShdWarpAttribute &warp) {
@@ -257,6 +264,8 @@ namespace merutilm::rff2 {
         const int sourceLayer = warpSourceLayer(warp);
         const bool sourceReady = sourceLayer < 0 || !loadedTexturePaths[sourceLayer].empty();
         TextureDescriptor::updateWarpParams(getDescriptor(SET_TEXTURE), warp, sourceReady);
+        specModes.setWarp(warp);
+        respecialize();
     }
 
 
@@ -283,7 +292,7 @@ namespace merutilm::rff2 {
         });
     }
 
-    void CPC2MapIterationStripe::setDither(const bool use) const {
+    void CPC2MapIterationStripe::setDither(const bool use) {
         using namespace SharedDescriptorTemplate;
         auto &vidDesc = getDescriptor(SET_VIDEO);
         const auto &vidUBO = *vidDesc.get<vkh::Uniform>(0, DescVideo::BINDING_UBO_VIDEO);
@@ -292,6 +301,12 @@ namespace merutilm::rff2 {
         updateBufferMF([&vidUBO](const uint32_t frameIndex) {
             vidUBO.updateMF(frameIndex);
         });
+        specModes.dither = use;
+        respecialize();
+    }
+
+    std::vector<uint32_t> CPC2MapIterationStripe::specializationConstants() const {
+        return specModes.words();
     }
 
     void CPC2MapIterationStripe::setAllIterations(const std::vector<double> &normal,

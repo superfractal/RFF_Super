@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-28.
 // Modified by GPT-5 on 2026-08-23.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "ComputePipelineConfigurator.hpp"
@@ -35,6 +36,7 @@ namespace merutilm::vkh {
 
         pipelineManager->attachDescriptor(std::move(descriptors));
         pipelineManager->attachShader(&computeShader);
+        pipelineManager->attachSpecialization(specializationConstants());
 
         pipeline = factory::create<ComputeShaderPipeline>(wc, pipelineLayout, std::move(pipelineManager),
                                                           pipelineCreateFlags);

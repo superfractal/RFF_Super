@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "GeneralGraphicsPipelineConfigurator.hpp"
@@ -32,6 +33,7 @@ namespace merutilm::vkh {
         pipelineManager->attachDescriptor(std::move(descriptors));
         pipelineManager->attachShader(&vertexShader);
         pipelineManager->attachShader(&fragmentShader);
+        pipelineManager->attachSpecialization(specializationConstants());
 
         auto vertManager = factory::create<HostDataObjectManager>();
         auto indexManager = factory::create<HostDataObjectManager>();

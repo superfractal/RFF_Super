@@ -368,6 +368,7 @@ add_executable(
         src/rff2/ui/VideoRenderSceneRenderer.hpp
         src/rff2/vulkan/CPC2MapIterationStripe.cpp
         src/rff2/vulkan/CPC2MapIterationStripe.hpp
+        src/rff2/vulkan/ShaderModeSpecialization.hpp
         src/rff2/vulkan/RCC1Vid.hpp
         src/rff2/vulkan/RCC2Vid.hpp
         src/rff2/vulkan/RCC3Vid.hpp

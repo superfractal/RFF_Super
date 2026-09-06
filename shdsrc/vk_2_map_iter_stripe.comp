@@ -4,6 +4,7 @@
 // Modified by Fable 5 on 2026-07-06
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #version 450
@@ -490,6 +491,34 @@ bool any_pattern_needs_band() {
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
+// Specialization constants. Every mode below is a switch on a uniform that the whole dispatch
+// shares, yet each of the up to eighteen get_color calls a pixel makes carried every arm of every
+// switch, and the register budget was set by the widest of them. With SPEC_MODES_FIXED the host
+// bakes the modes in at pipeline creation and the arms not taken are never compiled; the arm that
+// is taken is the same code either way. Left at the defaults, every read falls through to the
+// uniform and the shader is what it was.
+layout (constant_id = 0) const bool SPEC_MODES_FIXED = false;
+layout (constant_id = 1) const uint SPEC_SMOOTHING = 0u;
+layout (constant_id = 2) const uint SPEC_STRIPE_TYPE = 0u;
+layout (constant_id = 3) const uint SPEC_ANIMATION_MODE = 0u;
+// False only when no texture or pattern layer paints and the warp is off, which drops the whole decor path.
+layout (constant_id = 4) const bool SPEC_DECOR = true;
+// False only when no color is frozen, which drops the freeze match loop.
+layout (constant_id = 5) const bool SPEC_FREEZE = true;
+layout (constant_id = 6) const bool SPEC_DITHER = true;
+
+uint smoothing_word() {
+    return SPEC_MODES_FIXED ? SPEC_SMOOTHING : palette_attr.smoothing;
+}
+
+uint stripe_type() {
+    return SPEC_MODES_FIXED ? SPEC_STRIPE_TYPE : stripe_attr.type;
+}
+
+uint animation_mode() {
+    return SPEC_MODES_FIXED ? SPEC_ANIMATION_MODE : palette_attr.animation_mode;
+}
+
 // Reciprocals of the palette intervals and of the two stripe intervals, taken once per invocation
 // in main(). Every palette lookup and every stripe ratio used to divide by one of these, and
 // get_color runs up to eighteen times a pixel across four channels, so a pixel was spending on the
@@ -500,6 +529,7 @@ dvec4 g_inv_interval = dvec4(1.0);
 dvec2 g_stripe = dvec2(1.0);
 dvec2 g_inv_stripe = dvec2(1.0);
 
+// The two-FMA correction is Markstein's (IBM J. Res. Dev. 34(1), 1990); see NOTICE.
 // a / b, rebuilt from the hoisted reciprocal r = 1/b. q = a*r lands within an ulp; the residual
 // a - b*q is exact in an FMA, and folding it back lands on the correctly rounded quotient - the
 // same double OpFDiv returns, without OpFDiv's cost. precise keeps the compiler from unfusing the
@@ -519,7 +549,7 @@ double fract_d(double x) {
 
 // Smoothing transform shared by coloring and freeze matching.
 double smooth_iteration(double iteration) {
-    switch (palette_attr.smoothing & 0xFFu) {
+    switch (smoothing_word() & 0xFFu) {
         case SMOOTH_ITER_NONE: return iteration - fract_d(iteration);
         case SMOOTH_ITER_REVERSED: return iteration + 1 - 2 * fract_d(iteration);
         default: return iteration;
@@ -593,7 +623,7 @@ double eased_cycle(double ratio, const bool smoother) {
 
 // Iteration Coloring: widens the bands as the count climbs, taken on the count already divided by the cycle length so one Cycle Length stays the first cycle's width.
 double coloring_curve(double ratio) {
-    switch ((palette_attr.smoothing >> 10) & 0xFu) {
+    switch ((smoothing_word() >> 10) & 0xFu) {
         case ITER_COLORING_SQUARE_ROOT: return sqrt(max(ratio, 0.0LF));
         case ITER_COLORING_CUBE_ROOT: return cbrt_d(ratio);
         case ITER_COLORING_LOG: return log1p_d(ratio) * INV_LN2;
@@ -617,7 +647,7 @@ double coloring_curve(double ratio) {
 double biased_ratio(double ratio) {
     float x = clamp(float(ratio), 0.0, 1.0);
     float b = clamp(palette_attr.cycle_bias, 0.01, 16.0);
-    if (((palette_attr.smoothing >> 9) & 1u) == uint(CYCLE_CURVE_WAVE)) {
+    if (((smoothing_word() >> 9) & 1u) == uint(CYCLE_CURVE_WAVE)) {
         // x + A*sin(2*pi*x)/(2*pi), A = (b - 1) / (b + 1): monotone for |A| < 1 and periodic, so
         // it meets the wrap with its value and its slope both intact. The slope spans
         // 1 - |A| to 1 + |A|, whose ratio is exactly b - the widest band over the narrowest.
@@ -674,7 +704,7 @@ vec3 oklab_to_linear(vec3 lab) {
 }
 
 vec4 blend_palette(vec4 cc, vec4 nc, float t) {
-    if (((palette_attr.smoothing >> 8) & 1u) == uint(INTERP_RGB)) {
+    if (((smoothing_word() >> 8) & 1u) == uint(INTERP_RGB)) {
         return mix(cc, nc, t);
     }
     vec3 a = linear_to_oklab(srgb_to_linear(cc.rgb));
@@ -696,7 +726,7 @@ float cycle_dist(double a, double b) {
 // band so the static/animated boundary fades instead of flipping (no flicker during zoom).
 float freeze_weight(double iteration) {
     float tol = palette_attr.static_color_tolerance;
-    if (palette_attr.static_color_count == 0u || tol <= 0.0) {
+    if (!SPEC_FREEZE || palette_attr.static_color_count == 0u || tol <= 0.0) {
         return 0.0;
     }
     double ir = static_ratio(iteration, g_interval.r, g_inv_interval.r);
@@ -730,17 +760,17 @@ float turbulence_field(vec2 p, float t) {
 double animation_offset_iterations(vec2 coord) {
     float t = time_attr.flow_phase;
     double offset_iterations = double(time_attr.palette_phase);
-    if (palette_attr.animation_mode == ANIMATION_BREATHING) {
+    if (animation_mode() == ANIMATION_BREATHING) {
         offset_iterations += double(sin(t * float(DOUBLE_PI)) * palette_attr.animation_flow_amount);
     }
-    if (palette_attr.animation_mode == ANIMATION_TURBULENCE) {
+    if (animation_mode() == ANIMATION_TURBULENCE) {
         vec2 center = vec2(iteration_output_info_attr.extent) * 0.5;
         float extent = max(float(iteration_output_info_attr.extent.x), float(iteration_output_info_attr.extent.y));
         vec2 p = extent > 0.0 ? (coord - center) / extent : vec2(0.0);
         float field = turbulence_field(p * max(0.0, palette_attr.animation_flow_scale) * 8.0, t);
         offset_iterations += double(field * palette_attr.animation_flow_amount);
     }
-    if (palette_attr.animation_mode == ANIMATION_PSYCHEDELIC) {
+    if (animation_mode() == ANIMATION_PSYCHEDELIC) {
         vec2 center = vec2(iteration_output_info_attr.extent) * 0.5;
         float scale = max(float(iteration_output_info_attr.extent.x), float(iteration_output_info_attr.extent.y));
         vec2 p = scale > 0.0 ? (coord - center) / scale : vec2(0.0);
@@ -1052,7 +1082,7 @@ float warp_fbm(vec2 uv, int octaves) {
 // Iterations the palette lookup is displaced by at this pixel. Reading a field over the same UV the
 // decor layers use bends the color bands themselves, rather than painting anything over them.
 double warp_offset(double iteration, vec2 coord, vec2 band_grad, double anim_offset) {
-    if (texture_attr.warp_enabled == 0u || texture_attr.warp_amount == 0.0) {
+    if (!SPEC_DECOR || texture_attr.warp_enabled == 0u || texture_attr.warp_amount == 0.0) {
         return 0.0;
     }
     // Read off the unbent bands, with a warp of zero: this is the displacement that bends them.
@@ -1206,14 +1236,67 @@ double get_iteration_zoomed(uvec2 iter_coord) {
     return normalize_map_iteration(iteration, iteration_output_info_attr.max_value_zoomed);
 }
 
-double get_iteration_normal_safe(vec2 iter_coord) {
-    if (any(lessThan(iter_coord, vec2(0.0))) || any(greaterThanEqual(iter_coord, vec2(iteration_output_info_attr.extent)))) return 0.0;
-    return get_iteration_normal(uvec2(iter_coord));
+// A 3x3 block of one map's counts, read once so the four tent taps can share it. The taps sit
+// within half a texel of each other, so every bilinear corner they read lands in the block except
+// where the float index rounds across a texel edge, and that corner reads the map itself instead.
+struct HeightWindow {
+    ivec2 origin;
+    double v0, v1, v2, v3, v4, v5, v6, v7, v8;
+};
+
+// An origin no index reaches: every lookup through this window falls through to the map.
+const ivec2 WINDOW_NONE = ivec2(-0x40000000);
+
+HeightWindow window_none() {
+    return HeightWindow(WINDOW_NONE, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF, 0.0LF);
 }
 
-double get_iteration_zoomed_safe(vec2 iter_coord) {
+// Each texel is read through the same bounds-checked fetch a direct lookup uses, so a block hanging
+// off the map's edge holds the same zeros that lookup would have returned.
+HeightWindow load_normal_window(vec2 tx) {
+    ivec2 o = ivec2(floor(tx));
+    uvec2 u = uvec2(o);
+    return HeightWindow(o,
+        get_iteration_normal(u + uvec2(0u, 0u)), get_iteration_normal(u + uvec2(1u, 0u)), get_iteration_normal(u + uvec2(2u, 0u)),
+        get_iteration_normal(u + uvec2(0u, 1u)), get_iteration_normal(u + uvec2(1u, 1u)), get_iteration_normal(u + uvec2(2u, 1u)),
+        get_iteration_normal(u + uvec2(0u, 2u)), get_iteration_normal(u + uvec2(1u, 2u)), get_iteration_normal(u + uvec2(2u, 2u)));
+}
+
+HeightWindow load_zoomed_window(vec2 tx) {
+    ivec2 o = ivec2(floor(tx));
+    uvec2 u = uvec2(o);
+    return HeightWindow(o,
+        get_iteration_zoomed(u + uvec2(0u, 0u)), get_iteration_zoomed(u + uvec2(1u, 0u)), get_iteration_zoomed(u + uvec2(2u, 0u)),
+        get_iteration_zoomed(u + uvec2(0u, 1u)), get_iteration_zoomed(u + uvec2(1u, 1u)), get_iteration_zoomed(u + uvec2(2u, 1u)),
+        get_iteration_zoomed(u + uvec2(0u, 2u)), get_iteration_zoomed(u + uvec2(1u, 2u)), get_iteration_zoomed(u + uvec2(2u, 2u)));
+}
+
+bool window_holds(const in HeightWindow w, ivec2 d) {
+    return all(greaterThanEqual(d, ivec2(0))) && all(lessThan(d, ivec2(3)));
+}
+
+// Written as selects rather than an indexed array so the block stays in registers.
+double window_pick(const in HeightWindow w, ivec2 d) {
+    double r0 = d.x == 0 ? w.v0 : (d.x == 1 ? w.v1 : w.v2);
+    double r1 = d.x == 0 ? w.v3 : (d.x == 1 ? w.v4 : w.v5);
+    double r2 = d.x == 0 ? w.v6 : (d.x == 1 ? w.v7 : w.v8);
+    return d.y == 0 ? r0 : (d.y == 1 ? r1 : r2);
+}
+
+// The index is truncated exactly as it was before the window existed, and a corner the block does
+// not hold is read from the map, so the value is the one a direct lookup returns either way.
+double get_iteration_normal_safe(vec2 iter_coord, const in HeightWindow w) {
     if (any(lessThan(iter_coord, vec2(0.0))) || any(greaterThanEqual(iter_coord, vec2(iteration_output_info_attr.extent)))) return 0.0;
-    return get_iteration_zoomed(uvec2(iter_coord));
+    uvec2 idx = uvec2(iter_coord);
+    ivec2 d = ivec2(idx) - w.origin;
+    return window_holds(w, d) ? window_pick(w, d) : get_iteration_normal(idx);
+}
+
+double get_iteration_zoomed_safe(vec2 iter_coord, const in HeightWindow w) {
+    if (any(lessThan(iter_coord, vec2(0.0))) || any(greaterThanEqual(iter_coord, vec2(iteration_output_info_attr.extent)))) return 0.0;
+    uvec2 idx = uvec2(iter_coord);
+    ivec2 d = ivec2(idx) - w.origin;
+    return window_holds(w, d) ? window_pick(w, d) : get_iteration_zoomed(idx);
 }
 
 void set_iteration_output(uvec2 iter_coord, double value) {
@@ -1226,7 +1309,7 @@ void set_iteration_output(uvec2 iter_coord, double value) {
 
 float get_stripe_mul(double iteration){
     // Interior pixels carry no meaningful iteration count, so they keep the palette's Mandelbrot color.
-    if (stripe_attr.type == STRIPE_NONE || iteration == 0 || iteration >= iteration_output_info_attr.max_value) {
+    if (stripe_type() == STRIPE_NONE || iteration == 0 || iteration >= iteration_output_info_attr.max_value) {
         return 1;
     }
 
@@ -1239,10 +1322,11 @@ float get_stripe_mul(double iteration){
     // subtraction separately instead rounds the product first, which at depth is the whole answer.
     precise double m1 = fma(-g_stripe.x, floor(div_r(iter_curr, g_stripe.x, g_inv_stripe.x)), iter_curr);
     precise double m2 = fma(-g_stripe.y, floor(div_r(iter_curr, g_stripe.y, g_inv_stripe.y)), iter_curr);
-    float rat1 = float(m1 / g_stripe.x);
-    float rat2 = float(m2 / g_stripe.y);
+    // The same reciprocal serves this quotient too: div_r lands on the double OpFDiv returned.
+    float rat1 = float(div_r(m1, g_stripe.x, g_inv_stripe.x));
+    float rat2 = float(div_r(m2, g_stripe.y, g_inv_stripe.y));
 
-    switch (stripe_attr.type) {
+    switch (stripe_type()) {
         case STRIPE_SINGLE_DIRECTION: {
                                    black = rat1 * rat2;
                                    break;
@@ -1272,28 +1356,29 @@ float zoomed_edge_fade(vec2 ztx, float zsr) {
 }
 
 // Height (iteration) at an output-space coord: bilinear per map, cross-faded with the color-path weights so the slope height field stays continuous across keyframe boundaries
-double sample_height(vec2 coord, float nsr, float zsr, float r) {
+// nw and zw are the blocks the caller read for a group of taps; window_none() reads the maps directly.
+double sample_height(vec2 coord, float nsr, float zsr, float r, const in HeightWindow nw, const in HeightWindow zw) {
     vec2 center = vec2(iteration_output_info_attr.extent) / 2.0;
     vec2 ntx = coord / nsr + center;
     vec2 ztx = coord / zsr + center;
     vec2 nrt = mod(ntx, 1);
     vec2 zrt = mod(ztx, 1);
 
-    double n00 = get_iteration_normal_safe(ntx);
-    double n10 = get_iteration_normal_safe(ntx + vec2(1, 0));
-    double n01 = get_iteration_normal_safe(ntx + vec2(0, 1));
-    double n11 = get_iteration_normal_safe(ntx + vec2(1, 1));
+    double n00 = get_iteration_normal_safe(ntx, nw);
+    double n10 = get_iteration_normal_safe(ntx + vec2(1, 0), nw);
+    double n01 = get_iteration_normal_safe(ntx + vec2(0, 1), nw);
+    double n11 = get_iteration_normal_safe(ntx + vec2(1, 1), nw);
     double n0 = n00 - (n00 - n10) * nrt.x;
     double n1 = n01 - (n01 - n11) * nrt.x;
     double n = n0 - (n0 - n1) * nrt.y;
 
-    double z00 = get_iteration_zoomed_safe(ztx);
+    double z00 = get_iteration_zoomed_safe(ztx, zw);
     if (ztx.x >= iteration_output_info_attr.extent.x - 1 || ztx.y >= iteration_output_info_attr.extent.y - 1 || ztx.x < 0 || ztx.y < 0 || z00 == 0) {
         return n;
     }
-    double z10 = get_iteration_zoomed_safe(ztx + vec2(1, 0));
-    double z01 = get_iteration_zoomed_safe(ztx + vec2(0, 1));
-    double z11 = get_iteration_zoomed_safe(ztx + vec2(1, 1));
+    double z10 = get_iteration_zoomed_safe(ztx + vec2(1, 0), zw);
+    double z01 = get_iteration_zoomed_safe(ztx + vec2(0, 1), zw);
+    double z11 = get_iteration_zoomed_safe(ztx + vec2(1, 1), zw);
     double z0 = z00 - (z00 - z10) * zrt.x;
     double z1 = z01 - (z01 - z11) * zrt.x;
     double z = z0 - (z0 - z1) * zrt.y;
@@ -1319,13 +1404,15 @@ void main() {
     g_stripe = max(dvec2(stripe_attr.first_interval, stripe_attr.second_interval), dvec2(1e-4));
     g_inv_stripe = 1.0 / g_stripe;
 
-    for (int i = 0; i < TEXTURE_LAYERS; i++) {
-        DecorLayer l = texture_layer(i);
-        g_any_texture = g_any_texture || (l.enabled != 0u && l.opacity > 0.0);
-    }
-    for (int i = 0; i < PATTERN_LAYERS; i++) {
-        PatternLayer p = pattern_layer(i);
-        g_any_pattern = g_any_pattern || (p.enabled != 0u && p.opacity > 0.0);
+    if (SPEC_DECOR) {
+        for (int i = 0; i < TEXTURE_LAYERS; i++) {
+            DecorLayer l = texture_layer(i);
+            g_any_texture = g_any_texture || (l.enabled != 0u && l.opacity > 0.0);
+        }
+        for (int i = 0; i < PATTERN_LAYERS; i++) {
+            PatternLayer p = pattern_layer(i);
+            g_any_pattern = g_any_pattern || (p.enabled != 0u && p.opacity > 0.0);
+        }
     }
 
     vec2 center = vec2(iteration_output_info_attr.extent) / 2.0;
@@ -1336,10 +1423,19 @@ void main() {
     float zsr = pow(video_attr.default_zoom_increment, r);// r = -1 ~ 0
 
     // Fixed quarter-pixel tent filter keeps the height field and color sampling phase-independent.
-    double h0 = sample_height(coord + vec2(-0.25, -0.25), nsr, zsr, r);
-    double h1 = sample_height(coord + vec2( 0.25, -0.25), nsr, zsr, r);
-    double h2 = sample_height(coord + vec2(-0.25,  0.25), nsr, zsr, r);
-    double h3 = sample_height(coord + vec2( 0.25,  0.25), nsr, zsr, r);
+    // The four taps span half an output pixel, which is at most half a map texel, so one 3x3 block
+    // per map read at the first tap serves all sixteen corners the four bilinears want. The zoomed
+    // block is only read where that tap is inside the zoomed map, since outside it every tap
+    // returns before reading past its first corner.
+    vec2 tap0 = coord + vec2(-0.25, -0.25);
+    HeightWindow nw = load_normal_window(tap0 / nsr + center);
+    vec2 ztx0 = tap0 / zsr + center;
+    HeightWindow zw = (ztx0.x >= 0 && ztx0.y >= 0 && ztx0.x < iteration_output_info_attr.extent.x - 1 && ztx0.y < iteration_output_info_attr.extent.y - 1)
+        ? load_zoomed_window(ztx0) : window_none();
+    double h0 = sample_height(tap0, nsr, zsr, r, nw, zw);
+    double h1 = sample_height(coord + vec2( 0.25, -0.25), nsr, zsr, r, nw, zw);
+    double h2 = sample_height(coord + vec2(-0.25,  0.25), nsr, zsr, r, nw, zw);
+    double h3 = sample_height(coord + vec2( 0.25,  0.25), nsr, zsr, r, nw, zw);
     double h = (h0 + h1 + h2 + h3) * 0.25;
     set_iteration_output(gl_GlobalInvocationID.xy, h);
 
@@ -1347,13 +1443,14 @@ void main() {
     // color path calls get_color 32 times per pixel, so deriving it per call is not affordable.
     // Any decor layer can ask for it, so all of them are checked before paying for the four taps.
     vec2 band_grad = vec2(0);
-    if (any_texture_needs_band() || any_pattern_needs_band() ||
-        (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND)) {
+    if (SPEC_DECOR && (any_texture_needs_band() || any_pattern_needs_band() ||
+        (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND))) {
         double mv = iteration_output_info_attr.max_value;
-        double hl = sample_height(coord + vec2(-1, 0), nsr, zsr, r);
-        double hr = sample_height(coord + vec2( 1, 0), nsr, zsr, r);
-        double hd = sample_height(coord + vec2( 0, -1), nsr, zsr, r);
-        double hu = sample_height(coord + vec2( 0, 1), nsr, zsr, r);
+        HeightWindow none = window_none();
+        double hl = sample_height(coord + vec2(-1, 0), nsr, zsr, r, none, none);
+        double hr = sample_height(coord + vec2( 1, 0), nsr, zsr, r, none, none);
+        double hd = sample_height(coord + vec2( 0, -1), nsr, zsr, r, none, none);
+        double hu = sample_height(coord + vec2( 0, 1), nsr, zsr, r, none, none);
         bool lv = hl > 0 && hl < mv;
         bool rv = hr > 0 && hr < mv;
         bool dv = hd > 0 && hd < mv;
@@ -1372,7 +1469,7 @@ void main() {
     // This image is 8-bit, so half a step of noise here scatters the gradient's crossings into a grain instead of bands.
     // The HDR build of it is not, and its own step is finer than this noise, as the final pass knows.
 #ifndef MERGED_IMAGE_HDR
-    if (video_attr.dither) {
+    if (SPEC_DITHER && video_attr.dither) {
         c += (ign(vec2(gl_GlobalInvocationID.xy), 0.0) - 0.5) / 255.0;
     }
 #endif

@@ -73,6 +73,21 @@ The extended Reinhard tone-map option follows "Photographic Tone Reproduction
 for Digital Images", SIGGRAPH 2002.
 https://doi.org/10.1145/566654.566575
 
+Peter Markstein - FMA division correction
+
+The correctly rounded double division built from a hoisted reciprocal, in
+shdsrc/vk_2_map_iter_stripe.comp and shdsrc/vk_iteration_palette.frag, is the
+two-FMA residual-and-correction step Markstein published in "Computation of
+elementary functions on the IBM RISC System/6000 processor", IBM Journal of
+Research and Development 34(1), 1990, and restated with Alan H. Karp in
+"High-Precision Division and Square Root", ACM TOMS 23(4), 1997. What is taken
+is the three-operation identity itself; the code around it is this project's
+own and no file of the authors' is bundled. The papers attach no license
+statement to the technique, so this entry records the source of a published
+method rather than a grant of rights under one.
+https://doi.org/10.1147/rd.341.0111
+https://doi.org/10.1145/279232.279237
+
 Chris Wellons - lowbias32
 
 The pattern-noise integer hash uses lowbias32 from hash-prospector, distributed

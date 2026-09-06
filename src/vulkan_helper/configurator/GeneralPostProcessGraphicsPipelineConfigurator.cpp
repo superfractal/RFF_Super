@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-05.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "GeneralPostProcessGraphicsPipelineConfigurator.hpp"
@@ -51,6 +52,7 @@ namespace merutilm::vkh {
         pipelineManager->attachDescriptor(std::move(descriptors));
         pipelineManager->attachShader(&vertexShader);
         pipelineManager->attachShader(&fragmentShader);
+        pipelineManager->attachSpecialization(specializationConstants());
 
 
         if (!initializedVertexIndex) {

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-28.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #pragma once
@@ -112,6 +113,17 @@ namespace merutilm::vkh {
         }
 
         virtual void updateQueue(DescriptorUpdateQueue &queue, uint32_t frameIndex) = 0;
+
+        // Specialization constants for the shaders, word i for constant_id i; empty for none.
+        // Read when the pipeline is built, and again by respecialize() when they may have changed.
+        [[nodiscard]] virtual std::vector<uint32_t> specializationConstants() const { return {}; }
+
+        // Rebuilds the pipeline if specializationConstants() no longer matches what it was built with.
+        void respecialize() const {
+            if (pipeline != nullptr) {
+                pipeline->respecialize(specializationConstants());
+            }
+        }
 
         virtual void cmdRender(VkCommandBuffer cbh, uint32_t frameIndex, DescIndexPicker &&descIndices) = 0;
 

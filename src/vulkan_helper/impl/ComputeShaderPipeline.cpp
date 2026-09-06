@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-08-27.
 // Modified by Opus 5 on 2026-08-23
 // Modified by GPT-5 on 2026-08-23.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "ComputeShaderPipeline.hpp"
@@ -30,6 +31,7 @@ namespace merutilm::vkh {
 
 
     void ComputeShaderPipelineImpl::init() {
+        const VkSpecializationInfo *specialization = getSpecializationInfo();
         const VkComputePipelineCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
             .pNext = nullptr,
@@ -41,7 +43,7 @@ namespace merutilm::vkh {
                 .stage = VK_SHADER_STAGE_COMPUTE_BIT,
                 .module = getShaderModules()[0]->getShaderModuleHandle(),
                 .pName = "main",
-                .pSpecializationInfo = nullptr
+                .pSpecializationInfo = specialization
             },
             .layout = pipelineLayout.getLayoutHandle(),
             .basePipelineHandle = nullptr,

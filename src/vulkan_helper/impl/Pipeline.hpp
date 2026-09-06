@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-11.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #pragma once
@@ -13,6 +14,10 @@ namespace merutilm::vkh {
         PipelineLayoutRef pipelineLayout;
         const std::vector<DescriptorPtr> descriptors;
         const std::vector<ShaderModulePtr> shaderModules;
+        // Specialization constants the pipeline was built with; word i is constant_id i.
+        std::vector<uint32_t> specialization;
+        std::vector<VkSpecializationMapEntry> specializationMap;
+        VkSpecializationInfo specializationInfo = {};
 
         explicit PipelineAbstract(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
                                   PipelineManager &&pipelineManager) : WindowContextHandler(wc),
@@ -21,7 +26,10 @@ namespace merutilm::vkh {
                                                                            std::move(pipelineManager->descriptors)),
                                                                        shaderModules(
                                                                            std::move(
-                                                                               pipelineManager->shaderModules)) {
+                                                                               pipelineManager->shaderModules)),
+                                                                       specialization(
+                                                                           std::move(
+                                                                               pipelineManager->specialization)) {
         }
 
         ~PipelineAbstract() override = default;
@@ -49,6 +57,37 @@ namespace merutilm::vkh {
 
         [[nodiscard]] std::span<const ShaderModulePtr> getShaderModules() const {
             return shaderModules;
+        }
+
+        // The stage's specialization block, or nullptr with no constants. Rebuilt here so init()
+        // reads the words respecialize() may have replaced; the pointers stay valid as long as this does.
+        [[nodiscard]] const VkSpecializationInfo *getSpecializationInfo() {
+            if (specialization.empty()) {
+                return nullptr;
+            }
+            specializationMap.resize(specialization.size());
+            for (uint32_t i = 0; i < specialization.size(); ++i) {
+                specializationMap[i] = {i, i * static_cast<uint32_t>(sizeof(uint32_t)), sizeof(uint32_t)};
+            }
+            specializationInfo = {
+                .mapEntryCount = static_cast<uint32_t>(specializationMap.size()),
+                .pMapEntries = specializationMap.data(),
+                .dataSize = specialization.size() * sizeof(uint32_t),
+                .pData = specialization.data()
+            };
+            return &specializationInfo;
+        }
+
+        // Rebuilds the pipeline with new constants. A pipeline is immutable once created, so the
+        // device is drained and the old one destroyed first; unchanged words cost nothing.
+        void respecialize(std::vector<uint32_t> &&data) {
+            if (data == specialization) {
+                return;
+            }
+            wc.core.getLogicalDevice().waitDeviceIdle();
+            destroy();
+            specialization = std::move(data);
+            init();
         }
 
 

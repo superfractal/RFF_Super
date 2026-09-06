@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-11.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #pragma once
@@ -13,6 +14,8 @@ namespace merutilm::vkh {
         PipelineLayoutRef layout;
         std::vector<DescriptorPtr> descriptors = {};
         std::vector<ShaderModulePtr> shaderModules = {};
+        // Specialization constants, one 32-bit word per constant_id starting at 0. Empty means none.
+        std::vector<uint32_t> specialization = {};
 
         explicit PipelineManagerImpl(PipelineLayoutRef layout) : layout(layout) {
         }
@@ -23,6 +26,8 @@ namespace merutilm::vkh {
         }
 
         void attachDescriptor(std::vector<DescriptorPtr> &&descriptor) { descriptors = std::move(descriptor); }
+
+        void attachSpecialization(std::vector<uint32_t> &&data) { specialization = std::move(data); }
 
     };
 

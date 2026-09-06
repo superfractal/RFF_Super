@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #version 450
@@ -479,6 +480,29 @@ layout (location = 0) out vec4 color;
 dvec4 g_interval = dvec4(1.0);
 dvec4 g_inv_interval = dvec4(1.0);
 
+// Specialization constants, numbered as vk_2_map_iter_stripe.comp numbers its own so one host
+// table serves both. Every mode below is a switch on a uniform the whole draw shares, yet each of
+// the get_color calls carried every arm of every switch, and the register budget was set by the
+// widest of them. With SPEC_MODES_FIXED the host bakes the modes in at pipeline creation and the
+// arms not taken are never compiled; the arm that is taken is the same code either way. Left at
+// the defaults, every read falls through to the uniform and the shader is what it was.
+layout (constant_id = 0) const bool SPEC_MODES_FIXED = false;
+layout (constant_id = 1) const uint SPEC_SMOOTHING = 0u;
+layout (constant_id = 3) const uint SPEC_ANIMATION_MODE = 0u;
+// False only when no texture or pattern layer paints and the warp is off, which drops the whole decor path.
+layout (constant_id = 4) const bool SPEC_DECOR = true;
+// False only when no color is frozen, which drops the freeze match loop.
+layout (constant_id = 5) const bool SPEC_FREEZE = true;
+
+uint smoothing_word() {
+    return SPEC_MODES_FIXED ? SPEC_SMOOTHING : palette_attr.smoothing;
+}
+
+uint animation_mode() {
+    return SPEC_MODES_FIXED ? SPEC_ANIMATION_MODE : palette_attr.animation_mode;
+}
+
+// The two-FMA correction is Markstein's (IBM J. Res. Dev. 34(1), 1990); see NOTICE.
 // a / b, rebuilt from the hoisted reciprocal r = 1/b. q = a*r lands within an ulp; the residual
 // a - b*q is exact in an FMA, and folding it back lands on the correctly rounded quotient - the
 // same double OpFDiv returns, without OpFDiv's cost. precise keeps the compiler from unfusing the
@@ -492,7 +516,7 @@ double div_r(double a, double b, double r) {
 
 // Smoothing transform shared by coloring and freeze matching.
 double smooth_iteration(double iteration) {
-    switch (palette_attr.smoothing & 0xFFu) {
+    switch (smoothing_word() & 0xFFu) {
         case NONE: return iteration - mod(iteration, 1);
         case REVERSED: return iteration + 1 - 2 * mod(iteration, 1);
         default: return iteration;
@@ -566,7 +590,7 @@ double eased_cycle(double ratio, const bool smoother) {
 
 // Iteration Coloring: widens the bands as the count climbs, taken on the count already divided by the cycle length so one Cycle Length stays the first cycle's width.
 double coloring_curve(double ratio) {
-    switch ((palette_attr.smoothing >> 10) & 0xFu) {
+    switch ((smoothing_word() >> 10) & 0xFu) {
         case ITER_COLORING_SQUARE_ROOT: return sqrt(max(ratio, 0.0LF));
         case ITER_COLORING_CUBE_ROOT: return cbrt_d(ratio);
         case ITER_COLORING_LOG: return log1p_d(ratio) * INV_LN2;
@@ -589,7 +613,7 @@ double coloring_curve(double ratio) {
 double biased_ratio(double ratio) {
     float x = clamp(float(ratio), 0.0, 1.0);
     float b = clamp(palette_attr.cycle_bias, 0.01, 16.0);
-    if (((palette_attr.smoothing >> 9) & 1u) == uint(CYCLE_CURVE_WAVE)) {
+    if (((smoothing_word() >> 9) & 1u) == uint(CYCLE_CURVE_WAVE)) {
         // x + A*sin(2*pi*x)/(2*pi), A = (b - 1) / (b + 1): monotone for |A| < 1 and periodic, so
         // it meets the wrap with its value and its slope both intact. The slope spans
         // 1 - |A| to 1 + |A|, whose ratio is exactly b - the widest band over the narrowest.
@@ -642,7 +666,7 @@ vec3 oklab_to_linear(vec3 lab) {
 
 // Blend between two adjacent palette entries only: the per-channel combine and the freeze matching are untouched.
 vec4 blend_palette(vec4 cc, vec4 nc, float t) {
-    if (((palette_attr.smoothing >> 8) & 1u) == uint(INTERP_RGB)) {
+    if (((smoothing_word() >> 8) & 1u) == uint(INTERP_RGB)) {
         return mix(cc, nc, t);
     }
     vec3 a = linear_to_oklab(srgb_to_linear(cc.rgb));
@@ -664,7 +688,7 @@ float cycle_dist(double a, double b) {
 // band so the static/animated boundary fades instead of flipping (no flicker during zoom).
 float freeze_weight(double iteration) {
     float tol = palette_attr.static_color_tolerance;
-    if (palette_attr.static_color_count == 0u || tol <= 0.0) {
+    if (!SPEC_FREEZE || palette_attr.static_color_count == 0u || tol <= 0.0) {
         return 0.0;
     }
     // The pixel's own three ratios do not depend on which frozen colour is being tested, so they
@@ -705,17 +729,17 @@ double animation_offset_iterations(vec2 rawCoord) {
     vec2 coord = canvas_coord(rawCoord);
     float t = time_attr.flow_phase;
     double offset_iterations = double(time_attr.palette_phase);
-    if (palette_attr.animation_mode == ANIMATION_BREATHING) {
+    if (animation_mode() == ANIMATION_BREATHING) {
         offset_iterations += double(sin(t * float(TWO_PI)) * palette_attr.animation_flow_amount);
     }
-    if (palette_attr.animation_mode == ANIMATION_TURBULENCE) {
+    if (animation_mode() == ANIMATION_TURBULENCE) {
         vec2 center = vec2(iteration_info_attr.canvas_extent) * 0.5;
         float extent = max(float(iteration_info_attr.canvas_extent.x), float(iteration_info_attr.canvas_extent.y));
         vec2 p = extent > 0.0 ? (coord - center) / extent : vec2(0.0);
         float field = turbulence_field(p * max(0.0, palette_attr.animation_flow_scale) * 8.0, t);
         offset_iterations += double(field * palette_attr.animation_flow_amount);
     }
-    if (palette_attr.animation_mode == ANIMATION_PSYCHEDELIC) {
+    if (animation_mode() == ANIMATION_PSYCHEDELIC) {
         vec2 center = vec2(iteration_info_attr.canvas_extent) * 0.5;
         float scale = max(float(iteration_info_attr.canvas_extent.x), float(iteration_info_attr.canvas_extent.y));
         vec2 p = scale > 0.0 ? (coord - center) / scale : vec2(0.0);
@@ -1060,7 +1084,7 @@ float warp_fbm(vec2 uv, int octaves) {
 // Iterations the palette lookup is displaced by at this pixel. Reading a field over the same UV the
 // decor layers use bends the color bands themselves, rather than painting anything over them.
 double warp_offset(double iteration, vec2 coord, vec2 band_grad, double anim_iters) {
-    if (texture_attr.warp_enabled == 0u || texture_attr.warp_amount == 0.0) {
+    if (!SPEC_DECOR || texture_attr.warp_enabled == 0u || texture_attr.warp_amount == 0.0) {
         return 0.0;
     }
     // Read off the unbent bands, with a warp of zero: this is the displacement that bends them.
@@ -1183,15 +1207,15 @@ void main() {
         return;
     }
 
-    bool any_texture = any_texture_enabled();
-    bool any_pattern = any_pattern_enabled();
+    bool any_texture = SPEC_DECOR && any_texture_enabled();
+    bool any_pattern = SPEC_DECOR && any_pattern_enabled();
 
     double anim_iters = animation_offset_iterations(gl_FragCoord.xy);
     // Band-aligned decor UV needs the iteration gradient. Taken once here: every decor layer and the
     // warp can ask for it, and each of them used to pay for four taps of its own.
     vec2 band_grad = vec2(0);
-    if (any_texture_needs_band() || any_pattern_needs_band() ||
-        (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND)) {
+    if (SPEC_DECOR && (any_texture_needs_band() || any_pattern_needs_band() ||
+        (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND))) {
         band_grad = iteration_gradient(ivec2(gl_FragCoord.xy), iteration);
     }
     double warp_iters = warp_offset(iteration, gl_FragCoord.xy, band_grad, anim_iters);

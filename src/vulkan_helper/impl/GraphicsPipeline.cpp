@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-27.
 // Modified by Opus 5 on 2026-08-23
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "GraphicsPipeline.hpp"
@@ -35,6 +36,8 @@ namespace merutilm::vkh {
 
     void GraphicsPipelineImpl::init() {
         auto modules = getShaderModules();
+        // Handed to every stage: a constant_id a stage does not declare is ignored for that stage.
+        const VkSpecializationInfo *specialization = getSpecializationInfo();
 
         std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfos(modules.size());
         for (size_t i = 0; i < modules.size(); ++i) {
@@ -45,7 +48,7 @@ namespace merutilm::vkh {
                 .stage = modules[i]->getShaderStage(),
                 .module = modules[i]->getShaderModuleHandle(),
                 .pName = "main",
-                .pSpecializationInfo = nullptr
+                .pSpecializationInfo = specialization
             };
         }
 

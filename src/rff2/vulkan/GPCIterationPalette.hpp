@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-29.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-26
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #pragma once
@@ -8,6 +9,7 @@
 #include <string>
 
 #include "ShaderAnimationPhases.hpp"
+#include "ShaderModeSpecialization.hpp"
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 #include "../attr/ShdPaletteAttribute.h"
 #include "../attr/ShdStripeAttribute.h"
@@ -35,6 +37,8 @@ namespace merutilm::rff2 {
         // submits one frame per tile, so without it every tile lands on a different animation phase.
         bool animationTimePinned = false;
         float pinnedTime = 0.0f;
+        // The modes the pipeline is specialized on; every setter that moves one rebuilds the pipeline.
+        ShaderModeSpecialization specModes = {};
 
         GPCIterationPalette(vkh::EngineRef engine, const uint32_t windowContextIndex,
                                              const uint32_t renderContextIndex,
@@ -88,6 +92,8 @@ namespace merutilm::rff2 {
         void pipelineInitialized() override;
 
         void renderContextRefreshed() override;
+
+        [[nodiscard]] std::vector<uint32_t> specializationConstants() const override;
 
     private:
         // The instant the animation stands at: the clock, unless a multi-frame job pinned it.

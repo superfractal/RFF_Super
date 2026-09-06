@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-22, 2026-08-26, 2026-08-31
 // Modified by ox-alpha on 2026-08-22.
+// Modified by Fable 5.1 on 2026-09-06
 //
 
 #include "../vulkan/GPCIterationPalette.hpp"
@@ -154,10 +155,7 @@ namespace merutilm::rff2 {
         // The fixed part is packed solid up to the color array, so the blend's mode rides in the upper bits: low 8 = smoothing, bit 8 = space.
         // Bit 9 carries the cycle curve choice, and bits 10-13 the iteration coloring mode.
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_SMOOTHING,
-                                      (static_cast<uint32_t>(palette.colorSmoothing) & 0xFFu) |
-                                      (static_cast<uint32_t>(palette.colorInterpolation) << 8) |
-                                      (static_cast<uint32_t>(palette.cycleCurve) << 9) |
-                                      ((static_cast<uint32_t>(palette.iterationColoring) & 0xFu) << 10));
+                                      ShaderModeSpecialization::smoothingWord(palette));
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ANIMATION_SPEED, palette.animationSpeed);
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_ANIMATION_MODE, static_cast<uint32_t>(palette.animationMode));
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ANIMATION_FLOW_AMOUNT, palette.animationFlowAmount);
@@ -188,6 +186,8 @@ namespace merutilm::rff2 {
             [&paletteDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
                 paletteDesc.queue(queue, frameIndex, {}, {DescPalette::BINDING_SSBO_PALETTE});
             });
+        specModes.setPalette(palette);
+        respecialize();
     }
 
     void GPCIterationPalette::setTextures(const std::array<ShdTextureAttribute, TEXTURE_LAYER_COUNT> &textures,
@@ -206,6 +206,8 @@ namespace merutilm::rff2 {
             }
             TextureDescriptor::updateParams(textureDesc, layer, texture, !loadedTexturePaths[layer].empty());
         }
+        specModes.setTextures(textures);
+        respecialize();
         if (changedBindings.empty()) {
             return;
         }
@@ -223,6 +225,8 @@ namespace merutilm::rff2 {
             phases.setPatternSpeed(layer, patterns[layer]);
             TextureDescriptor::updatePatternParams(getDescriptor(SET_TEXTURE), layer, patterns[layer]);
         }
+        specModes.setPattern(patterns);
+        respecialize();
     }
 
     void GPCIterationPalette::setWarp(const ShdWarpAttribute &warp) {
@@ -231,6 +235,12 @@ namespace merutilm::rff2 {
         const int sourceLayer = warpSourceLayer(warp);
         const bool sourceReady = sourceLayer < 0 || !loadedTexturePaths[sourceLayer].empty();
         TextureDescriptor::updateWarpParams(getDescriptor(SET_TEXTURE), warp, sourceReady);
+        specModes.setWarp(warp);
+        respecialize();
+    }
+
+    std::vector<uint32_t> GPCIterationPalette::specializationConstants() const {
+        return specModes.words();
     }
 
     void GPCIterationPalette::setStripeSpeed(const ShdStripeAttribute &stripe) {
