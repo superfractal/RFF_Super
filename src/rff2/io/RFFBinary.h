@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-06-23.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -7,9 +8,6 @@
 
 namespace merutilm::rff2 {
     class RFFBinary {
-
-        float logZoom;
-
     public:
         explicit RFFBinary(float logZoom);
 
@@ -22,5 +20,8 @@ namespace merutilm::rff2 {
         virtual void exportFile(const std::filesystem::path &path) const = 0;
 
         float getLogZoom() const;
+
+    private:
+        float logZoom;
     };
 }

@@ -1,9 +1,11 @@
 //
 // Created by Opus 5 on 2026-08-07
 // Modified by Opus 5 on 2026-08-17
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
 #include <cstdint>
 #include <glm/glm.hpp>
 
@@ -25,23 +27,28 @@ namespace merutilm::rff2 {
     // layer's UV sources so it can ride the color bands the same way.
     struct ShdPatternAttribute {
         bool enabled = false;
+
         ShdPatternType type = ShdPatternType::STRIPES;
         ShdTextureUVMode uvMode = ShdTextureUVMode::CYCLE_BAND;
         // Replace by default: the palette-shifted ink is already a color of its own, and multiplying
         // two palette colors together only darkens them.
         ShdTextureBlendMode blendMode = ShdTextureBlendMode::REPLACE;
         float opacity = 1.0f;
+
         ShdPatternInkMode inkMode = ShdPatternInkMode::PALETTE_SHIFT;
         // Ink drawn where the pattern covers, in SOLID mode. The uncovered part is left untouched.
         glm::vec4 color = {0.0f, 0.0f, 0.0f, 1.0f};
         // PALETTE_SHIFT mode: how far around the palette cycle the covered area is read, in cycles.
         // 0.5 lands on the opposite side of the cycle, the strongest contrast the palette offers.
         float paletteShift = 0.5f;
+
         // Edge hardness: 0 leaves the shape as a soft gradient, 1 cuts it to a hard border.
         float sharpness = 0.5f;
+
         // Pattern repeats across one full palette cycle (u) and across the v source range.
         float scaleU = 4.0f;
         float scaleV = 4.0f;
+
         // Pattern-space scroll in repeats per second; drives the pattern's own animation.
         float scrollU = 0.0f;
         float scrollV = 0.0f;
@@ -52,6 +59,7 @@ namespace merutilm::rff2 {
         // Iterations spanned by one pattern tile along U. 0 follows the palette's cycle length,
         // which ties the pattern's size to the coloring; set it to size the pattern on its own.
         float periodIterations = 0.0f;
+
         // Outline straddling the border between the covered and uncovered parts of the shape, so it
         // reads as a seam between the two rather than a rim belonging to either one. Off by default:
         // every look saved before it existed was composed without one.

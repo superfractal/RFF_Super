@@ -1,13 +1,18 @@
 //
 // Created and modified by AI; earlier exact dates unavailable.
-// Modified by GPT-5 on 2026-08-16.,2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
+
+//
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-27, 2026-08-29, 2026-08-31, 2026-09-04
-// Modified by ox-alpha on 2026-08-22.
+// Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25
+// Modified by Opus 5.5 on 2026-09-23
 //
 
 #include "ConfigIO.h"
+#include "AudioTimelineIO.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -24,6 +29,8 @@
 namespace merutilm::rff2 {
     namespace {
         constexpr uint64_t MAX_CONFIG_STRING_BYTES = 16ULL * 1024 * 1024;
+        // Clarity x SSAA past this cannot give even a one-pixel canvas a uint16_t iteration-buffer axis.
+        constexpr double MAX_RENDER_SCALE = 65535.0;
 
         template<typename E>
         bool enumInRange(const E value, const int32_t min, const int32_t max) {
@@ -52,7 +59,9 @@ namespace merutilm::rff2 {
                 return false;
             }
             if (!std::isfinite(re.clarityMultiplier) || re.clarityMultiplier <= 0.01f ||
-                re.ssaa < 1 || re.ssaa > 8 || !std::isfinite(re.fps) || re.fps <= 0.0f || re.threads == 0) {
+                re.ssaa < 1 || re.ssaa > 8 ||
+                static_cast<double>(re.clarityMultiplier) * re.ssaa > MAX_RENDER_SCALE ||
+                !std::isfinite(re.fps) || re.fps <= 0.0f || re.threads == 0) {
                 return false;
             }
             if (!std::isfinite(vi.data.defaultZoomIncrement) || vi.data.defaultZoomIncrement <= 1.0f ||
@@ -65,7 +74,10 @@ namespace merutilm::rff2 {
                 !enumInRange(vi.exportation.hdrTransfer, 0, 2) ||
                 !std::isfinite(vi.exportation.hdrPeakNits) || vi.exportation.hdrPeakNits < 100.0f ||
                 vi.exportation.hdrPeakNits > 10000.0f || !std::isfinite(vi.timeline.estimateKeyframes) ||
-                vi.timeline.estimateKeyframes < 0.0f) {
+                vi.timeline.estimateKeyframes < 0.0f || !enumInRange(vi.timeline.rotationMode, 0, 1) ||
+                !enumInRange(vi.timeline.rotationDirection, 0, 1) || !std::isfinite(vi.timeline.rotationPeriod) ||
+                vi.timeline.rotationPeriod < 0.01f || vi.timeline.rotationPeriod > 86400.0f ||
+                !std::isfinite(vi.timeline.rotationStartAngle) || std::abs(vi.timeline.rotationStartAngle) > 360000.0f) {
                 return false;
             }
             return ShaderPresetIO::validate(attr.shader);
@@ -81,6 +93,28 @@ namespace merutilm::rff2 {
             return false;
         }
 
+        auto saved = attr;
+        try { AudioTimelineIO::relativePaths(saved.video.timeline.audio, path); }
+        catch (const std::filesystem::filesystem_error&) {
+            out.close(); IOUtilities::discardTemporaryFile(temporary); return false;
+        }
+        write(out, saved, width, height);
+        out.close();
+        if (out.fail()) {
+            IOUtilities::discardTemporaryFile(temporary);
+            vkh::logger::w_log(L"ERROR : Cannot save config");
+            return false;
+        }
+        if (!IOUtilities::commitTemporaryFile(temporary, path)) {
+            IOUtilities::discardTemporaryFile(temporary);
+            vkh::logger::w_log(L"ERROR : Cannot replace config");
+            return false;
+        }
+        return true;
+    }
+
+    void ConfigIO::write(std::ostream &out, const Attribute &attr,
+                         const uint16_t width, const uint16_t height) {
         auto writeString = [&out](const std::string &s) {
             IOUtilities::encodeAndWrite(out, static_cast<uint64_t>(s.length()));
             IOUtilities::encodeAndWrite(out, s.data(), s.length());
@@ -138,7 +172,7 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, vi.data.defaultZoomIncrement);
         IOUtilities::encodeAndWrite(out, vi.data.isStatic);
         IOUtilities::encodeAndWrite(out, vi.animation.overZoom);
-        IOUtilities::encodeAndWrite(out, vi.animation.showText);
+        IOUtilities::encodeAndWrite(out, vi.timeline.zoomOverlay.visible);
         IOUtilities::encodeAndWrite(out, vi.animation.mps);
         IOUtilities::encodeAndWrite(out, vi.exportation.fps);
         IOUtilities::encodeAndWrite(out, vi.exportation.bitrate);
@@ -214,8 +248,6 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, static_cast<int32_t>(attr.shader.palette.cycleCurve));
         // Appended last: the bloom's linear sum. Older configs lack it and keep the encoded one they were drawn with.
         IOUtilities::encodeAndWrite(out, attr.shader.bloom.linearAdd);
-        // Retained as zero so configs from the Line Depth prototype keep every later field aligned.
-        IOUtilities::encodeAndWrite(out, 0.0f);
         // Appended last: the texture layers' Size and Keep Aspect. Older configs lack them and load stretched to a square tile, as they were drawn.
         ShaderPresetIO::writeTextureSize(out, attr.shader);
         // Appended last, behind a marker of its own: the slope's gloss. The marker is what makes a
@@ -233,19 +265,34 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, static_cast<int32_t>(fr.panoramaLayout));
         // Appended last, behind a marker of its own for the reason the block above it carries one: the gloss's Relief. An older config lacks it and keeps the session's value.
         ShaderPresetIO::writeGlossRelief(out, attr.shader);
+        IOUtilities::encodeAndWrite(out, uint32_t{0x5643414D});
+        IOUtilities::encodeAndWrite(out, attr.video.data.cameraPadding);
+        IOUtilities::encodeAndWrite(out, attr.video.data.cameraScale);
+        IOUtilities::encodeAndWrite(out, attr.shader.camera.rotation);
+        IOUtilities::encodeAndWrite(out, static_cast<int32_t>(attr.shader.camera.projection));
+        IOUtilities::encodeAndWrite(out, attr.shader.camera.pitch);
+        IOUtilities::encodeAndWrite(out, attr.shader.camera.fov);
+        IOUtilities::encodeAndWrite(out, attr.shader.camera.range);
+        IOUtilities::encodeAndWrite(out, static_cast<int32_t>(attr.shader.camera.layout));
+        ShaderPresetIO::writeStudio(out, attr.shader);
+        ShaderPresetIO::writeSurface(out, attr.shader);
+        ShaderPresetIO::writeEffects(out, attr.shader);
+        ShaderPresetIO::writeGroove(out, attr.shader);
+        ShaderPresetIO::writeEffectSync(out, attr.shader);
+        ShaderPresetIO::writeChrome(out, attr.shader);
+        TimelineIO::writeRotation(out, vi.timeline);
+        IOUtilities::encodeAndWrite(out, attr.shader.hdr.mfrPeakNits);
+        ShaderPresetIO::writeLayerOrder(out, attr.shader);
+        IOUtilities::encodeAndWrite(out, uint32_t(vi.exportation.showExportPreview));
+        ShaderPresetIO::writeStudioLighting(out, attr.shader);
+        TimelineIO::writeOverlay(out, vi.timeline.zoomOverlay);
+        AudioTimelineIO::write(out, vi.timeline.audio);
+        ShaderPresetIO::writeBandDecorations(out, attr.shader);
+        ShaderPresetIO::writeSurfaceReplacement(out, attr.shader);
+        ShaderPresetIO::writeChaosBlur(out, attr.shader);
+        TimelineIO::writeOverlayPrecision(out, vi.timeline.zoomOverlay);
 
-        out.close();
-        if (out.fail()) {
-            IOUtilities::discardTemporaryFile(temporary);
-            vkh::logger::w_log(L"ERROR : Cannot save config");
-            return false;
-        }
-        if (!IOUtilities::commitTemporaryFile(temporary, path)) {
-            IOUtilities::discardTemporaryFile(temporary);
-            vkh::logger::w_log(L"ERROR : Cannot replace config");
-            return false;
-        }
-        return true;
+
     }
 
     bool ConfigIO::load(const std::filesystem::path &path, Attribute &out,
@@ -366,7 +413,7 @@ namespace merutilm::rff2 {
         IOUtilities::readAndDecode(in, &h);
 
         // Shader
-        ShaderPresetIO::readShader(in, t.shader, version >= 4, version >= 5);
+        ShaderPresetIO::readShader(in, t.shader, version >= 4, version >= 5, version < 6);
 
         // Video
         auto &vi = t.video;
@@ -492,7 +539,7 @@ namespace merutilm::rff2 {
         // Older configs carry no timeline and leave the session's own alone, the way the Warp and
         // Pattern Edge blocks were added.
         if (hasMore()) {
-            TimelineIO::readConfigBlock(in, vi.timeline);
+            TimelineIO::readConfigBlock(in, vi.timeline, version < 6);
         }
 
         if (hasMore()) {
@@ -555,7 +602,7 @@ namespace merutilm::rff2 {
             IOUtilities::readAndDecode(in, &t.shader.bloom.linearAdd);
         }
 
-        if (hasMore()) {
+        if (version < 6 && hasMore()) {
             float removedBandLineDepth;
             IOUtilities::readAndDecode(in, &removedBandLineDepth);
         }
@@ -612,6 +659,77 @@ namespace merutilm::rff2 {
             ShaderPresetIO::readGlossRelief(in, t.shader);
         }
 
+        if (hasMore()) {
+            uint32_t magic = 0;
+            IOUtilities::readAndDecode(in, &magic);
+            if (magic == 0x5643414D) {
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.video.data.cameraPadding);
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.video.data.cameraScale);
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.shader.camera.rotation);
+                if (hasMore()) {
+                    int32_t projection = 0;
+                    IOUtilities::readAndDecode(in, &projection);
+                    t.shader.camera.projection = static_cast<FrtProjectionMethod>(projection);
+                }
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.shader.camera.pitch);
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.shader.camera.fov);
+                if (hasMore()) IOUtilities::readAndDecode(in, &t.shader.camera.range);
+                if (hasMore()) {
+                    int32_t layout = 0;
+                    IOUtilities::readAndDecode(in, &layout);
+                    t.shader.camera.layout = static_cast<FrtPanoramaLayout>(layout);
+                }
+            } else if (in.fail()) {
+                in.clear();
+            }
+        }
+        ShaderPresetIO::readStudio(in, t.shader, version < 6);
+        ShaderPresetIO::readSurface(in, t.shader);
+        ShaderPresetIO::readEffects(in, t.shader);
+        ShaderPresetIO::readGroove(in, t.shader);
+        ShaderPresetIO::readEffectSync(in, t.shader);
+        // RFC 3-6 retain retired explorer slots before Chrome; RFC 7 omits them.
+        if (version < 7) {
+            const int retiredFloatCount = version < 6 ? 6 : 4;
+            for (int field = 0; field < retiredFloatCount; ++field) {
+                if (hasMore()) { float discarded; IOUtilities::readAndDecode(in, &discarded); }
+            }
+            if (version < 6 && hasMore()) {
+                uint32_t freeExploration = 0;
+                IOUtilities::readAndDecode(in, &freeExploration);
+                if (freeExploration > 1) return false;
+            }
+        }
+        ShaderPresetIO::readChrome(in, t.shader, version < 6);
+        TimelineIO::readRotation(in, vi.timeline);
+        t.shader.hdr.mfrPeakNits = 4000.0f;
+        if (hasMore()) IOUtilities::readAndDecode(in, &t.shader.hdr.mfrPeakNits);
+        ShaderPresetIO::readLayerOrder(in, t.shader);
+        vi.exportation.showExportPreview = true;
+        if (hasMore()) {
+            uint32_t showExportPreview = 1;
+            IOUtilities::readAndDecode(in, &showExportPreview);
+            if (showExportPreview > 1) return false;
+            vi.exportation.showExportPreview = showExportPreview != 0;
+        }
+        ShaderPresetIO::readStudioLighting(in, t.shader, version < 6);
+        vi.timeline.zoomOverlay = {};
+        vi.timeline.zoomOverlay.visible = vi.animation.showText;
+        TimelineIO::readOverlay(in, vi.timeline.zoomOverlay);
+        if (!AudioTimelineIO::read(in, vi.timeline.audio)) return false;
+        ShaderPresetIO::readBandDecorations(in, t.shader);
+        ShaderPresetIO::readSurfaceReplacement(in, t.shader);
+        ShaderPresetIO::readChaosBlur(in, t.shader);
+        TimelineIO::readOverlayPrecision(in, vi.timeline.zoomOverlay);
+        try { AudioTimelineIO::resolvePaths(vi.timeline.audio, path); }
+        catch (const std::filesystem::filesystem_error&) { return false; }
+        vi.animation.showText = vi.timeline.zoomOverlay.visible;
+        if (t.shader.slope.reliefZoomReference == -1.0f) t.shader.slope.reliefZoomReference = fr.logZoom;
+        const auto &camera = t.shader.camera;
+        if (t.video.data.cameraScale < 2 || t.video.data.cameraScale > 64 ||
+            !std::isfinite(camera.rotation) || !std::isfinite(camera.pitch) || !std::isfinite(camera.fov) || !std::isfinite(camera.range) ||
+            !enumInRange(camera.projection, 0, 2) || camera.pitch < -90 || camera.pitch > 90 ||
+            camera.fov < 1 || camera.fov > 179 || camera.range < 0 || camera.range > 6 || !enumInRange(camera.layout, 0, 1)) return false;
         if (in.fail() || !validateConfig(t)) {
             vkh::logger::w_log(L"ERROR : Config file is corrupted");
             return false;
@@ -630,7 +748,13 @@ namespace merutilm::rff2 {
     bool ConfigIO::loadShader(const std::filesystem::path &path, ShaderAttribute &out) {
         // The shader's fields sit all the way down the stream, so the file is decoded whole into a
         // scratch attribute - built around a center the loader overwrites - and only its shader kept.
-        Attribute scratch{.fractal = FractalAttribute{.center = fp_complex("0", "0", 0)}};
+        // Old color sources may omit video fields; supply valid defaults for the full-config validator.
+        Attribute scratch{
+            .fractal = FractalAttribute{.center = fp_complex("0", "0", 0)},
+            .video = {.data = {.defaultZoomIncrement = 2.0f},
+                      .animation = {.mps = 1.0f},
+                      .exportation = {.fps = 60.0f, .bitrate = 60000, .keyframeAA = 1, .colorAA = 1}}
+        };
         if (!load(path, scratch, nullptr, nullptr)) {
             return false;
         }

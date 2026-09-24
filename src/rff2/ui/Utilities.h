@@ -1,7 +1,8 @@
 //
 // Created by Merutilm on 2025-05-10.
-// Modified by GPT-5 on 2026-08-23, 2026-08-27.
+// Modified by GPT-5 on 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-09-03
+// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -29,8 +30,8 @@ namespace merutilm::rff2 {
         }
 
         static float getCurrentTime() {
-            return static_cast<float>(std::chrono::system_clock::now().time_since_epoch().count() - Constants::Fractal::INIT_TIME)
-                   / 1e9;
+            return std::chrono::duration<float>(std::chrono::steady_clock::now() - Constants::Fractal::INIT_TIME)
+                .count();
         }
 
 
@@ -59,17 +60,6 @@ namespace merutilm::rff2 {
             return str.size() >= suffix.size() && std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
         }
 
-        static std::wstring joinString(const std::wstring &delimiter, const std::vector<std::wstring> &arr) {
-            std::wostringstream v;
-            for (int i = 0; i < arr.size(); ++i) {
-                if (i > 0) {
-                    v << delimiter;
-                }
-                v << arr[i];
-            }
-            return v.str();
-        }
-
         static std::vector<std::wstring> split(const std::wstring &input, const wchar_t delimiter) {
             std::vector<std::wstring> split;
             std::wstringstream ss(input);
@@ -84,38 +74,42 @@ namespace merutilm::rff2 {
 
         // Orders names the way a file manager does: a run of digits counts as its value, so 0009
         // comes before 0010 and map2 before map10, whatever padding the names carry.
-        static bool naturalLess(const std::wstring &a, const std::wstring &b) {
-            size_t i = 0;
-            size_t j = 0;
-            while (i < a.size() && j < b.size()) {
-                if (std::iswdigit(a[i]) && std::iswdigit(b[j])) {
-                    size_t ea = i;
-                    size_t eb = j;
-                    while (ea < a.size() && std::iswdigit(a[ea])) ++ea;
-                    while (eb < b.size() && std::iswdigit(b[eb])) ++eb;
+        static bool naturalLess(const std::wstring &left, const std::wstring &right) {
+            size_t leftIndex = 0;
+            size_t rightIndex = 0;
+            while (leftIndex < left.size() && rightIndex < right.size()) {
+                if (std::iswdigit(left[leftIndex]) && std::iswdigit(right[rightIndex])) {
+                    size_t leftEnd = leftIndex;
+                    size_t rightEnd = rightIndex;
+                    while (leftEnd < left.size() && std::iswdigit(left[leftEnd])) {
+                        ++leftEnd;
+                    }
+                    while (rightEnd < right.size() && std::iswdigit(right[rightEnd])) {
+                        ++rightEnd;
+                    }
                     // Leading zeros carry no value, so they are dropped before the digits are compared.
-                    std::wstring_view na(a.data() + i, ea - i);
-                    std::wstring_view nb(b.data() + j, eb - j);
-                    na.remove_prefix(std::min(na.find_first_not_of(L'0'), na.size() - 1));
-                    nb.remove_prefix(std::min(nb.find_first_not_of(L'0'), nb.size() - 1));
-                    if (na.size() != nb.size()) {
-                        return na.size() < nb.size();
+                    std::wstring_view leftDigits(left.data() + leftIndex, leftEnd - leftIndex);
+                    std::wstring_view rightDigits(right.data() + rightIndex, rightEnd - rightIndex);
+                    leftDigits.remove_prefix(std::min(leftDigits.find_first_not_of(L'0'), leftDigits.size() - 1));
+                    rightDigits.remove_prefix(std::min(rightDigits.find_first_not_of(L'0'), rightDigits.size() - 1));
+                    if (leftDigits.size() != rightDigits.size()) {
+                        return leftDigits.size() < rightDigits.size();
                     }
-                    if (na != nb) {
-                        return na < nb;
+                    if (leftDigits != rightDigits) {
+                        return leftDigits < rightDigits;
                     }
-                    i = ea;
-                    j = eb;
+                    leftIndex = leftEnd;
+                    rightIndex = rightEnd;
                     continue;
                 }
-                const wchar_t ca = std::towlower(a[i]);
-                if (const wchar_t cb = std::towlower(b[j]); ca != cb) {
-                    return ca < cb;
+                const wchar_t leftCharacter = std::towlower(left[leftIndex]);
+                if (const wchar_t rightCharacter = std::towlower(right[rightIndex]); leftCharacter != rightCharacter) {
+                    return leftCharacter < rightCharacter;
                 }
-                ++i;
-                ++j;
+                ++leftIndex;
+                ++rightIndex;
             }
-            return a.size() - i < b.size() - j;
+            return left.size() - leftIndex < right.size() - rightIndex;
         }
 
         // The lower-cased extension of a path, with its dot, for comparing against a fixed list.

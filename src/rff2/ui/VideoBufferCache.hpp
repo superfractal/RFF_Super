@@ -1,17 +1,19 @@
 //
 // Created by Merutilm on 2025-09-12.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
-// Modified by Opus 5 on 2026-08-19.
+// Modified by Opus 5 on 2026-08-19
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 #include "../../vulkan_helper/context/BufferContext.hpp"
 #include "../../vulkan_helper/handle/CoreHandler.hpp"
 #include "opencv2/core/mat.hpp"
+#include <utility>
 
 namespace merutilm::rff2 {
-    struct VideoBufferCache final : vkh::CoreHandler{
+    struct VideoBufferCache final : vkh::CoreHandler {
         vkh::BufferContext bufferContext;
         int width;
         int height;
@@ -21,8 +23,10 @@ namespace merutilm::rff2 {
         int subsampleCount;
         cv::Mat image;
 
-        explicit VideoBufferCache(vkh::CoreRef core, vkh::BufferContext &&ctx, const int width,
-                                  const int height, const bool hdr, const float zoom, const int subsampleCount = 1) : CoreHandler(core), bufferContext(std::move(ctx)), width(width), height(height), hdr(hdr), zoom(zoom), subsampleCount(subsampleCount) {
+        explicit VideoBufferCache(vkh::CoreRef core, vkh::BufferContext &&context, const int width,
+                                  const int height, const bool hdr, const float zoom, const int subsampleCount = 1)
+            : CoreHandler(core), bufferContext(std::move(context)), width(width), height(height), hdr(hdr),
+              zoom(zoom), subsampleCount(subsampleCount) {
             VideoBufferCache::init();
         }
 

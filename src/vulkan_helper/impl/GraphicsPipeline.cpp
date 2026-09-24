@@ -2,68 +2,77 @@
 // Created by Merutilm on 2025-08-27.
 // Modified by Opus 5 on 2026-08-23
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-23
 //
 
 #include "GraphicsPipeline.hpp"
+#include "PipelinePreparation.hpp"
+#include "../core/allocator.hpp"
+#include "../core/exception.hpp"
 
 namespace merutilm::vkh {
-    GraphicsPipelineImpl::GraphicsPipelineImpl(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
+    GraphicsPipelineImpl::GraphicsPipelineImpl(WindowContextRef windowContext, PipelineLayoutRef pipelineLayout,
                                                VertexBufferRef vertexBuffer,
                                                IndexBufferRef indexBuffer,
                                                const uint32_t renderContextIndex,
                                                const uint32_t primarySubpassIndex,
-                                               PipelineManager &&pipelineManager) : PipelineAbstract(
-            wc, pipelineLayout, std::move(pipelineManager)), renderContextIndex(renderContextIndex),
-        primarySubpassIndex(primarySubpassIndex),
-        vertexBuffer(vertexBuffer),
-        indexBuffer(indexBuffer) {
-        GraphicsPipelineImpl::init();
+                                               PipelineManager &&pipelineManager)
+        : PipelineAbstract(windowContext, pipelineLayout, std::move(pipelineManager)),
+          renderContextIndex(renderContextIndex), primarySubpassIndex(primarySubpassIndex),
+          vertexBuffer(vertexBuffer), indexBuffer(indexBuffer) {
+        prepare([this] { GraphicsPipelineImpl::init(); });
     }
 
     GraphicsPipelineImpl::~GraphicsPipelineImpl() {
+        waitPreparation();
         GraphicsPipelineImpl::destroy();
     }
 
-    void GraphicsPipelineImpl::cmdBindAll(const VkCommandBuffer cbh, const uint32_t frameIndex, DescIndexPicker &&descIndices) const {
-        const auto sets = enumerateDescriptorSets(frameIndex, std::move(descIndices));
-        vkCmdBindPipeline(cbh, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-        vkCmdBindDescriptorSets(cbh, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    void GraphicsPipelineImpl::cmdBindAll(const VkCommandBuffer commandBuffer, const uint32_t frameIndex,
+                                          DescIndexPicker &&descriptorIndices) const {
+        const auto descriptorSets = enumerateDescriptorSets(frameIndex, std::move(descriptorIndices));
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 getLayout().getLayoutHandle(), 0,
-                                static_cast<uint32_t>(sets.size()), sets.data(), 0,
+                                static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 0,
                                 nullptr);
     }
 
 
     void GraphicsPipelineImpl::init() {
-        auto modules = getShaderModules();
+        if (pipeline != VK_NULL_HANDLE) {
+            throw exception_invalid_state("Graphics pipeline is already initialized");
+        }
+
+        const auto shaderModules = getShaderModules();
         // Handed to every stage: a constant_id a stage does not declare is ignored for that stage.
         const VkSpecializationInfo *specialization = getSpecializationInfo();
 
-        std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfos(modules.size());
-        for (size_t i = 0; i < modules.size(); ++i) {
-            shaderStageCreateInfos[i] = {
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStageCreateInfos(shaderModules.size());
+        for (size_t shaderIndex = 0; shaderIndex < shaderModules.size(); ++shaderIndex) {
+            shaderStageCreateInfos[shaderIndex] = {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .pNext = nullptr,
                 .flags = 0,
-                .stage = modules[i]->getShaderStage(),
-                .module = modules[i]->getShaderModuleHandle(),
+                .stage = shaderModules[shaderIndex]->getShaderStage(),
+                .module = shaderModules[shaderIndex]->getShaderModuleHandle(),
                 .pName = "main",
                 .pSpecializationInfo = specialization
             };
         }
 
-        auto &vertInputAttributeDescription = vertexBuffer.getVertexInputAttributeDescriptions();
-        auto &vertBindingDescription = vertexBuffer.getVertexInputBindingDescriptions();
+        const auto &vertexAttributes = vertexBuffer.getVertexInputAttributeDescriptions();
+        const auto &vertexBindings = vertexBuffer.getVertexInputBindingDescriptions();
 
 
         VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .vertexBindingDescriptionCount = static_cast<uint32_t>(vertBindingDescription.size()),
-            .pVertexBindingDescriptions = vertBindingDescription.data(),
-            .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertInputAttributeDescription.size()),
-            .pVertexAttributeDescriptions = vertInputAttributeDescription.data(),
+            .vertexBindingDescriptionCount = static_cast<uint32_t>(vertexBindings.size()),
+            .pVertexBindingDescriptions = vertexBindings.data(),
+            .vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributes.size()),
+            .pVertexAttributeDescriptions = vertexAttributes.data(),
         };
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {
@@ -88,7 +97,7 @@ namespace merutilm::vkh {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .depthClampEnable = VK_TRUE,
+            .depthClampEnable = VK_FALSE,
             .rasterizerDiscardEnable = VK_FALSE,
             .polygonMode = VK_POLYGON_MODE_FILL,
             .cullMode = VK_CULL_MODE_BACK_BIT,
@@ -119,7 +128,7 @@ namespace merutilm::vkh {
             .depthTestEnable = VK_FALSE,
             .depthWriteEnable = VK_FALSE,
             .depthCompareOp = VK_COMPARE_OP_LESS,
-            .depthBoundsTestEnable = VK_TRUE,
+            .depthBoundsTestEnable = VK_FALSE,
             .stencilTestEnable = VK_FALSE,
             .front = {},
             .back = {},
@@ -133,7 +142,7 @@ namespace merutilm::vkh {
             .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             .colorBlendOp = VK_BLEND_OP_ADD,
             .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+            .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
             .alphaBlendOp = VK_BLEND_OP_ADD,
             .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
                               VK_COLOR_COMPONENT_A_BIT
@@ -161,7 +170,7 @@ namespace merutilm::vkh {
             .pDynamicStates = dynamicStates.data(),
         };
 
-        VkGraphicsPipelineCreateInfo info = {
+        VkGraphicsPipelineCreateInfo pipelineInfo = {
             .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
@@ -184,11 +193,34 @@ namespace merutilm::vkh {
         };
 
 
-        if (allocator::invoke(vkCreateGraphicsPipelines, wc.core.getLogicalDevice().getLogicalDeviceHandle(),
-                                      wc.core.getLogicalDevice().getPipelineCacheHandle(), 1, &info,
-                                      nullptr,
-                                      &pipeline) != VK_SUCCESS) {
+        const auto &logicalDevice = wc.core.getLogicalDevice();
+        const VkDevice deviceHandle = logicalDevice.getLogicalDeviceHandle();
+        const VkPipelineCache pipelineCache = logicalDevice.getPipelineCacheHandle();
+        VkPipeline createdPipeline = VK_NULL_HANDLE;
+        const auto createPipeline = [&] {
+            return vkCreateGraphicsPipelines(deviceHandle, pipelineCache, 1, &pipelineInfo, nullptr,
+                                             &createdPipeline);
+        };
+        const auto &deviceProperties = wc.core.getPhysicalDevice().getPhysicalDeviceProperties();
+        // Paint only: input, timers and scene edits wait until the replacement pipeline is complete.
+        VkResult result;
+        try {
+            result = PipelinePreparation::run(
+                wc.getWindow().getWindowHandle(), shaderModules.back()->getFilename(),
+                std::to_string(deviceProperties.vendorID) + ":" + std::to_string(deviceProperties.deviceID) + ":" +
+                    std::to_string(deviceProperties.driverVersion), createPipeline);
+        } catch (...) {
+            if (createdPipeline != VK_NULL_HANDLE) {
+                allocator::invoke(vkDestroyPipeline, deviceHandle, createdPipeline, nullptr);
+            }
+            throw;
+        }
+        if (result != VK_SUCCESS) {
+            if (createdPipeline != VK_NULL_HANDLE) {
+                allocator::invoke(vkDestroyPipeline, deviceHandle, createdPipeline, nullptr);
+            }
             throw exception_init("Failed to create graphics pipeline!");
         }
+        pipeline = createdPipeline;
     }
 }

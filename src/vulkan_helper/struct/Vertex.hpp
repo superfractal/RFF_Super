@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-15.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -12,7 +13,8 @@ namespace merutilm::vkh {
         glm::vec2 texcoord = {};
 
         static Vertex generate(const glm::vec3 &position, const glm::vec3 &color, const glm::vec2 &texcoord) {
-            return Vertex{glm::vec3{position.x, -position.y, position.z}, color, texcoord};
+            const glm::vec3 flippedPosition{position.x, -position.y, position.z};
+            return Vertex{flippedPosition, color, texcoord};
         }
     };
 }

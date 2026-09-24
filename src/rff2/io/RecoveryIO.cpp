@@ -1,13 +1,18 @@
 //
 // Created by Opus 5 on 2026-08-14.
-// Modified by Opus 5 on 2026-08-15.
+// Modified by Opus 5 on 2026-08-15
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-21, 2026-09-23
 //
 
 #include "RecoveryIO.h"
 
+#include <cstdint>
+#include <filesystem>
 #include <format>
 #include <fstream>
+#include <optional>
+#include <vector>
 #include <windows.h>
 
 #include "ConfigIO.h"
@@ -40,7 +45,7 @@ namespace merutilm::rff2 {
 
         // The two files a session leaves under a name of its own rather than its lock's: what is
         // being offered, and what a run closed partway kept for the next start.
-        std::filesystem::path fixedFile(const wchar_t *name) {
+        std::filesystem::path namedSnapshotPath(const wchar_t *name) {
             return recoveryDir() / std::format(L"{}.{}", name, Constants::Extension::CONFIG);
         }
 
@@ -56,12 +61,15 @@ namespace merutilm::rff2 {
         }
 
         SessionOwner currentOwner() {
-            return {static_cast<uint32_t>(GetCurrentProcessId()), processCreationTime(GetCurrentProcess())};
+            return {
+                static_cast<uint32_t>(GetCurrentProcessId()),
+                processCreationTime(GetCurrentProcess())
+            };
         }
 
         // True while that process is still running, and is still the one that wrote the lock.
         bool isOwnerAlive(const SessionOwner &owner) {
-            const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, owner.pid);
+            const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, owner.pid);
             if (process == nullptr) {
                 return false;
             }
@@ -71,28 +79,28 @@ namespace merutilm::rff2 {
             return alive;
         }
 
-        bool readLock(const std::filesystem::path &path, SessionOwner *owner) {
+        bool readLock(const std::filesystem::path &path, SessionOwner &owner) {
             std::ifstream in(path, std::ios::in | std::ios::binary);
             if (!in.is_open()) {
                 return false;
             }
-            IOUtilities::readAndDecode(in, &owner->pid);
-            IOUtilities::readAndDecode(in, &owner->createdAt);
+            IOUtilities::readAndDecode(in, &owner.pid);
+            IOUtilities::readAndDecode(in, &owner.createdAt);
             return !in.fail();
         }
 
         // One session's files are all named after its lock: the snapshot beside it, and the two
         // half-written forms a crash can leave in place of either.
-        std::filesystem::path snapshotOfLock(const std::filesystem::path &lock) {
+        std::filesystem::path snapshotPathForLock(const std::filesystem::path &lock) {
             return std::filesystem::path(lock).replace_extension(
                 std::format(L".{}", Constants::Extension::CONFIG));
         }
 
-        std::filesystem::path tempOfLock(const std::filesystem::path &lock) {
+        std::filesystem::path temporarySnapshotPathForLock(const std::filesystem::path &lock) {
             return std::filesystem::path(lock).replace_extension(TEMP_EXTENSION);
         }
 
-        std::filesystem::path tempOfLockItself(const std::filesystem::path &lock) {
+        std::filesystem::path temporaryLockPath(const std::filesystem::path &lock) {
             return std::filesystem::path(lock) += TEMP_EXTENSION;
         }
 
@@ -117,7 +125,7 @@ namespace merutilm::rff2 {
         // is the one offered; the rest are swept away with the locks, so the folder cannot grow.
         std::vector<std::filesystem::path> deadLocks;
         std::filesystem::path newest;
-        std::filesystem::file_time_type newestTime;
+        std::filesystem::file_time_type newestTime = {};
 
         for (std::filesystem::directory_iterator it(dir, ec), end; it != end; it.increment(ec)) {
             if (ec) {
@@ -128,12 +136,12 @@ namespace merutilm::rff2 {
                 continue;
             }
             SessionOwner owner = {};
-            if (readLock(path, &owner) && isOwnerAlive(owner)) {
+            if (readLock(path, owner) && isOwnerAlive(owner)) {
                 // Another instance is running right now: its snapshot is not a crash.
                 continue;
             }
             deadLocks.push_back(path);
-            const std::filesystem::path snapshot = snapshotOfLock(path);
+            const std::filesystem::path snapshot = snapshotPathForLock(path);
             std::error_code timeEc;
             const std::filesystem::file_time_type time = std::filesystem::last_write_time(snapshot, timeEc);
             if (timeEc) {
@@ -146,8 +154,8 @@ namespace merutilm::rff2 {
             }
         }
 
-        const std::filesystem::path crashed = fixedFile(CRASHED_NAME);
-        const std::filesystem::path interrupted = fixedFile(INTERRUPTED_NAME);
+        const std::filesystem::path crashed = namedSnapshotPath(CRASHED_NAME);
+        const std::filesystem::path interrupted = namedSnapshotPath(INTERRUPTED_NAME);
         std::optional<RecoveredSnapshot> result = std::nullopt;
         bool preserveNewest = false;
         if (!newest.empty()) {
@@ -173,12 +181,12 @@ namespace merutilm::rff2 {
             }
         }
         for (const auto &lock: deadLocks) {
-            if (preserveNewest && snapshotOfLock(lock) == newest) {
+            if (preserveNewest && snapshotPathForLock(lock) == newest) {
                 continue;
             }
-            removeQuietly(snapshotOfLock(lock));
-            removeQuietly(tempOfLock(lock));
-            removeQuietly(tempOfLockItself(lock));
+            removeQuietly(snapshotPathForLock(lock));
+            removeQuietly(temporarySnapshotPathForLock(lock));
+            removeQuietly(temporaryLockPath(lock));
             removeQuietly(lock);
         }
         return result;
@@ -196,7 +204,7 @@ namespace merutilm::rff2 {
         // Written aside and moved into place, so a lock that is there at all is a whole one: a start
         // alongside this one reads it to decide whether this session is live, and half of it names
         // no process.
-        const std::filesystem::path temp = tempOfLockItself(lock);
+        const std::filesystem::path temp = temporaryLockPath(lock);
         std::ofstream out(temp, std::ios::out | std::ios::binary | std::ios::trunc);
         if (!out.is_open()) {
             return;
@@ -210,20 +218,20 @@ namespace merutilm::rff2 {
             return;
         }
         sessionLock = lock;
-        sessionSnapshot = snapshotOfLock(lock);
+        sessionSnapshot = snapshotPathForLock(lock);
     }
 
     void RecoveryIO::endSession(const bool unfinished) {
         if (sessionLock.empty()) {
             return;
         }
-        removeQuietly(tempOfLock(sessionLock));
+        removeQuietly(temporarySnapshotPathForLock(sessionLock));
         std::error_code ec;
         if (unfinished && std::filesystem::exists(sessionSnapshot, ec)) {
             // The window answered and the shutdown was orderly, but the view it was asked for never
             // arrived: the settings are kept under the one name a start looks for them by, so what
             // was too heavy to wait for can be lowered rather than found again by hand.
-            const std::filesystem::path interrupted = fixedFile(INTERRUPTED_NAME);
+            const std::filesystem::path interrupted = namedSnapshotPath(INTERRUPTED_NAME);
             if (!replaceFile(sessionSnapshot, interrupted)) {
                 // Keep both the snapshot and its dead-session lock so the next start can try again.
                 return;
@@ -240,7 +248,7 @@ namespace merutilm::rff2 {
         if (sessionSnapshot.empty()) {
             return;
         }
-        const std::filesystem::path temp = tempOfLock(sessionLock);
+        const std::filesystem::path temp = temporarySnapshotPathForLock(sessionLock);
         if (!ConfigIO::save(temp, attr, width, height)) {
             removeQuietly(temp);
             return;

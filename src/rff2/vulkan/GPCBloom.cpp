@@ -2,9 +2,12 @@
 // Created by Merutilm on 2025-08-30.
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-19, 2026-08-24
+// Modified by GPT-6 on 2026-09-10, 2026-09-16, 2026-09-20, 2026-09-23
 //
 
 #include "GPCBloom.hpp"
+
+#include <algorithm>
 
 #include "RCCDownsampleForBlur.hpp"
 #include "RCC3.hpp"
@@ -14,15 +17,31 @@
 #include "../constants/VulkanWindowConstants.hpp"
 
 namespace merutilm::rff2 {
+    namespace {
+        void writeBloomParameters(const vkh::UniformImpl &bloomUBO, const ShdBloomAttribute &bloom,
+                                  const ShdHdrAttribute &hdr, const bool sceneLinear) {
+            using namespace SharedDescriptorTemplate;
+            auto &host = bloomUBO.getHostObject();
+            host.set<float>(DescBloom::TARGET_BLOOM_THRESHOLD, bloom.threshold);
+            host.set<float>(DescBloom::TARGET_BLOOM_RADIUS, bloom.radius);
+            host.set<float>(DescBloom::TARGET_BLOOM_SOFTNESS, bloom.softness);
+            host.set<float>(DescBloom::TARGET_BLOOM_INTENSITY, bloom.intensity);
+            host.set<float>(DescBloom::TARGET_BLOOM_HDR, hdr.use ? 1.0f : 0.0f);
+            host.set<float>(DescBloom::TARGET_BLOOM_HEADROOM, std::max(hdr.headroom, 1e-3f));
+            host.set<float>(DescBloom::TARGET_BLOOM_LINEAR_ADD, bloom.linearAdd ? 1.0f : 0.0f);
+            host.set<float>(DescBloom::TARGET_BLOOM_SCENE_LINEAR, sceneLinear ? 1.0f : 0.0f);
+            bloomUBO.update();
+        }
+    }
+
     void GPCBloom::updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) {
         //no operation
     }
 
-    void GPCBloom::setBloom(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const {
+    void GPCBloom::setBloom(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr, const bool sceneLinear) const {
         using namespace SharedDescriptorTemplate;
         auto &bloomDesc = getDescriptor(SET_BLOOM);
         auto &bloomUBO = *bloomDesc.get<vkh::Uniform>(0, DescBloom::BINDING_UBO_BLOOM);
-        auto &bloomUBOHost = bloomUBO.getHostObject();
 
         const bool lockAfterUpdate = wc.getAttachmentIndex() ==
                                      Constants::VulkanWindow::MAIN_WINDOW_ATTACHMENT_INDEX;
@@ -30,14 +49,7 @@ namespace merutilm::rff2 {
             bloomUBO.unlock(wc.getCommandPool());
         }
 
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_THRESHOLD, bloom.threshold);
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_RADIUS, bloom.radius);
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_SOFTNESS, bloom.softness);
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_INTENSITY, bloom.intensity);
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_HDR, hdr.use ? 1.0f : 0.0f);
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_HEADROOM, std::max(hdr.headroom, 1e-3f));
-        bloomUBOHost.set<float>(DescBloom::TARGET_BLOOM_LINEAR_ADD, bloom.linearAdd ? 1.0f : 0.0f);
-        bloomUBO.update();
+        writeBloomParameters(bloomUBO, bloom, hdr, sceneLinear);
         if (lockAfterUpdate) {
             bloomUBO.lock(wc.getCommandPool());
         }
@@ -47,18 +59,10 @@ namespace merutilm::rff2 {
         });
     }
 
-    void GPCBloom::setBloomDynamic(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr) const {
+    void GPCBloom::setBloomDynamic(const ShdBloomAttribute &bloom, const ShdHdrAttribute &hdr, const bool sceneLinear) const {
         using namespace SharedDescriptorTemplate;
         const auto &bloomUBO = *getDescriptor(SET_BLOOM).get<vkh::Uniform>(0, DescBloom::BINDING_UBO_BLOOM);
-        auto &host = bloomUBO.getHostObject();
-        host.set<float>(DescBloom::TARGET_BLOOM_THRESHOLD, bloom.threshold);
-        host.set<float>(DescBloom::TARGET_BLOOM_RADIUS, bloom.radius);
-        host.set<float>(DescBloom::TARGET_BLOOM_SOFTNESS, bloom.softness);
-        host.set<float>(DescBloom::TARGET_BLOOM_INTENSITY, bloom.intensity);
-        host.set<float>(DescBloom::TARGET_BLOOM_HDR, hdr.use ? 1.0f : 0.0f);
-        host.set<float>(DescBloom::TARGET_BLOOM_HEADROOM, std::max(hdr.headroom, 1e-3f));
-        host.set<float>(DescBloom::TARGET_BLOOM_LINEAR_ADD, bloom.linearAdd ? 1.0f : 0.0f);
-        bloomUBO.update();
+        writeBloomParameters(bloomUBO, bloom, hdr, sceneLinear);
     }
 
     void GPCBloom::pipelineInitialized() {
@@ -81,6 +85,7 @@ namespace merutilm::rff2 {
                 );
                 break;
             }
+            case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 bloomDesc.get<vkh::CombinedImageSampler>(0, BINDING_BLOOM_CANVAS_ORIGINAL)->setImageContextMF(
                     sic.getImageContextMF(
@@ -104,6 +109,7 @@ namespace merutilm::rff2 {
 
 
     void GPCBloom::configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) {
+        ShaderLayerControl::configure(layerPush, pipelineLayoutManager);
         //no operation
     }
 

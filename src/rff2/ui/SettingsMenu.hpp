@@ -1,15 +1,22 @@
 //
 // Created by Merutilm on 2025-05-14.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-26, 2026-08-27.
 // Modified by Opus 5 on 2026-08-14, 2026-08-27, 2026-08-31
+// Modified by GPT-5 on 2026-08-21, 2026-08-26, 2026-08-27
+// Modified by GPT-6 on 2026-09-14, 2026-09-17, 2026-09-23
 //
 
 #pragma once
+#include "MenuModel.hpp"
+#include <cstdint>
 #include <deque>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <windef.h>
 
@@ -19,6 +26,22 @@
 
 namespace merutilm::rff2 {
     struct SettingsMenu {
+        struct MenuMetrics {
+            UINT dpi = 96;
+            HWND owner = nullptr;
+            HFONT font = nullptr;
+            int averageCharWidth = 1;
+
+            ~MenuMetrics();
+            MenuMetrics() = default;
+            MenuMetrics(const MenuMetrics&) = delete;
+            MenuMetrics& operator=(const MenuMetrics&) = delete;
+            bool refresh(UINT targetDpi);
+            int gutter() const;
+            int rightPadding() const;
+            int arrowColumn() const;
+        };
+
         // What an owner-drawn menu item needs to draw itself. Windows keeps no string for an
         // MFT_OWNERDRAW item, so the caption is kept here and handed to the item as its item data.
         // The container is a deque because those pointers must outlive every later insertion.
@@ -37,18 +60,23 @@ namespace merutilm::rff2 {
             // than the light one; this is the width it actually had. Zero until captured.
             int nativeWidth = 0;
             int nativeHeight = 0;
+            UINT nativeDpi = 96;
+            const MenuMetrics* metrics = nullptr;
         };
 
+        MenuMetrics menuMetrics;
         HMENU menubar;
         int count = 0;
         std::deque<MenuEntry> menuEntries = {};
         HWND masterWindow = nullptr;
         bool menuNativeSizesCaptured = false;
         bool menuOwnerDrawn = false;
+        bool menuMeasurementsDirty = false;
         std::vector<HMENU> childMenus = {};
-        std::vector<std::function<void(SettingsMenu &, RenderScene &)> > callbacks = {};
+        std::vector<std::function<void(SettingsMenu &, RenderScene &)>> callbacks = {};
+        std::function<void(int, int)> workspaceNavigation;
         std::vector<bool> hasCheckboxes = {};
-        std::vector<std::optional<std::function<bool*(RenderScene &, bool)> > > checkboxActions = {};
+        std::vector<std::optional<std::function<bool*(RenderScene &, bool)>>> checkboxActions = {};
         // What part of the attribute a panel is bound to - all the closers below need to tell them
         // apart by. A shader preset replaces the whole shader, a KFR color file only its palette,
         // and a settings file or a video export reaches everything.
@@ -85,9 +113,11 @@ namespace merutilm::rff2 {
         HMENU addChildItem(HMENU target, std::string_view child,
                            const std::function<void(SettingsMenu &, RenderScene &)> &callback);
 
+        HMENU addWorkspaceItem(HMENU target, std::string_view child, int workspace, int section,
+                               const std::function<void(SettingsMenu &, RenderScene &)> &fallback);
+
         HMENU addChildCheckbox(HMENU target, std::string_view child,
-                               const std::function<bool*(RenderScene &, bool)>
-                               &checkboxAction);
+                               const std::function<bool*(RenderScene &, bool)> &checkboxAction);
 
         template<typename P> requires std::is_base_of_v<Preset, P>
         HMENU addPresetExecutor(HMENU target, P preset);
@@ -97,13 +127,19 @@ namespace merutilm::rff2 {
         HMENU addFullShaderPreset(HMENU target, const ShdExamplePresets::FromFile &preset);
 
         HMENU add(HMENU target, std::string_view child,
-                  const std::function<void(SettingsMenu &, RenderScene &)> &callback, bool
-                  hasChild, bool hasCheckbox, const std::optional<std::function<bool *(RenderScene &, bool)>> &checkboxAction);
+                  const std::function<void(SettingsMenu &, RenderScene &)> &callback,
+                  bool hasChild, bool hasCheckbox,
+                  const std::optional<std::function<bool *(RenderScene &, bool)>> &checkboxAction);
 
         void executeAction(RenderScene &scene, int menuID);
 
+        void dispatchCommand(RenderScene &scene, UINT menuID);
+        MenuModel menuModel(RenderScene &scene) const;
+
         // The window the bar belongs to. Needed to have the bar redrawn when the theme flips.
         void attachMasterWindow(HWND window);
+
+        void applyDpi(UINT dpi, bool force = false);
 
         // Switches the bar and every popup between the system's own drawing and the dark one below.
         void applyMenuTheme();
@@ -144,8 +180,8 @@ namespace merutilm::rff2 {
 
     template<typename P> requires std::is_base_of_v<Preset, P>
     HMENU SettingsMenu::addPresetExecutor(HMENU target, const P preset) {
-        return add(target, preset.getName(), [p1 = std::move(preset)](SettingsMenu &, RenderScene &scene) {
-            scene.changePreset(p1);
+        return add(target, preset.getName(), [capturedPreset = std::move(preset)](SettingsMenu &, RenderScene &scene) {
+            scene.changePreset(capturedPreset);
         }, false, false, std::nullopt);
     }
 }

@@ -1,5 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-15
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -35,8 +36,10 @@ namespace merutilm::rff2 {
     // Texture layer whose image the warp reads, or -1 when it needs none. The layer's image has to
     // be on the GPU for the warp to read it, even when that layer is painting nothing itself.
     constexpr int warpSourceLayer(const ShdWarpAttribute &warp) {
-        return warp.enabled && warp.source != ShdWarpSource::NOISE
-                   ? static_cast<int>(warp.source) - 1
-                   : -1;
+        if (!warp.enabled || warp.source == ShdWarpSource::NOISE) {
+            return -1;
+        }
+
+        return static_cast<int>(warp.source) - 1;
     }
 }

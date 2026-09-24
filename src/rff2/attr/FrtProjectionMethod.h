@@ -1,5 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-31.
+// Modified by GPT-6 on 2026-09-08
 //
 
 #pragma once
@@ -20,12 +21,8 @@ namespace merutilm::rff2 {
     // The 360 projections are a debug-build feature, so a release build reads every projection as Planar
     // however it was set - including one carried in by a settings file a debug build wrote, which a release
     // build has no menu entry to turn off again.
+    // The historical restriction above is lifted; saved projections now render in release builds too.
     constexpr FrtProjectionMethod effectiveProjection(const FrtProjectionMethod method) {
-#ifdef NDEBUG
-        (void) method;
-        return FrtProjectionMethod::PLANAR;
-#else
         return method;
-#endif
     }
 }

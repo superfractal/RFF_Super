@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-28.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,11 +10,11 @@
 namespace merutilm::vkh {
     class ScopedCommandBufferExecutor final : public WindowContextHandler {
         const uint32_t frameIndex;
-        const VkFence fence;
         const VkSemaphore imageAvailable;
         const VkSemaphore renderFinished;
+        bool finished = false;
     public:
-        explicit ScopedCommandBufferExecutor(WindowContextRef wc, uint32_t frameIndex, VkFence fence, VkSemaphore imageAvailable, VkSemaphore renderFinished);
+        explicit ScopedCommandBufferExecutor(WindowContextRef wc, uint32_t frameIndex, VkSemaphore imageAvailable, VkSemaphore renderFinished);
 
         ~ScopedCommandBufferExecutor() override;
 
@@ -28,5 +29,7 @@ namespace merutilm::vkh {
         void init() override;
 
         void destroy() override;
+
+        void finish();
     };
 }

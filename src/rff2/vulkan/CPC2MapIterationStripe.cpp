@@ -1,13 +1,22 @@
 //
 // Created by Merutilm on 2025-09-06.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21.
+// Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-31
-// Modified by ox-alpha on 2026-08-22.
+// Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23
 //
 
 #include "CPC2MapIterationStripe.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 #include "PaletteBandLine.hpp"
 #include "SharedDescriptorTemplate.hpp"
@@ -54,12 +63,12 @@ namespace merutilm::rff2 {
 
     void CPC2MapIterationStripe::renderContextRefreshed() {
         using namespace SharedImageContextIndices;
-        auto &outDesc = getDescriptor(SET_OUTPUT_IMAGE);
-        auto &[outImg] = outDesc.get<vkh::StorageImage>(0, BINDING_OUTPUT_MERGED_IMAGE);
-        outImg = wc.getSharedImageContext().getImageContextMF(MF_VIDEO_RENDER_IMAGE_PRIMARY);
+        auto &outputImageDescriptor = getDescriptor(SET_OUTPUT_IMAGE);
+        auto &[outputImages] = outputImageDescriptor.get<vkh::StorageImage>(0, BINDING_OUTPUT_MERGED_IMAGE);
+        outputImages = wc.getSharedImageContext().getImageContextMF(MF_VIDEO_RENDER_IMAGE_PRIMARY);
         writeDescriptorMF(
-            [&outDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-                outDesc.queue(queue, frameIndex, {}, {BINDING_OUTPUT_MERGED_IMAGE});
+            [&outputImageDescriptor](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                outputImageDescriptor.queue(queue, frameIndex, {}, {BINDING_OUTPUT_MERGED_IMAGE});
             });
     }
 
@@ -86,12 +95,9 @@ namespace merutilm::rff2 {
             paletteSSBO.unlock(wc.getCommandPool());
         }
 
-        std::vector<glm::vec4> baseColors;
+        std::vector<glm::vec4> baseColors = palette.colors;
         if (palette.seamless) {
-            baseColors = palette.colors;
             baseColors.insert(baseColors.end(), palette.colors.rbegin(), palette.colors.rend());
-        } else {
-            baseColors = palette.colors;
         }
 
         std::vector<glm::vec4> finalColors;
@@ -110,9 +116,9 @@ namespace merutilm::rff2 {
             finalColors = baseColors;
         }
 
-        finalColors = applyBandLines(std::move(finalColors), palette);
-
-        const auto finalSize = static_cast<uint32_t>(finalColors.size());
+        auto bandPalette = prepareBandLinePalette(std::move(finalColors), palette);
+        const auto finalSize = bandPalette.cycleSize;
+        finalColors = std::move(bandPalette.colors);
 
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_SIZE, finalSize);
 
@@ -130,13 +136,15 @@ namespace merutilm::rff2 {
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ANIMATION_FLOW_SWIRL, palette.animationFlowSwirl);
 
         uint32_t staticCount = static_cast<uint32_t>(palette.staticColorIterations.size());
-        if (staticCount > DescPalette::MAX_STATIC_COLORS) staticCount = DescPalette::MAX_STATIC_COLORS;
+        if (staticCount > DescPalette::MAX_STATIC_COLORS) {
+            staticCount = DescPalette::MAX_STATIC_COLORS;
+        }
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_STATIC_COLOR_COUNT, staticCount);
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_STATIC_COLOR_TOLERANCE, palette.staticColorTolerance);
         paletteSSBOHost.reset(DescPalette::TARGET_PALETTE_STATIC_COLOR_ITERATIONS);
         for (uint32_t i = 0; i < staticCount; ++i) {
-            double v = palette.staticColorIterations[i];
-            paletteSSBOHost.set<double>(DescPalette::TARGET_PALETTE_STATIC_COLOR_ITERATIONS, i, v);
+            const double iteration = palette.staticColorIterations[i];
+            paletteSSBOHost.set<double>(DescPalette::TARGET_PALETTE_STATIC_COLOR_ITERATIONS, i, iteration);
         }
 
         paletteSSBOHost.set<glm::vec4>(DescPalette::TARGET_PALETTE_MANDELBROT_COLOR, palette.mandelbrotColor);
@@ -211,7 +219,6 @@ namespace merutilm::rff2 {
     void CPC2MapIterationStripe::setTextures(const std::array<ShdTextureAttribute, TEXTURE_LAYER_COUNT> &textures,
                                               const int warpSourceLayer, const uint32_t residentMask) {
         auto &textureDesc = getDescriptor(SET_TEXTURE);
-        std::vector<uint32_t> changedBindings;
         for (uint32_t layer = 0; layer < TEXTURE_LAYER_COUNT; ++layer) {
             const auto &texture = textures[layer];
             const bool wanted = texture.enabled || static_cast<int>(layer) == warpSourceLayer ||
@@ -219,21 +226,28 @@ namespace merutilm::rff2 {
             if (TextureDescriptor::uploadImage(wc.core, wc.getCommandPool(), textureDesc, layer,
                                                wanted ? texture.path : std::string{},
                                                loadedTexturePaths[layer])) {
-                changedBindings.push_back(TextureDescriptor::samplerBinding(layer));
+                pendingTextureBindings |= 1u << layer;
             }
             phases.setTextureSpeed(layer, texture);
             TextureDescriptor::updateParams(textureDesc, layer, texture, !loadedTexturePaths[layer].empty());
         }
         specModes.setTextures(textures);
         respecialize();
-        if (changedBindings.empty()) {
+        if (pendingTextureBindings == 0) {
             return;
+        }
+        std::vector<uint32_t> changedBindings;
+        for (uint32_t layer = 0; layer < TEXTURE_LAYER_COUNT; ++layer) {
+            if ((pendingTextureBindings & (1u << layer)) != 0) {
+                changedBindings.push_back(TextureDescriptor::samplerBinding(layer));
+            }
         }
         writeDescriptorMF(
             [&textureDesc, changedBindings = std::move(changedBindings)](vkh::DescriptorUpdateQueue &queue,
                                                                         const uint32_t frameIndex) {
                 textureDesc.queue(queue, frameIndex, {}, std::vector(changedBindings));
             });
+        pendingTextureBindings = 0;
     }
 
     void CPC2MapIterationStripe::setTextureParams(
@@ -257,6 +271,11 @@ namespace merutilm::rff2 {
         }
         specModes.setPattern(patterns);
         respecialize();
+    }
+
+    void CPC2MapIterationStripe::setEffects(const ShdEffectsAttribute &effects) {
+        
+        phases.setEffectsSpeed(effects);
     }
 
     void CPC2MapIterationStripe::setWarp(const ShdWarpAttribute &warp) {
@@ -290,6 +309,18 @@ namespace merutilm::rff2 {
         updateBufferMF([&vidUBO](const uint32_t frameIndex) {
             vidUBO.updateMF(frameIndex);
         });
+    }
+
+    void CPC2MapIterationStripe::setCamera(const VidCameraAttribute &camera, const uint32_t sourceScale) const {
+        using namespace SharedDescriptorTemplate;
+        const auto &ubo = *getDescriptor(SET_VIDEO).get<vkh::Uniform>(0, DescVideo::BINDING_UBO_VIDEO);
+        auto &host = ubo.getHostObject();
+        if (sourceScale == 1 && (camera.rotation != 0.0f || camera.projection != FrtProjectionMethod::PLANAR)) {
+            throw std::runtime_error("Camera tracks require keyframes generated with Rotation / 360 padding enabled.");
+        }
+        host.set<glm::vec4>(DescVideo::TARGET_VIDEO_CAMERA, {camera.rotation, static_cast<float>(camera.projection), camera.pitch, camera.fov});
+        host.set<glm::vec4>(DescVideo::TARGET_VIDEO_COVERAGE, {static_cast<float>(sourceScale), camera.range, static_cast<float>(camera.layout), 0.0f});
+        updateBufferMF([&ubo](const uint32_t frameIndex) { ubo.updateMF(frameIndex); });
     }
 
     void CPC2MapIterationStripe::setDither(const bool use) {
@@ -328,38 +359,45 @@ namespace merutilm::rff2 {
         using namespace SharedDescriptorTemplate;
         const auto &[width, height] = extent;
         setExtent(extent);
-        auto &iter = getDescriptor(SET_I2MAP);
-        auto &iterNormalSSBO = *iter.get<vkh::ShaderStorage>(0, BINDING_I2MAP_SSBO_NORMAL);
-        iterNormalSSBO.getHostObject().resizeAndClear<double>(TARGET_I2MAP_SSBO_NORMAL_ITERATION, width * height);
-        iterNormalSSBO.reloadBuffer();
+        auto &inputIterationsDescriptor = getDescriptor(SET_I2MAP);
+        auto &normalIterations = *inputIterationsDescriptor.get<vkh::ShaderStorage>(0, BINDING_I2MAP_SSBO_NORMAL);
+        normalIterations.getHostObject().resizeAndClear<double>(TARGET_I2MAP_SSBO_NORMAL_ITERATION, width * height);
+        normalIterations.reloadBuffer();
 
-        auto &iterZoomedSSBO = *iter.get<vkh::ShaderStorage>(0, BINDING_I2MAP_SSBO_ZOOMED);
-        iterZoomedSSBO.getHostObject().resizeAndClear<double>(TARGET_I2MAP_SSBO_ZOOMED_ITERATION, width * height);
-        iterZoomedSSBO.reloadBuffer();
+        auto &zoomedIterations = *inputIterationsDescriptor.get<vkh::ShaderStorage>(0, BINDING_I2MAP_SSBO_ZOOMED);
+        zoomedIterations.getHostObject().resizeAndClear<double>(TARGET_I2MAP_SSBO_ZOOMED_ITERATION, width * height);
+        zoomedIterations.reloadBuffer();
 
-        auto &iterOut = getDescriptor(SET_OUTPUT_ITERATION);
-        auto &iterOutSSBO = *iterOut.get<vkh::ShaderStorage>(0, DescIteration::BINDING_SSBO_ITERATION_MATRIX);
-        if (iterOutSSBO.isLocked()) {
-            iterOutSSBO.unlock(wc.getCommandPool());
-        }
-        iterOutSSBO.getHostObject().resizeAndClear<double>(DescIteration::TARGET_SSBO_ITERATION_BUFFER, width * height);
-        iterOutSSBO.reloadBuffer();
-        iterOutSSBO.lock(wc.getCommandPool());
+        auto &outputIterationsDescriptor = getDescriptor(SET_OUTPUT_ITERATION);
+        auto &outputIterations = *outputIterationsDescriptor.get<vkh::ShaderStorage>(
+            0, DescIteration::BINDING_SSBO_ITERATION_MATRIX);
+        // The GPU iteration output is replaced by reloadBuffer, which clears its lock state.
+        outputIterations.getHostObject().resizeAndClear<double>(
+            DescIteration::TARGET_SSBO_ITERATION_BUFFER, width * height);
+        outputIterations.reloadBuffer();
+        // lock() copies the staging mapping, so the cleared host values must be in it first.
+        outputIterations.upload();
+        outputIterations.lock(wc.getCommandPool());
 
-        const auto &iterOutUBO = *iterOut.get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO);
-        iterOutUBO.getHostObject().set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_EXTENT, {width, height});
+        const auto &outputIterationInfo = *outputIterationsDescriptor.get<vkh::Uniform>(
+            0, DescIteration::BINDING_UBO_ITERATION_INFO);
+        outputIterationInfo.getHostObject().set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_EXTENT, {width, height});
         // The video window always renders the whole canvas at once, unlike the tiled still export.
-        iterOutUBO.getHostObject().set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_CANVAS_EXTENT,
-                                                   {width, height});
-        iterOutUBO.getHostObject().set<glm::ivec2>(DescIteration::TARGET_UBO_ITERATION_CANVAS_OFFSET, {0, 0});
-        iterOutUBO.update(DescIteration::TARGET_UBO_ITERATION_EXTENT);
-        iterOutUBO.update(DescIteration::TARGET_UBO_ITERATION_CANVAS_EXTENT);
-        iterOutUBO.update(DescIteration::TARGET_UBO_ITERATION_CANVAS_OFFSET);
+        outputIterationInfo.getHostObject().set<glm::uvec2>(
+            DescIteration::TARGET_UBO_ITERATION_CANVAS_EXTENT, {width, height});
+        outputIterationInfo.getHostObject().set<glm::ivec2>(DescIteration::TARGET_UBO_ITERATION_CANVAS_OFFSET, {0, 0});
+        outputIterationInfo.update(DescIteration::TARGET_UBO_ITERATION_EXTENT);
+        outputIterationInfo.update(DescIteration::TARGET_UBO_ITERATION_CANVAS_EXTENT);
+        outputIterationInfo.update(DescIteration::TARGET_UBO_ITERATION_CANVAS_OFFSET);
 
 
-        writeDescriptorMF([&iter, &iterOut](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-            iter.queue(queue, frameIndex, {}, {BINDING_I2MAP_SSBO_NORMAL, BINDING_I2MAP_SSBO_ZOOMED});
-            iterOut.queue(queue, frameIndex, {}, {DescIteration::BINDING_UBO_ITERATION_INFO, DescIteration::BINDING_SSBO_ITERATION_MATRIX});
+        writeDescriptorMF([&inputIterationsDescriptor, &outputIterationsDescriptor](vkh::DescriptorUpdateQueue &queue,
+                                                                                     const uint32_t frameIndex) {
+            inputIterationsDescriptor.queue(queue, frameIndex, {},
+                                            {BINDING_I2MAP_SSBO_NORMAL, BINDING_I2MAP_SSBO_ZOOMED});
+            outputIterationsDescriptor.queue(queue, frameIndex, {},
+                                             {DescIteration::BINDING_UBO_ITERATION_INFO,
+                                              DescIteration::BINDING_SSBO_ITERATION_MATRIX});
         });
     }
 
@@ -391,30 +429,35 @@ namespace merutilm::rff2 {
     void CPC2MapIterationStripe::setTime(const float currentSec, const uint32_t frameIndex) {
         using namespace SharedDescriptorTemplate;
         advanceAnimationTo(currentSec);
+        // Effects have fixed video rates, so every frame and seek evaluates the same absolute phase.
+        phases.setEffectsVideoPhase(currentSec);
         auto &time = getDescriptor(SET_TIME);
         const auto &timeUBO = *time.get<vkh::Uniform>(0, DescTime::BINDING_UBO_TIME);
         phases.writeTimeUniform(timeUBO, frameIndex, currentSec);
     }
 
     void CPC2MapIterationStripe::configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) {
+        ShaderLayerControl::configure(layerPush, pipelineLayoutManager, VK_SHADER_STAGE_COMPUTE_BIT);
         //noop
     }
 
     void CPC2MapIterationStripe::configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) {
         using namespace SharedDescriptorTemplate;
-        auto normal = vkh::factory::create<vkh::HostDataObjectManager>();
-        normal->reserveArray<double>(TARGET_I2MAP_SSBO_NORMAL_ITERATION, 1);
-        auto normalSSBO = vkh::factory::create<vkh::ShaderStorage>(wc.core, std::move(normal),
-                                                                   vkh::BufferLock::ALWAYS_MUTABLE, false);
-        auto zoomed = vkh::factory::create<vkh::HostDataObjectManager>();
-        zoomed->reserveArray<double>(TARGET_I2MAP_SSBO_ZOOMED_ITERATION, 1);
-        auto zoomedSSBO = vkh::factory::create<vkh::ShaderStorage>(wc.core, std::move(zoomed),
-                                                                   vkh::BufferLock::ALWAYS_MUTABLE, false);
+        auto normalIterationsLayout = vkh::factory::create<vkh::HostDataObjectManager>();
+        normalIterationsLayout->reserveArray<double>(TARGET_I2MAP_SSBO_NORMAL_ITERATION, 1);
+        auto normalIterations = vkh::factory::create<vkh::ShaderStorage>(
+            wc.core, std::move(normalIterationsLayout), vkh::BufferLock::ALWAYS_MUTABLE, false);
+        auto zoomedIterationsLayout = vkh::factory::create<vkh::HostDataObjectManager>();
+        zoomedIterationsLayout->reserveArray<double>(TARGET_I2MAP_SSBO_ZOOMED_ITERATION, 1);
+        auto zoomedIterations = vkh::factory::create<vkh::ShaderStorage>(
+            wc.core, std::move(zoomedIterationsLayout), vkh::BufferLock::ALWAYS_MUTABLE, false);
 
-        auto i2mapManager = vkh::factory::create<vkh::DescriptorManager>();
-        i2mapManager->appendSSBO(BINDING_I2MAP_SSBO_NORMAL, VK_SHADER_STAGE_COMPUTE_BIT, std::move(normalSSBO));
-        i2mapManager->appendSSBO(BINDING_I2MAP_SSBO_ZOOMED, VK_SHADER_STAGE_COMPUTE_BIT, std::move(zoomedSSBO));
-        appendUniqueDescriptor(SET_I2MAP, descriptors, std::move(i2mapManager));
+        auto inputIterationsManager = vkh::factory::create<vkh::DescriptorManager>();
+        inputIterationsManager->appendSSBO(BINDING_I2MAP_SSBO_NORMAL, VK_SHADER_STAGE_COMPUTE_BIT,
+                                           std::move(normalIterations));
+        inputIterationsManager->appendSSBO(BINDING_I2MAP_SSBO_ZOOMED, VK_SHADER_STAGE_COMPUTE_BIT,
+                                           std::move(zoomedIterations));
+        appendUniqueDescriptor(SET_I2MAP, descriptors, std::move(inputIterationsManager));
         appendDescriptor<DescVideo>(SET_VIDEO, descriptors);
         appendDescriptor<DescPalette>(SET_PALETTE, descriptors);
         appendDescriptor<DescTime>(SET_TIME, descriptors);
@@ -448,6 +491,6 @@ namespace merutilm::rff2 {
                 .unnormalizedCoordinates = VK_FALSE,
             });
         appendUniqueDescriptor(SET_TEXTURE, descriptors,
-                               TextureDescriptor::createManager(wc.core, sampler, VK_SHADER_STAGE_COMPUTE_BIT));
+                               TextureDescriptor::createManager(wc.core, sampler, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT));
     }
 }

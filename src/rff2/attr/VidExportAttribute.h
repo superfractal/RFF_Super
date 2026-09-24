@@ -1,11 +1,14 @@
 //
 // Created by Merutilm on 2025-05-04.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-19
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-18, 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
+
 #include "VidHdrTransfer.h"
 
 namespace merutilm::rff2 {
@@ -19,6 +22,7 @@ namespace merutilm::rff2 {
         // colorAA times at evenly spread instants inside the frame's 1/fps slice and
         // averaged, removing Psychedelic / Color-Animation-Speed judder. 1 = off.
         uint32_t colorAA;
+
         // When true, video is built automatically right after keyframe generation finishes.
         // Default is false so keyframes are kept and the video is exported manually.
         bool autoCreateVideo;
@@ -32,10 +36,12 @@ namespace merutilm::rff2 {
         // Write generated keyframes as .rfmz rather than .rfm. The two hold the same table - the
         // packing is lossless - so this only decides how much room the folder takes.
         bool compressKeyframes;
+
         // Which curve the exported pixels carry. SDR keeps the 8-bit tone-mapped picture; PQ and HLG
         // send 10-bit BT.2020 and need HDR to be on, since only then does the chain hold light above white.
         VidHdrTransfer hdrTransfer = VidHdrTransfer::SDR;
         // The display brightness the HDR headroom lands on, in nits.
         float hdrPeakNits = 1000.0f;
+        bool showExportPreview = true;
     };
 }

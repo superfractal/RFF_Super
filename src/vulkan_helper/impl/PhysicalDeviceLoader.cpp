@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "PhysicalDeviceLoader.hpp"
@@ -10,6 +11,23 @@
 #include "../util/PhysicalDeviceUtils.hpp"
 
 namespace merutilm::vkh {
+    namespace {
+        struct DummySurfaceResources {
+            VkInstance instance;
+            HWND window;
+            VkSurfaceKHR surface = VK_NULL_HANDLE;
+
+            ~DummySurfaceResources() {
+                if (surface != VK_NULL_HANDLE) {
+                    allocator::invoke(vkDestroySurfaceKHR, instance, surface, nullptr);
+                }
+                if (window != nullptr) {
+                    DestroyWindow(window);
+                }
+                UnregisterClassW(config::DUMMY_WINDOW_CLASS, nullptr);
+            }
+        };
+    }
 
     PhysicalDeviceLoaderImpl::PhysicalDeviceLoaderImpl(InstanceRef instance) : instance(instance) {
         PhysicalDeviceLoaderImpl::init();
@@ -59,7 +77,10 @@ namespace merutilm::vkh {
             .hwnd = dummyWindow,
         };
 
-        allocator::invoke(vkCreateWin32SurfaceKHR, instance.getInstanceHandle(), &surfaceCreateInfo, nullptr, &surface);
+        if (allocator::invoke(vkCreateWin32SurfaceKHR, instance.getInstanceHandle(), &surfaceCreateInfo,
+                              nullptr, &surface) != VK_SUCCESS) {
+            throw exception_init("Failed to create the temporary device-selection surface!");
+        }
 
         return surface;
     }
@@ -76,28 +97,29 @@ namespace merutilm::vkh {
                                        physicalDevices.data()) != VK_SUCCESS) {
             throw exception_init("Failed to enumerate the physical devices!");
         }
-        const HWND dummyWindow = createDummyWindow();
-        const VkSurfaceKHR surface = createDummySurface(dummyWindow);
-
-        for (const auto pd: physicalDevices) {
-            if (PhysicalDeviceUtils::isDeviceSuitable(pd, surface)) {
-                physicalDevice = pd;
-                vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
-                vkGetPhysicalDeviceMemoryProperties(physicalDevice, &physicalDeviceMemoryProperties);
-                vkGetPhysicalDeviceFeatures(physicalDevice, &physicalDeviceFeatures);
-                queueFamilyIndices = PhysicalDeviceUtils::findQueueFamilies(pd, surface);
-                const VkSurfaceCapabilitiesKHR capabilities = populateSurfaceCapabilities(surface);
-                maxFramesInFlight = capabilities.minImageCount + 1;
-                if (capabilities.maxImageCount > 0 && maxFramesInFlight > capabilities.maxImageCount) {
-                    maxFramesInFlight = capabilities.maxImageCount;
-                }
-                break;
-            }
+        DummySurfaceResources temporarySurface{instance.getInstanceHandle(), createDummyWindow()};
+        if (temporarySurface.window == nullptr) {
+            throw exception_init("Failed to create the temporary device-selection window!");
         }
+        temporarySurface.surface = createDummySurface(temporarySurface.window);
 
-        allocator::invoke(vkDestroySurfaceKHR, instance.getInstanceHandle(), surface, nullptr);
-        DestroyWindow(dummyWindow);
-        UnregisterClassW(config::DUMMY_WINDOW_CLASS, nullptr);
+        for (const auto candidateDevice : physicalDevices) {
+            if (!PhysicalDeviceUtils::isDeviceSuitable(candidateDevice, temporarySurface.surface)) {
+                continue;
+            }
+
+            physicalDevice = candidateDevice;
+            vkGetPhysicalDeviceProperties(physicalDevice, &physicalDeviceProperties);
+            vkGetPhysicalDeviceMemoryProperties(physicalDevice, &physicalDeviceMemoryProperties);
+            vkGetPhysicalDeviceFeatures(physicalDevice, &physicalDeviceFeatures);
+            queueFamilyIndices = PhysicalDeviceUtils::findQueueFamilies(candidateDevice, temporarySurface.surface);
+            const VkSurfaceCapabilitiesKHR capabilities = populateSurfaceCapabilities(temporarySurface.surface);
+            maxFramesInFlight = capabilities.minImageCount + 1;
+            if (capabilities.maxImageCount > 0 && maxFramesInFlight > capabilities.maxImageCount) {
+                maxFramesInFlight = capabilities.maxImageCount;
+            }
+            break;
+        }
 
         if (physicalDevice == nullptr) {
             throw exception_init("No suitable physical device found");

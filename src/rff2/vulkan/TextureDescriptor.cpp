@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-05
 // Modified by Opus 5 on 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-27
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #include "TextureDescriptor.hpp"
@@ -8,6 +9,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <vector>
 
 #include "../../vulkan_helper/core/logger.hpp"
@@ -158,7 +160,12 @@ namespace merutilm::rff2::TextureDescriptor {
         };
         const auto ctx = vkh::BufferImageContextUtils::imageFromByteColorArray(
             core, commandPool, TEXTURE_FORMAT, 1, 1, 4, 8, false, white.data());
-        desc.get<vkh::CombinedImageSampler>(0, samplerBinding(layer))->setUniqueImageContext(ctx);
+        try {
+            desc.get<vkh::CombinedImageSampler>(0, samplerBinding(layer))->setUniqueImageContext(ctx);
+        } catch (...) {
+            vkh::ImageContext::destroyContext(core, ctx);
+            throw;
+        }
     }
 
     bool uploadImage(const vkh::CoreRef core, const vkh::CommandPoolRef commandPool, const vkh::DescriptorRef desc,
@@ -173,6 +180,7 @@ namespace merutilm::rff2::TextureDescriptor {
             return true;
         }
 
+        std::string nextCachedPath(path);
         const std::vector<std::byte> bytes = readFileBytes(path);
         int width = 0;
         int height = 0;
@@ -192,12 +200,33 @@ namespace merutilm::rff2::TextureDescriptor {
             return true;
         }
 
+        std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> decodedPixels(pixels, &stbi_image_free);
+        const auto maxDimension = core.getPhysicalDevice().getPhysicalDeviceProperties().limits.maxImageDimension2D;
+        VkImageFormatProperties imageProperties{};
+        const VkResult imageSupport = vkGetPhysicalDeviceImageFormatProperties(
+            core.getPhysicalDevice().getPhysicalDeviceHandle(), TEXTURE_FORMAT, VK_IMAGE_TYPE_2D,
+            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            0, &imageProperties);
+        if (static_cast<uint32_t>(width) > maxDimension || static_cast<uint32_t>(height) > maxDimension ||
+            imageSupport != VK_SUCCESS ||
+            static_cast<uint32_t>(width) > imageProperties.maxExtent.width ||
+            static_cast<uint32_t>(height) > imageProperties.maxExtent.height) {
+            vkh::logger::w_log(L"ERROR : Texture image exceeds this GPU's size limit");
+            uploadPlaceholder(core, commandPool, desc, layer);
+            cachedPath.clear();
+            return true;
+        }
         const auto ctx = vkh::BufferImageContextUtils::imageFromByteColorArray(
             core, commandPool, TEXTURE_FORMAT, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 4, 8,
             false, reinterpret_cast<std::byte *>(pixels));
-        stbi_image_free(pixels);
-        desc.get<vkh::CombinedImageSampler>(0, samplerBinding(layer))->setUniqueImageContext(ctx);
-        cachedPath = path;
+        decodedPixels.reset();
+        try {
+            desc.get<vkh::CombinedImageSampler>(0, samplerBinding(layer))->setUniqueImageContext(ctx);
+        } catch (...) {
+            vkh::ImageContext::destroyContext(core, ctx);
+            throw;
+        }
+        cachedPath.swap(nextCachedPath);
         return true;
     }
 

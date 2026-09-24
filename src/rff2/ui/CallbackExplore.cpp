@@ -1,11 +1,14 @@
 //
 // Created by Merutilm on 2025-05-16.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
 // Modified by Opus 5 on 2026-08-14, 2026-08-26
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-22, 2026-09-25
 //
 
+#include "NativeDialogs.hpp"
 #include "CallbackExplore.hpp"
+#include "Callback.hpp"
 
 #include <format>
 
@@ -17,78 +20,80 @@
 #include "../locator/MandelbrotLocator.h"
 
 namespace merutilm::rff2 {
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RECOMPUTE = [
-            ](const SettingsMenu &, RenderScene &scene) {
-        // Asking for the view outright is also how a recovery that is waiting for approval is
-        // answered, so it releases the hold: the panel carrying it may be closed by then.
-        scene.setComputeHold(false);
-        scene.getRequests().requestRecompute();
-    };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RESET = [
-            ](const SettingsMenu &, RenderScene &scene) {
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RECOMPUTE =
+        [](const SettingsMenu &, RenderScene &scene) {
+            // Asking for the view outright is also how a recovery that is waiting for approval is
+            // answered, so it releases the hold: the panel carrying it may be closed by then.
+            scene.setComputeHold(false);
+            scene.getRequests().requestRecompute();
+        };
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::RESET = [](const SettingsMenu &,
+                                                                                         RenderScene &scene) {
         scene.getRequests().requestDefaultSettings();
         scene.getRequests().requestShader();
         scene.getRequests().requestResize();
         scene.getRequests().requestRecompute();
     };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::CANCEL_RENDER = [
-            ](const SettingsMenu &, RenderScene &scene) {
-        scene.getState().cancel();
-    };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::FIND_CENTER = [
-            ](const SettingsMenu &, RenderScene &scene) {
-        if (scene.getAttribute().fractal.formulaType != FractalFormulaType::MANDELBROT) {
-            MessageBox(nullptr, "Find Center is only available for the Mandelbrot formula.", "Caution", MB_OK | MB_ICONWARNING);
-            return;
-        }
-        // The reference this reads belongs to the calculation, which builds a new one and destroys
-        // this one as it goes. Stopped first, as Locate Minibrot does, so what is walked below is
-        // still there to walk; a calculation running alongside would pull it away mid-search.
-        scene.getState().cancel();
-        const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
-        if (perturbator == nullptr || perturbator->getReference() == Constants::NullPointer::PROCESS_TERMINATED_REFERENCE) {
-            return;
-        }
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::CANCEL_RENDER =
+        [](const SettingsMenu &, RenderScene &scene) {
+            scene.getState().cancel();
+        };
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::FIND_CENTER =
+        [](const SettingsMenu &, RenderScene &scene) {
+            if (scene.getAttribute().fractal.formulaType != FractalFormulaType::MANDELBROT) {
+                NativeDialogs::message(nullptr, "Find Center is only available for the Mandelbrot formula.",
+                                       "Caution", MB_OK | MB_ICONWARNING);
+                return;
+            }
+            // The reference this reads belongs to the calculation, which builds a new one and destroys
+            // this one as it goes. Stopped first, as Locate Minibrot does, so what is walked below is
+            // still there to walk; a calculation running alongside would pull it away mid-search.
+            scene.getState().cancel();
+            const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
+            if (perturbator == nullptr ||
+                perturbator->getReference() == Constants::NullPointer::PROCESS_TERMINATED_REFERENCE) {
+                return;
+            }
 
-        if (const std::unique_ptr<fp_complex> c = MandelbrotLocator::findCenter(perturbator); c == nullptr) {
-            MessageBox(nullptr, "No center found!", "Caution", MB_OK | MB_ICONWARNING);
-        } else {
-            scene.getAttribute().fractal.center = *c;
-            scene.getRequests().requestRecompute();
-        }
-    };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::LOCATE_MINIBROT = [
-            ](const SettingsMenu &, RenderScene &scene) {
-        Attribute &settings = scene.getAttribute();
+            if (const std::unique_ptr<fp_complex> c = MandelbrotLocator::findCenter(perturbator);
+                c == nullptr) {
+                NativeDialogs::message(nullptr, "No center found!", "Caution", MB_OK | MB_ICONWARNING);
+            } else {
+                scene.getAttribute().fractal.center = *c;
+                scene.getRequests().requestRecompute();
+            }
+        };
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackExplore::LOCATE_MINIBROT =
+        [](const SettingsMenu &, RenderScene &scene) {
+            Attribute &settings = scene.getAttribute();
 
-        if (settings.fractal.formulaType != FractalFormulaType::MANDELBROT) {
-            MessageBox(nullptr, "Locate Minibrot is only available for the Mandelbrot formula.", "Caution", MB_OK | MB_ICONWARNING);
-            return;
-        }
+            if (settings.fractal.formulaType != FractalFormulaType::MANDELBROT) {
+                NativeDialogs::message(nullptr,
+                                       "Locate Minibrot is only available for the Mandelbrot formula.",
+                                       "Caution", MB_OK | MB_ICONWARNING);
+                return;
+            }
 
-        if (settings.fractal.reuseReferenceMethod != FrtReuseReferenceMethod::DISABLED) {
-            MessageBox(nullptr, "Do not reuse reference!", "Caution", MB_OK | MB_ICONWARNING);
-            return;
-        }
+            if (settings.fractal.reuseReferenceMethod != FrtReuseReferenceMethod::DISABLED) {
+                NativeDialogs::message(nullptr, "Do not reuse reference!", "Caution", MB_OK | MB_ICONWARNING);
+                return;
+            }
 
-        scene.getState().cancel();
-        const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
-        if(perturbator == nullptr) {
-            throw vkh::exception_invalid_state("Perturbator cannot be null");
-        }
+            scene.getState().cancel();
+            const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
+            if (perturbator == nullptr) {
+                throw vkh::exception_invalid_state("Perturbator cannot be null");
+            }
 
-        scene.getState().createThread(
-            [&scene, logZoom = settings.fractal.logZoom, perturbator, &settings](
-        const std::stop_token&) {
+            scene.getState().createThread([&scene, logZoom = settings.fractal.logZoom, perturbator,
+                                           &settings](const std::stop_token &) {
                 ApproxTableCache &approxTableCache = scene.getApproxTableCache();
                 const uint64_t longestPeriod = perturbator->getReference()->longestPeriod();
 
                 const std::unique_ptr<MandelbrotLocator> locator = MandelbrotLocator::locateMinibrot(
                     scene.getState(), perturbator, approxTableCache,
                     getActionWhileFindingMinibrotCenter(scene, logZoom, longestPeriod),
-                    getActionWhileCreatingTable(scene, logZoom),
-                    getActionWhileFindingZoom(scene)
-                );
+                    getActionWhileCreatingTable(scene, logZoom), getActionWhileFindingZoom(scene));
 
                 if (locator == nullptr) {
                     if (scene.getState().interruptRequested()) {
@@ -96,10 +101,11 @@ namespace merutilm::rff2 {
                     } else {
                         // The center never converged (status stuck at e.g. "0.000%[100]").
                         vkh::logger::w_log(L"Locate Minibrot Failed : center did not converge.");
-                        MessageBox(nullptr,
-                                   "Failed to locate the minibrot : the center did not converge.\n"
-                                   "Zoom closer to the minibrot and try again.",
-                                   "Locate Minibrot Failed", MB_OK | MB_ICONERROR);
+                        NativeDialogs::message(
+                            nullptr,
+                            "Failed to locate the minibrot : the center did not converge.\n"
+                            "Zoom closer to the minibrot and try again.",
+                            "Locate Minibrot Failed", MB_OK | MB_ICONERROR);
                     }
                     return;
                 }
@@ -107,27 +113,24 @@ namespace merutilm::rff2 {
                 settings.fractal.center = locatorCalc.center;
                 settings.fractal.logZoom = locatorCalc.logZoom - MandelbrotLocator::MINIBROT_LOG_ZOOM_OFFSET;
                 scene.getRequests().requestRecompute();
-            }
-        );
-    };
+            });
+        };
 
-
-    std::function<void(uint64_t, int)> CallbackExplore::getActionWhileFindingMinibrotCenter(
-        const RenderScene &scene, const float logZoom,
-        const uint64_t longestPeriod) {
+    std::function<void(uint64_t, int)>
+    CallbackExplore::getActionWhileFindingMinibrotCenter(const RenderScene &scene, const float logZoom,
+                                                         const uint64_t longestPeriod) {
         return [&scene, logZoom, longestPeriod](const uint64_t p, int i) {
             if (p % Utilities::getRefreshInterval(logZoom) == 0) {
-                scene.setStatusMessage(Constants::Status::RENDER_STATUS,
-                                       std::format(L"L : {:.3f}%[{}]",
-                                                   static_cast<float>(100 * p) / static_cast<float>(
-                                                       longestPeriod),
-                                                   i));
+                scene.setStatusMessage(
+                    Constants::Status::RENDER_STATUS,
+                    std::format(L"L : {:.3f}%[{}]",
+                                static_cast<float>(100 * p) / static_cast<float>(longestPeriod), i));
             }
         };
     }
 
-    std::function<void(uint64_t, float)> CallbackExplore::getActionWhileCreatingTable(
-        const RenderScene &scene, const float logZoom) {
+    std::function<void(uint64_t, float)>
+    CallbackExplore::getActionWhileCreatingTable(const RenderScene &scene, const float logZoom) {
         return [&scene, logZoom](const uint64_t p, const float i) {
             if (p % Utilities::getRefreshInterval(logZoom) == 0) {
                 scene.setStatusMessage(Constants::Status::RENDER_STATUS,
@@ -136,11 +139,9 @@ namespace merutilm::rff2 {
         };
     }
 
-
     std::function<void(float)> CallbackExplore::getActionWhileFindingZoom(const RenderScene &scene) {
         return [&scene](float zoom) {
-            scene.setStatusMessage(Constants::Status::RENDER_STATUS,
-                                   std::format(L"Z : 10^{}", zoom));
+            scene.setStatusMessage(Constants::Status::RENDER_STATUS, std::format(L"Z : 10^{}", zoom));
         };
     }
 }

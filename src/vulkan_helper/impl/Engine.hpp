@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-19.
 // Modified by Opus 5 on 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -41,10 +42,7 @@ namespace merutilm::vkh {
 
         [[nodiscard]] CoreRef getCore() const { return *core; }
 
-        [[nodiscard]] WindowContextRef getWindowContext(const uint32_t windowContextIndex) const {
-            std::scoped_lock lock(windowContextsMutex);
-            return *windowContexts.at(windowContextIndex);
-        }
+        [[nodiscard]] WindowContextRef getWindowContext(uint32_t windowContextIndex) const;
 
         [[nodiscard]] RepositoriesRef getGlobalRepositories() const {
             return *globalRepositories;

@@ -1,8 +1,17 @@
 //
 // Created by Merutilm on 2025-05-09.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <thread>
+#include <utility>
+#include <vector>
+
 #include "ParallelRenderState.h"
 #include "../constants/Constants.hpp"
 namespace merutilm::rff2 {
@@ -23,7 +32,7 @@ namespace merutilm::rff2 {
         void dispatch() const;
 
     private:
-        static std::vector<uint32_t> getRenderPriority(uint32_t rpy);
+        static std::vector<uint32_t> getRenderPriority(uint32_t rowsPerWorker);
 
 
         void renderForward(uint32_t xRes, uint32_t yRes, uint32_t y, std::vector<std::atomic<bool> > &rendered) const;
@@ -39,73 +48,72 @@ namespace merutilm::rff2 {
     // DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER  DEFINITION OF PARALLEL ARRAY DISPATCHER
 
 
-    inline ParallelDispatcher::ParallelDispatcher(ParallelRenderState &state, const uint32_t xRes, const uint32_t yRes, const uint32_t threads,
-                                                  ParallelRenderer renderer) : state(state), renderer(std::move(renderer)),
-                                                                               xRes(xRes), yRes(yRes), threads(threads) {
+    inline ParallelDispatcher::ParallelDispatcher(ParallelRenderState &state, const uint32_t xRes,
+                                                  const uint32_t yRes, const uint32_t threads,
+                                                  ParallelRenderer renderer)
+        : state(state), renderer(std::move(renderer)), xRes(xRes), yRes(yRes), threads(threads) {
     }
 
     inline void ParallelDispatcher::dispatch() const {
-        const uint32_t rpy = yRes / threads + 1;
+        const uint32_t rowsPerWorker = yRes / threads + 1;
         if (state.interruptRequested()) {
             return;
         }
 
+        const std::vector<uint32_t> rowPriority = getRenderPriority(rowsPerWorker);
+        const auto pixelCount = xRes * yRes;
+        std::vector<std::atomic<bool>> rendered(pixelCount);
+        std::vector<std::jthread> workers;
+        workers.reserve(threads);
 
-        const std::vector<uint32_t> rpyIndices = getRenderPriority(rpy);
-        auto threadPool = std::vector<std::jthread>();
-        threadPool.reserve(threads);
-        auto len = xRes * yRes;
-        auto rendered = std::vector<std::atomic<bool> >(len);
-
-        for (uint32_t sy = 0; sy < yRes; sy += rpy) {
-            threadPool.emplace_back([sy, &rpyIndices, this, &rendered, len] {
-                for (const auto vy: rpyIndices) {
-                    renderForward(xRes, yRes, sy + vy, rendered);
+        for (uint32_t startRow = 0; startRow < yRes; startRow += rowsPerWorker) {
+            workers.emplace_back([startRow, &rowPriority, this, &rendered, pixelCount] {
+                for (const auto rowOffset : rowPriority) {
+                    renderForward(xRes, yRes, startRow + rowOffset, rendered);
                 }
-                renderBackward(xRes, yRes, len, rendered);
+                renderBackward(xRes, yRes, pixelCount, rendered);
             });
         }
 
-
-        for (auto &t: threadPool) {
-            if (t.joinable()) {
-                t.join();
+        for (auto &worker : workers) {
+            if (worker.joinable()) {
+                worker.join();
             }
         }
     }
 
+    inline std::vector<uint32_t> ParallelDispatcher::getRenderPriority(const uint32_t rowsPerWorker) {
+        std::vector<uint32_t> priority(rowsPerWorker, 0);
+        uint32_t offset = rowsPerWorker >> 1;
+        uint32_t repetitionCount = 1;
+        uint32_t writeIndex = 1;
 
-    inline std::vector<uint32_t> ParallelDispatcher::getRenderPriority(const uint32_t rpy) {
-        auto result = std::vector<uint32_t>(rpy, 0);
-        uint32_t count = rpy >> 1;
-        uint32_t repetition = 1;
-        uint32_t index = 1;
-
-        while (count > 0) {
-            for (uint32_t j = 0; j < repetition; ++j) {
-                result[index] = result[j] + count;
-                ++index;
+        while (offset > 0) {
+            for (uint32_t j = 0; j < repetitionCount; ++j) {
+                priority[writeIndex] = priority[j] + offset;
+                ++writeIndex;
             }
 
-            repetition <<= 1;
-            count >>= 1;
+            repetitionCount <<= 1;
+            offset >>= 1;
         }
 
-        auto cpy = result;
-        cpy.resize(index);
-        std::ranges::sort(cpy);
+        auto sortedPriority = priority;
+        sortedPriority.resize(writeIndex);
+        std::ranges::sort(sortedPriority);
 
-        uint32_t cpyIndex = 0;
-        while (index < result.size()) {
-            if (
-                const uint32_t missing = cpyIndex + count;
-                cpy.size() <= cpyIndex || cpy[cpyIndex] != missing) {
-                result[index] = missing;
-                ++index;
-                ++count;
-                } else ++cpyIndex;
+        uint32_t sortedIndex = 0;
+        while (writeIndex < priority.size()) {
+            const uint32_t missing = sortedIndex + offset;
+            if (sortedPriority.size() <= sortedIndex || sortedPriority[sortedIndex] != missing) {
+                priority[writeIndex] = missing;
+                ++writeIndex;
+                ++offset;
+            } else {
+                ++sortedIndex;
+            }
         }
-        return result;
+        return priority;
     }
 
 
@@ -120,12 +128,11 @@ namespace merutilm::rff2 {
                 return;
             }
 
-            if (const uint32_t i = static_cast<uint32_t>(xRes) * y + x;
-                !rendered[i].exchange(true)
-                ) {
+            const uint32_t index = static_cast<uint32_t>(xRes) * y + x;
+            if (!rendered[index].exchange(true)) {
                 renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
-                         static_cast<float>(y) / yRes, i);
-                }
+                         static_cast<float>(y) / yRes, index);
+            }
         }
     }
 

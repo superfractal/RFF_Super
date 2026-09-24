@@ -1,8 +1,11 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <type_traits>
 #include <vector>
 
 #include "Repository.hpp"
@@ -11,17 +14,16 @@
 namespace merutilm::vkh {
     class RepositoriesImpl {
 
-        std::vector<Repo> repositories = {};
+        std::vector<Repo> repositories;
 
     public:
+        explicit RepositoriesImpl() = default;
 
-        explicit RepositoriesImpl() {
-        }
-
-        template<typename RepoType> requires std::is_base_of_v<RepoAbstract, RepoType>
+        template<typename RepoType>
+            requires std::is_base_of_v<RepoAbstract, RepoType>
         RepoType *getRepository() {
             for (const auto &repository : repositories) {
-                auto repo = dynamic_cast<RepoType *>(repository.get());
+                auto *repo = dynamic_cast<RepoType *>(repository.get());
                 if (repo != nullptr) {
                     return repo;
                 }
@@ -29,7 +31,8 @@ namespace merutilm::vkh {
             return nullptr;
         }
 
-        template<typename RepoType> requires std::is_base_of_v<RepoAbstract, RepoType>
+        template<typename RepoType>
+            requires std::is_base_of_v<RepoAbstract, RepoType>
         void addRepository(CoreRef core) {
             if (getRepository<RepoType>() != nullptr) {
                 throw exception_invalid_args("Repository already exists");

@@ -1,0 +1,43 @@
+{
+  "_comment": "Modified by GPT-6 on 2026-09-24",
+  "date": "2026-09-24",
+  "package_versions": {
+    "mingw-w64-x86_64-crt": "14.0.0.r37.g2bfe61fba-1",
+    "mingw-w64-x86_64-gcc-libgfortran": "16.1.0-2",
+    "mingw-w64-x86_64-gcc-libs": "16.1.0-2",
+    "mingw-w64-x86_64-glm": "1.0.3-1",
+    "mingw-w64-x86_64-gmp": "6.3.0-2",
+    "mingw-w64-x86_64-headers": "14.0.0.r37.g2bfe61fba-1",
+    "mingw-w64-x86_64-imath": "3.2.2-4",
+    "mingw-w64-x86_64-jbigkit": "2.1-5",
+    "mingw-w64-x86_64-lerc": "4.1.0-1",
+    "mingw-w64-x86_64-libdeflate": "1.25-1",
+    "mingw-w64-x86_64-libjpeg-turbo": "3.1.4.1-2",
+    "mingw-w64-x86_64-libpng": "1.6.58-1",
+    "mingw-w64-x86_64-libtiff": "4.7.1-1",
+    "mingw-w64-x86_64-libwebp": "1.6.0-1",
+    "mingw-w64-x86_64-libwinpthread": "14.0.0.r37.g2bfe61fba-1",
+    "mingw-w64-x86_64-openblas": "0.3.33-2",
+    "mingw-w64-x86_64-opencv": "4.13.0-3",
+    "mingw-w64-x86_64-openexr": "3.4.11-1",
+    "mingw-w64-x86_64-openjpeg2": "2.5.4-2",
+    "mingw-w64-x86_64-openjph": "0.27.1-1",
+    "mingw-w64-x86_64-tbb": "2022.3.0-2",
+    "mingw-w64-x86_64-xz": "5.8.3-1",
+    "mingw-w64-x86_64-zlib": "1.3.2-2",
+    "mingw-w64-x86_64-zstd": "1.5.7-2"
+  },
+  "evidence": [
+    "Runtime DLLs and static GMP match installed package mtree SHA-256 records.",
+    "Exact MSYS2 source archives and signatures verified with installed MSYS2 package keyring.",
+    "JBIG-KIT 2.1 libjbig/jbig.c grants GPL version 2 or later; choose GPLv3 for this GPLv3 application, despite abbreviated package metadata.",
+    "GMP 6.3.0 offers LGPLv3-or-later or GPLv2-or-later; supply exact source and build patches for the static library.",
+    "GCC runtime README identifies libquadmath as LGPLv2.1-or-later; do not apply the GCC runtime exception to it.",
+    "libgfortran ships COPYING.RUNTIME; GCC source headers and installed runtime notice establish the exception.",
+    "XZ COPYING identifies liblzma as 0BSD; command-line xz tools are excluded.",
+    "libjpeg-turbo requires IJG acknowledgement and retained BSD/zlib notices.",
+    "OpenCV imgcodecs/core/imgproc import closure includes the listed image codecs; videoio/FFmpeg/GStreamer modules are excluded.",
+    "Installed notices plus upstream LICENSE/COPYING/NOTICE/PATENTS files are retained in staging; sources include packaging recipes and patches.",
+    "This is a version-specific technical audit record, not an authorization to publish an untagged binary."
+  ]
+}

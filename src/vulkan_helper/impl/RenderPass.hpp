@@ -1,8 +1,13 @@
 //
 // Created by Merutilm on 2025-07-11.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <unordered_map>
+#include <vector>
+
 #include "../core/vkh_base.hpp"
 #include "../manage/RenderPassManager.hpp"
 #include "../handle/CoreHandler.hpp"
@@ -10,9 +15,9 @@
 namespace merutilm::vkh {
     class RenderPassImpl final : public CoreHandler {
         const std::vector<RenderPassAttachment> attachments;
-        const std::vector<std::vector<uint32_t> > preserveIndices;
-        const std::vector<std::unordered_map<RenderPassAttachmentType, std::vector<VkAttachmentReference> > >
-        attachmentReferences;
+        const std::vector<std::vector<uint32_t>> preserveIndices;
+        const std::vector<std::unordered_map<RenderPassAttachmentType, std::vector<VkAttachmentReference>>>
+            attachmentReferences;
         const std::vector<VkSubpassDependency> subpassDependencies;
         const uint32_t subpassCount;
         VkRenderPass renderPass = VK_NULL_HANDLE;
@@ -31,11 +36,11 @@ namespace merutilm::vkh {
         RenderPassImpl &operator=(RenderPassImpl &&) = delete;
 
 
-        [[nodiscard]] uint32_t getPreserveIndicesCount(const uint32_t subpassIndex) const {
+        [[nodiscard]] uint32_t getPreserveIndicesCount(uint32_t subpassIndex) const {
             return static_cast<uint32_t>(preserveIndices[subpassIndex].size());
-        };
+        }
 
-        [[nodiscard]] const uint32_t *getPreserveIndices(const uint32_t subpassIndex) const {
+        [[nodiscard]] const uint32_t *getPreserveIndices(uint32_t subpassIndex) const {
             return preserveIndices[subpassIndex].data();
         }
 
@@ -48,7 +53,7 @@ namespace merutilm::vkh {
 
 
         [[nodiscard]] const std::vector<VkAttachmentReference> &getAttachmentReferences(
-            const uint32_t subpassIndex, const RenderPassAttachmentType attachmentType) const {
+            uint32_t subpassIndex, RenderPassAttachmentType attachmentType) const {
             return attachmentReferences[subpassIndex].at(attachmentType);
         }
 

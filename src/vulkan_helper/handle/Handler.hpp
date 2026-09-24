@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-07.
 //
+
 #pragma once
 
 namespace merutilm::vkh {

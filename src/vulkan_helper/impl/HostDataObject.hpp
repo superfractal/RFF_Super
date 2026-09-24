@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-15.
 // Modified by Opus 5 on 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -18,16 +19,12 @@ namespace merutilm::vkh {
         std::vector<uint32_t> paddingsPerElem;
         std::vector<uint32_t> offsets;
 
-        explicit HostDataObjectImpl(HostDataObjectManager &&uploadManager) : data(std::move(
-                                                                                 uploadManager->data)),
-                                                                             elements(
-                                                                                 std::move(uploadManager->elements)),
-                                                                             sizes(std::move(uploadManager->sizes)),
-                                                                             paddingsPerElem(
-                                                                                 std::move(
-                                                                                     uploadManager->paddingsPerElem)),
-                                                                             offsets(std::move(
-                                                                                 uploadManager->offsets)) {
+        explicit HostDataObjectImpl(HostDataObjectManager &&uploadManager)
+            : data(std::move(uploadManager->data)),
+              elements(std::move(uploadManager->elements)),
+              sizes(std::move(uploadManager->sizes)),
+              paddingsPerElem(std::move(uploadManager->paddingsPerElem)),
+              offsets(std::move(uploadManager->offsets)) {
         }
 
         ~HostDataObjectImpl() = default;
@@ -43,7 +40,8 @@ namespace merutilm::vkh {
         template<typename T> requires std::is_trivially_copyable_v<T>
         const T &get(const uint32_t target) const {
             safe_array::check_size_equal(sizes[target], sizeof(T), "Buffer Object get");
-            auto view = std::span(data.begin() + offsets[target], data.begin() + offsets[target] + sizes[target]);
+            const auto view = std::span(data.begin() + offsets[target],
+                                        data.begin() + offsets[target] + sizes[target]);
             return *reinterpret_cast<const T *>(view.data());
         }
 
@@ -54,7 +52,8 @@ namespace merutilm::vkh {
             safe_array::check_size_equal(sizes[target], sizeof(T) * elements[target], "Buffer Object Vector get");
             safe_array::check_index(index, elements[target], "Buffer Object Vector get");
             const size_t offset = offsets[target] + elementStride<T>(target) * static_cast<size_t>(index);
-            auto view = std::span(data.begin() + offset, data.begin() + offset + sizeof(T));
+            const auto view = std::span(data.begin() + offset,
+                                        data.begin() + offset + sizeof(T));
             return *reinterpret_cast<const T *>(view.data());
         }
 
@@ -68,11 +67,11 @@ namespace merutilm::vkh {
 
         template<typename T> requires std::is_trivially_copyable_v<T>
         void set(const uint32_t target, const std::vector<T> &arr) {
-            const uint32_t size = sizeof(T) * static_cast<uint32_t>(arr.size());
-            safe_array::check_size_equal(sizes[target], size, "Buffer Object Vector set");
+            const uint32_t byteCount = sizeof(T) * static_cast<uint32_t>(arr.size());
+            safe_array::check_size_equal(sizes[target], byteCount, "Buffer Object Vector set");
             const size_t stride = elementStride<T>(target);
             if (stride == sizeof(T)) {
-                memcpy(&data[offsets[target]], arr.data(), size);
+                memcpy(&data[offsets[target]], arr.data(), byteCount);
                 return;
             }
             // Padded elements do not sit end to end, so they are written one stride apart rather

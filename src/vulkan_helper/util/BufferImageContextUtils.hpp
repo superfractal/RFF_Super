@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-08-04.
 // Modified by Opus 5 on 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -11,15 +12,11 @@
 #include "BufferImageUtils.hpp"
 #include "BarrierUtils.hpp"
 #include "../context/BufferContext.hpp"
+#include <memory>
+#include <string>
 
 namespace merutilm::vkh {
     struct BufferImageContextUtils {
-        static std::vector<VkImage> enumerateImages(const MultiframeImageContext &context) {
-            std::vector<VkImage> images(context.size());
-            std::ranges::transform(context, images.begin(), [](const ImageContext &image) { return image.image; });
-            return images;
-        }
-
         /**
         * Creates image from byte color array. result layout is <b>VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.</b>
         */
@@ -38,32 +35,38 @@ namespace merutilm::vkh {
                                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                          });
 
-            BufferContext::mapMemory(core, staging);
-            memcpy(staging.mappedMemory, data, size);
-            BufferContext::unmapMemory(core, staging);
+            ImageContext context{};
+            try {
+                BufferContext::mapMemory(core, staging);
+                memcpy(staging.mappedMemory, data, size);
+                BufferContext::unmapMemory(core, staging);
 
 
-            const ImageInitInfo initInfo = {
-                .imageType = VK_IMAGE_TYPE_2D,
-                .imageViewType = VK_IMAGE_VIEW_TYPE_2D,
-                .imageFormat = format,
-                .extent = {width, height, 1},
-                .useMipmap = useMipmap,
-                .arrayLayers = 1,
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .imageTiling = VK_IMAGE_TILING_OPTIMAL,
-                .usage = static_cast<VkImageUsageFlags>(VK_IMAGE_USAGE_SAMPLED_BIT |
-                         VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                         (useMipmap ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0)),
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            };
+                const ImageInitInfo initInfo = {
+                    .imageType = VK_IMAGE_TYPE_2D,
+                    .imageViewType = VK_IMAGE_VIEW_TYPE_2D,
+                    .imageFormat = format,
+                    .extent = {width, height, 1},
+                    .useMipmap = useMipmap,
+                    .arrayLayers = 1,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .imageTiling = VK_IMAGE_TILING_OPTIMAL,
+                    .usage = static_cast<VkImageUsageFlags>(VK_IMAGE_USAGE_SAMPLED_BIT |
+                             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                             (useMipmap ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0)),
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                };
 
-            const ImageContext context = ImageContext::createContext(core, initInfo);
+                context = ImageContext::createContext(core, initInfo);
+            } catch (...) {
+                BufferContext::destroyContext(core, staging);
+                throw;
+            }
 
             //COMMAND START
-            {
-                const auto sce = ScopedNewCommandBufferExecutor(core, commandPool);
+            try {
+                auto sce = ScopedNewCommandBufferExecutor(core, commandPool);
                 const VkBufferImageCopy copyRegion = {
                     .bufferOffset = 0,
                     .bufferRowLength = 0,
@@ -104,6 +107,11 @@ namespace merutilm::vkh {
                                                         0, 1, VK_PIPELINE_STAGE_TRANSFER_BIT,
                                                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
                 }
+                sce.finish();
+            } catch (...) {
+                ImageContext::destroyContext(core, context);
+                BufferContext::destroyContext(core, staging);
+                throw;
             }
             //COMMAND END
             BufferContext::destroyContext(core, staging);
@@ -116,15 +124,13 @@ namespace merutilm::vkh {
         static ImageContext imageFromPath(CoreRef core, CommandPoolRef commandPool, const VkFormat format,
                                           const bool useMipmap,
                                           const std::string_view path) {
-            stbi_uc *data = nullptr;
+            const std::string terminatedPath(path);
             int width = 0;
             int height = 0;
             int fileChannels = 0;
-            data = stbi_load(path.data(), &width, &height, &fileChannels, STBI_rgb_alpha);
+            std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> data(
+                stbi_load(terminatedPath.c_str(), &width, &height, &fileChannels, STBI_rgb_alpha), &stbi_image_free);
             if (data == nullptr || width <= 0 || height <= 0) {
-                if (data != nullptr) {
-                    stbi_image_free(data);
-                }
                 throw exception_init("Failed to load texture");
             }
             // Whatever the file claims its size to be, the image has to be one the device will
@@ -133,7 +139,6 @@ namespace merutilm::vkh {
             if (const VkPhysicalDeviceLimits &limits = core.getPhysicalDevice().getPhysicalDeviceProperties().limits;
                 static_cast<uint32_t>(width) > limits.maxImageDimension2D ||
                 static_cast<uint32_t>(height) > limits.maxImageDimension2D) {
-                stbi_image_free(data);
                 throw exception_init("Texture is larger than this device allows");
             }
             // The count stb hands back is how many channels the file had, not how many it decoded
@@ -145,8 +150,7 @@ namespace merutilm::vkh {
                                                                 static_cast<uint32_t>(width),
                                                                 static_cast<uint32_t>(height), STBI_rgb_alpha,
                                                                 8, useMipmap,
-                                                                reinterpret_cast<std::byte *>(data));
-            stbi_image_free(data);
+                                                                reinterpret_cast<std::byte *>(data.get()));
             return result;
         }
 

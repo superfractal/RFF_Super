@@ -1,14 +1,16 @@
 //
 // Created by Merutilm on 2025-05-04.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-16, 2026-08-21.
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-22, 2026-08-29, 2026-08-31
-// Modified by ox-alpha on 2026-08-22.
+// Modified by GPT-5 on 2026-08-16, 2026-08-21
+// Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
 //
 
 #pragma once
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "ShdPalColorSmoothingMethod.h"
@@ -16,6 +18,7 @@
 #include "ShdFogBlurQuality.h"
 #include "ShdToneMapMethod.h"
 #include "ShdSlopeGlossSource.h"
+#include "ShdSurfaceStyle.h"
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
 #include "ShdSlopeTintBlend.h"
@@ -30,6 +33,7 @@
 #include "ShdPalIterationColoringMode.h"
 #include "ShdPatternInkMode.h"
 #include "ShdPatternLayerSelection.h"
+#include "ShdEffectsAttribute.h"
 #include "ShdPatternType.h"
 #include "ShdStripeType.h"
 #include "ShdTextureBlendMode.h"
@@ -38,7 +42,7 @@
 #include "ShdWarpSource.h"
 #include "VidHdrTransfer.h"
 #include "VidKeyInterpolation.h"
-#include "VidTimelineSlotSelection.h"
+#include "VidRotationMode.h"
 #include "FractalAttribute.h"
 
 
@@ -105,7 +109,8 @@ namespace merutilm::rff2 {
                 using enum ShdPalColorInterpolationMethod;
                 return {
                     RGB,
-                    OKLAB
+                    OKLAB,
+                    LINEAR_RGB
                 };
             }
             if constexpr (std::is_same_v<E, ShdFogBlurQuality>) {
@@ -121,7 +126,11 @@ namespace merutilm::rff2 {
                     CLIP,
                     REINHARD,
                     ACES,
-                    FILMIC
+                    FILMIC,
+                    MFR_SHOULDER,
+                    MFR_LOG,
+                    MFR_LINEAR,
+                    MFR_FALSE_COLOR
                 };
             }
             if constexpr (std::is_same_v<E, VidHdrTransfer>) {
@@ -151,6 +160,25 @@ namespace merutilm::rff2 {
                 return {
                     MULTIPLY,
                     OKLAB
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdSurfaceBlend>) {
+                return {
+                    ShdSurfaceBlend::MIX,
+                    ShdSurfaceBlend::ADD,
+                    ShdSurfaceBlend::MULTIPLY,
+                    ShdSurfaceBlend::SCREEN
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdSurfaceStyle>) {
+                return {
+                    ShdSurfaceStyle::ORIGINAL,
+                    ShdSurfaceStyle::LIQUID_METAL,
+                    ShdSurfaceStyle::CYBER_SIGILISM,
+                    ShdSurfaceStyle::PHONK,
+                    ShdSurfaceStyle::BLACK_METAL,
+                    ShdSurfaceStyle::DEEP_SEA,
+                    ShdSurfaceStyle::UKIYO_E
                 };
             }
             if constexpr (std::is_same_v<E, ShdSlopeGlossSource>) {
@@ -238,6 +266,44 @@ namespace merutilm::rff2 {
                     CLOUD
                 };
             }
+            if constexpr (std::is_same_v<E, ShdEffectType>) {
+                using enum ShdEffectType;
+                return {
+                    RAIN,
+                    FLAME,
+                    EMBERS,
+                    MIST,
+                    HEAT,
+                    RIPPLES,
+                    FLOW,
+                    AURORA
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdEffectBlend>) {
+                using enum ShdEffectBlend;
+                return {
+                    NORMAL,
+                    ADD,
+                    SCREEN,
+                    MULTIPLY
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdRainShape>) {
+                return {
+                    ShdRainShape::DROPS,
+                    ShdRainShape::STREAKS
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdEffectMask>) {
+                using enum ShdEffectMask;
+                return {
+                    ALL,
+                    EXTERIOR,
+                    INTERIOR,
+                    BANDS,
+                    EDGE
+                };
+            }
             if constexpr (std::is_same_v<E, ShdPatternLayerSelection>) {
                 using enum ShdPatternLayerSelection;
                 return {
@@ -264,6 +330,18 @@ namespace merutilm::rff2 {
                     TEXTURE_4
                 };
             }
+            if constexpr (std::is_same_v<E, VidRotationMode>) {
+                return {
+                    VidRotationMode::KEYFRAMES,
+                    VidRotationMode::CONSTANT_PERIOD
+                };
+            }
+            if constexpr (std::is_same_v<E, VidRotationDirection>) {
+                return {
+                    VidRotationDirection::CLOCKWISE,
+                    VidRotationDirection::COUNTERCLOCKWISE
+                };
+            }
             if constexpr (std::is_same_v<E, VidKeyInterpolation>) {
                 using enum VidKeyInterpolation;
                 return {
@@ -271,19 +349,6 @@ namespace merutilm::rff2 {
                     LINEAR,
                     SMOOTH,
                     CUBIC
-                };
-            }
-            if constexpr (std::is_same_v<E, VidTimelineSlotSelection>) {
-                using enum VidTimelineSlotSelection;
-                return {
-                    SLOT_1,
-                    SLOT_2,
-                    SLOT_3,
-                    SLOT_4,
-                    SLOT_5,
-                    SLOT_6,
-                    SLOT_7,
-                    SLOT_8
                 };
             }
             if constexpr (std::is_same_v<E, FractalFormulaType>) {
@@ -301,6 +366,12 @@ namespace merutilm::rff2 {
 
         template<typename E> requires std::is_enum_v<E> || std::is_same_v<E, bool>
         static std::wstring toString(const E &value) {
+            if constexpr (std::is_same_v<E, VidRotationMode>) {
+                return value == VidRotationMode::CONSTANT_PERIOD ? L"Constant Period" : L"Keyframes";
+            }
+            if constexpr (std::is_same_v<E, VidRotationDirection>) {
+                return value == VidRotationDirection::CLOCKWISE ? L"Clockwise" : L"Counterclockwise";
+            }
             if constexpr (std::is_same_v<E, FrtReuseReferenceMethod>) {
                 switch (value) {
                     using enum FrtReuseReferenceMethod;
@@ -370,6 +441,7 @@ namespace merutilm::rff2 {
                     using enum ShdPalColorInterpolationMethod;
                     case RGB: return L"RGB";
                     case OKLAB: return L"OKLab";
+                    case LINEAR_RGB: return L"Linear RGB";
                     default: break;
                 }
             }
@@ -388,6 +460,10 @@ namespace merutilm::rff2 {
                     case REINHARD: return L"Reinhard";
                     case ACES: return L"ACES (Narkowicz fit)";
                     case FILMIC: return L"Filmic";
+                    case MFR_SHOULDER: return L"MFR Shoulder";
+                    case MFR_LOG: return L"MFR Log View";
+                    case MFR_LINEAR: return L"MFR Linear Clip";
+                    case MFR_FALSE_COLOR: return L"MFR False Color";
                     default: break;
                 }
             }
@@ -422,6 +498,25 @@ namespace merutilm::rff2 {
                     case MULTIPLY: return L"Multiply";
                     case OKLAB: return L"OKLab Tint";
                     default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdSurfaceBlend>) {
+                switch (value) {
+                    case ShdSurfaceBlend::MIX: return L"Mix";
+                    case ShdSurfaceBlend::ADD: return L"Add";
+                    case ShdSurfaceBlend::MULTIPLY: return L"Multiply";
+                    case ShdSurfaceBlend::SCREEN: return L"Screen";
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdSurfaceStyle>) {
+                switch (value) {
+                    case ShdSurfaceStyle::ORIGINAL: return L"Original";
+                    case ShdSurfaceStyle::LIQUID_METAL: return L"Y2K Chrome / Liquid Metal";
+                    case ShdSurfaceStyle::CYBER_SIGILISM: return L"Cyber Sigilism";
+                    case ShdSurfaceStyle::PHONK: return L"PHONK / Drift Phonk";
+                    case ShdSurfaceStyle::BLACK_METAL: return L"Black Metal Album Art";
+                    case ShdSurfaceStyle::DEEP_SEA: return L"Deep Sea Bioluminescence";
+                    case ShdSurfaceStyle::UKIYO_E: return L"Ukiyo-e Fractal";
                 }
             }
             if constexpr (std::is_same_v<E, ShdSlopeGlossSource>) {
@@ -529,6 +624,48 @@ namespace merutilm::rff2 {
                     default: break;
                 }
             }
+            if constexpr (std::is_same_v<E, ShdEffectType>) {
+                switch (value) {
+                    using enum ShdEffectType;
+                    case RAIN: return L"Rain";
+                    case FLAME: return L"Flame";
+                    case EMBERS: return L"Embers";
+                    case MIST: return L"Mist";
+                    case HEAT: return L"Heat Haze";
+                    case RIPPLES: return L"Ripples";
+                    case FLOW: return L"Flow Light";
+                    case AURORA: return L"Aurora";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdEffectBlend>) {
+                switch (value) {
+                    using enum ShdEffectBlend;
+                    case NORMAL: return L"Normal";
+                    case ADD: return L"Add";
+                    case SCREEN: return L"Screen";
+                    case MULTIPLY: return L"Multiply";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdRainShape>) {
+                switch (value) {
+                    case ShdRainShape::STREAKS: return L"Water Streaks";
+                    case ShdRainShape::DROPS: return L"Raindrops";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdEffectMask>) {
+                switch (value) {
+                    using enum ShdEffectMask;
+                    case ALL: return L"Surface";
+                    case EXTERIOR: return L"Exterior";
+                    case INTERIOR: return L"No Surface";
+                    case BANDS: return L"Bands";
+                    case EDGE: return L"Iteration Edges";
+                    default: break;
+                }
+            }
             if constexpr (std::is_same_v<E, ShdPatternLayerSelection>) {
                 switch (value) {
                     using enum ShdPatternLayerSelection;
@@ -554,20 +691,6 @@ namespace merutilm::rff2 {
                     case LINEAR: return L"Linear";
                     case SMOOTH: return L"Smooth";
                     case CUBIC: return L"Cubic";
-                    default: break;
-                }
-            }
-            if constexpr (std::is_same_v<E, VidTimelineSlotSelection>) {
-                switch (value) {
-                    using enum VidTimelineSlotSelection;
-                    case SLOT_1: return L"1";
-                    case SLOT_2: return L"2";
-                    case SLOT_3: return L"3";
-                    case SLOT_4: return L"4";
-                    case SLOT_5: return L"5";
-                    case SLOT_6: return L"6";
-                    case SLOT_7: return L"7";
-                    case SLOT_8: return L"8";
                     default: break;
                 }
             }

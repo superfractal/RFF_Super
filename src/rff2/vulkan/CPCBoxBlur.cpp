@@ -1,8 +1,8 @@
 //
 // Created by Merutilm on 2025-08-28.
-//
 // Modified by Opus 5 on 2026-08-19, 2026-08-24
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-20, 2026-09-23
 //
 
 #include "CPCBoxBlur.hpp"
@@ -11,7 +11,6 @@
 #include <cmath>
 
 #include "SharedImageContextIndices.hpp"
-#include "../../vulkan_helper/executor/ScopedCommandBufferExecutor.hpp"
 #include "../../vulkan_helper/util/BarrierUtils.hpp"
 #include "../constants/VulkanWindowConstants.hpp"
 
@@ -48,10 +47,11 @@ namespace merutilm::rff2 {
             return blurDesc.get<vkh::StorageImage>(descIndex, binding).ctx[frameIndex];
         };
 
-        vkh::BarrierUtils::cmdImageMemoryBarrier(cbh, ctxGetter(0, BINDING_BLUR_IMAGE_DST).image, 0,
+        vkh::BarrierUtils::cmdImageMemoryBarrier(cbh, ctxGetter(0, BINDING_BLUR_IMAGE_DST).image,
+                                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
                                                  VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                                                  VK_IMAGE_LAYOUT_GENERAL, 0, 1,
-                                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
         for (uint32_t i = 0; i < BOX_BLUR_PASS_COUNT; ++i) {
@@ -138,6 +138,7 @@ namespace merutilm::rff2 {
                                 sic.getImageContextMF(MF_MAIN_RENDER_DOWNSAMPLED_IMAGE_SECONDARY));
                 break;
             }
+            case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 setGaussianBlur(sic.getImageContextMF(MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
                                 sic.getImageContextMF(MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_SECONDARY));

@@ -1,8 +1,11 @@
 //
 // Created by Merutilm on 2025-07-14.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <vector>
+
 #include "Fence.hpp"
 #include "Semaphore.hpp"
 #include "../handle/CoreHandler.hpp"
@@ -11,8 +14,6 @@ namespace merutilm::vkh {
     class SyncObjectImpl final : public CoreHandler {
         std::vector<Fence> fences = {};
         std::vector<Semaphore> semaphores = {};
-
-
     public:
         explicit SyncObjectImpl(CoreRef core);
 

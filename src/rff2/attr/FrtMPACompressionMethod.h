@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-04.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,15 +10,14 @@ namespace merutilm::rff2 {
         /**
          * Do Not Compress. It is the fastest but allocates the most memory.
          */
-        NO_COMPRESSION,
+        NO_COMPRESSION = 0,
         /**
          * Compresses using elements' count each period. Both speed and memory usage are average.
          */
-        LITTLE_COMPRESSION,
+        LITTLE_COMPRESSION = 1,
         /**
          * Compresses all duplicate elements and speeds up MPA Table creation. It allocates the less memory, but the speed is also slow.
          */
-        STRONGEST
-
+        STRONGEST = 2
     };
 }

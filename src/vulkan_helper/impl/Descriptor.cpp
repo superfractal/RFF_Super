@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #include "Descriptor.hpp"
@@ -44,67 +45,51 @@ namespace merutilm::vkh {
             std::iota(bindings.begin(), bindings.end(), 0);
         }
 
-        auto bm = std::move(bindings);
-        std::ranges::unique(bm);
-        std::ranges::sort(bm);
+        auto selectedBindings = std::move(bindings);
+        std::ranges::sort(selectedBindings);
+        const auto duplicates = std::ranges::unique(selectedBindings);
+        selectedBindings.erase(duplicates.begin(), duplicates.end());
 
-        updateIndices(updateQueue, frameIndex, std::move(descIndices), bm);
+        updateIndices(updateQueue, frameIndex, std::move(descIndices), selectedBindings);
     }
 
     void DescriptorImpl::updateIndices(DescriptorUpdateQueue &updateQueue, const uint32_t frameIndex,
                                        const std::vector<uint32_t> &descIndices,
                                        const std::vector<uint32_t> &bindings) const {
+        const auto queueBufferWrite = [&](BufferObjectAbstract &buffer, const VkDescriptorType descriptorType,
+                                          const uint32_t descriptorIndex, const uint32_t binding) {
+            updateQueue.push_back({
+                .bufferInfo = VkDescriptorBufferInfo{
+                    .buffer = buffer.isMultiframe() ? buffer.getBufferContextMF(frameIndex).buffer
+                                                    : buffer.getBufferContext().buffer,
+                    .offset = 0,
+                    .range = buffer.getHostObject().getTotalSizeByte()
+                },
+            });
+            updateQueue.back().writeSet = {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = nullptr,
+                .dstSet = descriptorSets[frameIndex][descriptorIndex],
+                .dstBinding = binding,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = descriptorType,
+                .pImageInfo = nullptr,
+                .pBufferInfo = &updateQueue.back().bufferInfo,
+                .pTexelBufferView = nullptr,
+            };
+        };
+
         for (const uint32_t descIndex: descIndices) {
             for (const uint32_t binding: bindings) {
                 const auto &raw = getRaw(descIndex, binding);
                 if (std::holds_alternative<Uniform>(raw)) {
-                    auto &ubo = std::get<Uniform>(raw);
-
-                    updateQueue.push_back({
-                        .bufferInfo = VkDescriptorBufferInfo{
-                            .buffer = ubo->isMultiframe() ? ubo->getBufferContextMF(frameIndex).buffer : ubo->getBufferContext().buffer,
-                            .offset = 0,
-                            .range = ubo->getHostObject().getTotalSizeByte()
-                        },
-                    });
-                    updateQueue.back().writeSet = {
-                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .pNext = nullptr,
-                        .dstSet = descriptorSets[frameIndex][descIndex],
-                        .dstBinding = binding,
-                        .dstArrayElement = 0,
-                        .descriptorCount = 1,
-                        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                        .pImageInfo = nullptr,
-                        .pBufferInfo = &updateQueue.back().bufferInfo,
-                        .pTexelBufferView = nullptr,
-                    };
-                }
-                if (std::holds_alternative<ShaderStorage>(raw)) {
-                    auto &ssbo = std::get<ShaderStorage>(raw);
-
-
-                    updateQueue.push_back({
-                        .bufferInfo = VkDescriptorBufferInfo{
-                            .buffer = ssbo->isMultiframe() ? ssbo->getBufferContextMF(frameIndex).buffer : ssbo->getBufferContext().buffer,
-                            .offset = 0,
-                            .range = ssbo->getHostObject().getTotalSizeByte()
-                        },
-                    });
-                    updateQueue.back().writeSet = {
-                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                        .pNext = nullptr,
-                        .dstSet = descriptorSets[frameIndex][descIndex],
-                        .dstBinding = binding,
-                        .dstArrayElement = 0,
-                        .descriptorCount = 1,
-                        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                        .pImageInfo = nullptr,
-                        .pBufferInfo = &updateQueue.back().bufferInfo,
-                        .pTexelBufferView = nullptr,
-                    };
-                }
-                if (std::holds_alternative<CombinedImageSampler>(raw)) {
+                    queueBufferWrite(*std::get<Uniform>(raw), VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                     descIndex, binding);
+                } else if (std::holds_alternative<ShaderStorage>(raw)) {
+                    queueBufferWrite(*std::get<ShaderStorage>(raw), VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                     descIndex, binding);
+                } else if (std::holds_alternative<CombinedImageSampler>(raw)) {
                     auto &tex = std::get<CombinedImageSampler>(raw);
 
                     updateQueue.push_back({
@@ -127,8 +112,7 @@ namespace merutilm::vkh {
                         .pBufferInfo = nullptr,
                         .pTexelBufferView = nullptr,
                     };
-                }
-                if (std::holds_alternative<InputAttachment>(raw)) {
+                } else if (std::holds_alternative<InputAttachment>(raw)) {
                     const auto &[ctx] = std::get<InputAttachment>(raw);
                     updateQueue.push_back({
                         .imageInfo = VkDescriptorImageInfo{
@@ -150,8 +134,7 @@ namespace merutilm::vkh {
                         .pBufferInfo = nullptr,
                         .pTexelBufferView = nullptr,
                     };
-                }
-                if (std::holds_alternative<StorageImage>(raw)) {
+                } else if (std::holds_alternative<StorageImage>(raw)) {
                     const auto &[ctx] = std::get<StorageImage>(raw);
                     updateQueue.push_back({
                         .imageInfo = VkDescriptorImageInfo{

@@ -1,12 +1,11 @@
 //
 // Created by Merutilm on 2025-05-28.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 #include "../../Presets.h"
 #include "../../../attr/ShdFogAttribute.h"
-
-
 
 namespace merutilm::rff2::ShdFogPresets {
 
@@ -15,25 +14,28 @@ namespace merutilm::rff2::ShdFogPresets {
 
         [[nodiscard]] ShdFogAttribute genFog() const override;
     };
+
     struct Low final : public Presets::ShaderPresets::FogPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdFogAttribute genFog() const override;
     };
+
     struct Medium final : public Presets::ShaderPresets::FogPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdFogAttribute genFog() const override;
     };
+
     struct High final : public Presets::ShaderPresets::FogPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdFogAttribute genFog() const override;
     };
+
     struct Ultra final : public Presets::ShaderPresets::FogPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdFogAttribute genFog() const override;
     };
 };
-

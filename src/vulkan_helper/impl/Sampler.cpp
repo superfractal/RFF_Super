@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "Sampler.hpp"
@@ -7,7 +8,8 @@
 #include "../core/allocator.hpp"
 
 namespace merutilm::vkh {
-    SamplerImpl::SamplerImpl(const CoreRef core, const VkSamplerCreateInfo &samplerInfo) : CoreHandler(core), samplerInfo(samplerInfo) {
+    SamplerImpl::SamplerImpl(CoreRef core, const VkSamplerCreateInfo &samplerInfo)
+        : CoreHandler(core), samplerInfo(samplerInfo) {
         SamplerImpl::init();
     }
 
@@ -16,12 +18,14 @@ namespace merutilm::vkh {
     }
 
     void SamplerImpl::init() {
-        if (allocator::invoke(vkCreateSampler, core.getLogicalDevice().getLogicalDeviceHandle(), &samplerInfo, nullptr, &sampler)) {
+        const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();
+        if (allocator::invoke(vkCreateSampler, device, &samplerInfo, nullptr, &sampler)) {
             throw exception_init("Failed to create sampler!");
         }
     }
 
     void SamplerImpl::destroy() {
-        allocator::invoke(vkDestroySampler, core.getLogicalDevice().getLogicalDeviceHandle(), sampler, nullptr);
+        const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();
+        allocator::invoke(vkDestroySampler, device, sampler, nullptr);
     }
 }

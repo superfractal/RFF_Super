@@ -1,7 +1,21 @@
+//
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24
+//
 
+#include "UiLanguage.hpp"
+#include "NativeDialogs.hpp"
 #include "TimelineWindow.hpp"
+#include "../video/ZoomOverlay.hpp"
+#include "workspace/TimelineTransportLayout.hpp"
+#include "UiDpi.hpp"
+#include "SettingsTheme.hpp"
+#include "Utilities.h"
+#include "workspace/AccessibleControl.hpp"
+#include "workspace/AttributeFormModel.hpp"
+#include "workspace/FormWorkspace.hpp"
+#include "../video/VideoCameraSource.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +26,7 @@
 #include <limits>
 #include <ranges>
 #include <string>
+#include <sstream>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
@@ -22,6 +37,8 @@
 #include "../constants/Constants.hpp"
 #include "../io/PreferencesIO.h"
 #include "../io/TimelineIO.h"
+#include "../io/TimelineJsonIO.hpp"
+#include "../io/AudioTimelineIO.hpp"
 #include "Callback.hpp"
 #include "CallbackShader.hpp"
 #include "RenderScene.hpp"
@@ -42,9 +59,11 @@ namespace merutilm::rff2 {
         std::atomic<int> openTimelineWindows{0};
         constexpr UINT WM_TIMELINE_PREVIEW_READY = WM_APP + 0x251;
         constexpr UINT WM_TIMELINE_EXPORT_FINISHED = WM_APP + 0x252;
+        constexpr UINT WM_TIMELINE_CACHE_PROGRESS = WM_APP + 0x25F;
         constexpr UINT_PTR PLAYBACK_TIMER = 1;
         constexpr UINT_PTR PREVIEW_STATUS_TIMER = 2;
         constexpr UINT_PTR EDGE_SCROLL_TIMER = 3;
+        constexpr int WORKSPACE_DOCK_TOGGLE = 4700;
         // A preview that returns sooner than this is never announced: the line would only blink.
         constexpr UINT PREVIEW_STATUS_DELAY = 250;
         // 30 preview steps a second is as fine as the scrubbed preview can follow.
@@ -67,6 +86,7 @@ namespace merutilm::rff2 {
             COLORREF accentHover;
             COLORREF accentPressed;
             COLORREF accentSoft;
+            COLORREF selectedText;
             COLORREF accentBorder;
             COLORREF focusRing;
             COLORREF accentText;
@@ -78,37 +98,43 @@ namespace merutilm::rff2 {
             COLORREF toggleOff;
             COLORREF disabledTrack;
             COLORREF linkedTrack;
-            COLORREF distanceTick;
         };
 
-        constexpr TimelineTheme DARK_THEME = {
-            .background = RGB(25, 28, 33), .panel = RGB(29, 32, 38), .panelRaised = RGB(35, 38, 45),
-            .previewBackground = RGB(15, 17, 20), .border = RGB(48, 52, 59), .grid = RGB(41, 45, 52),
-            .text = RGB(233, 235, 238), .mutedText = RGB(152, 157, 164), .accent = RGB(45, 99, 200),
-            .accentHover = RGB(45, 99, 200), .accentPressed = RGB(90, 135, 214),
-            .accentSoft = RGB(34, 71, 138), .accentBorder = RGB(122, 160, 224),
-            .focusRing = RGB(160, 190, 236), .accentText = RGB(160, 190, 236),
-            .activeText = RGB(233, 240, 251), .buttonHoverBorder = RGB(90, 95, 103),
-            .hold = RGB(245, 158, 11), .selected = RGB(249, 115, 22), .buttonHover = RGB(45, 49, 56),
-            .toggleOff = RGB(58, 62, 70), .disabledTrack = RGB(85, 89, 96),
-            .linkedTrack = RGB(226, 228, 232), .distanceTick = RGB(74, 222, 128),
-        };
-
-        constexpr TimelineTheme LIGHT_THEME = {
-            .background = RGB(247, 249, 252), .panel = RGB(255, 255, 255), .panelRaised = RGB(248, 250, 252),
-            .previewBackground = RGB(237, 241, 245), .border = RGB(214, 222, 232), .grid = RGB(229, 234, 240),
-            .text = RGB(17, 24, 39), .mutedText = RGB(75, 85, 99), .accent = RGB(37, 99, 235),
-            .accentHover = RGB(29, 78, 216), .accentPressed = RGB(30, 64, 175),
-            .accentSoft = RGB(239, 246, 255), .accentBorder = RGB(191, 219, 254),
-            .focusRing = RGB(147, 197, 253), .accentText = RGB(29, 78, 216),
-            .activeText = RGB(255, 255, 255), .buttonHoverBorder = RGB(184, 195, 209),
-            .hold = RGB(217, 119, 6), .selected = RGB(234, 88, 12), .buttonHover = RGB(243, 246, 250),
-            .toggleOff = RGB(214, 222, 232), .disabledTrack = RGB(100, 116, 139),
-            .linkedTrack = RGB(51, 65, 85), .distanceTick = RGB(21, 128, 61),
-        };
-
-        const TimelineTheme &timelineTheme(const bool lightMode) {
-            return lightMode ? LIGHT_THEME : DARK_THEME;
+        constexpr TimelineTheme timelineThemeFrom(const SettingsThemeColors &shared, const bool light) {
+            return {
+                .background = shared.background,
+                .panel = shared.background,
+                .panelRaised = shared.buttonFace,
+                .previewBackground = shared.background,
+                .border = shared.sectionFrame,
+                .grid = shared.sectionFrame,
+                .text = shared.text,
+                .mutedText = shared.rangeText,
+                .accent = shared.primaryButton,
+                .accentHover = shared.primaryButtonPressed,
+                .accentPressed = shared.primaryButtonPressed,
+                .accentSoft = shared.radioSelectedBackground,
+                .selectedText = shared.radioSelectedText,
+                .accentBorder = shared.radioSelectedBorder,
+                .focusRing = shared.cardNoteAccent,
+                .accentText = shared.cardNoteAccent,
+                .activeText = shared.primaryButtonText,
+                .buttonHoverBorder = shared.textFieldBorder,
+                .hold = light ? RGB(217, 119, 6) : RGB(245, 158, 11),
+                .selected = light ? RGB(234, 88, 12) : RGB(249, 115, 22),
+                .buttonHover = shared.buttonFacePressed,
+                .toggleOff = shared.sliderTrack,
+                .disabledTrack = shared.textDisabled,
+                .linkedTrack = shared.text,
+            };
+        }
+        TimelineTheme timelineTheme(const bool lightMode) {
+            auto result = timelineThemeFrom(settingsTheme(!lightMode), lightMode);
+            if (highContrastSettingsMode()) {
+                result.hold = result.text;
+                result.selected = result.accentText;
+            }
+            return result;
         }
         constexpr float MIN_VIEW_SPAN = 1.0f;
         // Past this many parameters changing between one report and the next, what happened is a
@@ -130,6 +156,7 @@ namespace merutilm::rff2 {
         };
 
         const std::array SHADER_PANELS = {
+            ShaderPanel{L"Camera / Rotation / 360\u00B0", &CallbackVideo::CAMERA_SETTINGS, L"Camera"},
             ShaderPanel{L"Palette", &CallbackShader::PALETTE, L"Palette"},
             ShaderPanel{L"Stripe", &CallbackShader::STRIPE, L"Stripe"},
             ShaderPanel{L"Slope", &CallbackShader::SLOPE, L"Slope"},
@@ -152,7 +179,8 @@ namespace merutilm::rff2 {
         // A parameter whose own range is wider than this is plotted against its keys, not its range.
         constexpr float WIDE_VALUE_RANGE = 1000.0f;
         constexpr uint16_t SPEED_TARGET = vidTimelineTargetId(VidTimelineTarget::SPEED);
-        constexpr uint16_t COLOR_ANIMATION_TARGET = vidTimelineTargetId(VidTimelineTarget::PALETTE_ANIMATION_SPEED);
+        constexpr uint16_t COLOR_ANIMATION_TARGET =
+            vidTimelineTargetId(VidTimelineTarget::PALETTE_ANIMATION_SPEED);
         constexpr uint16_t FOG_OPACITY_TARGET = vidTimelineTargetId(VidTimelineTarget::FOG_OPACITY);
         constexpr uint16_t CYCLE_R_TARGET = vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_R);
         constexpr uint16_t CYCLE_G_TARGET = vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_G);
@@ -160,8 +188,25 @@ namespace merutilm::rff2 {
         constexpr wchar_t FORMULA_FIELD_HINT[] =
             L"Click: enter a value or formula (+ \u2212 \u00d7 \u00f7 parentheses) \u00b7 Drag: scrub";
 
+        thread_local UINT timelineDpi = 0;
+        struct TimelineDpiScope {
+            UINT previous = timelineDpi;
+            explicit TimelineDpiScope(UINT dpi) {
+                timelineDpi = dpi;
+            }
+            ~TimelineDpiScope() {
+                timelineDpi = previous;
+            }
+        };
         int sc(const int value) {
-            return Constants::Win32::settingsScaled(value);
+            if (value <= 0) {
+                return value;
+            }
+            return timelineDpi
+                       ? std::max(
+                             1,
+                             int(value * Constants::Win32::SETTINGS_UI_BASE_SCALE * timelineDpi / 96.0 + .5))
+                       : Constants::Win32::settingsScaled(value);
         }
 
         void fillRect(const HDC hdc, const RECT &rect, const COLORREF color) {
@@ -180,12 +225,17 @@ namespace merutilm::rff2 {
             return PtInRect(&rect, point) != FALSE;
         }
 
-        void drawText(const HDC hdc, const std::wstring &text, RECT rect, const COLORREF color, const UINT format,
-                      const HFONT font) {
+        void drawText(const HDC hdc, const std::wstring &text, RECT rect, const COLORREF color,
+                      const UINT format, const HFONT font) {
             const HGDIOBJ previous = SelectObject(hdc, font);
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, color);
-            DrawTextW(hdc, text.c_str(), -1, &rect, format);
+            try {
+                UiLanguage::drawText(hdc, text.c_str(), -1, &rect, format);
+            } catch (...) {
+                SelectObject(hdc, previous);
+                throw;
+            }
             SelectObject(hdc, previous);
         }
 
@@ -215,8 +265,10 @@ namespace merutilm::rff2 {
             const float raw = std::max(span, 1e-4f) / static_cast<float>(std::max(slots, 1));
             const float magnitude = std::pow(10.0f, std::floor(std::log10(raw)));
             const float normalized = raw / magnitude;
-            const float nice = normalized <= 1.0f ? 1.0f : normalized <= 2.0f ? 2.0f :
-                               normalized <= 5.0f ? 5.0f : 10.0f;
+            const float nice = normalized <= 1.0f   ? 1.0f
+                               : normalized <= 2.0f ? 2.0f
+                               : normalized <= 5.0f ? 5.0f
+                                                    : 10.0f;
             return nice * magnitude;
         }
 
@@ -256,15 +308,15 @@ namespace merutilm::rff2 {
 
         std::wstring interpolationName(const VidKeyInterpolation interpolation) {
             switch (interpolation) {
-                case VidKeyInterpolation::LINEAR:
-                    return L"Linear";
-                case VidKeyInterpolation::SMOOTH:
-                    return L"Smooth";
-                case VidKeyInterpolation::CUBIC:
-                    return L"Cubic";
-                case VidKeyInterpolation::STEP:
-                default:
-                    return L"Step";
+            case VidKeyInterpolation::LINEAR:
+                return L"Linear";
+            case VidKeyInterpolation::SMOOTH:
+                return L"Smooth";
+            case VidKeyInterpolation::CUBIC:
+                return L"Cubic";
+            case VidKeyInterpolation::STEP:
+            default:
+                return L"Step";
             }
         }
 
@@ -296,16 +348,17 @@ namespace merutilm::rff2 {
         // A switch or a mode means nothing between its steps, so its keys hold until the next one.
         VidKeyInterpolation defaultInterpolation(const uint16_t targetId) {
             const TimelineParamDesc *param = TimelineParams::find(targetId);
-            return param != nullptr && (param->kind == TimelineParamKind::BOOL ||
-                                        param->kind == TimelineParamKind::ENUM)
+            return param != nullptr &&
+                           (param->kind == TimelineParamKind::BOOL || param->kind == TimelineParamKind::ENUM)
                        ? VidKeyInterpolation::STEP
                        : VidKeyInterpolation::SMOOTH;
         }
 
-        float evaluateDisplayedTrack(const VidTimelineTrack &track, const uint16_t targetId, const float depth,
-                                     const float fallback) {
+        float evaluateDisplayedTrack(const VidTimelineTrack &track, const uint16_t targetId,
+                                     const float depth, const float fallback) {
             if (const TimelineParamDesc *param = TimelineParams::find(targetId); param != nullptr) {
-                return TimelineSchedule::evaluateTrack(track, depth, fallback, param->minValue, param->maxValue);
+                return TimelineSchedule::evaluateTrack(track, depth, fallback, param->minValue,
+                                                       param->maxValue);
             }
             return TimelineSchedule::evaluateTrack(track, depth, fallback);
         }
@@ -332,7 +385,26 @@ namespace merutilm::rff2 {
             });
         }
 
+        bool colorCycleTracksLinked(const VidTimelineAttribute &timeline, const bool linkWhenAbsent) {
+            const auto findTrack = [&timeline](const uint16_t targetId) -> const VidTimelineTrack * {
+                const auto found = std::ranges::find(timeline.tracks, targetId, &VidTimelineTrack::targetId);
+                return found == timeline.tracks.end() ? nullptr : &*found;
+            };
+            const VidTimelineTrack *red = findTrack(CYCLE_R_TARGET);
+            const VidTimelineTrack *green = findTrack(CYCLE_G_TARGET);
+            const VidTimelineTrack *blue = findTrack(CYCLE_B_TARGET);
+            if (red == nullptr && green == nullptr && blue == nullptr) {
+                return linkWhenAbsent;
+            }
+            return red != nullptr && green != nullptr && blue != nullptr &&
+                   red->enabled == green->enabled && red->enabled == blue->enabled &&
+                   sameKeys(red->keys, green->keys) && sameKeys(red->keys, blue->keys);
+        }
+
         COLORREF trackColor(const uint16_t targetId, const bool active, const bool lightMode) {
+            if (highContrastSettingsMode()) {
+                return active ? timelineTheme(lightMode).text : timelineTheme(lightMode).disabledTrack;
+            }
             if (!active) {
                 return timelineTheme(lightMode).disabledTrack;
             }
@@ -353,30 +425,30 @@ namespace merutilm::rff2 {
             }
             const TimelineParamDesc *param = TimelineParams::find(targetId);
             if (param == nullptr) {
-                return timelineTheme(lightMode).accent;
+                return timelineTheme(lightMode).accentText;
             }
             // Every row of one settings group is drawn in one color, so a stack of them is read by group.
             switch (param->dirty) {
-                case TimelineDirtyMask::PALETTE:
-                    return lightMode ? RGB(190, 24, 93) : RGB(244, 114, 182);
-                case TimelineDirtyMask::STRIPE:
-                    return lightMode ? RGB(161, 98, 7) : RGB(250, 204, 21);
-                case TimelineDirtyMask::SLOPE:
-                    return lightMode ? RGB(79, 70, 229) : RGB(129, 140, 248);
-                case TimelineDirtyMask::COLOR:
-                    return lightMode ? RGB(14, 116, 144) : RGB(34, 211, 238);
-                case TimelineDirtyMask::FOG:
-                    return lightMode ? RGB(15, 118, 110) : RGB(20, 184, 166);
-                case TimelineDirtyMask::BLOOM:
-                    return lightMode ? RGB(194, 65, 12) : RGB(251, 146, 60);
-                case TimelineDirtyMask::TEXTURE:
-                    return lightMode ? RGB(77, 124, 15) : RGB(163, 230, 53);
-                case TimelineDirtyMask::PATTERN:
-                    return lightMode ? RGB(162, 28, 175) : RGB(217, 70, 239);
-                case TimelineDirtyMask::WARP:
-                    return lightMode ? RGB(3, 105, 161) : RGB(56, 189, 248);
-                default:
-                    return timelineTheme(lightMode).accent;
+            case TimelineDirtyMask::PALETTE:
+                return lightMode ? RGB(190, 24, 93) : RGB(244, 114, 182);
+            case TimelineDirtyMask::STRIPE:
+                return lightMode ? RGB(161, 98, 7) : RGB(250, 204, 21);
+            case TimelineDirtyMask::SLOPE:
+                return lightMode ? RGB(79, 70, 229) : RGB(129, 140, 248);
+            case TimelineDirtyMask::COLOR:
+                return lightMode ? RGB(14, 116, 144) : RGB(34, 211, 238);
+            case TimelineDirtyMask::FOG:
+                return lightMode ? RGB(15, 118, 110) : RGB(20, 184, 166);
+            case TimelineDirtyMask::BLOOM:
+                return lightMode ? RGB(194, 65, 12) : RGB(251, 146, 60);
+            case TimelineDirtyMask::TEXTURE:
+                return lightMode ? RGB(77, 124, 15) : RGB(163, 230, 53);
+            case TimelineDirtyMask::PATTERN:
+                return lightMode ? RGB(162, 28, 175) : RGB(217, 70, 239);
+            case TimelineDirtyMask::WARP:
+                return lightMode ? RGB(3, 105, 161) : RGB(56, 189, 248);
+            default:
+                return timelineTheme(lightMode).accentText;
             }
         }
 
@@ -388,10 +460,15 @@ namespace merutilm::rff2 {
 
         void drawButton(const HDC hdc, const RECT &rect, const std::wstring &label, const bool hovered,
                         const bool active, const HFONT font, const TimelineTheme &theme) {
-            const COLORREF fill = active ? hovered ? theme.accentHover : theme.accent
-                                         : hovered ? theme.buttonHover : theme.panelRaised;
-            const COLORREF border = active ? theme.accentPressed
-                                           : hovered ? theme.buttonHoverBorder : theme.border;
+            COLORREF fill = theme.panelRaised;
+            COLORREF border = theme.border;
+            if (active) {
+                fill = hovered ? theme.accentHover : theme.accent;
+                border = theme.accentPressed;
+            } else if (hovered) {
+                fill = theme.buttonHover;
+                border = theme.buttonHoverBorder;
+            }
             const HBRUSH brush = CreateSolidBrush(fill);
             const HPEN pen = CreatePen(PS_SOLID, 1, border);
             const HGDIOBJ oldBrush = SelectObject(hdc, brush);
@@ -402,7 +479,7 @@ namespace merutilm::rff2 {
             DeleteObject(pen);
             DeleteObject(brush);
             drawText(hdc, label, rect, active ? theme.activeText : theme.text,
-                      DT_CENTER | DT_VCENTER | DT_SINGLELINE, font);
+                     DT_CENTER | DT_VCENTER | DT_SINGLELINE, font);
         }
 
         HBITMAP createPreviewBitmap(const HWND window, const cv::Mat &image, SIZE &size) {
@@ -448,11 +525,35 @@ namespace merutilm::rff2 {
         }
 
         int textWidth(const HDC hdc, const std::wstring &text, const HFONT font) {
+            const auto translated = UiLanguage::text(text);
             const HGDIOBJ previous = SelectObject(hdc, font);
             SIZE size = {};
-            GetTextExtentPoint32W(hdc, text.c_str(), static_cast<int>(text.size()), &size);
+            GetTextExtentPoint32W(hdc, translated.c_str(), static_cast<int>(translated.size()), &size);
             SelectObject(hdc, previous);
             return size.cx;
+        }
+
+        int wrappedTextHeight(HDC dc, const std::wstring &text, HFONT font, int width) {
+            const auto previous = SelectObject(dc, font);
+            RECT measured{0, 0, std::max(1, width), 0};
+            try {
+                UiLanguage::drawText(dc, text.c_str(), int(text.size()), &measured,
+                                     DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+            } catch (...) {
+                SelectObject(dc, previous);
+                throw;
+            }
+            SelectObject(dc, previous);
+            return measured.bottom;
+        }
+
+        std::wstring fittingText(HDC dc, HFONT font, int width, std::initializer_list<std::wstring> choices) {
+            for (const auto &text : choices) {
+                if (textWidth(dc, text, font) <= width) {
+                    return text;
+                }
+            }
+            return {};
         }
 
         void fillRoundRect(const HDC hdc, const RECT &rect, const COLORREF fill, const COLORREF border,
@@ -469,17 +570,44 @@ namespace merutilm::rff2 {
         }
 
         // A field framed with its caption riding the top border, and the field itself is what gets clicked.
-        RECT drawCaptionBox(const HDC hdc, const RECT &box, const std::wstring &caption, const COLORREF background,
-                            const HFONT captionFont, const bool hovered, const bool active,
-                            const TimelineTheme &theme) {
+        RECT drawCaptionBox(const HDC hdc, const RECT &box, const std::wstring &caption,
+                            const COLORREF background, const HFONT captionFont, const bool hovered,
+                            const bool active, const TimelineTheme &theme) {
             fillRoundRect(hdc, box, hovered ? theme.buttonHover : theme.panelRaised,
                           active ? theme.accent : theme.border, sc(10));
             const int captionWidth = textWidth(hdc, caption, captionFont) + sc(10);
             const RECT plate = {box.left + sc(12), box.top - sc(11), box.left + sc(12) + captionWidth,
                                 box.top + sc(11)};
             fillRect(hdc, plate, background);
-            drawText(hdc, caption, plate, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE, captionFont);
+            drawText(hdc, caption, plate, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+                     captionFont);
             return {box.left + sc(12), box.top + sc(10), box.right - sc(12), box.bottom - sc(4)};
+        }
+
+        int fontHeight(HDC dc, HFONT font) {
+            const auto previous = SelectObject(dc, font);
+            TEXTMETRICW metrics{};
+            GetTextMetricsW(dc, &metrics);
+            SelectObject(dc, previous);
+            return int(metrics.tmHeight);
+        }
+
+        RECT drawTransportReadout(HDC dc, const RECT &box, const std::wstring &caption, HFONT captionFont,
+                                  bool editable, bool hovered, bool active, const TimelineTheme &theme) {
+            const auto dip = [](int value) { return UiDpi::pixels(value, timelineDpi ? timelineDpi : 96); };
+            if (active || (editable && hovered)) {
+                fillRect(dc, box, active ? theme.accentSoft : theme.buttonHover);
+            }
+            const int labelBottom = box.top + dip(2) + std::max(dip(14), fontHeight(dc, captionFont));
+            RECT label{box.left + dip(8), box.top + dip(2), box.right - dip(8), labelBottom};
+            drawText(dc, caption, label,
+                     active && highContrastSettingsMode() ? theme.selectedText : theme.mutedText,
+                     DT_LEFT | DT_VCENTER | DT_SINGLELINE, captionFont);
+            if (editable) {
+                fillRect(dc, {box.left, box.bottom - 1, box.right, box.bottom},
+                         active ? theme.accentText : theme.border);
+            }
+            return {box.left + dip(8), labelBottom + dip(2), box.right - dip(8), box.bottom - dip(3)};
         }
 
         void drawToggle(const HDC hdc, const RECT &rect, const bool on, const TimelineTheme &theme) {
@@ -487,10 +615,19 @@ namespace merutilm::rff2 {
             fillRoundRect(hdc, rect, on ? theme.accent : theme.toggleOff,
                           on ? theme.accentBorder : theme.border, radius * 2);
             const int knob = std::max(radius - sc(4), sc(3));
-            const int centerX = on ? static_cast<int>(rect.right) - radius : static_cast<int>(rect.left) + radius;
+            const int centerX =
+                on ? static_cast<int>(rect.right) - radius : static_cast<int>(rect.left) + radius;
             const int centerY = static_cast<int>(rect.top + rect.bottom) / 2;
-            const HBRUSH brush = CreateSolidBrush(RGB(245, 246, 248));
-            const HPEN pen = CreatePen(PS_SOLID, 1, RGB(226, 228, 232));
+            COLORREF knobFill = RGB(245, 246, 248);
+            if (highContrastSettingsMode()) {
+                knobFill = on ? theme.activeText : theme.panel;
+            }
+            const HBRUSH brush = CreateSolidBrush(knobFill);
+            COLORREF knobBorder = RGB(226, 228, 232);
+            if (highContrastSettingsMode()) {
+                knobBorder = on ? theme.activeText : theme.text;
+            }
+            const HPEN pen = CreatePen(PS_SOLID, 1, knobBorder);
             const HGDIOBJ oldBrush = SelectObject(hdc, brush);
             const HGDIOBJ oldPen = SelectObject(hdc, pen);
             Ellipse(hdc, centerX - knob, centerY - knob, centerX + knob, centerY + knob);
@@ -503,52 +640,57 @@ namespace merutilm::rff2 {
         enum class TransportGlyph { PLAY, PAUSE, STOP, LOOP };
 
         // The transport glyphs are drawn rather than typed, so no symbol font has to be present.
-        void drawTransportButton(const HDC hdc, const RECT &rect, const TransportGlyph glyph, const bool hovered,
-                                 const bool active, const TimelineTheme &theme) {
-            fillRoundRect(hdc, rect, active ? theme.accent : hovered ? theme.buttonHover : theme.panelRaised,
-                          active ? theme.accentBorder : theme.border, sc(8));
+        void drawTransportButton(const HDC hdc, const RECT &rect, const TransportGlyph glyph,
+                                 const bool hovered, const bool active, const TimelineTheme &theme) {
+            COLORREF fill = theme.panelRaised;
+            if (active) {
+                fill = theme.accent;
+            } else if (hovered) {
+                fill = theme.buttonHover;
+            }
+            fillRoundRect(hdc, rect, fill, active ? theme.accentBorder : theme.border, sc(8));
             const COLORREF ink = active ? theme.activeText : theme.text;
             const int cx = static_cast<int>(rect.left + rect.right) / 2;
             const int cy = static_cast<int>(rect.top + rect.bottom) / 2;
-            const int size = std::max(static_cast<int>(std::min(rect.right - rect.left, rect.bottom - rect.top)) / 4,
-                                      sc(4));
+            const int size = std::max(
+                static_cast<int>(std::min(rect.right - rect.left, rect.bottom - rect.top)) / 4, sc(4));
             const HBRUSH brush = CreateSolidBrush(ink);
             const HPEN pen = CreatePen(PS_SOLID, sc(2), ink);
             const HGDIOBJ oldBrush = SelectObject(hdc, brush);
             const HGDIOBJ oldPen = SelectObject(hdc, pen);
             switch (glyph) {
-                case TransportGlyph::PLAY: {
-                    const POINT points[3] = {{cx - size + sc(2), cy - size}, {cx + size, cy},
-                                             {cx - size + sc(2), cy + size}};
-                    Polygon(hdc, points, 3);
-                    break;
-                }
-                case TransportGlyph::PAUSE:
-                    Rectangle(hdc, cx - size, cy - size, cx - sc(2), cy + size);
-                    Rectangle(hdc, cx + sc(2), cy - size, cx + size, cy + size);
-                    break;
-                case TransportGlyph::STOP:
-                    Rectangle(hdc, cx - size, cy - size, cx + size, cy + size);
-                    break;
-                case TransportGlyph::LOOP: {
-                    // The familiar repeat mark: a closed pill with one arrow head per straight run.
-                    const int halfWidth = size + sc(3);
-                    const int halfHeight = std::max(size - sc(3), sc(3));
-                    const HGDIOBJ hollow = SelectObject(hdc, GetStockObject(NULL_BRUSH));
-                    RoundRect(hdc, cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight,
-                              halfHeight * 2, halfHeight * 2);
-                    SelectObject(hdc, hollow);
-                    const int head = std::max(halfHeight - sc(1), sc(3));
-                    const POINT forward[3] = {{cx - head, cy - halfHeight - head},
-                                              {cx - head, cy - halfHeight + head},
-                                              {cx + head, cy - halfHeight}};
-                    const POINT backward[3] = {{cx + head, cy + halfHeight - head},
-                                               {cx + head, cy + halfHeight + head},
-                                               {cx - head, cy + halfHeight}};
-                    Polygon(hdc, forward, 3);
-                    Polygon(hdc, backward, 3);
-                    break;
-                }
+            case TransportGlyph::PLAY: {
+                const POINT points[3] = {
+                    {cx - size + sc(2), cy - size}, {cx + size, cy}, {cx - size + sc(2), cy + size}};
+                Polygon(hdc, points, 3);
+                break;
+            }
+            case TransportGlyph::PAUSE:
+                Rectangle(hdc, cx - size, cy - size, cx - sc(2), cy + size);
+                Rectangle(hdc, cx + sc(2), cy - size, cx + size, cy + size);
+                break;
+            case TransportGlyph::STOP:
+                Rectangle(hdc, cx - size, cy - size, cx + size, cy + size);
+                break;
+            case TransportGlyph::LOOP: {
+                // The familiar repeat mark: a closed pill with one arrow head per straight run.
+                const int halfWidth = size + sc(3);
+                const int halfHeight = std::max(size - sc(3), sc(3));
+                const HGDIOBJ hollow = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+                RoundRect(hdc, cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight,
+                          halfHeight * 2, halfHeight * 2);
+                SelectObject(hdc, hollow);
+                const int head = std::max(halfHeight - sc(1), sc(3));
+                const POINT forward[3] = {{cx - head, cy - halfHeight - head},
+                                          {cx - head, cy - halfHeight + head},
+                                          {cx + head, cy - halfHeight}};
+                const POINT backward[3] = {{cx + head, cy + halfHeight - head},
+                                           {cx + head, cy + halfHeight + head},
+                                           {cx - head, cy + halfHeight}};
+                Polygon(hdc, forward, 3);
+                Polygon(hdc, backward, 3);
+                break;
+            }
             }
             SelectObject(hdc, oldPen);
             SelectObject(hdc, oldBrush);
@@ -573,7 +715,8 @@ namespace merutilm::rff2 {
             const int cx = static_cast<int>(rect.left + rect.right) / 2;
             const int cy = static_cast<int>(rect.top + rect.bottom) / 2;
             const int radius = std::max(
-                static_cast<int>(std::min(rect.right - rect.left, rect.bottom - rect.top)) / 2 - sc(2), sc(4));
+                static_cast<int>(std::min(rect.right - rect.left, rect.bottom - rect.top)) / 2 - sc(2),
+                sc(4));
             const HPEN pen = CreatePen(PS_SOLID, sc(2), color);
             const HGDIOBJ oldPen = SelectObject(hdc, pen);
             const HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
@@ -627,51 +770,36 @@ namespace merutilm::rff2 {
                 wc.style = CS_DBLCLKS;
                 wc.hInstance = GetModuleHandleW(nullptr);
                 wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
-                wc.hIcon = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON, 32, 32,
-                                                        LR_DEFAULTCOLOR));
+                wc.hIcon = static_cast<HICON>(
+                    LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON, 32, 32, LR_DEFAULTCOLOR));
                 wc.lpfnWndProc = TimelineWindow::windowProc;
                 wc.lpszClassName = TIMELINE_WINDOW_CLASS;
                 return RegisterClassExW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
             }();
-            (void) registered;
+            (void)registered;
         }
-    }
+    } // namespace
 
-    TimelineWindow::TimelineWindow(SettingsMenu &menu, RenderScene &scene) :
-        engine(scene.engine),
-        sourceAttribute(&scene.getAttribute()),
-        attribute(scene.getAttribute()),
-        settingsMenu(&menu),
-        renderScene(&scene),
-        schedule(TimelineSchedule::create(scene.getAttribute().video.timeline,
-                                          scene.getAttribute().video.timeline.estimateKeyframes,
-                                          -scene.getAttribute().video.animation.overZoom,
-                                           scene.getAttribute().video.animation.mps)) {
+    TimelineWindow::TimelineWindow(SettingsMenu &menu, RenderScene &scene)
+        : engine(scene.engine), sourceAttribute(&scene.getAttribute()), attribute(scene.getAttribute()),
+          settingsMenu(&menu), renderScene(&scene),
+          schedule(TimelineSchedule::create(
+              scene.getAttribute().video.timeline, scene.getAttribute().video.timeline.estimateKeyframes,
+              -scene.getAttribute().video.animation.overZoom, scene.getAttribute().video.animation.mps)) {
+        previewScheduleSnapshot = std::make_shared<TimelineSchedule>(schedule);
         lightMode = timelineLightMode();
-        titleFont = CreateFontW(sc(30), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
-        bodyFont = CreateFontW(sc(26), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                               OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                               DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
-        smallFont = CreateFontW(sc(22), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
-        captionFont = CreateFontW(sc(20), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                                  OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                  DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
-        valueFont = CreateFontW(sc(25), 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
+        updateDpi(UiDpi::forWindow(nullptr));
         fieldEditBrush = CreateSolidBrush(timelineTheme(lightMode).panelRaised);
         ensureEditableTracks();
-        undoBaseline = attribute.video.timeline;
+        linkColorCycle = colorCycleTracksLinked(attribute.video.timeline, true);
+        undoBaseline = sourceAttribute->video.timeline;
+        undoBaselineStatic = sourceAttribute->video.data.isStatic;
         previewDepth = schedule.getStartDepth();
         resetView();
     }
 
     VidTimelineTrack *TimelineWindow::track(const uint16_t targetId) {
-        for (auto &track: attribute.video.timeline.tracks) {
+        for (auto &track : attribute.video.timeline.tracks) {
             if (track.targetId == targetId) {
                 return &track;
             }
@@ -699,16 +827,16 @@ namespace merutilm::rff2 {
         const VidKeyInterpolation out = defaultInterpolation(targetId);
         // A new track starts flat on the value the settings already hold, so adding one changes nothing
         // until one of its keys is moved.
-        VidTimelineTrack track = {
-            .targetId = targetId,
-            .enabled = true,
-            .keys = {
-                {.depth = attribute.video.timeline.estimateKeyframes, .value = value,
-                 .color = glm::vec4(1.0f), .out = out},
-                {.depth = -attribute.video.animation.overZoom, .value = value,
-                 .color = glm::vec4(1.0f), .out = out}
-            }
-        };
+        VidTimelineTrack track = {.targetId = targetId,
+                                  .enabled = true,
+                                  .keys = {{.depth = attribute.video.timeline.estimateKeyframes,
+                                            .value = value,
+                                            .color = glm::vec4(1.0f),
+                                            .out = out},
+                                           {.depth = -attribute.video.animation.overZoom,
+                                            .value = value,
+                                            .color = glm::vec4(1.0f),
+                                            .out = out}}};
         if (targetId == SPEED_TARGET) {
             attribute.video.timeline.tracks.insert(attribute.video.timeline.tracks.begin(), std::move(track));
             return attribute.video.timeline.tracks.front();
@@ -721,11 +849,11 @@ namespace merutilm::rff2 {
         // A timeline that carries no track at all opens on the two a pacing is most often built from;
         // every other parameter is added from the track menu, and a removed one stays removed.
         const bool fresh = attribute.video.timeline.tracks.empty();
-        (void) ensureScalarTrack(SPEED_TARGET);
+        (void)ensureScalarTrack(SPEED_TARGET);
         // The color animation is the palette's, which a PNG source never runs, so a timeline opened
         // on one starts with the pacing alone rather than a track that could not move a picture.
         if (fresh && !attribute.video.data.isStatic) {
-            (void) ensureScalarTrack(COLOR_ANIMATION_TARGET);
+            (void)ensureScalarTrack(COLOR_ANIMATION_TARGET);
         }
     }
 
@@ -744,7 +872,8 @@ namespace merutilm::rff2 {
         const bool created = track(targetId) == nullptr;
         VidTimelineTrack &current = ensureScalarTrack(targetId);
         current.enabled = true;
-        const float depth = std::clamp(snapDepth(previewDepth), schedule.getEndDepth(), schedule.getStartDepth());
+        const float depth =
+            std::clamp(snapDepth(previewDepth), schedule.getEndDepth(), schedule.getStartDepth());
         const float clamped = std::clamp(value, param->minValue, param->maxValue);
         if (created) {
             // The row it just gained sits at the foot of the stack, so the stack is scrolled to it.
@@ -757,13 +886,13 @@ namespace merutilm::rff2 {
         // Putting a key on the row is what turns the parameter into a curve, and from then on the
         // panel writes to the key at the playhead.
         if (flatTrack(current)) {
-            for (auto &key: current.keys) {
+            for (auto &key : current.keys) {
                 key.value = clamped;
             }
             selectedTrackTarget = targetId;
             selectedTrackKey = -1;
             hoveredTrackKey = {};
-            (void) syncLinkedColorCycle(targetId);
+            (void)syncLinkedColorCycle(targetId);
             commitTimeline();
             return;
         }
@@ -781,7 +910,9 @@ namespace merutilm::rff2 {
                 MessageBeep(MB_ICONWARNING);
                 return;
             }
-            current.keys.push_back({.depth = depth, .value = clamped, .color = glm::vec4(1.0f),
+            current.keys.push_back({.depth = depth,
+                                    .value = clamped,
+                                    .color = glm::vec4(1.0f),
                                     .out = defaultInterpolation(targetId)});
             std::ranges::stable_sort(current.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) {
                 return a.depth > b.depth;
@@ -798,7 +929,7 @@ namespace merutilm::rff2 {
         selectedTrackTarget = targetId;
         selectedTrackKey = at;
         hoveredTrackKey = {};
-        (void) syncLinkedColorCycle(targetId);
+        (void)syncLinkedColorCycle(targetId);
         commitTimeline();
     }
 
@@ -810,20 +941,21 @@ namespace merutilm::rff2 {
         const bool created = track(targetId) == nullptr;
         VidTimelineTrack &current = ensureScalarTrack(targetId);
         current.enabled = true;
-        const float depth = std::clamp(snapDepth(previewDepth), schedule.getEndDepth(), schedule.getStartDepth());
+        const float depth =
+            std::clamp(snapDepth(previewDepth), schedule.getEndDepth(), schedule.getStartDepth());
         if (created) {
             trackScrollOffset = std::numeric_limits<int>::max() / 2;
         }
         // A color track holding one color throughout is not a curve yet, as a number's is not.
         if (created || flatColorTrack(current)) {
-            for (auto &key: current.keys) {
+            for (auto &key : current.keys) {
                 key.color = color;
             }
             hoveredTrackKey = {};
             commitTimeline();
             return;
         }
-        for (auto &key: current.keys) {
+        for (auto &key : current.keys) {
             if (std::abs(key.depth - depth) < 1.0f) {
                 key.color = color;
                 commitTimeline();
@@ -834,11 +966,10 @@ namespace merutilm::rff2 {
             MessageBeep(MB_ICONWARNING);
             return;
         }
-        current.keys.push_back({.depth = depth, .value = 0.0f, .color = color,
-                                .out = VidKeyInterpolation::SMOOTH});
-        std::ranges::stable_sort(current.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) {
-            return a.depth > b.depth;
-        });
+        current.keys.push_back(
+            {.depth = depth, .value = 0.0f, .color = color, .out = VidKeyInterpolation::SMOOTH});
+        std::ranges::stable_sort(
+            current.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) { return a.depth > b.depth; });
         selectedTrackTarget = targetId;
         selectedTrackKey = -1;
         hoveredTrackKey = {};
@@ -858,17 +989,12 @@ namespace merutilm::rff2 {
         const auto isRemoved = [&removed](const uint16_t id) {
             return std::ranges::find(removed, id) != removed.end();
         };
-        std::erase_if(attribute.video.timeline.tracks, [&isRemoved](const VidTimelineTrack &current) {
-            return isRemoved(current.targetId);
-        });
+        std::erase_if(attribute.video.timeline.tracks,
+                      [&isRemoved](const VidTimelineTrack &current) { return isRemoved(current.targetId); });
         std::erase_if(selectedTrackTargets, isRemoved);
         if (isRemoved(selectedTrackTarget)) {
             selectedTrackTarget = SPEED_TARGET;
             selectedTrackKey = -1;
-        }
-        if (isRemoved(editedTrackTarget)) {
-            keyEditor.reset();
-            editedTrackKey = -1;
         }
         hoveredTrackKey = {};
         commitTimeline();
@@ -886,7 +1012,7 @@ namespace merutilm::rff2 {
         const std::vector<VidTimelineKey> keys = source->keys;
         const bool enabled = source->enabled;
         bool changed = false;
-        for (const uint16_t targetId: {CYCLE_R_TARGET, CYCLE_G_TARGET, CYCLE_B_TARGET}) {
+        for (const uint16_t targetId : {CYCLE_R_TARGET, CYCLE_G_TARGET, CYCLE_B_TARGET}) {
             if (targetId == sourceTarget) {
                 continue;
             }
@@ -906,6 +1032,23 @@ namespace merutilm::rff2 {
         timelineLightModeFlag().store(lightMode, std::memory_order_relaxed);
         // Kept straight away, so the next start opens the editor in the colors it was left in.
         PreferencesIO::save();
+        refreshTheme();
+    }
+
+    void TimelineWindow::refreshTheme() {
+        const auto &shared = settingsTheme(!lightMode);
+        inspectorTheme = {shared.background,
+                          shared.text,
+                          shared.rangeText,
+                          shared.cardNoteAccent,
+                          shared.radioSelectedBackground,
+                          shared.radioSelectedText,
+                          shared.textFieldBackground,
+                          shared.sliderTrack,
+                          shared.textError};
+        if (inspector) {
+            inspector->applyTheme();
+        }
         applyPanelTheme();
         hoverTheme = false;
         if (fieldEditBrush != nullptr) {
@@ -913,11 +1056,31 @@ namespace merutilm::rff2 {
         }
         fieldEditBrush = CreateSolidBrush(timelineTheme(lightMode).panelRaised);
         if (fieldEdit != nullptr) {
+            applyDarkThemeClass(fieldEdit, false, !lightMode);
             InvalidateRect(fieldEdit, nullptr, TRUE);
         }
+        if (fieldTooltip) {
+            applyDarkThemeClass(fieldTooltip, false, !lightMode);
+            SendMessageW(fieldTooltip, TTM_SETTIPBKCOLOR, settingsTheme(!lightMode).tooltipBackground, 0);
+            SendMessageW(fieldTooltip, TTM_SETTIPTEXTCOLOR, settingsTheme(!lightMode).tooltipText, 0);
+        }
         if (window != nullptr) {
+            if (!embedded || floatingWorkspace) {
+                applyDarkWindowFrame(window, !lightMode);
+            }
             InvalidateRect(window, nullptr, FALSE);
         }
+    }
+
+    void TimelineWindow::applyWorkspaceTheme(HWND handle) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self) {
+            return;
+        }
+        if (self->embedded) {
+            self->lightMode = !darkSettingsMode();
+        }
+        self->refreshTheme();
     }
 
     void TimelineWindow::adoptPanel(SettingsWindow &panel) {
@@ -927,7 +1090,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::applyPanelTheme() const {
-        for (const HWND panel: themedPanels) {
+        for (const HWND panel : themedPanels) {
             if (SettingsWindow *opened = SettingsWindow::of(panel); opened != nullptr) {
                 opened->setDarkOverride(!lightMode);
             }
@@ -935,7 +1098,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::toggleFullscreen() {
-        if (window == nullptr) {
+        if (window == nullptr || embedded) {
             return;
         }
         if (fullscreen) {
@@ -964,8 +1127,7 @@ namespace merutilm::rff2 {
         hoverFullscreen = false;
         SetWindowPos(window, HWND_TOP, monitor.rcMonitor.left, monitor.rcMonitor.top,
                      monitor.rcMonitor.right - monitor.rcMonitor.left,
-                     monitor.rcMonitor.bottom - monitor.rcMonitor.top,
-                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                     monitor.rcMonitor.bottom - monitor.rcMonitor.top, SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
         InvalidateRect(window, nullptr, FALSE);
     }
 
@@ -975,7 +1137,7 @@ namespace merutilm::rff2 {
         if (targetId == SPEED_TARGET) {
             float peak = std::max(fallback, VidTimelineAttribute::MIN_SPEED);
             if (current != nullptr) {
-                for (const auto &key: current->keys) {
+                for (const auto &key : current->keys) {
                     peak = std::max(peak, key.value);
                 }
             }
@@ -993,7 +1155,7 @@ namespace merutilm::rff2 {
         if (param->minValue >= 0.0f) {
             float peak = std::max(fallback, 1.0f);
             if (current != nullptr) {
-                for (const auto &key: current->keys) {
+                for (const auto &key : current->keys) {
                     peak = std::max(peak, key.value);
                 }
             }
@@ -1001,7 +1163,7 @@ namespace merutilm::rff2 {
         }
         float magnitude = std::max(1.0f, std::abs(fallback));
         if (current != nullptr) {
-            for (const auto &key: current->keys) {
+            for (const auto &key : current->keys) {
                 magnitude = std::max(magnitude, std::abs(key.value));
             }
         }
@@ -1010,7 +1172,7 @@ namespace merutilm::rff2 {
     }
 
     const TimelineWindow::TrackLayout *TimelineWindow::layout(const uint16_t targetId) const {
-        for (const auto &item: trackLayouts) {
+        for (const auto &item : trackLayouts) {
             if (item.targetId == targetId) {
                 return &item;
             }
@@ -1080,9 +1242,9 @@ namespace merutilm::rff2 {
         const int trackWidth = static_cast<int>(scrollTrack.right - scrollTrack.left);
         const int thumbWidth = static_cast<int>(scrollThumb.right - scrollThumb.left);
         const int travel = std::max(trackWidth - thumbWidth, 1);
-        const float ratio = std::clamp(
-            static_cast<float>(point.x - scrollGrabOffset - scrollTrack.left) / static_cast<float>(travel),
-            0.0f, 1.0f);
+        const float ratio = std::clamp(static_cast<float>(point.x - scrollGrabOffset - scrollTrack.left) /
+                                           static_cast<float>(travel),
+                                       0.0f, 1.0f);
         const float fullSpan = std::max(schedule.getStartDepth() - schedule.getEndDepth(), 1e-6f);
         const float span = viewSpan();
         viewStartDepth = schedule.getStartDepth() - (fullSpan - span) * ratio;
@@ -1112,9 +1274,10 @@ namespace merutilm::rff2 {
         const int barHeight = static_cast<int>(trackScrollTrack.bottom - trackScrollTrack.top);
         const int thumbHeight = static_cast<int>(trackScrollThumb.bottom - trackScrollThumb.top);
         const int travel = std::max(barHeight - thumbHeight, 1);
-        const float ratio = std::clamp(
-            static_cast<float>(point.y - trackScrollGrabOffset - trackScrollTrack.top) / static_cast<float>(travel),
-            0.0f, 1.0f);
+        const float ratio =
+            std::clamp(static_cast<float>(point.y - trackScrollGrabOffset - trackScrollTrack.top) /
+                           static_cast<float>(travel),
+                       0.0f, 1.0f);
         trackScrollOffset = static_cast<int>(std::lround(ratio * static_cast<float>(trackScrollRange)));
         if (window != nullptr) {
             InvalidateRect(window, nullptr, FALSE);
@@ -1136,8 +1299,8 @@ namespace merutilm::rff2 {
         // has no place left on it: it is drawn nowhere and grabbed nowhere, and a track whose opening
         // key is one of them reads as a track that lost its first diamond. The key that stood at the
         // old start follows the new one, and anything else beyond the ends is brought onto the axis.
-        for (auto &track: attribute.video.timeline.tracks) {
-            for (auto &key: track.keys) {
+        for (auto &track : attribute.video.timeline.tracks) {
+            for (auto &key : track.keys) {
                 key.depth = key.depth >= previousStartDepth - 1e-3f
                                 ? startDepth
                                 : std::clamp(key.depth, endDepth, startDepth);
@@ -1146,10 +1309,10 @@ namespace merutilm::rff2 {
                 return a.depth > b.depth;
             });
             // Keys the move brought onto one depth are one key, so only the first of them is kept.
-            const auto duplicates = std::ranges::unique(track.keys,
-                                                        [](const VidTimelineKey &a, const VidTimelineKey &b) {
-                                                            return std::abs(a.depth - b.depth) < 1e-3f;
-                                                        });
+            const auto duplicates =
+                std::ranges::unique(track.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) {
+                    return std::abs(a.depth - b.depth) < 1e-3f;
+                });
             track.keys.erase(duplicates.begin(), duplicates.end());
         }
         selectedTrackKey = -1;
@@ -1158,8 +1321,10 @@ namespace merutilm::rff2 {
 
     void TimelineWindow::rebuildSchedule() {
         const bool wasFullView = viewSpan() >= schedule.getStartDepth() - schedule.getEndDepth() - 1e-3f;
-        schedule = TimelineSchedule::create(attribute.video.timeline, attribute.video.timeline.estimateKeyframes,
-                                            -attribute.video.animation.overZoom, attribute.video.animation.mps);
+        schedule =
+            TimelineSchedule::create(attribute.video.timeline, attribute.video.timeline.estimateKeyframes,
+                                     -attribute.video.animation.overZoom, attribute.video.animation.mps);
+        previewScheduleSnapshot = std::make_shared<TimelineSchedule>(schedule);
         previewDepth = std::clamp(previewDepth, schedule.getEndDepth(), schedule.getStartDepth());
         if (wasFullView) {
             resetView();
@@ -1170,11 +1335,13 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::commitTimeline() {
+        accessibilityDirty = true;
         attribute.video.timeline.enabled = true;
         recordUndoStep();
         rebuildSchedule();
         if (sourceAttribute != nullptr) {
             sourceAttribute->video.timeline = attribute.video.timeline;
+            rememberWorkspaceSource();
         }
         if (!draggingTrackKey) {
             requestFramePreview();
@@ -1184,73 +1351,131 @@ namespace merutilm::rff2 {
         }
     }
 
-    void TimelineWindow::recordUndoStep() {
-        if (restoringUndoStep) {
-            // The step just put back is where the next change is measured from, and the gesture
-            // clock is cleared so that change opens a step of its own however quickly it follows.
-            undoBaseline = attribute.video.timeline;
-            lastUndoStep = 0;
-            return;
+    namespace {
+        std::string timelineBytes(const VidTimelineAttribute &value) {
+            std::ostringstream out(std::ios::out | std::ios::binary);
+            TimelineIO::writeTimeline(out, value);
+            AudioTimelineIO::write(out, value.audio);
+            TimelineIO::writeOverlayPrecision(out, value.zoomOverlay);
+            return std::move(out).str();
         }
+    } // namespace
+
+    void TimelineWindow::recordUndoStep() {
         const ULONGLONG now = GetTickCount64();
         // A key being dragged, or a value scrubbed in a settings panel, reports its change on every
         // mouse move. One step for the whole gesture is what Undo is asked to take back, so a change
         // arriving on the heels of the last one extends that step rather than opening another.
-        if (const bool extend = !undoSteps.empty() &&
-                                (draggingTrackKey || now - lastUndoStep < UNDO_COALESCE_MS); !extend) {
-            undoSteps.push_back(undoBaseline);
+        if (timelineBytes(undoBaseline) == timelineBytes(attribute.video.timeline) &&
+            undoBaselineStatic == attribute.video.data.isStatic) {
+            return;
+        }
+        if (const bool extend = !undoSteps.empty() && historyOrder.latest(undoSteps.back().serial) &&
+                                timelineBytes(undoSteps.back().after) == timelineBytes(undoBaseline) &&
+                                undoSteps.back().afterStatic == undoBaselineStatic &&
+                                (draggingTrackKey ? dragHasUndoStep : now - lastUndoStep < UNDO_COALESCE_MS);
+            !extend) {
+            undoSteps.push_back({undoBaseline, attribute.video.timeline, historyOrder.commit(),
+                                 undoBaselineStatic, attribute.video.data.isStatic});
             if (undoSteps.size() > MAX_UNDO_STEPS) {
                 undoSteps.erase(undoSteps.begin());
             }
             // The steps taken back are what a new change branches away from, and are gone with it.
             redoSteps.clear();
         }
+        undoSteps.back().after = attribute.video.timeline;
+        undoSteps.back().afterStatic = attribute.video.data.isStatic;
+        undoBaselineStatic = attribute.video.data.isStatic;
+        if (draggingTrackKey) {
+            dragHasUndoStep = true;
+        }
         lastUndoStep = now;
         undoBaseline = attribute.video.timeline;
     }
 
-    void TimelineWindow::undoTimeline() {
+    bool TimelineWindow::undoTimeline() {
         if (undoSteps.empty()) {
-            MessageBeep(MB_ICONWARNING);
-            return;
+            return false;
         }
-        redoSteps.push_back(attribute.video.timeline);
-        VidTimelineAttribute restored = std::move(undoSteps.back());
+        const auto &current = sourceAttribute ? sourceAttribute->video.timeline : attribute.video.timeline;
+        if (timelineBytes(current) != timelineBytes(undoSteps.back().after) ||
+            (sourceAttribute ? sourceAttribute->video.data.isStatic : attribute.video.data.isStatic) !=
+                undoSteps.back().afterStatic) {
+            undoSteps.clear();
+            redoSteps.clear();
+            return false;
+        }
+        historyOrder.prepareUndo(redoSteps);
+        attribute.video.data.isStatic = undoSteps.back().beforeStatic;
+        if (sourceAttribute) {
+            sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
+        }
+        auto restored = undoSteps.back().before;
+        redoSteps.push_back(std::move(undoSteps.back()));
         undoSteps.pop_back();
         applyRestoredTimeline(std::move(restored));
+        return true;
     }
 
-    void TimelineWindow::redoTimeline() {
-        if (redoSteps.empty()) {
-            MessageBeep(MB_ICONWARNING);
-            return;
+    bool TimelineWindow::redoTimeline() {
+        if (redoSteps.empty() || !historyOrder.validRedo()) {
+            return false;
         }
-        undoSteps.push_back(attribute.video.timeline);
-        VidTimelineAttribute restored = std::move(redoSteps.back());
+        const auto &current = sourceAttribute ? sourceAttribute->video.timeline : attribute.video.timeline;
+        if (timelineBytes(current) != timelineBytes(redoSteps.back().before) ||
+            (sourceAttribute ? sourceAttribute->video.data.isStatic : attribute.video.data.isStatic) !=
+                redoSteps.back().beforeStatic) {
+            undoSteps.clear();
+            redoSteps.clear();
+            return false;
+        }
+        attribute.video.data.isStatic = redoSteps.back().afterStatic;
+        if (sourceAttribute) {
+            sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
+        }
+        auto restored = redoSteps.back().after;
+        undoSteps.push_back(std::move(redoSteps.back()));
         redoSteps.pop_back();
         applyRestoredTimeline(std::move(restored));
+        return true;
     }
 
     void TimelineWindow::applyRestoredTimeline(VidTimelineAttribute &&restored) {
         attribute.video.timeline = std::move(restored);
+        attribute.video.animation.showText = attribute.video.timeline.zoomOverlay.visible;
+        linkColorCycle = colorCycleTracksLinked(attribute.video.timeline, linkColorCycle);
+        PostMessageW(window, WM_APP + 0x266, 0, 0);
         // A key the step being put back had added is not there to stay picked, edited or hovered.
-        keyEditor.reset();
-        editedTrackKey = -1;
         selectedTrackKey = -1;
         selectedTrackTargets.clear();
         hoveredTrackKey = {};
-        restoringUndoStep = true;
-        commitTimeline();
-        restoringUndoStep = false;
+        // The step just put back is where the next change is measured from, and the gesture
+        // clock is cleared so that change opens a step of its own however quickly it follows.
+        undoBaseline = attribute.video.timeline;
+        undoBaselineStatic = attribute.video.data.isStatic;
+        lastUndoStep = 0;
+        if (sourceAttribute) {
+            sourceAttribute->video.timeline = attribute.video.timeline;
+            sourceAttribute->video.animation.showText = attribute.video.animation.showText;
+            rememberWorkspaceSource();
+        }
+        ensureEditableTracks();
+        rebuildSchedule();
+        if (embedded) {
+            syncWorkspace(window);
+        } else {
+            requestFramePreview();
+        }
+        InvalidateRect(window, nullptr, FALSE);
     }
 
     TimelineWindow::KeyHit TimelineWindow::hitTrackKey(const POINT point) const {
         const int radius = sc(9);
         KeyHit best = {};
         int bestDistance = radius * radius + 1;
-        for (const auto &item: trackLayouts) {
+        for (const auto &item : trackLayouts) {
             const VidTimelineTrack *current = track(item.targetId);
-            if (current == nullptr || !item.editable) {
+            if (current == nullptr) {
                 continue;
             }
             for (int i = 0; i < static_cast<int>(current->keys.size()); ++i) {
@@ -1259,7 +1484,8 @@ namespace merutilm::rff2 {
                 if (!visibleX(x, timelineAxis, radius)) {
                     continue;
                 }
-                const int y = valueY(key.value, item.minValue, item.maxValue, item.row);
+                const int y = item.editable ? valueY(key.value, item.minValue, item.maxValue, item.row)
+                                            : (item.row.top + item.row.bottom) / 2;
                 if (y < timelineAxis.top || y > timelineAxis.bottom) {
                     continue;
                 }
@@ -1279,7 +1505,7 @@ namespace merutilm::rff2 {
         if (point.y < timelineAxis.top || point.y > timelineAxis.bottom) {
             return UINT16_MAX;
         }
-        for (const auto &item: trackLayouts) {
+        for (const auto &item : trackLayouts) {
             if ((item.editable || !editableOnly) && contains(item.row, point)) {
                 return item.targetId;
             }
@@ -1291,7 +1517,7 @@ namespace merutilm::rff2 {
         if (point.y < timelineAxis.top || point.y > timelineAxis.bottom) {
             return UINT16_MAX;
         }
-        for (const auto &item: trackLayouts) {
+        for (const auto &item : trackLayouts) {
             if (contains(item.label, point)) {
                 return item.targetId;
             }
@@ -1302,7 +1528,7 @@ namespace merutilm::rff2 {
     int TimelineWindow::trackRowDropTarget(const POINT point) const {
         int index = -1;
         int firstVisible = -1;
-        for (const auto &item: trackLayouts) {
+        for (const auto &item : trackLayouts) {
             if (item.order < 0) {
                 continue;
             }
@@ -1370,7 +1596,7 @@ namespace merutilm::rff2 {
         };
         // The rows travel as one block, stacked the way the stack already holds them.
         std::vector<uint16_t> block;
-        for (const uint16_t id: order) {
+        for (const uint16_t id : order) {
             if (carried(id)) {
                 block.push_back(id);
             }
@@ -1405,7 +1631,7 @@ namespace merutilm::rff2 {
                 }
             }
         };
-        for (const uint16_t id: order) {
+        for (const uint16_t id : order) {
             take(id);
             // The channels the R row stands for while they are linked follow it to its new place.
             if (id == CYCLE_R_TARGET && linkColorCycle) {
@@ -1424,6 +1650,7 @@ namespace merutilm::rff2 {
         recordUndoStep();
         if (sourceAttribute != nullptr) {
             sourceAttribute->video.timeline = attribute.video.timeline;
+            rememberWorkspaceSource();
         }
         if (window != nullptr) {
             InvalidateRect(window, nullptr, FALSE);
@@ -1432,7 +1659,8 @@ namespace merutilm::rff2 {
 
     void TimelineWindow::updateTrackKey(const POINT point) {
         VidTimelineTrack *current = track(selectedTrackTarget);
-        if (current == nullptr || selectedTrackKey < 0 || selectedTrackKey >= static_cast<int>(current->keys.size())) {
+        if (current == nullptr || selectedTrackKey < 0 ||
+            selectedTrackKey >= static_cast<int>(current->keys.size())) {
             return;
         }
         current->enabled = true;
@@ -1451,18 +1679,24 @@ namespace merutilm::rff2 {
             return;
         }
         const float plotHeight = static_cast<float>(std::max(item->row.bottom - item->row.top - sc(16), 1L));
-        const float valueRatio = std::clamp(
-            static_cast<float>(item->row.bottom - sc(8) - point.y) / plotHeight, 0.0f, 1.0f);
+        const float valueRatio =
+            std::clamp(static_cast<float>(item->row.bottom - sc(8) - point.y) / plotHeight, 0.0f, 1.0f);
         float value = dragValueMin + (dragValueMax - dragValueMin) * valueRatio;
         if (selectedTrackTarget == SPEED_TARGET) {
             value = std::max(value, VidTimelineAttribute::MIN_SPEED);
-        } else if (const TimelineParamDesc *param = TimelineParams::find(selectedTrackTarget); param != nullptr) {
+        } else if (const TimelineParamDesc *param = TimelineParams::find(selectedTrackTarget);
+                   param != nullptr) {
             value = std::clamp(value, param->minValue, param->maxValue);
+            if (param->kind == TimelineParamKind::BOOL || param->kind == TimelineParamKind::ENUM) {
+                value = std::round(value);
+            }
         }
         current->keys[selectedTrackKey].depth = std::clamp(depth, endDepth, startDepth);
-        current->keys[selectedTrackKey].value = value;
+        if (item->editable) {
+            current->keys[selectedTrackKey].value = value;
+        }
         previewDepth = current->keys[selectedTrackKey].depth;
-        (void) syncLinkedColorCycle(selectedTrackTarget);
+        (void)syncLinkedColorCycle(selectedTrackTarget);
         commitTimeline();
     }
 
@@ -1491,15 +1725,16 @@ namespace merutilm::rff2 {
         }
         float value = current.keys.empty()
                           ? baseValue(targetId)
-                          : TimelineSchedule::evaluateTrack(current, depth, baseValue(targetId));
+                          : evaluateDisplayedTrack(current, targetId, depth, baseValue(targetId));
         if (targetId == SPEED_TARGET) {
             value = std::max(value, VidTimelineAttribute::MIN_SPEED);
         }
-        current.keys.push_back({.depth = depth, .value = value, .color = glm::vec4(1.0f),
+        current.keys.push_back({.depth = depth,
+                                .value = value,
+                                .color = glm::vec4(1.0f),
                                 .out = defaultInterpolation(targetId)});
-        std::ranges::stable_sort(current.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) {
-            return a.depth > b.depth;
-        });
+        std::ranges::stable_sort(
+            current.keys, [](const VidTimelineKey &a, const VidTimelineKey &b) { return a.depth > b.depth; });
         selectedTrackTarget = targetId;
         selectedTrackKey = 0;
         previewDepth = depth;
@@ -1511,13 +1746,14 @@ namespace merutilm::rff2 {
                 nearest = distance;
             }
         }
-        (void) syncLinkedColorCycle(targetId);
+        (void)syncLinkedColorCycle(targetId);
         commitTimeline();
     }
 
     void TimelineWindow::deleteTrackKey() {
         VidTimelineTrack *current = track(selectedTrackTarget);
-        if (current == nullptr || selectedTrackKey < 0 || selectedTrackKey >= static_cast<int>(current->keys.size())) {
+        if (current == nullptr || selectedTrackKey < 0 ||
+            selectedTrackKey >= static_cast<int>(current->keys.size())) {
             return;
         }
         if (current->keys.size() <= 1) {
@@ -1527,138 +1763,61 @@ namespace merutilm::rff2 {
         current->enabled = true;
         current->keys.erase(current->keys.begin() + selectedTrackKey);
         selectedTrackKey = std::min(selectedTrackKey, static_cast<int>(current->keys.size()) - 1);
-        (void) syncLinkedColorCycle(selectedTrackTarget);
+        (void)syncLinkedColorCycle(selectedTrackTarget);
         commitTimeline();
     }
 
     void TimelineWindow::setTrackInterpolation(const VidKeyInterpolation interpolation) {
         VidTimelineTrack *current = track(selectedTrackTarget);
-        if (current == nullptr || selectedTrackKey < 0 || selectedTrackKey >= static_cast<int>(current->keys.size())) {
+        if (current == nullptr || selectedTrackKey < 0 ||
+            selectedTrackKey >= static_cast<int>(current->keys.size())) {
             return;
         }
         current->enabled = true;
         current->keys[selectedTrackKey].out = interpolation;
-        (void) syncLinkedColorCycle(selectedTrackTarget);
+        if (const auto *p = TimelineParams::find(selectedTrackTarget);
+            p && (p->kind == TimelineParamKind::BOOL || p->kind == TimelineParamKind::ENUM)) {
+            current->keys[selectedTrackKey].out = VidKeyInterpolation::STEP;
+        }
+        (void)syncLinkedColorCycle(selectedTrackTarget);
         commitTimeline();
     }
 
     void TimelineWindow::openTrackKeyEditor() {
-        VidTimelineTrack *current = track(selectedTrackTarget);
-        if (current == nullptr || selectedTrackKey < 0 || selectedTrackKey >= static_cast<int>(current->keys.size())) {
-            return;
-        }
-        keyEditor.reset();
-        editedTrackTarget = selectedTrackTarget;
-        editedTrackKey = selectedTrackKey;
-        editedDistance = displayDistance(current->keys[editedTrackKey].depth);
-        editedValue = current->keys[editedTrackKey].value;
-        editedInterpolation = current->keys[editedTrackKey].out;
-
-        auto editor = std::make_unique<SettingsWindow>(rowName(editedTrackTarget, linkColorCycle) + L" Key", 430);
-        editor->registerSectionHeader(L"Exact Values", false);
-        editor->registerTextInput<float>(
-            L"Distance", &editedDistance, Unparser::floatTrim(4), Parser::FLOAT,
-            [this](const float &value) {
-                if (!std::isfinite(value) || value < 0.0f ||
-                    value > schedule.getStartDepth() - schedule.getEndDepth()) {
-                    return false;
-                }
-                const VidTimelineTrack *current = track(editedTrackTarget);
-                if (current == nullptr) {
-                    return false;
-                }
-                const float depth = depthFromDistance(value);
-                for (int i = 0; i < static_cast<int>(current->keys.size()); ++i) {
-                    if (i != editedTrackKey && std::abs(current->keys[i].depth - depth) < 1.0f) {
-                        return false;
-                    }
-                }
-                return true;
-            },
-            [this] { commitTrackKeyEditor(); }, L"Set Key Distance",
-            std::format(L"How far the video has run at this key, counted from 0 at its first frame. "
-                        L"Keyframe {:.1f} minus this distance is the keyframe file it lands on. "
-                        L"Press Enter to apply the typed value.", schedule.getStartDepth()), 0.1);
-        const bool speed = editedTrackTarget == SPEED_TARGET;
-        editor->registerTextInput<float>(
-            speed ? L"Speed" : L"Value", &editedValue, Unparser::floatTrim(5), Parser::FLOAT,
-            [this](const float &value) {
-                if (!std::isfinite(value)) {
-                    return false;
-                }
-                if (editedTrackTarget == SPEED_TARGET) {
-                    return value >= VidTimelineAttribute::MIN_SPEED;
-                }
-                const TimelineParamDesc *param = TimelineParams::find(editedTrackTarget);
-                return param != nullptr && value >= param->minValue && value <= param->maxValue;
-            },
-            [this] { commitTrackKeyEditor(); }, speed ? L"Set Key Speed" : L"Set Key Value",
-            speed ? L"The exact speed in keyframes per second. Press Enter to apply the typed value."
-                  : L"The exact shader value at this keyframe depth. Press Enter to apply it.",
-            keyValueStep(editedTrackTarget));
-        editor->registerSelectionInput<VidKeyInterpolation>(
-            L"Interpolation", &editedInterpolation, [this] { commitTrackKeyEditor(); }, L"Set Interpolation",
-            L"How this key reaches the next key on the same track.");
-        editor->registerStaticText(L"Enter applies a number immediately. Arrow keys change it by one step.");
-        editor->setWindowCloseFunction([] {});
-        keyEditor = std::move(editor);
-        adoptPanel(*keyEditor);
-    }
-
-    void TimelineWindow::commitTrackKeyEditor() {
-        VidTimelineTrack *current = track(editedTrackTarget);
-        if (current == nullptr || editedTrackKey < 0 || editedTrackKey >= static_cast<int>(current->keys.size())) {
-            return;
-        }
-        VidTimelineKey edited = current->keys[editedTrackKey];
-        edited.depth = std::clamp(depthFromDistance(editedDistance), schedule.getEndDepth(),
-                                  schedule.getStartDepth());
-        for (int i = 0; i < static_cast<int>(current->keys.size()); ++i) {
-            if (i != editedTrackKey && std::abs(current->keys[i].depth - edited.depth) < 1.0f) {
-                MessageBeep(MB_ICONWARNING);
-                return;
-            }
-        }
-        if (editedTrackTarget == SPEED_TARGET) {
-            edited.value = std::max(editedValue, VidTimelineAttribute::MIN_SPEED);
-        } else if (const TimelineParamDesc *param = TimelineParams::find(editedTrackTarget); param != nullptr) {
-            edited.value = std::clamp(editedValue, param->minValue, param->maxValue);
-        }
-        edited.out = editedInterpolation;
-        current->keys[editedTrackKey] = edited;
-        std::ranges::stable_sort(current->keys, [](const VidTimelineKey &a, const VidTimelineKey &b) {
-            return a.depth > b.depth;
-        });
-        editedTrackKey = 0;
-        previewDepth = edited.depth;
-        float nearest = std::abs(current->keys.front().depth - edited.depth);
-        for (int i = 1; i < static_cast<int>(current->keys.size()); ++i) {
-            const float distance = std::abs(current->keys[i].depth - edited.depth);
-            if (distance < nearest) {
-                editedTrackKey = i;
-                nearest = distance;
-            }
-        }
-        selectedTrackTarget = editedTrackTarget;
-        selectedTrackKey = editedTrackKey;
-        current->enabled = true;
-        (void) syncLinkedColorCycle(editedTrackTarget);
-        commitTimeline();
+        showInspectorSection(0);
     }
 
     void TimelineWindow::loadTimeline() {
-        const auto path = IOUtilities::ioFileDialog(L"Open Video Timeline", Constants::Extension::DESC_TIMELINE,
-                                                    IOUtilities::OPEN_FILE, Constants::Extension::TIMELINE);
+        const auto path =
+            IOUtilities::ioFileDialogMulti(L"Open Video Timeline", IOUtilities::OPEN_FILE,
+                {{std::wstring(Constants::Extension::DESC_TIMELINE), std::wstring(Constants::Extension::TIMELINE)},
+                 {L"Timeline JSON", L"json"}});
         if (path == nullptr) {
             return;
         }
+        if (_wcsicmp(path->extension().c_str(), L".json") == 0) {
+            try {
+                if (std::filesystem::file_size(*path) > TimelineJsonIO::maximumBytes)
+                    throw std::runtime_error("JSON exceeds 16 MiB");
+                std::ifstream input(*path, std::ios::binary);
+                if (!input) throw std::runtime_error("Cannot open JSON file");
+                std::string text((std::istreambuf_iterator<char>(input)), {});
+                if (input.bad()) throw std::runtime_error("Cannot read JSON file");
+                importTimelineJson(text, *path);
+            } catch (const std::exception &e) {
+                NativeDialogs::message(window, e.what(), "Timeline JSON", MB_OK | MB_ICONERROR);
+            }
+            return;
+        }
         VidTimelineAttribute loaded = {};
+        loaded.zoomOverlay.visible = attribute.video.timeline.zoomOverlay.visible;
         if (!TimelineIO::load(*path, loaded)) {
-            MessageBoxW(window, L"The selected .rfvt file could not be loaded.", L"Timeline Editor",
-                        MB_OK | MB_ICONERROR);
+            NativeDialogs::message(window, L"The selected .rfvt file could not be loaded.",
+                                   L"Timeline Editor", MB_OK | MB_ICONERROR);
             return;
         }
         attribute.video.timeline = std::move(loaded);
+        PostMessageW(window, WM_APP + 0x266, 0, 0);
         // The keys of the file were written against the keyframe count it carries, so they are moved
         // onto this folder's axis when its own count takes over.
         const float fileStartDepth = attribute.video.timeline.estimateKeyframes;
@@ -1668,27 +1827,46 @@ namespace merutilm::rff2 {
         }
         ensureEditableTracks();
         // Three channels a file holds apart are not linked ones, so the link follows what it carries.
-        const VidTimelineTrack *cycleR = track(CYCLE_R_TARGET);
-        const VidTimelineTrack *cycleG = track(CYCLE_G_TARGET);
-        const VidTimelineTrack *cycleB = track(CYCLE_B_TARGET);
-        linkColorCycle = cycleR != nullptr && cycleG != nullptr && cycleB != nullptr &&
-                         sameKeys(cycleR->keys, cycleG->keys) && sameKeys(cycleR->keys, cycleB->keys);
+        linkColorCycle = colorCycleTracksLinked(attribute.video.timeline, false);
         selectedTrackTarget = SPEED_TARGET;
         selectedTrackKey = -1;
         hoveredTrackKey = {};
         rebuildSchedule();
         if (sourceAttribute != nullptr) {
+            recordUndoStep();
             sourceAttribute->video.timeline = attribute.video.timeline;
+            rememberWorkspaceSource();
         }
         requestFramePreview();
         InvalidateRect(window, nullptr, FALSE);
     }
 
     void TimelineWindow::saveTimeline() const {
-        const auto path = IOUtilities::ioFileDialog(L"Save Video Timeline", Constants::Extension::DESC_TIMELINE,
-                                                    IOUtilities::SAVE_FILE, Constants::Extension::TIMELINE);
+        const auto path =
+            IOUtilities::ioFileDialogMulti(L"Save Video Timeline", IOUtilities::SAVE_FILE,
+                {{std::wstring(Constants::Extension::DESC_TIMELINE), std::wstring(Constants::Extension::TIMELINE)},
+                 {L"Timeline JSON", L"json"}});
+        if (path && _wcsicmp(path->extension().c_str(), L".json") == 0) {
+            const auto temporary = IOUtilities::temporaryFilePath(*path);
+            try {
+                auto timeline = attribute.video.timeline;
+                AudioTimelineIO::relativePaths(timeline.audio, *path);
+                const auto text = TimelineJsonIO::document(timeline).dump(2);
+                if (text.size() > TimelineJsonIO::maximumBytes) throw std::runtime_error("JSON exceeds 16 MiB");
+                std::ofstream out(temporary, std::ios::binary);
+                out.write(text.data(), static_cast<std::streamsize>(text.size()));
+                out.close();
+                if (!out || !IOUtilities::commitTemporaryFile(temporary, *path))
+                    throw std::runtime_error("Cannot save timeline JSON");
+            } catch (const std::exception &e) {
+                IOUtilities::discardTemporaryFile(temporary);
+                NativeDialogs::message(window, e.what(), "Timeline JSON", MB_OK | MB_ICONERROR);
+            }
+            return;
+        }
         if (path != nullptr && !TimelineIO::save(*path, attribute.video.timeline)) {
-            MessageBoxW(window, L"The .rfvt file could not be saved.", L"Timeline Editor", MB_OK | MB_ICONERROR);
+            NativeDialogs::message(window, L"The .rfvt file could not be saved.", L"Timeline Editor",
+                                   MB_OK | MB_ICONERROR);
         }
     }
 
@@ -1710,9 +1888,9 @@ namespace merutilm::rff2 {
             // The editor exports from keyframes that already exist, so the rows steering keyframe generation are greyed rather than left offering an edit this export never reads.
             VidExportAttribute &exportation = sourceAttribute->video.exportation;
             const std::unordered_set<const void *> kept = {
-                &exportation.fps, &exportation.bitrate, &exportation.lossless,
-                &exportation.keyframeAA, &exportation.colorAA, &exportation.pauseMainPreview,
-                &exportation.hdrTransfer, &exportation.hdrPeakNits,
+                &exportation.fps,         &exportation.bitrate,     &exportation.lossless,
+                &exportation.keyframeAA,  &exportation.colorAA,     &exportation.pauseMainPreview,
+                &exportation.hdrTransfer, &exportation.hdrPeakNits, &exportation.showExportPreview,
             };
             window.disableRowsInObjectExcept(&exportation, sizeof(VidExportAttribute), kept);
         }
@@ -1726,17 +1904,17 @@ namespace merutilm::rff2 {
         constexpr UINT CMD_EXPORT_VIDEO = 1;
         constexpr UINT CMD_EXPORT_SETTINGS = 2;
         const HMENU menu = CreatePopupMenu();
-        AppendMenuW(menu, MF_STRING, CMD_EXPORT_VIDEO, L"Export Video");
+        AppendMenuW(menu, MF_STRING, CMD_EXPORT_VIDEO, UiLanguage::label(L"Export Video"));
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, CMD_EXPORT_SETTINGS, L"Export Settings");
+        AppendMenuW(menu, MF_STRING, CMD_EXPORT_SETTINGS, UiLanguage::label(L"Export Settings"));
         MENUITEMINFOW item = {sizeof(item)};
         item.fMask = MIIM_STATE;
         item.fState = MFS_DEFAULT;
         SetMenuItemInfoW(menu, CMD_EXPORT_VIDEO, FALSE, &item);
         POINT at = {exportButton.left, exportButton.bottom + sc(2)};
         ClientToScreen(window, &at);
-        const int chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN,
-                                          at.x, at.y, 0, window, nullptr);
+        const int chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN, at.x, at.y, 0,
+                                          window, nullptr);
         DestroyMenu(menu);
         if (chosen == CMD_EXPORT_VIDEO) {
             exportVideo();
@@ -1756,10 +1934,10 @@ namespace merutilm::rff2 {
                 return;
             }
             std::wstring error;
-            std::unique_ptr<VideoFrameSource> opened = VideoFrameSource::open(
-                *directory, attribute.video.data.isStatic, error);
+            std::unique_ptr<VideoFrameSource> opened =
+                VideoFrameSource::open(*directory, attribute.video.data.isStatic, error);
             if (opened == nullptr) {
-                MessageBoxW(window, error.c_str(), L"Timeline Export", MB_OK | MB_ICONERROR);
+                NativeDialogs::message(window, error.c_str(), L"Timeline Export", MB_OK | MB_ICONERROR);
                 return;
             }
             frameSource = std::move(opened);
@@ -1769,14 +1947,15 @@ namespace merutilm::rff2 {
             retargetTrackDepths(previousStartDepth);
             rebuildSchedule();
             sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
+            recordUndoStep();
             sourceAttribute->video.timeline = attribute.video.timeline;
+            rememberWorkspaceSource();
         }
 
         const bool lossless = sourceAttribute->video.exportation.lossless;
-        const auto save = IOUtilities::ioFileDialog(L"Save Video Location", Constants::Extension::DESC_VIDEO,
-                                                     IOUtilities::SAVE_FILE,
-                                                     lossless ? Constants::Extension::VIDEO_LOSSLESS
-                                                              : Constants::Extension::VIDEO);
+        const auto save = IOUtilities::ioFileDialog(
+            L"Save Video Location", Constants::Extension::DESC_VIDEO, IOUtilities::SAVE_FILE,
+            lossless ? Constants::Extension::VIDEO_LOSSLESS : Constants::Extension::VIDEO);
         if (save == nullptr) {
             return;
         }
@@ -1788,22 +1967,39 @@ namespace merutilm::rff2 {
         stopFramePreviewWorker();
         destroyFramePreview();
         exporting = true;
+        exportStopSource = std::stop_source{};
         hoverExport = false;
         setPlaying(false);
         InvalidateRect(window, nullptr, FALSE);
 
-        scene->getBackgroundThreads().createThread(
-            [engine = &engine, scene, exportAttribute, directory, save = *save, notifyWindow,
-             owner = this](const BackgroundThread &) {
+        try {
+            scene->getBackgroundThreads().createThread([engine = &engine, scene, exportAttribute, directory,
+                                                        save = *save, notifyWindow,
+                                                        owner = this, exportStop = exportStopSource](const BackgroundThread &thread) {
+                std::stop_callback shutdownStop(thread.stopToken(), [exportStop]() mutable {
+                    exportStop.request_stop();
+                });
                 struct ExportActivity final {
                     RenderScene *scene;
-                    explicit ExportActivity(RenderScene *scene) : scene(scene) { scene->setVideoExportActive(true); }
-                    ~ExportActivity() { scene->setVideoExportActive(false); }
-                } activity(scene);
-                VideoWindow::createVideo(*engine, exportAttribute, directory, save);
-                PostMessageW(notifyWindow, WM_TIMELINE_EXPORT_FINISHED,
-                             reinterpret_cast<WPARAM>(owner), 0);
+                    HWND notifyWindow;
+                    TimelineWindow *owner;
+                    ExportActivity(RenderScene *scene, HWND notifyWindow, TimelineWindow *owner)
+                        : scene(scene), notifyWindow(notifyWindow), owner(owner) {
+                        scene->setVideoExportActive(true);
+                    }
+                    ~ExportActivity() {
+                        PostMessageW(notifyWindow, WM_TIMELINE_EXPORT_FINISHED,
+                                     reinterpret_cast<WPARAM>(owner), 0);
+                        scene->setVideoExportActive(false);
+                    }
+                } activity(scene, notifyWindow, owner);
+                VideoWindow::createVideo(*engine, exportAttribute, directory, save, {}, exportStop.get_token());
             });
+        } catch (const std::exception &) {
+            PostMessageW(notifyWindow, WM_TIMELINE_EXPORT_FINISHED, reinterpret_cast<WPARAM>(this), 0);
+            NativeDialogs::message(window, L"The video export worker could not start.", L"Timeline Export",
+                                   MB_OK | MB_ICONERROR);
+        }
     }
 
     void TimelineWindow::loadKeyframeDirectory() {
@@ -1811,17 +2007,22 @@ namespace merutilm::rff2 {
         if (directory == nullptr) {
             return;
         }
+        loadKeyframeDirectory(*directory);
+    }
+
+    void TimelineWindow::loadKeyframeDirectory(const std::filesystem::path &directory) {
         std::wstring error;
-        std::unique_ptr<VideoFrameSource> opened = VideoFrameSource::open(
-            *directory, attribute.video.data.isStatic, error);
+        std::unique_ptr<VideoFrameSource> opened =
+            VideoFrameSource::open(directory, attribute.video.data.isStatic, error);
         if (opened == nullptr) {
-            MessageBoxW(window, error.c_str(), L"Timeline Preview", MB_OK | MB_ICONERROR);
+            NativeDialogs::message(window, error.c_str(), L"Timeline Preview", MB_OK | MB_ICONERROR);
             return;
         }
         if (engine.isValidWindowContext(Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX) &&
             !previewWorker.joinable() && !previewContextAttached.load()) {
-            MessageBoxW(window, L"The video renderer is already being used by another preview or export.",
-                        L"Timeline Preview", MB_OK | MB_ICONWARNING);
+            NativeDialogs::message(window,
+                                   L"The video renderer is already being used by another preview or export.",
+                                   L"Timeline Preview", MB_OK | MB_ICONWARNING);
             return;
         }
 
@@ -1838,30 +2039,28 @@ namespace merutilm::rff2 {
         if (sourceAttribute != nullptr) {
             sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
             // The keys moved with the new upper Depth, so the whole timeline goes back, not the count alone.
+            recordUndoStep();
             sourceAttribute->video.timeline = attribute.video.timeline;
+            rememberWorkspaceSource();
         }
-        (void) initializeFramePreview();
+        (void)initializeFramePreview();
     }
 
     bool TimelineWindow::initializeFramePreview() {
         if (frameSource == nullptr || window == nullptr) {
             return false;
         }
-        previewRenderWindow = CreateWindowExW(0, Constants::Win32::CLASS_VIDEO_RENDER_WINDOW, nullptr,
-                                              WS_CHILD, 0, 0, sc(64), sc(64), window, nullptr,
-                                              GetModuleHandleW(nullptr), nullptr);
+        previewRenderWindow =
+            CreateWindowExW(0, Constants::Win32::CLASS_VIDEO_RENDER_WINDOW, nullptr, WS_CHILD, 0, 0, sc(64),
+                            sc(64), window, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (previewRenderWindow == nullptr) {
-            MessageBoxW(window, L"Could not create the keyframe renderer.", L"Timeline Preview",
-                        MB_OK | MB_ICONERROR);
+            NativeDialogs::message(window, L"Could not create the keyframe renderer.", L"Timeline Preview",
+                                   MB_OK | MB_ICONERROR);
             return false;
         }
         {
             std::scoped_lock lock(previewBitmapMutex);
             previewMessage = L"Building the keyframe renderer... (the first time can take minutes)";
-        }
-        {
-            std::scoped_lock lock(previewRequestMutex);
-            previewRequestGeneration = 0;
         }
         previewWorkerFailed.store(false);
         InvalidateRect(window, nullptr, FALSE);
@@ -1902,15 +2101,25 @@ namespace merutilm::rff2 {
             const auto context = engine.attachWindowContext(
                 previewRenderWindow, Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX);
             previewContextAttached.store(true);
-            previewScene = std::make_unique<VideoRenderScene>(
-                engine, *context, VkExtent2D{frameSource->getWidth(), frameSource->getHeight()}, initialAttribute);
+            Attribute previewAttribute = cameraSourceAttribute(initialAttribute, frameSource->getDirectory());
+            const VkExtent2D sourceExtent{frameSource->getWidth(), frameSource->getHeight()};
+            const double scale = std::min({0.5 / std::max(1u, previewAttribute.render.ssaa),
+                                           1280.0 / sourceExtent.width, 720.0 / sourceExtent.height});
+            const VkExtent2D previewExtent{std::max(1u, static_cast<uint32_t>(sourceExtent.width * scale)),
+                                           std::max(1u, static_cast<uint32_t>(sourceExtent.height * scale))};
+            previewAttribute.render.ssaa = 1;
+            previewAttribute.video.exportation.keyframeAA = 1;
+            previewAttribute.video.exportation.colorAA = 1;
+            frameSource->setPreviewSize(previewExtent.width, previewExtent.height);
+            previewScene =
+                std::make_unique<VideoRenderScene>(engine, *context, previewExtent, previewAttribute);
         } catch (const std::exception &e) {
             previewWorkerFailed.store(true);
             const std::string text = e.what();
             {
                 std::scoped_lock lock(previewBitmapMutex);
-                previewMessage = std::format(L"Keyframe renderer failed: {}",
-                                             std::wstring(text.begin(), text.end()));
+                previewMessage =
+                    std::format(L"Keyframe renderer failed: {}", std::wstring(text.begin(), text.end()));
             }
             PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
             return false;
@@ -1919,52 +2128,129 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::startFramePreviewWorker() {
-        previewWorker = std::jthread([this](const std::stop_token stopToken) {
-            uint64_t processedGeneration = 0;
+        uint64_t initialGeneration;
+        {
+            std::scoped_lock lock(previewRequestMutex);
+            initialGeneration = previewRequestGeneration;
+        }
+        setPlaying(false);
+        cacheStop = std::stop_source{};
+        cachePreloading.store(true);
+        {
+            std::scoped_lock lock(previewBitmapMutex);
+            cacheMessage = UiLanguage::text(L"Preparing RAM preload...");
+        }
+        previewWorker = std::jthread([this, initialGeneration](const std::stop_token stopToken) {
+            uint64_t processedGeneration = initialGeneration;
+            MEMORYSTATUSEX memory{sizeof(memory)};
+            const uint64_t temporaryBytes = uint64_t(frameSource->getWidth()) * frameSource->getHeight() * 32;
+            const uint64_t budget =
+                GlobalMemoryStatusEx(&memory) && memory.ullAvailPhys > temporaryBytes
+                    ? std::min<uint64_t>(memory.ullAvailPhys / 2, memory.ullAvailPhys - temporaryBytes)
+                    : 0;
+            std::wstring error;
+            ULONGLONG lastProgress = 0;
+            const bool cached = frameSource->preload(
+                budget, cacheStop.get_token(),
+                [this, &lastProgress, &processedGeneration,
+                 stopToken](const uint32_t done, const uint32_t count, const uint64_t bytes) {
+                    const ULONGLONG now = GetTickCount64();
+                    if (done != 0 && done != count && now - lastProgress < 100) {
+                        return;
+                    }
+                    lastProgress = now;
+                    processFramePreviewRequest(processedGeneration, stopToken, false);
+                    {
+                        std::scoped_lock lock(previewBitmapMutex);
+                        cacheMessage = std::format(L"{} {}/{}  ({:.1f} MiB)\n{}",
+                                                   UiLanguage::text(L"Preloading previews to RAM:"), done,
+                                                   count, static_cast<double>(bytes) / (1024 * 1024),
+                                                   UiLanguage::text(L"Stop cancels preloading."));
+                    }
+                    PostMessageW(window, WM_TIMELINE_CACHE_PROGRESS, 0, 0);
+                },
+                error);
+            {
+                std::scoped_lock lock(previewBitmapMutex);
+                cacheMessage =
+                    cached
+                        ? std::format(L"{} {}  ({:.1f} MiB)", UiLanguage::text(L"RAM preload complete:"),
+                                      frameSource->getFrameCount(),
+                                      static_cast<double>(frameSource->previewCacheBytes()) / (1024 * 1024))
+                        : UiLanguage::text(error);
+                if (!cached && error != L"Not enough free RAM for all previews. Using on-demand loading." &&
+                    error != L"RAM preload canceled. Using on-demand loading." &&
+                    error != L"RAM preload failed. Using on-demand loading.") {
+                    cacheMessage += L" " + UiLanguage::text(L"RAM preload failed. Using on-demand loading.");
+                }
+            }
+            cachePreloading.store(false);
+            PostMessageW(window, WM_TIMELINE_CACHE_PROGRESS, 0, 0);
             while (!stopToken.stop_requested()) {
-                float depth = 0.0f;
-                float sec = 0.0f;
-                VidTimelineAttribute timeline = {};
-                ShaderAttribute shader = {};
-                {
-                    std::unique_lock lock(previewRequestMutex);
-                    previewRequestCondition.wait(lock, [this, &stopToken, &processedGeneration] {
-                        return stopToken.stop_requested() || previewRequestGeneration != processedGeneration;
-                    });
-                    if (stopToken.stop_requested()) {
-                        break;
-                    }
-                    processedGeneration = previewRequestGeneration;
-                    depth = requestedPreviewDepth;
-                    sec = requestedPreviewSec;
-                    timeline = requestedPreviewTimeline;
-                    shader = requestedPreviewShader;
-                }
-                try {
-                    (void) renderFramePreview(depth, sec, timeline, shader);
-                } catch (const std::exception &e) {
-                    // What went wrong is carried into the editor, where it can be read and reported.
-                    const std::string text = e.what();
-                    {
-                        std::scoped_lock lock(previewBitmapMutex);
-                        previewMessage = std::format(L"Keyframe preview failed: {}",
-                                                     std::wstring(text.begin(), text.end()));
-                    }
-                    previewWorkerFailed.store(true);
-                    PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
-                } catch (...) {
-                    {
-                        std::scoped_lock lock(previewBitmapMutex);
-                        previewMessage = L"The keyframe preview could not be rendered";
-                    }
-                    previewWorkerFailed.store(true);
-                    PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
-                }
+                processFramePreviewRequest(processedGeneration, stopToken, true);
             }
         });
     }
 
+    void TimelineWindow::processFramePreviewRequest(uint64_t &processedGeneration,
+                                                    const std::stop_token stopToken, const bool wait) {
+        int imageSide = 0;
+        uint32_t imagePage = 0;
+        std::shared_ptr<const AiBundleRequest> imageBundle;
+        float depth = 0.0f;
+        float sec = 0.0f;
+        VidTimelineAttribute timeline = {};
+        ShaderAttribute shader = {};
+        std::shared_ptr<const TimelineSchedule> timelineSchedule;
+        {
+            std::unique_lock lock(previewRequestMutex);
+            if (wait) {
+                previewRequestCondition.wait(lock, [this, &stopToken, &processedGeneration] {
+                    return stopToken.stop_requested() || previewRequestGeneration != processedGeneration;
+                });
+            }
+            if (stopToken.stop_requested() || previewRequestGeneration == processedGeneration) {
+                return;
+            }
+            processedGeneration = previewRequestGeneration;
+            depth = requestedPreviewDepth;
+            sec = requestedPreviewSec;
+            timeline = requestedPreviewTimeline;
+            shader = requestedPreviewShader;
+            timelineSchedule = requestedPreviewSchedule;
+            imageSide = std::exchange(requestedAiImageSide, 0);
+            imagePage = requestedAiImagePage;
+            imageBundle = std::exchange(requestedAiBundle, {});
+        }
+        previewWorkerFailed.store(false);
+        if (imageSide != 0) {
+            renderAiImages(imageSide, imagePage, timeline, shader, *timelineSchedule, processedGeneration, stopToken, imageBundle);
+            if (stopToken.stop_requested()) return;
+        }
+        try {
+            (void)renderFramePreview(depth, sec, timeline, shader, *timelineSchedule, processedGeneration);
+        } catch (const std::exception &e) {
+            // What went wrong is carried into the editor, where it can be read and reported.
+            const std::string text = e.what();
+            {
+                std::scoped_lock lock(previewBitmapMutex);
+                previewMessage =
+                    std::format(L"Keyframe preview failed: {}", std::wstring(text.begin(), text.end()));
+            }
+            previewWorkerFailed.store(true);
+            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(processedGeneration), 0);
+        } catch (...) {
+            {
+                std::scoped_lock lock(previewBitmapMutex);
+                previewMessage = L"The keyframe preview could not be rendered";
+            }
+            previewWorkerFailed.store(true);
+            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(processedGeneration), 0);
+        }
+    }
+
     void TimelineWindow::stopFramePreviewWorker() {
+        cacheStop.request_stop();
         // Whatever was outstanding ends with the worker, so the rendering line must not outlive it.
         previewPending = false;
         previewBusy = false;
@@ -1974,12 +2260,37 @@ namespace merutilm::rff2 {
         if (!previewWorker.joinable()) {
             return;
         }
-        previewWorker.request_stop();
+        {
+            std::scoped_lock lock(previewRequestMutex);
+            previewWorker.request_stop();
+        }
         previewRequestCondition.notify_all();
         previewWorker.join();
+        {
+            std::scoped_lock lock(previewRequestMutex);
+            requestedAiImageSide = 0;
+            requestedAiBundle.reset();
+        }
+        aiImagesBusy.store(false);
+        {
+            std::scoped_lock lock(previewBitmapMutex);
+            aiImageSheet.release();
+            aiImageError.clear();
+            aiImageGeneration = 0;
+            aiSavedDirectory.clear();
+        }
+        cachePreloading.store(false);
     }
 
-    void TimelineWindow::requestFramePreview() {
+    float TimelineWindow::previewSeconds() const {
+        if (playSeconds >= 0.0f && playSeconds <= schedule.getTotalSeconds() &&
+            schedule.depthAt(playSeconds) == previewDepth) {
+            return playSeconds;
+        }
+        return schedule.timeAt(previewDepth);
+    }
+
+    void TimelineWindow::requestFramePreview(const float seconds) {
         // Read here rather than held from when the editor opened: the Shader menu stays usable while
         // it is, and a fog or color changed there belongs in the next preview. Read before the
         // return below as well, since the track rows are drawn against it whether a keyframe folder
@@ -1987,15 +2298,16 @@ namespace merutilm::rff2 {
         if (sourceAttribute != nullptr) {
             attribute.shader = sourceAttribute->shader;
         }
-        if (frameSource == nullptr || !previewWorker.joinable() || previewWorkerFailed.load()) {
+        if (frameSource == nullptr || !previewWorker.joinable()) {
             return;
         }
         {
             std::scoped_lock lock(previewRequestMutex);
             requestedPreviewDepth = previewDepth;
-            requestedPreviewSec = schedule.timeAt(previewDepth);
+            requestedPreviewSec = seconds >= 0.0f ? seconds : previewSeconds();
             requestedPreviewTimeline = attribute.video.timeline;
             requestedPreviewShader = attribute.shader;
+            requestedPreviewSchedule = previewScheduleSnapshot;
             ++previewRequestGeneration;
         }
         // The rendering line waits out the delay rather than replacing the status at once, and a run
@@ -2010,8 +2322,9 @@ namespace merutilm::rff2 {
     }
 
     bool TimelineWindow::renderFramePreview(const float depth, const float sec,
-                                             const VidTimelineAttribute &timeline,
-                                             const ShaderAttribute &shader) {
+                                            const VidTimelineAttribute &timeline,
+                                            const ShaderAttribute &shader, const TimelineSchedule &timelineSchedule,
+                                            const uint64_t generation, cv::Mat *capture) {
         if (frameSource == nullptr || previewScene == nullptr) {
             return false;
         }
@@ -2021,20 +2334,22 @@ namespace merutilm::rff2 {
                 std::scoped_lock lock(previewBitmapMutex);
                 previewMessage = error;
             }
-            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
+            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(generation), 0);
             return false;
         }
 
         const float sampledDepth = frameSource->getSampledDepth();
         previewScene->updateBase(shader, timeline);
         previewScene->setStatic(frameSource->isStatic());
+        previewScene->setTimelineSchedule(timelineSchedule);
         previewScene->setCurrentFrame(sampledDepth);
         previewScene->setTime(sec);
         if (frameSource->isStatic()) {
             auto &normal = frameSource->getNormalStatic();
             auto &zoomed = frameSource->getZoomedStatic();
             previewScene->setMap(&normal, &zoomed);
-            previewScene->applyCurrentStaticImage(frameSource->getNormalImage(), frameSource->getZoomedImage());
+            previewScene->applyCurrentStaticImage(frameSource->getNormalImage(),
+                                                  frameSource->getZoomedImage());
         } else {
             auto &normal = frameSource->getNormalDynamic();
             auto &zoomed = frameSource->getZoomedDynamic();
@@ -2043,9 +2358,10 @@ namespace merutilm::rff2 {
             const uint64_t normalMax = normal.getMaxIteration();
             const uint64_t zoomedMax = zoomed.getMaxIteration();
             previewScene->setMaxIterationDynamic(static_cast<double>(std::max(normalMax, zoomedMax)),
-                                                 static_cast<double>(normalMax), static_cast<double>(zoomedMax));
-            previewScene->applyTimelineShader(depth, sec);
+                                                 static_cast<double>(normalMax),
+                                                 static_cast<double>(zoomedMax));
         }
+        previewScene->applyTimelineShader(depth, sec);
         previewScene->renderOffscreenOnce();
         previewScene->queueImage();
 
@@ -2064,8 +2380,12 @@ namespace merutilm::rff2 {
                 std::scoped_lock lock(previewBitmapMutex);
                 previewMessage = L"The rendered keyframe could not be copied to the editor";
             }
-            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
+            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(generation), 0);
             return false;
+        }
+        if (capture) {
+            *capture = buffer->image.clone();
+            return true;
         }
         SIZE size = {};
         const HBITMAP bitmap = createPreviewBitmap(window, buffer->image, size);
@@ -2074,7 +2394,7 @@ namespace merutilm::rff2 {
                 std::scoped_lock lock(previewBitmapMutex);
                 previewMessage = L"The rendered keyframe has an unsupported image format";
             }
-            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
+            PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(generation), 0);
             return false;
         }
         {
@@ -2083,13 +2403,12 @@ namespace merutilm::rff2 {
                 DeleteObject(previewBitmap);
             }
             previewBitmap = bitmap;
+            publishedPreviewZoom = buffer->zoom;
             previewSize = size;
-            previewMessage = std::format(L"{} keyframes  |  {}  |  {}",
-                                         frameSource->getFrameCount(),
-                                         frameSource->isStatic() ? L"PNG" : L"RFM/RFMZ",
-                                         frameSource->getDirectory().filename().wstring());
+            publishedPreviewGeneration = generation;
+            previewMessage = std::format(L"{} keyframes", frameSource->getFrameCount());
         }
-        PostMessageW(window, WM_TIMELINE_PREVIEW_READY, 0, 0);
+        PostMessageW(window, WM_TIMELINE_PREVIEW_READY, static_cast<WPARAM>(generation), 0);
         return true;
     }
 
@@ -2097,7 +2416,8 @@ namespace merutilm::rff2 {
     float TimelineWindow::keyframeLogZoom(const uint32_t id) {
         const float increment = std::log10(std::max(attribute.video.data.defaultZoomIncrement, 1.000001f));
         // Without a keyframe to read, the zoom being explored is the only anchor the editor has.
-        const float estimated = attribute.fractal.logZoom - static_cast<float>(static_cast<int64_t>(id) - 1) * increment;
+        const float estimated =
+            attribute.fractal.logZoom - static_cast<float>(static_cast<int64_t>(id) - 1) * increment;
         if (frameSource == nullptr || id == 0 || id > frameSource->getFrameCount()) {
             return estimated;
         }
@@ -2107,6 +2427,12 @@ namespace merutilm::rff2 {
         }
         // Not a NaN kept in the vector: -ffast-math is on, and a test for one there is folded away.
         std::optional<float> &cached = keyframeLogZooms[id - 1];
+        if (!cachePreloading.load()) {
+            if (const auto zoom = frameSource->cachedLogZoom(id)) {
+                cached = zoom;
+                return *zoom;
+            }
+        }
         if (cached.has_value()) {
             return *cached;
         }
@@ -2170,19 +2496,43 @@ namespace merutilm::rff2 {
         }
         closeFieldEdit();
 
-        const RECT box = field == FieldEdit::DISTANCE ? distanceField : keyframeField;
+        RECT box;
+        const wchar_t *accessibleName;
+        const wchar_t *accessibleId;
+        long focusItem;
+        switch (field) {
+        case FieldEdit::DISTANCE:
+            box = distanceField;
+            accessibleName = L"Timeline Distance";
+            accessibleId = L"timeline.distance";
+            focusItem = workspace::TimelineItems::distance;
+            break;
+        case FieldEdit::TIME:
+            box = timeField;
+            accessibleName = L"Timeline Time";
+            accessibleId = L"timeline.time";
+            focusItem = workspace::TimelineItems::time;
+            break;
+        default:
+            box = keyframeField;
+            accessibleName = L"Timeline Keyframe";
+            accessibleId = L"timeline.keyframe";
+            focusItem = workspace::TimelineItems::keyframe;
+            break;
+        }
         if (box.right <= box.left || box.bottom <= box.top) {
             return;
         }
-        const std::wstring value = field == FieldEdit::DISTANCE
-                                       ? Unparser::floatTrim(4)(displayDistance(previewDepth))
-                                       : Unparser::floatTrim(4)(previewDepth);
+        const std::wstring value =
+            field == FieldEdit::DISTANCE
+                ? Unparser::floatTrim(4)(displayDistance(previewDepth))
+                : Unparser::floatTrim(4)(field == FieldEdit::TIME ? previewSeconds() : previewDepth);
         const RECT editRect = {box.left + sc(8), box.top + sc(9), box.right - sc(8), box.bottom - sc(4)};
         activeFieldEdit = field;
-        fieldEdit = CreateWindowExW(0, WC_EDITW, value.c_str(),
-                                    WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER,
-                                    editRect.left, editRect.top, editRect.right - editRect.left,
-                                    editRect.bottom - editRect.top, window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        fieldEdit = CreateWindowExW(
+            0, WC_EDITW, value.c_str(), WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER, editRect.left,
+            editRect.top, editRect.right - editRect.left, editRect.bottom - editRect.top, window, nullptr,
+            GetModuleHandleW(nullptr), nullptr);
         if (fieldEdit == nullptr) {
             activeFieldEdit = FieldEdit::NONE;
             return;
@@ -2191,6 +2541,10 @@ namespace merutilm::rff2 {
         SendMessageW(fieldEdit, EM_SETLIMITTEXT, 128, 0);
         SendMessageW(fieldEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(sc(4), sc(4)));
         SetWindowSubclass(fieldEdit, fieldEditProc, 1, reinterpret_cast<DWORD_PTR>(this));
+        workspace::AccessibleControl::describe(
+            fieldEdit, accessibleName,
+            L"Enter a number or formula. Press Enter to apply or Escape to cancel.", accessibleId);
+        keyboardFocus = focusItem;
         SetFocus(fieldEdit);
         SendMessageW(fieldEdit, EM_SETSEL, 0, -1);
         InvalidateRect(window, nullptr, FALSE);
@@ -2206,15 +2560,28 @@ namespace merutilm::rff2 {
         text.resize(length);
         const std::optional<double> value = NumericExpression::evaluate(text);
         if (!value.has_value() || std::abs(*value) > std::numeric_limits<float>::max()) {
+            workspace::AccessibleControl::validation(fieldEdit,
+                                                     L"Enter a valid formula with a finite result.");
             MessageBeep(MB_ICONWARNING);
             SendMessageW(fieldEdit, EM_SETSEL, 0, -1);
             return false;
         }
+        if (activeFieldEdit == FieldEdit::TIME &&
+            text == Unparser::floatTrim(4)(previewSeconds())) {
+            closeFieldEdit();
+            return true;
+        }
 
-        const double depth = activeFieldEdit == FieldEdit::DISTANCE ? depthFromDistance(static_cast<float>(*value))
-                                                                    : *value;
-        previewDepth = std::clamp(static_cast<float>(depth), schedule.getEndDepth(), schedule.getStartDepth());
+        const double depth =
+            activeFieldEdit == FieldEdit::DISTANCE ? depthFromDistance(static_cast<float>(*value))
+            : activeFieldEdit == FieldEdit::TIME   ? schedule.depthAt(static_cast<float>(*value))
+                                                   : *value;
+        previewDepth =
+            std::clamp(static_cast<float>(depth), schedule.getEndDepth(), schedule.getStartDepth());
         syncPlaybackClock();
+        if (activeFieldEdit == FieldEdit::TIME) {
+            playSeconds = std::clamp(static_cast<float>(*value), 0.0f, schedule.getTotalSeconds());
+        }
         closeFieldEdit();
         requestFramePreview();
         InvalidateRect(window, nullptr, FALSE);
@@ -2240,11 +2607,10 @@ namespace merutilm::rff2 {
         if (margin <= 0) {
             return false;
         }
-        const int past = point.x < timelineAxis.left + margin
-                             ? point.x - static_cast<int>(timelineAxis.left) - margin
-                             : point.x > timelineAxis.right - margin
-                                   ? point.x - static_cast<int>(timelineAxis.right) + margin
-                                   : 0;
+        const int past =
+            point.x < timelineAxis.left + margin    ? point.x - static_cast<int>(timelineAxis.left) - margin
+            : point.x > timelineAxis.right - margin ? point.x - static_cast<int>(timelineAxis.right) + margin
+                                                    : 0;
         if (past == 0) {
             return false;
         }
@@ -2260,9 +2626,9 @@ namespace merutilm::rff2 {
         if (margin <= 0) {
             return false;
         }
-        const int delta = point.y < timelineAxis.top + margin
-                              ? -sc(6)
-                              : point.y > timelineAxis.bottom - margin ? sc(6) : 0;
+        const int delta = point.y < timelineAxis.top + margin      ? -sc(6)
+                          : point.y > timelineAxis.bottom - margin ? sc(6)
+                                                                   : 0;
         if (delta == 0) {
             return false;
         }
@@ -2280,9 +2646,8 @@ namespace merutilm::rff2 {
         const float lowest = std::ceil(viewEndDepth);
         const float highest = std::floor(viewStartDepth);
         const float snapped = snapDepth(viewDepthAt(point.x));
-        const float held = lowest <= highest
-                               ? std::clamp(snapped, lowest, highest)
-                               : std::clamp(snapped, viewEndDepth, viewStartDepth);
+        const float held = lowest <= highest ? std::clamp(snapped, lowest, highest)
+                                             : std::clamp(snapped, viewEndDepth, viewStartDepth);
         previewDepth = std::clamp(held, schedule.getEndDepth(), schedule.getStartDepth());
         syncPlaybackClock();
         InvalidateRect(window, nullptr, FALSE);
@@ -2296,10 +2661,15 @@ namespace merutilm::rff2 {
     }
 
     TimelineWindow::~TimelineWindow() {
+        exportStopSource.request_stop();
+        inspector.reset();
+        inspectorSplitter.reset();
+        accessibility.reset();
+        dockSplitter.reset();
         // The Shader panels this editor opened stand on rows held to what a track can carry, and
         // they write into a timeline that is going away, so they close with it. A panel opened from
         // the Shader menu is untouched and keeps every row it has.
-        for (const HWND panel: recordingPanels) {
+        for (const HWND panel : recordingPanels) {
             if (IsWindow(panel)) {
                 DestroyWindow(panel);
             }
@@ -2347,7 +2717,489 @@ namespace merutilm::rff2 {
         return openTimelineWindows.load(std::memory_order_relaxed) > 0;
     }
 
+    void TimelineWindow::rememberWorkspaceSource() {
+        if (embedded && sourceAttribute) {
+            workspaceSource = timelineBytes(sourceAttribute->video.timeline);
+        }
+    }
+
+    HWND TimelineWindow::createWorkspace(SettingsMenu &menu, RenderScene &scene, HWND parent, bool floating) {
+        registerTimelineWindowClass();
+        auto *timeline = new TimelineWindow(menu, scene);
+        timeline->embedded = true;
+        timeline->floatingWorkspace = floating;
+        timeline->rememberWorkspaceSource();
+        if (!timeline->create(parent)) {
+            delete timeline;
+            return nullptr;
+        }
+        timeline->initializeWorkspaceDock();
+        return timeline->window;
+    }
+
+    void TimelineWindow::initializeWorkspaceDock() {
+        if (dockToggle) {
+            return;
+        }
+        dockPreferences = Utilities::getDefaultPath() / L"timeline-layout.txt";
+        dockState.load(dockPreferences);
+        dockToggle = CreateWindowExW(0, L"BUTTON", UiLanguage::label(L"Hide Tracks"),
+                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 1, 1, window,
+                                     reinterpret_cast<HMENU>(WORKSPACE_DOCK_TOGGLE),
+                                     GetModuleHandleW(nullptr), nullptr);
+        SendMessageW(dockToggle, WM_SETFONT, reinterpret_cast<WPARAM>(smallFont), FALSE);
+        SetWindowSubclass(dockToggle, dockToggleProc, 1, reinterpret_cast<DWORD_PTR>(this));
+        TOOLINFOW hint{sizeof(hint)};
+        hint.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+        hint.hwnd = window;
+        hint.uId = reinterpret_cast<UINT_PTR>(dockToggle);
+        hint.lpszText = const_cast<wchar_t *>(L"Show or hide tracks while playback continues.");
+        SendMessageW(fieldTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&hint));
+        dockSplitter = std::make_unique<workspace::PaneSplitter>(
+            window, true, L"Resize timeline tracks",
+            [this] {
+                if (exporting || draggingOverlay || draggingTrackKey || draggingTrackRow ||
+                    fieldDrag != FieldDrag::NONE || !commitFieldEdit()) {
+                    return false;
+                }
+                dockResizeStart = dockState;
+                dockResizeHeight =
+                    int(std::round((dockLayout.tracks.bottom - dockLayout.tracks.top) * 96.0 / uiDpi));
+                return true;
+            },
+            [this](int delta) {
+                const int maximum = std::clamp(int(dockLayout.maximumTracksHeight * 96.0 / uiDpi),
+                                               workspace::TimelineDockState::minimumHeight,
+                                               workspace::TimelineDockState::maximumHeight);
+                const int height = std::clamp(dockResizeHeight - int(std::round(delta * 96.0 / uiDpi)),
+                                              workspace::TimelineDockState::minimumHeight, maximum);
+                dockState.height = delta == 0 || height == dockResizeHeight ? dockResizeStart.height : height;
+                dockState.previewPercent =
+                    delta == 0
+                        ? dockResizeStart.previewPercent
+                        : std::clamp(
+                              int(std::lround(100.0 * (1.0 - UiDpi::pixels(height, uiDpi) /
+                                                                 double(std::max(1, dockLayout.paneSpace))))),
+                              10, 90);
+                layoutWorkspaceDock();
+            },
+            [this](bool cancel) {
+                if (cancel) {
+                    dockState = dockResizeStart;
+                    layoutWorkspaceDock();
+                } else if (dockState != dockResizeStart) {
+                    saveWorkspaceDock();
+                }
+            },
+            [this] {
+                if (!exporting) {
+                    dockState = {};
+                    layoutWorkspaceDock();
+                    saveWorkspaceDock();
+                }
+            },
+            [this](int direction) {
+                keyboardFocus = workspace::TimelineItems::divider;
+                tabItem(direction);
+            },
+            true);
+        initializeInspector();
+        layoutWorkspaceDock();
+    }
+
+    void TimelineWindow::layoutWorkspaceDock() {
+        if (!dockToggle) {
+            return;
+        }
+        accessibilityDirty = true;
+        RECT client;
+        GetClientRect(window, &client);
+        client.right = layoutInspector(client.right, client.bottom);
+        dockLayout =
+            workspace::TimelineDockLayout::arrange(client.right, client.bottom, uiDpi, dockState,
+                                                   embedded ? 0 : int(std::lround(sc(100) * 96.0 / uiDpi)),
+                                                   embedded ? 160 : int(std::lround(sc(256) * 96.0 / uiDpi)));
+        if (dockState.inspectorLeft) {
+            for (RECT *rect : {&dockLayout.preview, &dockLayout.transport, &dockLayout.tracks,
+                               &dockLayout.divider, &dockLayout.toggle}) {
+                if (!IsRectEmpty(rect)) {
+                    OffsetRect(rect, inspectorReservedWidth, 0);
+                }
+            }
+        }
+        dockSplitter->layout(dockLayout.divider, uiDpi / 96.f);
+        const auto &button = dockLayout.toggle;
+        SetWindowPos(dockToggle, HWND_TOP, button.left, button.top, std::max(1L, button.right - button.left),
+                     std::max(1L, button.bottom - button.top), SWP_NOACTIVATE);
+        const auto *caption = UiLanguage::label(dockLayout.tracksVisible ? L"Hide Tracks" : L"Show Tracks");
+        wchar_t currentCaption[128]{};
+        GetWindowTextW(dockToggle, currentCaption, 128);
+        if (wcscmp(currentCaption, caption) != 0) {
+            SetWindowTextW(dockToggle, caption);
+        }
+        const bool enabled = dockLayout.tracksAvailable && !exporting;
+        if ((IsWindowEnabled(dockToggle) != FALSE) != enabled) {
+            EnableWindow(dockToggle, enabled);
+        }
+        TOOLINFOW hint{sizeof(hint)};
+        hint.hwnd = window;
+        hint.uId = reinterpret_cast<UINT_PTR>(dockToggle);
+        hint.lpszText = const_cast<wchar_t *>(
+            !dockLayout.tracksAvailable ? L"Hide Settings or increase the window height to show tracks."
+            : IsRectEmpty(&dockLayout.preview) ? L"Hide tracks to show the preview at this window height."
+                                               : L"Show or hide tracks while playback continues.");
+        SendMessageW(fieldTooltip, TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&hint));
+        if (!dockLayout.tracksVisible) {
+            timelineAxis = {};
+            timelinePanel = {};
+            rulerStrip = {};
+            scrollTrack = {};
+            scrollThumb = {};
+            trackScrollTrack = {};
+            trackScrollThumb = {};
+            zoomPresetButton = {};
+            trackLayouts.clear();
+            reorderRowTargets.clear();
+        }
+        RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    }
+
+    void TimelineWindow::saveWorkspaceDock() {
+        dockPreferencesFailed = !dockState.save(dockPreferences);
+        InvalidateRect(window, nullptr, FALSE);
+    }
+
+    void TimelineWindow::toggleWorkspaceDock() {
+        if (exporting) {
+            return;
+        }
+        dockSplitter->cancel();
+        dockState.collapsed = !dockState.collapsed;
+        if (dockState.collapsed) {
+            dockState.previewHidden = false;
+        }
+        layoutWorkspaceDock();
+        saveWorkspaceDock();
+    }
+
+    LRESULT TimelineWindow::dockToggleProc(HWND hwnd, UINT message, WPARAM w, LPARAM l, UINT_PTR,
+                                           DWORD_PTR data) {
+        auto &self = *reinterpret_cast<TimelineWindow *>(data);
+        // Owner drawing covers the button, so resizing must not erase it with the native background.
+        if (message == WM_ERASEBKGND) {
+            return 1;
+        }
+        if (message == WM_GETDLGCODE) {
+            return DLGC_WANTTAB | DLGC_WANTCHARS;
+        }
+        if (message == WM_KEYDOWN && w == VK_TAB) {
+            self.keyboardFocus = workspace::TimelineItems::toggle;
+            self.tabItem(GetKeyState(VK_SHIFT) < 0 ? -1 : 1);
+            return 0;
+        }
+        if (message == WM_KEYDOWN && w == VK_RETURN) {
+            SendMessageW(hwnd, BM_CLICK, 0, 0);
+            return 0;
+        }
+        if (message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK) {
+            if (IsWindowEnabled(hwnd)) {
+                if (GetFocus() != self.fieldEdit) {
+                    SetFocus(hwnd);
+                }
+                SetCapture(hwnd);
+                SendMessageW(hwnd, BM_SETSTATE, TRUE, 0);
+            }
+            return 0;
+        }
+        if ((message == WM_MOUSEMOVE || message == WM_LBUTTONUP) && GetCapture() == hwnd) {
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            const POINT point{GET_X_LPARAM(l), GET_Y_LPARAM(l)};
+            const bool inside = PtInRect(&rect, point) != FALSE;
+            if (message == WM_MOUSEMOVE) {
+                SendMessageW(hwnd, BM_SETSTATE, inside, 0);
+                return 0;
+            }
+            ReleaseCapture();
+            SendMessageW(hwnd, BM_SETSTATE, FALSE, 0);
+            if (inside) {
+                SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(WORKSPACE_DOCK_TOGGLE, BN_CLICKED),
+                             reinterpret_cast<LPARAM>(hwnd));
+            }
+            return 0;
+        }
+        if (message == WM_NCDESTROY) {
+            RemoveWindowSubclass(hwnd, dockToggleProc, 1);
+        }
+        return DefSubclassProc(hwnd, message, w, l);
+    }
+
+    void TimelineWindow::applyWorkspaceDpi(HWND handle, UINT dpi) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (self && dpi && !self->floatingWorkspace) {
+            self->updateDpi(dpi);
+        }
+    }
+
+    void TimelineWindow::updateDpi(UINT dpi) {
+        if (!dpi || (dpi == uiDpi && titleFont && fontsEmbedded == embedded)) {
+            return;
+        }
+        if (dockSplitter) {
+            dockSplitter->cancel();
+        }
+        const TimelineDpiScope scope(dpi);
+        HFONT *fontTargets[] = {&titleFont, &bodyFont, &smallFont, &captionFont, &valueFont};
+        const int standaloneFontSizes[] = {30, 26, 22, 20, 25},
+                  fontWeights[] = {FW_SEMIBOLD, FW_MEDIUM, FW_NORMAL, FW_NORMAL, FW_SEMIBOLD};
+        const int workspaceFontSizes[] = {17, 14, 13, 12, 14};
+        HFONT replacementFonts[5]{};
+        for (int i = 0; i < 5; ++i) {
+            const int height =
+                embedded ? -UiDpi::pixels(workspaceFontSizes[i], dpi) : sc(standaloneFontSizes[i]);
+            replacementFonts[i] =
+                CreateFontW(height, 0, 0, 0, fontWeights[i], FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                            OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                            DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
+            if (!replacementFonts[i]) {
+                for (auto font : replacementFonts) {
+                    if (font) {
+                        DeleteObject(font);
+                    }
+                }
+                return;
+            }
+        }
+        if (fieldEdit) {
+            SendMessageW(fieldEdit, WM_SETFONT, reinterpret_cast<WPARAM>(replacementFonts[4]), FALSE);
+            SendMessageW(fieldEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(sc(4), sc(4)));
+        }
+        for (int i = 0; i < 5; ++i) {
+            if (*fontTargets[i]) {
+                DeleteObject(*fontTargets[i]);
+            }
+            *fontTargets[i] = replacementFonts[i];
+        }
+        uiDpi = dpi;
+        fontsEmbedded = embedded;
+        if (inspector) {
+            inspector->applyMetrics(bodyFont, uiDpi / 96.f);
+        }
+        if (dockToggle) {
+            SendMessageW(dockToggle, WM_SETFONT, reinterpret_cast<WPARAM>(smallFont), FALSE);
+            layoutWorkspaceDock();
+        }
+        if (window) {
+            InvalidateRect(window, nullptr, FALSE);
+        }
+    }
+
+    void TimelineWindow::syncWorkspace(HWND handle) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded || !self->sourceAttribute) {
+            return;
+        }
+        const auto &source = *self->sourceAttribute;
+        self->attribute.shader = source.shader;
+        self->attribute.video.animation = source.video.animation;
+        self->attribute.video.exportation = source.video.exportation;
+        if (self->workspaceSource != timelineBytes(source.video.timeline) ||
+            source.video.timeline.tracks.empty()) {
+            self->attribute.video.timeline = source.video.timeline;
+            self->ensureEditableTracks();
+            self->linkColorCycle = colorCycleTracksLinked(self->attribute.video.timeline, true);
+            self->undoBaseline = source.video.timeline;
+            self->lastUndoStep = 0;
+            self->selectedTrackKey = -1;
+            self->hoveredTrackKey = {};
+            self->rememberWorkspaceSource();
+        }
+        if (self->frameSource && self->frameSource->isStatic() != source.video.data.isStatic) {
+            self->setPlaying(false);
+            self->stopFramePreviewWorker();
+            self->destroyFramePreview();
+            self->frameSource.reset();
+            std::scoped_lock lock(self->previewBitmapMutex);
+            if (self->previewBitmap) {
+                DeleteObject(self->previewBitmap);
+                self->previewBitmap = nullptr;
+            }
+            self->previewMessage = L"Select a keyframe folder to enable scrubbing";
+        }
+        self->undoBaselineStatic = source.video.data.isStatic;
+        self->attribute.video.data = source.video.data;
+        self->attribute.fractal = source.fractal;
+        self->recordBaseline = source.shader;
+        self->rebuildSchedule();
+        if (IsWindowVisible(handle)) {
+            self->requestFramePreview();
+        }
+        InvalidateRect(handle, nullptr, FALSE);
+    }
+
+    void TimelineWindow::showWorkspace(HWND handle, const RECT &rect, bool visible) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return;
+        }
+        const bool light = !darkSettingsMode();
+        if (self->lightMode != light) {
+            self->lightMode = light;
+            self->refreshTheme();
+        }
+        if (!self->floatingWorkspace) {
+            RECT current;
+            GetWindowRect(handle, &current);
+            MapWindowPoints(nullptr, GetParent(handle), reinterpret_cast<POINT *>(&current), 2);
+            if (!EqualRect(&current, &rect)) {
+                SetWindowPos(handle, HWND_TOP, rect.left, rect.top, std::max(1L, rect.right - rect.left),
+                             std::max(1L, rect.bottom - rect.top), SWP_NOACTIVATE);
+            }
+        }
+        const auto show = [&] {
+            int displayCommand = SW_HIDE;
+            if (visible) {
+                if (!self->floatingWorkspace) {
+                    displayCommand = SW_SHOWNA;
+                } else if (IsIconic(handle)) {
+                    displayCommand = SW_RESTORE;
+                } else {
+                    displayCommand = SW_SHOW;
+                }
+            }
+            ShowWindow(handle, displayCommand);
+            if (visible && self->floatingWorkspace) {
+                SetForegroundWindow(handle);
+            }
+        };
+        if (visible == self->mainPreviewPauseClaimed) {
+            show();
+            return;
+        }
+        if (visible) {
+            syncWorkspace(handle);
+            ++openTimelineWindows;
+            self->mainPreviewPauseClaimed = true;
+            self->renderScene->getRequests().shaderEditListener.store(handle, std::memory_order_release);
+            show();
+            if (self->frameSource && !self->previewContextAttached && !self->exporting) {
+                (void)self->initializeFramePreview();
+            }
+        } else {
+            self->setPlaying(false);
+            self->closeFieldEdit();
+            self->stopFramePreviewWorker();
+            self->destroyFramePreview();
+            for (HWND panel : self->recordingPanels) {
+                if (IsWindow(panel)) {
+                    DestroyWindow(panel);
+                }
+            }
+            self->recordingPanels.clear();
+            HWND listening = handle;
+            self->renderScene->getRequests().shaderEditListener.compare_exchange_strong(listening, nullptr);
+            --openTimelineWindows;
+            self->mainPreviewPauseClaimed = false;
+            ShowWindow(handle, SW_HIDE);
+        }
+    }
+
+    uint64_t TimelineWindow::workspaceHistoryOrder(HWND handle, bool redo) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return 0;
+        }
+        const auto &entries = redo ? self->redoSteps : self->undoSteps;
+        return entries.empty() || (redo && !self->historyOrder.validRedo()) ? 0 : entries.back().serial;
+    }
+
+    void TimelineWindow::bindWorkspaceHistory(HWND handle, std::shared_ptr<workspace::HistoryDomain> domain,
+                                              std::function<void(bool)> request) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return;
+        }
+        self->undoSteps.clear();
+        self->redoSteps.clear();
+        self->historyOrder.bind(std::move(domain));
+        self->historyRequest = std::move(request);
+    }
+
+    bool TimelineWindow::workspaceHistory(HWND handle, bool redo, bool execute) {
+        if (!workspaceHistoryOrder(handle, redo)) {
+            return false;
+        }
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!execute) {
+            return true;
+        }
+        return redo ? self->redoTimeline() : self->undoTimeline();
+    }
+
+    void TimelineWindow::workspaceAction(HWND handle, int action) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return;
+        }
+        if (action == 0) {
+            self->setPlaying(!self->playing);
+        }
+        if (action == 1) {
+            self->stopPlayback();
+        }
+        if (action == 2) {
+            self->loadKeyframeDirectory();
+        }
+    }
+
+    bool TimelineWindow::loadWorkspaceKeyframes(HWND handle, const std::filesystem::path &directory) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return false;
+        }
+        self->loadKeyframeDirectory(directory);
+        return self->frameSource && self->frameSource->getDirectory() == directory;
+    }
+
+    bool TimelineWindow::workspacePreviewReady(HWND handle) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return false;
+        }
+        std::scoped_lock lock(self->previewRequestMutex, self->previewBitmapMutex);
+        return self->previewBitmap && !self->previewPending && !self->previewWorkerFailed &&
+               self->publishedPreviewGeneration == self->previewRequestGeneration;
+    }
+
+    std::wstring TimelineWindow::workspaceStatus(HWND handle) {
+        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
+        if (!self || !self->embedded) {
+            return L"Timeline is unavailable.";
+        }
+        if (self->exporting) {
+            return L"Exporting video...";
+        }
+        if (self->aiImagesBusy.load()) return self->aiTotalPages.load()
+            ? std::format(L"{} {}/{}", UiLanguage::text(L"Saving image pages:"), self->aiSavedPages.load(), self->aiTotalPages.load())
+            : UiLanguage::text(L"Preparing image sheet...");
+        if (self->cachePreloading.load()) {
+            std::scoped_lock lock(self->previewBitmapMutex);
+            return self->cacheMessage;
+        }
+        if (self->previewBusy) {
+            return L"Rendering keyframe preview...";
+        }
+        if (!self->frameSource) {
+            return L"Load keyframes to preview the timeline.";
+        }
+        return std::wstring(self->playing ? L"Timeline playing. " : L"Timeline paused. ") +
+               durationText(self->previewSeconds());
+    }
+
     bool TimelineWindow::create(const HWND owner) {
+        const UiDpi::AwarenessScope awareness(true);
+        updateDpi(UiDpi::forWindow(owner));
+        const TimelineDpiScope dpiScope(uiDpi);
         const int designWidth = sc(1180);
         const int designHeight = sc(780);
         RECT frame = {0, 0, designWidth, designHeight};
@@ -2361,22 +3213,26 @@ namespace merutilm::rff2 {
         const int y = work.top + (work.bottom - work.top - height) / 2;
 
         // A tool window's caption draws no minimize or maximize box and carries no taskbar button to come back to.
-        window = CreateWindowExW(WS_EX_APPWINDOW, TIMELINE_WINDOW_CLASS, L"RFF_Super - Timeline Editor",
-                                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, x, y, width, height, owner, nullptr,
+        const bool childWindow = embedded && !floatingWorkspace;
+        window = CreateWindowExW(childWindow ? 0 : WS_EX_APPWINDOW, TIMELINE_WINDOW_CLASS,
+                                 UiLanguage::label(L"RFF_Super - Timeline Editor"),
+                                 (childWindow ? WS_CHILD | WS_CLIPSIBLINGS : WS_OVERLAPPEDWINDOW) |
+                                     WS_CLIPCHILDREN,
+                                 childWindow ? 0 : x, childWindow ? 0 : y, width, height, owner, nullptr,
                                  GetModuleHandleW(nullptr), this);
         if (window == nullptr) {
             return false;
         }
-        fieldTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
-                                       WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-                                       CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                                       window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        updateDpi(UiDpi::forWindow(window));
+        const TimelineDpiScope windowDpiScope(uiDpi);
+        fieldTooltip = CreateWindowExW(
+            WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT,
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (fieldTooltip != nullptr) {
-            SetWindowPos(fieldTooltip, HWND_TOPMOST, 0, 0, 0, 0,
-                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            SetWindowPos(fieldTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
             SendMessageW(fieldTooltip, TTM_SETMAXTIPWIDTH, 0, sc(520));
             SendMessageW(fieldTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 350);
-            for (UINT_PTR id = 1; id <= 2; ++id) {
+            for (UINT_PTR id = 1; id <= 3; ++id) {
                 TOOLINFOW tool = {};
                 tool.cbSize = sizeof(tool);
                 tool.uFlags = TTF_SUBCLASS;
@@ -2385,6 +3241,14 @@ namespace merutilm::rff2 {
                 tool.lpszText = const_cast<wchar_t *>(FORMULA_FIELD_HINT);
                 SendMessageW(fieldTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
             }
+        }
+        accessibility = std::make_unique<workspace::AccessibleItems>(
+            window, [] { return L"Timeline"; }, [this] { return accessibleItems(); },
+            [this](long id, bool activate) { return activate ? activateItem(id) : focusItem(id); },
+            [this](long id, std::wstring_view value) { return writeItem(id, value); });
+        initializeWorkspaceDock();
+        if (embedded) {
+            return true;
         }
         ++openTimelineWindows;
         mainPreviewPauseClaimed = true;
@@ -2401,16 +3265,20 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::setPlaying(const bool play) {
+        if (play && cachePreloading.load()) {
+            return;
+        }
         if (play == playing) {
             return;
         }
         playing = play;
+        accessibilityDirty = true;
         if (!playing) {
             KillTimer(window, PLAYBACK_TIMER);
             return;
         }
         // Starting at the end replays from the top rather than sitting still on the last frame.
-        playSeconds = schedule.timeAt(previewDepth);
+        playSeconds = previewSeconds();
         if (playSeconds >= schedule.getTotalSeconds() - 1e-3f) {
             playSeconds = 0.0f;
             previewDepth = schedule.getStartDepth();
@@ -2420,6 +3288,8 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::stopPlayback() {
+        cacheStop.request_stop();
+        accessibilityDirty = true;
         setPlaying(false);
         playSeconds = 0.0f;
         previewDepth = schedule.getStartDepth();
@@ -2441,7 +3311,7 @@ namespace merutilm::rff2 {
             }
         }
         previewDepth = schedule.depthAt(playSeconds);
-        requestFramePreview();
+        requestFramePreview(playSeconds);
         InvalidateRect(window, nullptr, FALSE);
     }
 
@@ -2466,9 +3336,8 @@ namespace merutilm::rff2 {
         static constexpr int PERCENTS[] = {100, 200, 400, 800, 1600, 3200, 6400};
         constexpr int count = static_cast<int>(std::size(PERCENTS));
         for (int i = 0; i < count; ++i) {
-            const std::wstring item = PERCENTS[i] == 100
-                                          ? std::format(L"{}%  (fit)", PERCENTS[i])
-                                          : std::format(L"{}%", PERCENTS[i]);
+            const std::wstring item = PERCENTS[i] == 100 ? std::format(L"{}%  (fit)", PERCENTS[i])
+                                                         : std::format(L"{}%", PERCENTS[i]);
             AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(i + 1), item.c_str());
         }
         POINT at = {zoomPresetButton.left, zoomPresetButton.bottom};
@@ -2516,15 +3385,17 @@ namespace merutilm::rff2 {
             const HMENU interpolations = CreatePopupMenu();
             for (int i = 0; i < INTERPOLATION_COUNT; ++i) {
                 const auto mode = static_cast<VidKeyInterpolation>(i);
-                AppendMenuW(interpolations, MF_STRING | (current->keys[hit.keyIndex].out == mode ? MF_CHECKED : 0),
-                            CMD_INTERPOLATION + i, interpolationName(mode).c_str());
+                AppendMenuW(interpolations,
+                            MF_STRING | (current->keys[hit.keyIndex].out == mode ? MF_CHECKED : 0),
+                            CMD_INTERPOLATION + i, UiLanguage::text(interpolationName(mode)).c_str());
             }
-            AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(interpolations), L"To Next Key");
-            AppendMenuW(menu, MF_STRING, CMD_DELETE_KEY, L"Delete Key");
+            AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(interpolations),
+                        UiLanguage::label(L"To Next Key"));
+            AppendMenuW(menu, MF_STRING, CMD_DELETE_KEY, UiLanguage::label(L"Delete Key"));
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         } else if (rowTarget != UINT16_MAX && editableTarget(rowTarget) && layout(rowTarget) != nullptr &&
                    contains(layout(rowTarget)->row, point)) {
-            AppendMenuW(menu, MF_STRING, CMD_ADD_KEY, L"Add Key Here");
+            AppendMenuW(menu, MF_STRING, CMD_ADD_KEY, UiLanguage::label(L"Add Key Here"));
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         }
 
@@ -2538,14 +3409,15 @@ namespace merutilm::rff2 {
                 continue;
             }
             AppendMenuW(parameters, MF_STRING, static_cast<UINT_PTR>(CMD_PARAMETER) + i,
-                        SHADER_PANELS[i].name);
+                        UiLanguage::label(SHADER_PANELS[i].name));
         }
-        AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(parameters), L"Parameters");
+        AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(parameters), UiLanguage::label(L"Parameters"));
         const bool removable = current != nullptr && rowTarget != SPEED_TARGET;
         const std::wstring removeItem = rowTarget == UINT16_MAX
                                             ? std::wstring(L"Remove Parameter")
                                             : L"Remove " + rowName(rowTarget, linkColorCycle);
-        AppendMenuW(menu, MF_STRING | (removable ? 0 : MF_GRAYED), CMD_REMOVE_TRACK, removeItem.c_str());
+        AppendMenuW(menu, MF_STRING | (removable ? 0 : MF_GRAYED), CMD_REMOVE_TRACK,
+                    UiLanguage::text(removeItem).c_str());
 
         POINT at = point;
         ClientToScreen(window, &at);
@@ -2561,57 +3433,60 @@ namespace merutilm::rff2 {
             return;
         }
         switch (chosen) {
-            case CMD_ADD_KEY:
-                addTrackKey(rowTarget, point);
-                break;
-            case CMD_DELETE_KEY:
-                deleteTrackKey();
-                break;
-            case CMD_REMOVE_TRACK:
-                removeTrack(rowTarget);
-                break;
-            default:
-                break;
+        case CMD_ADD_KEY:
+            addTrackKey(rowTarget, point);
+            break;
+        case CMD_DELETE_KEY:
+            deleteTrackKey();
+            break;
+        case CMD_REMOVE_TRACK:
+            removeTrack(rowTarget);
+            break;
+        default:
+            break;
         }
     }
 
+    void TimelineWindow::openControlsGuide() {
+        if (!commitFieldEdit()) {
+            return;
+        }
+        controlsGuide.reset();
+        controlsGuide = std::make_unique<SettingsWindow>(L"Timeline Controls", 620);
+        controlsGuide->registerNotesCard(
+            L"Navigate",
+            {{L"Preview",
+              L"Drag an empty track area to scrub. Space plays or pauses when a track or key is focused."},
+             {L"View",
+              L"Wheel zooms. Shift+Wheel pans. Ctrl+Wheel scrolls tracks. Press 0 to fit the full timeline."},
+             {L"Keyboard", L"Tab moves between controls. Up/Down selects tracks; Left/Right selects keys. F6 "
+                           L"moves between workspace panes."}});
+        controlsGuide->registerNotesCard(
+            L"Edit", {{L"Keys", L"Double-click a track or press Insert to add a key. Enter or F2 edits the "
+                                L"selected key. Delete removes the selected key or track."},
+                      {L"Tracks", L"Drag a track name or press Alt+Up/Down to reorder. Shift+Up/Down extends "
+                                  L"the selection. Right-click or Shift+F10 opens the track menu."},
+                      {L"Values", L"Click Distance, Keyframe or Time to enter a formula. Enter applies it; "
+                                  L"Esc cancels. Zoom is read-only."}});
+        std::wstring status;
+        {
+            std::scoped_lock lock(previewBitmapMutex);
+            status = cacheMessage.empty() ? previewMessage : cacheMessage;
+        }
+        if (previewBusy && !cachePreloading.load()) {
+            status = std::format(L"Rendering distance {:.2f}.", displayDistance(previewBusyDepth));
+        }
+        const std::wstring source =
+            frameSource ? frameSource->getDirectory().filename().wstring() : L"No keyframe folder selected.";
+        controlsGuide->registerNotesCard(L"Preview", {{L"Status", status}, {L"Source folder", source}});
+        controlsGuide->setWindowCloseFunction([] {});
+        adoptPanel(*controlsGuide);
+    }
+
     void TimelineWindow::openShaderPanel(const size_t index) {
-        if (settingsMenu == nullptr || renderScene == nullptr || index >= SHADER_PANELS.size()) {
-            return;
+        if (index < SHADER_PANELS.size()) {
+            showParameterCatalog(SHADER_PANELS[index].groupPrefix);
         }
-        const ShaderPanel &panel = SHADER_PANELS[index];
-        // A panel that was closed leaves its entry standing until the next one is opened, and the
-        // Shader menu's own code drops those as it adds its window. Counting across the call would
-        // then read a replaced entry as no new panel at all and leave this one unarmed, so the
-        // closed ones go first and the count below is the panel itself.
-        std::erase_if(settingsMenu->activeSettingsWindows,
-                      [](const SettingsMenu::ActiveSettingsWindow &active) {
-                          return !IsWindow(active.window->getWindow());
-                      });
-        // The Shader menu's own panel, built by the Shader menu's own code against the very
-        // attribute it edits there: what opens here is that panel and not a copy of it.
-        const size_t before = settingsMenu->activeSettingsWindows.size();
-        (*panel.callback)(*settingsMenu, *renderScene);
-        if (settingsMenu->activeSettingsWindows.size() <= before) {
-            return;
-        }
-        SettingsWindow &window = *settingsMenu->activeSettingsWindows.back().window;
-        // Every parameter the timeline can carry, by where it sits in the attribute the rows are
-        // bound to. A row on any other part of the shader is one no track can drive.
-        std::unordered_set<const void *> driven;
-        for (const auto &param: TimelineParams::all()) {
-            // Over a PNG source a row the picture cannot answer is left out of the kept set with the
-            // ones no track drives, so the panel greys it out rather than offering an edit that does nothing.
-            if (param.address != nullptr &&
-                (!attribute.video.data.isStatic || TimelineParams::movesOverStaticImage(param.id))) {
-                driven.insert(param.address(sourceAttribute->shader));
-            }
-        }
-        window.disableRowsInObjectExcept(&sourceAttribute->shader, sizeof(ShaderAttribute), driven);
-        recordBaseline = sourceAttribute->shader;
-        std::erase_if(recordingPanels, [](const HWND open) { return !IsWindow(open); });
-        recordingPanels.push_back(window.getWindow());
-        adoptPanel(window);
     }
 
     bool TimelineWindow::recording() const {
@@ -2622,6 +3497,10 @@ namespace merutilm::rff2 {
         if (sourceAttribute == nullptr) {
             return;
         }
+        if (timelineBytes(attribute.video.timeline) != timelineBytes(sourceAttribute->video.timeline)) {
+            attribute.video.timeline = sourceAttribute->video.timeline;
+            commitTimeline();
+        }
         const ShaderAttribute &now = sourceAttribute->shader;
         // The editor draws its rows against its own copy, so it follows the settings either way.
         attribute.shader = now;
@@ -2629,10 +3508,11 @@ namespace merutilm::rff2 {
             // Nothing of this editor's is open on the shader, so an edit made elsewhere is only
             // read by the next preview, as it always was.
             recordBaseline = now;
+            requestFramePreview();
             return;
         }
         std::vector<const TimelineParamDesc *> changed;
-        for (const auto &param: TimelineParams::all()) {
+        for (const auto &param : TimelineParams::all()) {
             const bool differs = param.kind == TimelineParamKind::COLOR
                                      ? param.getColor(now) != param.getColor(recordBaseline)
                                      : param.getValue(now) != param.getValue(recordBaseline);
@@ -2644,12 +3524,12 @@ namespace merutilm::rff2 {
         // A whole group of settings replaced at once is a preset being loaded, not a row being
         // moved, and putting a key on every parameter it touched is not what loading one asks for.
         if (changed.empty() || changed.size() > MAX_RECORDED_AT_ONCE) {
-            if (!changed.empty() && window != nullptr) {
-                InvalidateRect(window, nullptr, FALSE);
+            if (!changed.empty()) {
+                requestFramePreview();
             }
             return;
         }
-        for (const TimelineParamDesc *param: changed) {
+        for (const TimelineParamDesc *param : changed) {
             if (param->kind == TimelineParamKind::COLOR) {
                 setParameterColor(param->id, param->getColor(now));
             } else {
@@ -2659,26 +3539,30 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::paint(const HDC target, const RECT &client) {
+        const TimelineDpiScope dpiScope(uiDpi);
         const TimelineTheme &theme = timelineTheme(lightMode);
-        const int width = client.right - client.left;
+        const int width = std::max(1, int(client.right - client.left) - inspectorReservedWidth);
         const int height = client.bottom - client.top;
-        const HDC canvas = CreateCompatibleDC(target);
-        const HBITMAP bitmap = CreateCompatibleBitmap(target, std::max(width, 1), std::max(height, 1));
-        const HGDIOBJ previousBitmap = SelectObject(canvas, bitmap);
+        const HDC canvas = paintBuffer.begin(target, client.right - client.left, height);
+        if (!canvas) {
+            return;
+        }
         fillRect(canvas, client, theme.background);
 
         // One spacing value for the window edges, the header inset and the gaps between the three
         // panels, so nothing sits closer to its neighbour than anything else does.
-        const int margin = sc(12);
-        const int headerHeight = sc(88);
+        const auto dip = [this](int value) { return UiDpi::pixels(value, uiDpi); };
+        const bool narrow = width < dip(700);
+        const bool narrowHeader = embedded && width < dip(656);
+        const int margin = embedded ? dip(12) : sc(12);
+        const int headerHeight = embedded ? dip(narrowHeader ? 96 : 48) : sc(88);
         const int transportHeight = sc(72);
-        const int labelWidth = sc(360);
-        const int rulerRowHeight = sc(34);
+        const int rulerRowHeight = embedded ? dip(24) : sc(34);
         const int axisTopInset = rulerRowHeight * 2 + sc(8);
-        const int footerHeight = sc(46);
-        const int zoomRowHeight = sc(38);
+        const int footerHeight = embedded ? dip(32) : sc(46);
+        const int zoomRowHeight = embedded ? dip(28) : sc(38);
         const int scrollHeight = sc(12);
-        const int minRowHeight = sc(52);
+        const int minRowHeight = embedded ? dip(36) : sc(52);
         const int minAxisHeight = sc(96);
         // The panel below has to keep its ruler, its rows, the zoom bar and the footer, so the preview gives way first.
         const int timelineMinHeight = axisTopInset + minAxisHeight + zoomRowHeight + footerHeight;
@@ -2691,59 +3575,115 @@ namespace merutilm::rff2 {
         }
         const int previewHeight = available - timelineHeight;
 
-        RECT header = {0, 0, width, headerHeight};
+        const int contentLeft = dockState.inspectorLeft ? inspectorReservedWidth : 0;
+        RECT header = {contentLeft, 0, contentLeft + width, headerHeight};
         fillRect(canvas, header, theme.panel);
-        const int boxTop = sc(30);
-        const int boxBottom = headerHeight - sc(16);
-        const int buttonTop = boxTop + sc(2);
-        const int buttonBottom = boxBottom - sc(2);
+        const int boxTop = embedded ? dip(8) : sc(30);
+        const int boxBottom = headerHeight - (embedded ? dip(8) : sc(16));
+        const int buttonTop = boxTop + (embedded ? 0 : sc(2));
+        const int buttonBottom = boxBottom - (embedded ? 0 : sc(2));
         const int headerInset = margin + sc(20);
-        exportButton = {width - headerInset - sc(112), buttonTop, width - headerInset, buttonBottom};
-        saveButton = {exportButton.left - sc(10) - sc(112), buttonTop, exportButton.left - sc(10), buttonBottom};
+        aiButton = {width - headerInset - sc(96), buttonTop, width - headerInset, buttonBottom};
+        exportButton = {aiButton.left - sc(10) - sc(112), buttonTop, aiButton.left - sc(10), buttonBottom};
+        saveButton = {exportButton.left - sc(10) - sc(112), buttonTop, exportButton.left - sc(10),
+                      buttonBottom};
         loadButton = {saveButton.left - sc(10) - sc(96), buttonTop, saveButton.left - sc(10), buttonBottom};
-        fullscreenButton = {loadButton.left - sc(20) - sc(104), buttonTop, loadButton.left - sc(20), buttonBottom};
-        framesButton = {fullscreenButton.left - sc(20) - sc(146), boxTop, fullscreenButton.left - sc(20), boxBottom};
-        themeButton = {framesButton.left - sc(20) - sc(126), boxTop, framesButton.left - sc(20), boxBottom};
+        fullscreenButton = embedded ? RECT{}
+                                    : RECT{loadButton.left - sc(20) - sc(104), buttonTop,
+                                           loadButton.left - sc(20), buttonBottom};
+        const int framesRight = (embedded ? loadButton.left : fullscreenButton.left) - sc(20);
+        framesButton = {framesRight - sc(146), boxTop, framesRight, boxBottom};
+        themeButton = embedded ? RECT{}
+                               : RECT{framesButton.left - sc(20) - sc(126), boxTop,
+                                      framesButton.left - sc(20), boxBottom};
+        if (narrowHeader) {
+            const int right = width - margin;
+            aiButton = {right - dip(76), dip(56), right, dip(84)};
+            exportButton = {aiButton.left - dip(84), dip(56), aiButton.left - dip(8), dip(84)};
+            saveButton = {exportButton.left - dip(84), dip(56), exportButton.left - dip(8), dip(84)};
+            loadButton = {saveButton.left - dip(84), dip(56), saveButton.left - dip(8), dip(84)};
+            framesButton = {right - dip(136), dip(8), right, dip(40)};
+        }
 
-        RECT title = {headerInset, buttonTop, themeButton.left - sc(12), buttonBottom};
-        drawText(canvas, L"Timeline Editor", title, theme.text,
-                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
-                 titleFont);
-        {
-            const RECT inner = drawCaptionBox(canvas, themeButton, L"Theme", theme.panel, captionFont, hoverTheme,
-                                              lightMode, theme);
+        for (RECT *rect :
+             {&aiButton, &exportButton, &saveButton, &loadButton, &fullscreenButton, &framesButton, &themeButton}) {
+            if (!IsRectEmpty(rect)) {
+                OffsetRect(rect, contentLeft, 0);
+            }
+        }
+        if (!embedded) {
+            const RECT inner = drawCaptionBox(canvas, themeButton, L"Theme", theme.panel, captionFont,
+                                              hoverTheme, lightMode, theme);
             const int mid = static_cast<int>(inner.top + inner.bottom) / 2;
             const RECT toggle = {inner.right - sc(46), mid - sc(11), inner.right, mid + sc(11)};
             drawToggle(canvas, toggle, lightMode, theme);
             drawText(canvas, lightMode ? L"Light" : L"Dark",
                      {inner.left, inner.top, toggle.left - sc(8), inner.bottom},
-                     lightMode ? theme.accentText : theme.text, DT_LEFT | DT_VCENTER | DT_SINGLELINE, bodyFont);
+                     lightMode ? theme.accentText : theme.text, DT_LEFT | DT_VCENTER | DT_SINGLELINE,
+                     bodyFont);
         }
         {
             const bool loaded = frameSource != nullptr;
             const RECT inner = drawCaptionBox(canvas, framesButton, L"Keyframes", theme.panel, captionFont,
                                               hoverFrames, loaded, theme);
-            drawText(canvas, loaded ? L"Loaded" : L"Select folder", inner,
-                     loaded ? theme.accentText : theme.text,
-                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
+            drawText(canvas,
+                     loaded ? std::format(L"{} loaded", frameSource->getFrameCount()) : L"Select folder",
+                     inner, loaded ? theme.accentText : theme.text,
+                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
         }
-        drawButton(canvas, fullscreenButton, fullscreen ? L"WINDOW" : L"FULL", hoverFullscreen, fullscreen,
-                   smallFont, theme);
-        drawButton(canvas, loadButton, L"LOAD", hoverLoad, false, smallFont, theme);
-        drawButton(canvas, saveButton, L"SAVE", hoverSave, false, smallFont, theme);
-        drawButton(canvas, exportButton, exporting ? L"EXPORTING" : L"EXPORT", hoverExport, true,
-                   smallFont, theme);
+        if (!embedded) {
+            drawButton(canvas, fullscreenButton, fullscreen ? L"WINDOW" : L"FULL", hoverFullscreen,
+                       fullscreen, smallFont, theme);
+        }
+        drawButton(canvas, loadButton, L"Load", hoverLoad, false, smallFont, theme);
+        drawButton(canvas, saveButton, L"Save", hoverSave, false, smallFont, theme);
+        drawButton(canvas, aiButton, L"AI Edit", hoverAi, aiImagesBusy.load(), smallFont, theme);
+        drawButton(canvas, exportButton, exporting ? L"Exporting" : L"Export", hoverExport, true, smallFont,
+                   theme);
 
         RECT previewPanel = {margin, contentTop, width - margin, contentTop + previewHeight};
-        fillRect(canvas, previewPanel, theme.previewBackground);
-        frameRect(canvas, previewPanel, theme.border);
+        if (dockToggle) {
+            previewPanel = dockLayout.preview;
+        }
+        if (!IsRectEmpty(&previewPanel)) {
+            fillRect(canvas, previewPanel, theme.previewBackground);
+            frameRect(canvas, previewPanel, theme.border);
+        }
+        overlayImageRect = {};
         RECT preview = previewPanel;
         preview.left += sc(10);
         preview.right -= sc(10);
         preview.top += sc(10);
         preview.bottom -= sc(10);
-        {
+        if (!IsRectEmpty(&preview)) {
             std::scoped_lock lock(previewBitmapMutex);
+            if (!cacheMessage.empty()) {
+                RECT notice = preview;
+                notice.bottom = std::min(preview.bottom, preview.top + sc(cachePreloading.load() ? 48 : 24));
+                drawText(canvas, cacheMessage, notice, theme.mutedText, DT_CENTER | DT_WORDBREAK, smallFont);
+                preview.top = notice.bottom;
+            }
+            if (shortsGuide.visible && shortsGuide.showDescriptions &&
+                preview.bottom - preview.top > sc(100)) {
+                RECT description = preview;
+                description.bottom = description.top + sc(20);
+                drawText(canvas, L"Top: UI display area", description, theme.mutedText,
+                         DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                preview.top = description.bottom;
+                description.top = preview.bottom - sc(60);
+                description.bottom = description.top + sc(20);
+                drawText(canvas, L"Bottom: title / description area", description, theme.mutedText,
+                         DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                preview.bottom = description.top;
+                description.top += sc(20);
+                description.bottom += sc(20);
+                drawText(canvas, L"Right: controls", description, theme.mutedText,
+                         DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                description.top += sc(20);
+                description.bottom += sc(20);
+                drawText(canvas, L"YouTube Shorts guide (approximate)", description, theme.mutedText,
+                         DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+            }
             if (previewBitmap != nullptr && previewSize.cx > 0 && previewSize.cy > 0) {
                 const double sourceRatio = static_cast<double>(previewSize.cx) / previewSize.cy;
                 const double targetRatio = static_cast<double>(preview.right - preview.left) /
@@ -2765,44 +3705,66 @@ namespace merutilm::rff2 {
                            source, 0, 0, previewSize.cx, previewSize.cy, SRCCOPY);
                 SelectObject(source, previous);
                 DeleteDC(source);
+                overlayImageRect = image;
+                if (!overlayRenderer) {
+                    overlayRenderer = std::make_unique<ZoomOverlay>();
+                }
+                overlayRenderer->paint(canvas, image, publishedPreviewZoom,
+                                       attribute.video.timeline.zoomOverlay);
+                shortsGuide.paint(canvas, image);
+                if (overlayPositionMode && attribute.video.timeline.zoomOverlay.visible) {
+                    frameRect(canvas, image, theme.accentText);
+                    const auto b = overlayRenderer->bounds();
+                    const int saved = SaveDC(canvas);
+                    if (saved != 0) {
+                        IntersectClipRect(canvas, image.left, image.top, image.right, image.bottom);
+                        frameRect(canvas,
+                                  {image.left + b.x, image.top + b.y, image.left + b.x + b.width,
+                                   image.top + b.y + b.height},
+                                  theme.accentText);
+                        RestoreDC(canvas, saved);
+                    }
+                }
+                if (!overlayRenderer->status().empty()) {
+                    drawText(canvas, overlayRenderer->status(),
+                             {image.left, image.bottom - dip(22), image.right, image.bottom}, theme.text,
+                             DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                }
             } else {
                 // An empty panel named for a render read as one already loaded, so with no keyframe
                 // folder behind it the panel says that instead of naming what it would hold.
-                drawText(canvas, frameSource == nullptr ? L"NO KEYFRAMES LOADED" : L"CURRENT RENDER PREVIEW",
+                if (frameSource == nullptr) {
+                    overlayImageRect = preview;
+                    if (!overlayRenderer) {
+                        overlayRenderer = std::make_unique<ZoomOverlay>();
+                    }
+                    overlayRenderer->paint(canvas, preview, 100, attribute.video.timeline.zoomOverlay);
+                    shortsGuide.paint(canvas, preview);
+                }
+                drawText(canvas,
+                         frameSource == nullptr ? L"SAMPLE OVERLAY - NO KEYFRAMES LOADED"
+                                                : L"CURRENT RENDER PREVIEW",
                          preview, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
             }
         }
 
         RECT transport = {margin, previewPanel.bottom + margin, width - margin,
                           previewPanel.bottom + margin + transportHeight};
+        if (dockToggle) {
+            transport = dockLayout.transport;
+        }
+        if (dockToggle && (dockPreferencesFailed || !dockLayout.tracksAvailable) &&
+            preview.bottom - preview.top >= dip(24)) {
+            RECT notice = preview;
+            notice.bottom = notice.top + dip(24);
+            fillRect(canvas, notice, theme.panel);
+            drawText(canvas,
+                     dockPreferencesFailed ? L"Timeline layout was not saved."
+                                           : L"Hide Settings or increase the window height to show tracks.",
+                     notice, theme.text, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+        }
         fillRect(canvas, transport, theme.panel);
         frameRect(canvas, transport, theme.border);
-        const int transportMid = static_cast<int>(transport.top + transport.bottom) / 2;
-        const int glyphSize = sc(28);
-        const int glyphGap = sc(6);
-        const int transportPad = sc(14);
-        playButton = {transport.left + transportPad, transportMid - glyphSize / 2,
-                      transport.left + transportPad + glyphSize, transportMid + glyphSize / 2};
-        pauseButton = {playButton.right + glyphGap, playButton.top, playButton.right + glyphGap + glyphSize,
-                       playButton.bottom};
-        stopButton = {pauseButton.right + glyphGap, playButton.top, pauseButton.right + glyphGap + glyphSize,
-                      playButton.bottom};
-        loopButton = {stopButton.right + transportPad, playButton.top, stopButton.right + transportPad + glyphSize,
-                      playButton.bottom};
-        drawTransportButton(canvas, playButton, TransportGlyph::PLAY, hoverPlay, playing, theme);
-        drawTransportButton(canvas, pauseButton, TransportGlyph::PAUSE, hoverPause, false, theme);
-        drawTransportButton(canvas, stopButton, TransportGlyph::STOP, hoverStop, false, theme);
-        drawTransportButton(canvas, loopButton, TransportGlyph::LOOP, hoverLoop, loopPlayback, theme);
-        const int separatorX = static_cast<int>(loopButton.right) + transportPad;
-        {
-            const HPEN separator = CreatePen(PS_SOLID, 1, theme.border);
-            const HGDIOBJ oldSeparator = SelectObject(canvas, separator);
-            MoveToEx(canvas, separatorX, transport.top + sc(10), nullptr);
-            LineTo(canvas, separatorX, transport.bottom - sc(10));
-            SelectObject(canvas, oldSeparator);
-            DeleteObject(separator);
-        }
-
         const float startDepth = schedule.getStartDepth();
         const float zoomExponent = zoomExponentAt(previewDepth);
         const std::wstring fields[4][2] = {
@@ -2810,58 +3772,101 @@ namespace merutilm::rff2 {
             {L"Keyframe", std::format(L"{:.1f}", previewDepth)},
             // Read off the keyframe files; with none open the depth axis is a placeholder and the
             // zoom extrapolated along it says nothing, so the readout stands empty until one is.
-            {L"Zoom", frameSource == nullptr ? std::wstring(L"\u2014") : std::format(L"1E{:.1f}", zoomExponent)},
-            {L"Time", std::format(L"{} / {}", durationText(schedule.timeAt(previewDepth)),
+            {L"Zoom",
+             frameSource == nullptr ? std::wstring(L"\u2014") : std::format(L"1E{:.1f}", zoomExponent)},
+            {L"Time", std::format(L"{} / {}", durationText(previewSeconds()),
                                   durationText(schedule.getTotalSeconds()))},
         };
         RECT *const fieldRects[4] = {&distanceField, &keyframeField, &zoomField, &timeField};
         // The readouts share one width and one gap, so the row is spaced as evenly as it reads.
-        const int fieldGap = sc(10);
-        const int fieldsLeft = separatorX + transportPad;
-        const int fieldWidth = std::clamp(
-            (static_cast<int>(transport.right) - sc(240) - transportPad - fieldsLeft - fieldGap * 3) / 4,
-            sc(104), sc(190));
-        int fieldX = fieldsLeft;
-        RECT activeEditRect = {};
+        std::array<int, 4> fieldOrder = narrow ? std::array{0, 3, 1, 2} : std::array{0, 1, 2, 3};
+        if (narrow && activeFieldEdit == FieldEdit::KEYFRAME) {
+            fieldOrder = {1, 0, 3, 2};
+        }
+        if (narrow && activeFieldEdit == FieldEdit::TIME) {
+            fieldOrder = {3, 0, 1, 2};
+        }
+        const int transportRight =
+            dockToggle && !narrow ? dockLayout.toggle.left - dip(8) : transport.right - dip(12);
+        const auto transportLayout = workspace::TimelineTransportLayout::arrange(
+            transport, transportRight, uiDpi, narrow, textWidth(canvas, fields[3][1], valueFont), fieldOrder,
+            std::max(dip(14), fontHeight(canvas, captionFont)) + fontHeight(canvas, valueFont) + dip(7));
+        playButton = transportLayout.buttons[0];
+        pauseButton = transportLayout.buttons[1];
+        stopButton = transportLayout.buttons[2];
+        loopButton = transportLayout.buttons[3];
+        drawTransportButton(canvas, playButton, TransportGlyph::PLAY, hoverPlay, playing, theme);
+        drawTransportButton(canvas, pauseButton, TransportGlyph::PAUSE, hoverPause, false, theme);
+        drawTransportButton(canvas, stopButton, TransportGlyph::STOP, hoverStop, false, theme);
+        drawTransportButton(canvas, loopButton, TransportGlyph::LOOP, hoverLoop, loopPlayback, theme);
+        fillRect(canvas, transportLayout.separator, theme.border);
+        RECT activeEditRect{};
         for (int i = 0; i < 4; ++i) {
-            const RECT box = {fieldX, transportMid - sc(22), fieldX + fieldWidth, transportMid + sc(22)};
-            *fieldRects[i] = {};
-            if (box.right > transport.right - transportPad) {
-                break;
+            *fieldRects[i] = transportLayout.fields[i];
+        }
+        for (int i : fieldOrder) {
+            const RECT box = transportLayout.fields[i];
+            if (IsRectEmpty(&box)) {
+                continue;
             }
-            *fieldRects[i] = box;
             // The boxes that carry the playhead light up while one of them is being dragged.
             const bool edited = activeFieldEdit == FieldEdit::DISTANCE ? i == 0
-                                : activeFieldEdit == FieldEdit::KEYFRAME && i == 1;
-            const bool dragged = fieldDrag == FieldDrag::DEPTH ? i == 0 || i == 1
-                                     : fieldDrag == FieldDrag::TIME && i == 3;
+                                : activeFieldEdit == FieldEdit::TIME
+                                    ? i == 3
+                                    : activeFieldEdit == FieldEdit::KEYFRAME && i == 1;
+            const bool dragged =
+                fieldDrag == FieldDrag::DEPTH ? i == 0 || i == 1 : fieldDrag == FieldDrag::TIME && i == 3;
             const bool hovered = hoveredFieldEdit == FieldEdit::DISTANCE ? i == 0
-                                   : hoveredFieldEdit == FieldEdit::KEYFRAME && i == 1;
-            const RECT inner = drawCaptionBox(canvas, box, fields[i][0], theme.panel, captionFont, hovered,
-                                              dragged || edited, theme);
+                                 : hoveredFieldEdit == FieldEdit::TIME
+                                     ? i == 3
+                                     : hoveredFieldEdit == FieldEdit::KEYFRAME && i == 1;
+            const RECT inner = drawTransportReadout(canvas, box, fields[i][0], captionFont, i != 2, hovered,
+                                                    dragged || edited, theme);
             if (edited) {
-                activeEditRect = {box.left + sc(8), box.top + sc(9), box.right - sc(8), box.bottom - sc(4)};
+                activeEditRect = inner;
             } else {
-                drawText(canvas, fields[i][1], inner, theme.text, DT_CENTER | DT_VCENTER | DT_SINGLELINE, valueFont);
+                drawText(canvas, fields[i][1], inner, dragged ? theme.selectedText : theme.text,
+                         DT_CENTER | DT_VCENTER | DT_SINGLELINE, valueFont);
             }
-            fieldX = box.right + fieldGap;
         }
         std::wstring status;
         if (activeFieldEdit != FieldEdit::NONE) {
-            status = L"Formula: +  -  *  /  ( )    Enter: apply    Esc: cancel";
+            status = L"Enter / Esc";
         } else if (hoveredFieldEdit != FieldEdit::NONE) {
-            status = FORMULA_FIELD_HINT;
+            status = L"Click to edit";
+        } else if (dockToggle && !dockLayout.tracksAvailable) {
+            status = L"Increase the window height to show tracks.";
+        } else if (dockPreferencesFailed) {
+            status = L"Timeline layout was not saved.";
+        } else if (aiImagesBusy.load()) {
+            status = aiTotalPages.load()
+                ? std::format(L"{} {}/{}", UiLanguage::text(L"Saving image pages:"), aiSavedPages.load(), aiTotalPages.load())
+                : UiLanguage::text(L"Preparing image sheet...");
+        } else if (cachePreloading.load()) {
+            status = L"Preloading previews to RAM:";
         } else if (previewBusy) {
-            status = std::format(L"Rendering d {:.2f}...", previewBusyDepth);
+            status = L"Rendering";
         } else {
             std::scoped_lock lock(previewBitmapMutex);
             status = previewMessage;
         }
-        drawText(canvas, status, {fieldX, transport.top, transport.right - transportPad, transport.bottom},
-                 theme.mutedText, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+        const auto visibleStatus =
+            fittingText(canvas, smallFont, transportLayout.status.right - transportLayout.status.left,
+                        {status, L"See Controls"});
+        drawText(canvas, visibleStatus, transportLayout.status, theme.mutedText,
+                 DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
 
         RECT timeline = {margin, transport.bottom + margin, width - margin,
                          transport.bottom + margin + timelineHeight};
+        if (dockToggle) {
+            if (!dockLayout.tracksVisible) {
+                controlsButton = {};
+                overlayButton = {};
+                presentPaint(target, activeEditRect);
+                return;
+            }
+            timeline = dockLayout.tracks;
+        }
         fillRect(canvas, timeline, theme.panel);
         frameRect(canvas, timeline, theme.border);
         timelinePanel = timeline;
@@ -2879,7 +3884,7 @@ namespace merutilm::rff2 {
         // The rows are the tracks the timeline holds, stacked in the order the file keeps them, so
         // a row carried over another one keeps the place it was dropped in.
         std::vector<const VidTimelineTrack *> displayedTracks;
-        for (const auto &track: attribute.video.timeline.tracks) {
+        for (const auto &track : attribute.video.timeline.tracks) {
             // The R row carries all three channels while they are linked, so G and B are not shown.
             if (linkColorCycle && (track.targetId == CYCLE_G_TARGET || track.targetId == CYCLE_B_TARGET)) {
                 continue;
@@ -2891,6 +3896,26 @@ namespace merutilm::rff2 {
             }
             displayedTracks.push_back(&track);
         }
+        const int trackValueWidth = embedded ? dip(52) : sc(66);
+        const int nameInset = rowTextLeft - timeline.left;
+        const int nameGutters = nameInset + sc(20) + sc(10) + (narrow ? 0 : sc(12) + trackValueWidth);
+        int desiredLabelWidth = embedded ? dip(240) : sc(360);
+        for (const auto *track : displayedTracks) {
+            desiredLabelWidth =
+                std::max(desiredLabelWidth,
+                         nameGutters + textWidth(canvas, rowName(track->targetId, linkColorCycle), bodyFont));
+        }
+        const int labelLimit =
+            embedded ? std::max(nameGutters + dip(84), std::min(dip(340), width * 2 / 5)) : sc(440);
+        const int labelWidth = std::min(desiredLabelWidth, labelLimit);
+        const int trackNameWidth = std::max(dip(32), labelWidth - nameGutters);
+        int readableRowHeight = minRowHeight;
+        for (const auto *track : displayedTracks) {
+            readableRowHeight = std::max(readableRowHeight,
+                                         wrappedTextHeight(canvas, rowName(track->targetId, linkColorCycle),
+                                                           bodyFont, trackNameWidth) +
+                                             sc(16) + (narrow ? fontHeight(canvas, smallFont) + dip(2) : 0));
+        }
         const int trackCount = std::max<int>(1, static_cast<int>(displayedTracks.size()));
         const int guideTop = timeline.bottom - footerHeight;
         const int zoomRowTop = guideTop - zoomRowHeight;
@@ -2901,7 +3926,7 @@ namespace merutilm::rff2 {
         // value or to drag a key on, so the stack scrolls at a quarter of the view rather than
         // thinning every row further towards nothing.
         constexpr int maxVisibleTracks = 4;
-        const int trackRowHeight = std::max(minRowHeight, viewHeight / maxVisibleTracks);
+        const int trackRowHeight = std::max(readableRowHeight, viewHeight / maxVisibleTracks);
         const bool tracksScroll = trackCount * trackRowHeight > viewHeight;
         // The axis stops short of the right column whether the rows scroll or not, so the bar that
         // column holds keeps its place and widening the window never drops it.
@@ -2911,10 +3936,7 @@ namespace merutilm::rff2 {
         trackScrollTrack = {};
         trackScrollThumb = {};
         if (axis.right <= axis.left || axis.bottom <= axis.top) {
-            BitBlt(target, 0, 0, width, height, canvas, 0, 0, SRCCOPY);
-            SelectObject(canvas, previousBitmap);
-            DeleteObject(bitmap);
-            DeleteDC(canvas);
+            presentPaint(target, activeEditRect);
             return;
         }
 
@@ -2926,12 +3948,11 @@ namespace merutilm::rff2 {
         const int distanceRowTop = timeline.top + sc(4);
         const int timeRowTop = distanceRowTop + rulerRowHeight;
         rulerStrip = {axis.left, distanceRowTop, axis.right, axisTop};
-        drawText(canvas, L"Distance (d)", {rowIconLeft, distanceRowTop, axis.left - sc(12),
-                                           distanceRowTop + rulerRowHeight}, theme.mutedText,
-                 DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
-        drawText(canvas, L"Time", {rowIconLeft, timeRowTop, axis.left - sc(12),
-                                   timeRowTop + rulerRowHeight}, theme.mutedText,
-                 DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+        drawText(canvas, L"Distance (d)",
+                 {rowIconLeft, distanceRowTop, axis.left - sc(12), distanceRowTop + rulerRowHeight},
+                 theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+        drawText(canvas, L"Time", {rowIconLeft, timeRowTop, axis.left - sc(12), timeRowTop + rulerRowHeight},
+                 theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
         const int tickSlots = std::clamp(static_cast<int>((axis.right - axis.left) / sc(132)), 2, 16);
         const float tickStep = depthTickStep(viewStart - viewEnd, tickSlots);
         const int tickDecimals = tickStep < 0.095f ? 2 : tickStep < 0.95f ? 1 : 0;
@@ -2947,8 +3968,9 @@ namespace merutilm::rff2 {
             const HPEN minorPen = CreatePen(PS_SOLID, 1, theme.grid);
             const HGDIOBJ oldMinor = SelectObject(canvas, minorPen);
             for (int minor = 1; minor < 5; ++minor) {
-                const int minorX = depthX(depthFromDistance(distance + tickStep * static_cast<float>(minor) / 5.0f),
-                                          viewStart, viewEnd, axis);
+                const int minorX =
+                    depthX(depthFromDistance(distance + tickStep * static_cast<float>(minor) / 5.0f),
+                           viewStart, viewEnd, axis);
                 if (!visibleX(minorX, axis, 0)) {
                     continue;
                 }
@@ -2967,7 +3989,7 @@ namespace merutilm::rff2 {
             SelectObject(canvas, oldPen);
             DeleteObject(pen);
             drawText(canvas, std::format(L"d {:.{}f}", distance, tickDecimals),
-                     {x - sc(62), distanceRowTop, x + sc(62), timeRowTop - sc(4)}, theme.distanceTick,
+                     {x - sc(62), distanceRowTop, x + sc(62), timeRowTop - sc(4)}, theme.mutedText,
                      DT_CENTER | DT_VCENTER | DT_SINGLELINE, smallFont);
             drawText(canvas, durationText(schedule.timeAt(depth)),
                      {x - sc(58), timeRowTop, x + sc(58), timeRowTop + rulerRowHeight}, theme.mutedText,
@@ -2976,7 +3998,7 @@ namespace merutilm::rff2 {
 
         // Every row is carried by its name cell to any place in the stack, the Speed row included.
         reorderRowTargets.clear();
-        for (const VidTimelineTrack *item: displayedTracks) {
+        for (const VidTimelineTrack *item : displayedTracks) {
             reorderRowTargets.push_back(item->targetId);
         }
         // Every track reads the same, so every row gets the same height.
@@ -2987,146 +4009,174 @@ namespace merutilm::rff2 {
         // Rows are drawn at their own height wherever the scroll puts them, and cut at the view.
         const int trackClipRight = static_cast<int>(axis.right) + sc(10);
         const HRGN trackClip = CreateRectRgn(timeline.left + sc(2), axis.top, trackClipRight, axis.bottom);
-        SelectClipRgn(canvas, trackClip);
-        for (int row = 0; row < trackCount; ++row) {
-            const int top = axis.top - trackScrollOffset + row * rowHeight;
-            // Every row is the same height, the last one included, so the stack reads evenly.
-            const int bottom = top + rowHeight;
-            if (bottom <= axis.top) {
-                continue;
-            }
-            if (top >= axis.bottom) {
-                break;
-            }
-            const VidTimelineTrack *track = row < static_cast<int>(displayedTracks.size())
-                                                ? displayedTracks[row]
-                                                : nullptr;
-            const uint16_t targetId = track != nullptr ? track->targetId :
-                vidTimelineTargetId(VidTimelineTarget::SPEED);
-            const bool trackActive = track == nullptr || (track->enabled && attribute.video.timeline.enabled);
-            const COLORREF rowColor = linkColorCycle && targetId == CYCLE_R_TARGET && trackActive
-                                          ? theme.linkedTrack
-                                          : trackColor(targetId, trackActive, lightMode);
-            const RECT labelCell = {timeline.left + sc(8), top + sc(4), axis.left - sc(20), bottom - sc(4)};
-            // The row standing in for an empty stack is on no stack to be carried anywhere.
-            const int rowOrder = track != nullptr ? row : -1;
-            const bool carriedRow = draggingTrackRow && trackRowDragMoved &&
-                                   std::ranges::find(carriedRows, targetId) != carriedRows.end();
-            if (trackRowSelected(targetId)) {
-                fillRoundRect(canvas, labelCell, theme.panelRaised, theme.accent, sc(8));
-            }
-            if (carriedRow) {
-                fillRoundRect(canvas, labelCell, theme.accentSoft, theme.accentBorder, sc(8));
-            }
-            const int labelMid = static_cast<int>(labelCell.top + labelCell.bottom) / 2;
-            const RECT iconBox = {rowIconLeft, labelMid - sc(12), rowIconLeft + rowIconWidth,
-                                  labelMid + sc(12)};
-            drawTrackIcon(canvas, iconBox, targetId, rowColor);
-            const float shownValue = track != nullptr
-                                         ? evaluateDisplayedTrack(*track, targetId, previewDepth,
-                                                                  baseValue(targetId))
-                                         : baseValue(targetId);
-            const std::wstring valueLabel = std::format(L"{:.3f}", shownValue);
-            const int valueWidth = textWidth(canvas, valueLabel, smallFont) + sc(6);
-            const int valueLeft = labelCell.right - valueWidth - sc(10);
-            drawText(canvas, rowName(targetId, linkColorCycle),
-                     {rowTextLeft, labelCell.top - sc(1), valueLeft - sc(12),
-                       labelCell.bottom - sc(1)}, trackActive ? theme.text : theme.mutedText,
-                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
-            drawText(canvas, valueLabel,
-                     {valueLeft, labelCell.top, labelCell.right - sc(10),
-                       labelCell.bottom}, trackActive ? theme.mutedText : theme.disabledTrack,
-                     DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
-
-            const HPEN divider = CreatePen(PS_SOLID, 1, theme.grid);
-            const HGDIOBJ oldPen = SelectObject(canvas, divider);
-            MoveToEx(canvas, timeline.left + sc(8), bottom, nullptr);
-            LineTo(canvas, timeline.right - sc(8), bottom);
-            SelectObject(canvas, oldPen);
-            DeleteObject(divider);
-
-            if (draggingTrackRow && trackRowDragMoved && rowOrder >= 0) {
-                const int lastRow = static_cast<int>(reorderRowTargets.size());
-                // The line stands where the carried row lands: over this row, or under the last one.
-                const int dropY = trackRowDropIndex == rowOrder
-                                      ? top
-                                      : trackRowDropIndex == lastRow && rowOrder == lastRow - 1 ? bottom : -1;
-                if (dropY >= 0) {
-                    const HPEN dropPen = CreatePen(PS_SOLID, sc(2), theme.selected);
-                    const HGDIOBJ oldDrop = SelectObject(canvas, dropPen);
-                    MoveToEx(canvas, timeline.left + sc(8), dropY, nullptr);
-                    LineTo(canvas, axis.right, dropY);
-                    SelectObject(canvas, oldDrop);
-                    DeleteObject(dropPen);
+        if (trackClip == nullptr) {
+            return;
+        }
+        if (SelectClipRgn(canvas, trackClip) == ERROR) {
+            DeleteObject(trackClip);
+            return;
+        }
+        try {
+            for (int row = 0; row < trackCount; ++row) {
+                const int top = axis.top - trackScrollOffset + row * rowHeight;
+                // Every row is the same height, the last one included, so the stack reads evenly.
+                const int bottom = top + rowHeight;
+                if (bottom <= axis.top) {
+                    continue;
                 }
-            }
-
-            const bool editable = editableTarget(targetId);
-            float minValue = 0.0f;
-            float maxValue = 1.0f;
-            if (editable) {
-                std::tie(minValue, maxValue) = valueRange(targetId);
-            }
-            trackLayouts.push_back({.targetId = targetId, .row = {axis.left, top, axis.right, bottom},
-                                    .label = labelCell, .editable = editable, .minValue = minValue,
-                                    .maxValue = maxValue, .order = rowOrder});
-            if (editable && track != nullptr) {
-                const RECT rowRect = {axis.left, top, axis.right, bottom};
-                if (minValue < 0.0f && maxValue > 0.0f) {
-                    const int zeroY = valueY(0.0f, minValue, maxValue, rowRect);
-                    const HPEN zeroPen = CreatePen(PS_DOT, 1, theme.grid);
-                    const HGDIOBJ oldZero = SelectObject(canvas, zeroPen);
-                    MoveToEx(canvas, axis.left, zeroY, nullptr);
-                    LineTo(canvas, axis.right, zeroY);
-                    SelectObject(canvas, oldZero);
-                    DeleteObject(zeroPen);
+                if (top >= axis.bottom) {
+                    break;
                 }
-                const int samples = std::max(2, static_cast<int>(axis.right - axis.left));
-                const HPEN curve = CreatePen(PS_SOLID, sc(2), rowColor);
-                const HGDIOBJ oldCurve = SelectObject(canvas, curve);
-                for (int i = 0; i < samples; ++i) {
-                    const float depth = viewStart + (viewEnd - viewStart) * static_cast<float>(i) /
-                                        static_cast<float>(samples - 1);
-                    const float value = evaluateDisplayedTrack(*track, targetId, depth, baseValue(targetId));
-                    const int x = axis.left + i;
-                    const int y = valueY(value, minValue, maxValue, rowRect);
-                    if (i == 0) {
-                        MoveToEx(canvas, x, y, nullptr);
-                    } else {
-                        LineTo(canvas, x, y);
+                const VidTimelineTrack *track =
+                    row < static_cast<int>(displayedTracks.size()) ? displayedTracks[row] : nullptr;
+                const uint16_t targetId =
+                    track != nullptr ? track->targetId : vidTimelineTargetId(VidTimelineTarget::SPEED);
+                const bool trackActive = track == nullptr || (track->enabled && attribute.video.timeline.enabled);
+                const COLORREF rowColor = linkColorCycle && targetId == CYCLE_R_TARGET && trackActive
+                                              ? theme.linkedTrack
+                                              : trackColor(targetId, trackActive, lightMode);
+                const RECT labelCell = {timeline.left + sc(8), top + sc(4), axis.left - sc(20), bottom - sc(4)};
+                // The row standing in for an empty stack is on no stack to be carried anywhere.
+                const int rowOrder = track != nullptr ? row : -1;
+                const bool carriedRow = draggingTrackRow && trackRowDragMoved &&
+                                        std::ranges::find(carriedRows, targetId) != carriedRows.end();
+                if (trackRowSelected(targetId)) {
+                    fillRoundRect(canvas, labelCell, theme.panelRaised, theme.accentText, sc(8));
+                }
+                if (carriedRow) {
+                    fillRoundRect(canvas, labelCell, theme.accentSoft, theme.accentBorder, sc(8));
+                }
+                const int labelMid = static_cast<int>(labelCell.top + labelCell.bottom) / 2;
+                const RECT iconBox = {rowIconLeft, labelMid - sc(12), rowIconLeft + rowIconWidth,
+                                      labelMid + sc(12)};
+                drawTrackIcon(canvas, iconBox, targetId,
+                              carriedRow && highContrastSettingsMode() ? theme.selectedText : rowColor);
+                const float shownValue =
+                    track != nullptr ? evaluateDisplayedTrack(*track, targetId, previewDepth, baseValue(targetId))
+                                     : baseValue(targetId);
+                const std::wstring valueLabel =
+                    fittingText(canvas, smallFont, trackValueWidth,
+                                {std::format(L"{:.3f}", shownValue), std::format(L"{:.3g}", shownValue)});
+                const int valueLeft = labelCell.right - trackValueWidth - sc(10);
+                const auto name = rowName(targetId, linkColorCycle);
+                const int nameHeight = wrappedTextHeight(canvas, name, bodyFont, trackNameWidth);
+                const int nameTop =
+                    labelMid - (nameHeight + (narrow ? fontHeight(canvas, smallFont) + dip(2) : 0)) / 2;
+                drawText(canvas, name, {rowTextLeft, nameTop, rowTextLeft + trackNameWidth, nameTop + nameHeight},
+                         carriedRow    ? theme.selectedText
+                         : trackActive ? theme.text
+                                       : theme.mutedText,
+                         DT_LEFT | DT_WORDBREAK, bodyFont);
+                const RECT valueRect =
+                    narrow ? RECT{rowTextLeft, nameTop + nameHeight + dip(2), labelCell.right - sc(10),
+                                  labelCell.bottom}
+                           : RECT{valueLeft, labelCell.top, labelCell.right - sc(10), labelCell.bottom};
+                drawText(canvas, valueLabel, valueRect,
+                         carriedRow && highContrastSettingsMode() ? theme.selectedText
+                         : trackActive                            ? theme.mutedText
+                                                                  : theme.disabledTrack,
+                         (narrow ? DT_LEFT | DT_TOP : DT_RIGHT | DT_VCENTER) | DT_SINGLELINE, smallFont);
+
+                const HPEN divider = CreatePen(PS_SOLID, 1, theme.grid);
+                const HGDIOBJ oldPen = SelectObject(canvas, divider);
+                MoveToEx(canvas, timeline.left + sc(8), bottom, nullptr);
+                LineTo(canvas, timeline.right - sc(8), bottom);
+                SelectObject(canvas, oldPen);
+                DeleteObject(divider);
+
+                if (draggingTrackRow && trackRowDragMoved && rowOrder >= 0) {
+                    const int lastRow = static_cast<int>(reorderRowTargets.size());
+                    // The line stands where the carried row lands: over this row, or under the last one.
+                    const int dropY = trackRowDropIndex == rowOrder                             ? top
+                                      : trackRowDropIndex == lastRow && rowOrder == lastRow - 1 ? bottom
+                                                                                                : -1;
+                    if (dropY >= 0) {
+                        const HPEN dropPen = CreatePen(PS_SOLID, sc(2), theme.selected);
+                        const HGDIOBJ oldDrop = SelectObject(canvas, dropPen);
+                        MoveToEx(canvas, timeline.left + sc(8), dropY, nullptr);
+                        LineTo(canvas, axis.right, dropY);
+                        SelectObject(canvas, oldDrop);
+                        DeleteObject(dropPen);
                     }
                 }
-                SelectObject(canvas, oldCurve);
-                DeleteObject(curve);
-            }
 
-            if (track != nullptr) {
-                for (int keyIndex = 0; keyIndex < static_cast<int>(track->keys.size()); ++keyIndex) {
-                    const auto &key = track->keys[keyIndex];
-                    const int x = depthX(key.depth, viewStart, viewEnd, axis);
-                    if (!visibleX(x, axis, sc(8))) {
-                        continue;
+                const bool editable = editableTarget(targetId);
+                float minValue = 0.0f;
+                float maxValue = 1.0f;
+                if (editable) {
+                    std::tie(minValue, maxValue) = valueRange(targetId);
+                }
+                trackLayouts.push_back({.targetId = targetId,
+                                        .row = {axis.left, top, axis.right, bottom},
+                                        .label = labelCell,
+                                        .editable = editable,
+                                        .minValue = minValue,
+                                        .maxValue = maxValue,
+                                        .order = rowOrder});
+                if (editable && track != nullptr) {
+                    const RECT rowRect = {axis.left, top, axis.right, bottom};
+                    if (minValue < 0.0f && maxValue > 0.0f) {
+                        const int zeroY = valueY(0.0f, minValue, maxValue, rowRect);
+                        const HPEN zeroPen = CreatePen(PS_DOT, 1, theme.grid);
+                        const HGDIOBJ oldZero = SelectObject(canvas, zeroPen);
+                        MoveToEx(canvas, axis.left, zeroY, nullptr);
+                        LineTo(canvas, axis.right, zeroY);
+                        SelectObject(canvas, oldZero);
+                        DeleteObject(zeroPen);
                     }
-                    const int y = editable ? valueY(key.value, minValue, maxValue,
-                                                    {axis.left, top, axis.right, bottom}) : (top + bottom) / 2;
-                    const bool selected = targetId == selectedTrackTarget && keyIndex == selectedTrackKey;
-                    const bool hovered = targetId == hoveredTrackKey.targetId &&
-                                         keyIndex == hoveredTrackKey.keyIndex;
-                    const int radius = selected ? sc(7) : hovered ? sc(6) : sc(5);
-                    const HBRUSH keyBrush = CreateSolidBrush(selected ? theme.selected : rowColor);
-                    const HPEN keyPen = CreatePen(PS_SOLID, selected ? sc(2) : 1,
-                                                  selected ? RGB(255, 237, 213) : theme.focusRing);
-                    const HGDIOBJ oldBrush = SelectObject(canvas, keyBrush);
-                    const HGDIOBJ oldKeyPen = SelectObject(canvas, keyPen);
-                    // A keyframe is drawn as the diamond every editor draws it as.
-                    const POINT diamond[4] = {{x, y - radius}, {x + radius, y}, {x, y + radius}, {x - radius, y}};
-                    Polygon(canvas, diamond, 4);
-                    SelectObject(canvas, oldKeyPen);
-                    SelectObject(canvas, oldBrush);
-                    DeleteObject(keyPen);
-                    DeleteObject(keyBrush);
+                    const int samples = std::max(2, static_cast<int>(axis.right - axis.left));
+                    const HPEN curve = CreatePen(PS_SOLID, sc(2), rowColor);
+                    const HGDIOBJ oldCurve = SelectObject(canvas, curve);
+                    for (int i = 0; i < samples; ++i) {
+                        const float depth = viewStart + (viewEnd - viewStart) * static_cast<float>(i) /
+                                                            static_cast<float>(samples - 1);
+                        const float value = evaluateDisplayedTrack(*track, targetId, depth, baseValue(targetId));
+                        const int x = axis.left + i;
+                        const int y = valueY(value, minValue, maxValue, rowRect);
+                        if (i == 0) {
+                            MoveToEx(canvas, x, y, nullptr);
+                        } else {
+                            LineTo(canvas, x, y);
+                        }
+                    }
+                    SelectObject(canvas, oldCurve);
+                    DeleteObject(curve);
+                }
+
+                if (track != nullptr) {
+                    for (int keyIndex = 0; keyIndex < static_cast<int>(track->keys.size()); ++keyIndex) {
+                        const auto &key = track->keys[keyIndex];
+                        const int x = depthX(key.depth, viewStart, viewEnd, axis);
+                        if (!visibleX(x, axis, sc(8))) {
+                            continue;
+                        }
+                        const int y =
+                            editable ? valueY(key.value, minValue, maxValue, {axis.left, top, axis.right, bottom})
+                                     : (top + bottom) / 2;
+                        const bool selected = targetId == selectedTrackTarget && keyIndex == selectedTrackKey;
+                        const bool hovered =
+                            targetId == hoveredTrackKey.targetId && keyIndex == hoveredTrackKey.keyIndex;
+                        const int radius = selected ? sc(7) : hovered ? sc(6) : sc(5);
+                        const HBRUSH keyBrush = CreateSolidBrush(selected ? theme.selected : rowColor);
+                        const HPEN keyPen = CreatePen(PS_SOLID, selected ? sc(2) : 1,
+                                                      selected ? RGB(255, 237, 213) : theme.focusRing);
+                        const HGDIOBJ oldBrush = SelectObject(canvas, keyBrush);
+                        const HGDIOBJ oldKeyPen = SelectObject(canvas, keyPen);
+                        // A keyframe is drawn as the diamond every editor draws it as.
+                        const POINT diamond[4] = {
+                            {x, y - radius}, {x + radius, y}, {x, y + radius}, {x - radius, y}};
+                        Polygon(canvas, diamond, 4);
+                        SelectObject(canvas, oldKeyPen);
+                        SelectObject(canvas, oldBrush);
+                        DeleteObject(keyPen);
+                        DeleteObject(keyBrush);
+                    }
                 }
             }
+        } catch (...) {
+            SelectClipRgn(canvas, nullptr);
+            DeleteObject(trackClip);
+            throw;
         }
         SelectClipRgn(canvas, nullptr);
         DeleteObject(trackClip);
@@ -3137,22 +4187,25 @@ namespace merutilm::rff2 {
         frameRect(canvas, trackScrollTrack, theme.border);
         {
             const int barHeight = static_cast<int>(trackScrollTrack.bottom - trackScrollTrack.top);
-            const int thumbHeight = std::clamp(
-                static_cast<int>(static_cast<float>(barHeight) * static_cast<float>(viewHeight) /
-                                 static_cast<float>(std::max(contentHeight, 1))),
-                std::min(sc(28), barHeight), barHeight);
-            const float scrolled = trackScrollRange > 0
-                                       ? static_cast<float>(trackScrollOffset) /
-                                         static_cast<float>(trackScrollRange)
-                                       : 0.0f;
+            const int thumbHeight =
+                std::clamp(static_cast<int>(static_cast<float>(barHeight) * static_cast<float>(viewHeight) /
+                                            static_cast<float>(std::max(contentHeight, 1))),
+                           std::min(sc(28), barHeight), barHeight);
+            const float scrolled = trackScrollRange > 0 ? static_cast<float>(trackScrollOffset) /
+                                                              static_cast<float>(trackScrollRange)
+                                                        : 0.0f;
             const int thumbTop = trackScrollTrack.top +
                                  static_cast<int>(static_cast<float>(barHeight - thumbHeight) * scrolled);
-            trackScrollThumb = {trackScrollTrack.left, thumbTop, trackScrollTrack.right, thumbTop + thumbHeight};
+            trackScrollThumb = {trackScrollTrack.left, thumbTop, trackScrollTrack.right,
+                                thumbTop + thumbHeight};
             // With every row on screen the bar stays, filled and quiet, rather than leaving the column empty.
-            const bool thumbHeld = trackScrollRange > 0 && (draggingTrackScrollThumb || hoverTrackScrollThumb);
+            const bool thumbHeld =
+                trackScrollRange > 0 && (draggingTrackScrollThumb || hoverTrackScrollThumb);
             fillRect(canvas, trackScrollThumb,
-                     trackScrollRange == 0 ? theme.buttonHover : thumbHeld ? theme.accent : theme.accentSoft);
-            frameRect(canvas, trackScrollThumb, thumbHeld ? theme.accentBorder : theme.border);
+                     trackScrollRange == 0 ? theme.toggleOff
+                     : thumbHeld           ? theme.accentText
+                                           : theme.mutedText);
+            frameRect(canvas, trackScrollThumb, thumbHeld ? theme.accentText : theme.border);
         }
 
         const float fullSpan = std::max(startDepth - fullEndDepth, 1e-6f);
@@ -3170,9 +4223,11 @@ namespace merutilm::rff2 {
         // grows to the right, and the arrow keeps the place it is drawn in whatever the number is.
         drawText(canvas, std::format(L"{:.0f}%", 100.0f * fullSpan / std::max(shownSpan, 1e-6f)),
                  {zoomPresetButton.left + sc(10), zoomPresetButton.top, zoomPresetButton.right - sc(22),
-                  zoomPresetButton.bottom}, theme.text, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
-        drawText(canvas, L"\x25BE", {zoomPresetButton.left, zoomPresetButton.top,
-                                     zoomPresetButton.right - sc(9), zoomPresetButton.bottom},
+                  zoomPresetButton.bottom},
+                 theme.text, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+        drawText(canvas, L"\x25BE",
+                 {zoomPresetButton.left, zoomPresetButton.top, zoomPresetButton.right - sc(9),
+                  zoomPresetButton.bottom},
                  theme.text, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
         scrollTrack = {axis.left, zoomMid - scrollHeight / 2, axis.right, zoomMid + scrollHeight / 2};
         fillRect(canvas, scrollTrack, theme.panelRaised);
@@ -3186,8 +4241,8 @@ namespace merutilm::rff2 {
         const int thumbLeft = scrollTrack.left + static_cast<int>((scrollWidth - thumbWidth) * scrolled);
         scrollThumb = {thumbLeft, scrollTrack.top, thumbLeft + thumbWidth, scrollTrack.bottom};
         const bool thumbActive = draggingScrollThumb || hoverScrollThumb;
-        fillRect(canvas, scrollThumb, thumbActive ? theme.accent : theme.accentSoft);
-        frameRect(canvas, scrollThumb, thumbActive ? theme.accentBorder : theme.border);
+        fillRect(canvas, scrollThumb, thumbActive ? theme.accentText : theme.mutedText);
+        frameRect(canvas, scrollThumb, thumbActive ? theme.accentText : theme.border);
 
         const HPEN guideDivider = CreatePen(PS_SOLID, 1, theme.grid);
         const HGDIOBJ oldGuideDivider = SelectObject(canvas, guideDivider);
@@ -3195,40 +4250,54 @@ namespace merutilm::rff2 {
         LineTo(canvas, timeline.right - sc(8), guideTop);
         SelectObject(canvas, oldGuideDivider);
         DeleteObject(guideDivider);
-        RECT guidance = {rowIconLeft, guideTop + sc(7), timeline.right - rowRightPad,
-                         timeline.bottom - sc(7)};
-        const std::wstring guideTitle = L"Controls:";
-        drawText(canvas, guideTitle, guidance, theme.accent, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
-        guidance.left += textWidth(canvas, guideTitle, smallFont) + sc(10);
+        const int guideMiddle = (guideTop + timeline.bottom) / 2;
+        controlsButton = {timeline.right - rowRightPad - dip(84), guideMiddle - dip(14),
+                          timeline.right - rowRightPad, guideMiddle + dip(14)};
+        drawButton(canvas, controlsButton, L"Controls", hoverControls, false, smallFont, theme);
+        overlayButton = {controlsButton.left - dip(130), controlsButton.top, controlsButton.left - dip(8),
+                         controlsButton.bottom};
+        drawButton(canvas, overlayButton, L"Zoom Overlay", false, overlayPositionMode, smallFont, theme);
+        RECT guidance = {rowIconLeft, guideTop, overlayButton.left - dip(12), timeline.bottom};
+        const int guidanceWidth = guidance.right - guidance.left;
+        std::wstring guideText;
         const VidTimelineTrack *selectedTrack = track(selectedTrackTarget);
         if (selectedTrack != nullptr && selectedTrackKey >= 0 &&
             selectedTrackKey < static_cast<int>(selectedTrack->keys.size())) {
             const auto &key = selectedTrack->keys[selectedTrackKey];
             const std::wstring unit = selectedTrackTarget == SPEED_TARGET ? L" kf/s" : L"";
-            drawText(canvas, std::format(L"{}  Key {}    Distance d {:.3f} (kf {:.1f})    {:.4f}{}    {}    |    Drag an empty area: scrub preview",
-                                         rowName(selectedTrackTarget, linkColorCycle), selectedTrackKey + 1,
-                                         displayDistance(key.depth), key.depth, key.value, unit,
+            guideText =
+                fittingText(canvas, smallFont, guidanceWidth,
+                            {std::format(L"Key {}   |   d {:.3f}   |   {:.4f}{}   |   {}   |   F2: edit key",
+                                         selectedTrackKey + 1, displayDistance(key.depth), key.value, unit,
                                          interpolationName(key.out)),
-                     guidance, theme.text, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                             std::format(L"Key {}   |   {}   |   F2: edit key", selectedTrackKey + 1,
+                                         interpolationName(key.out)),
+                             std::format(L"Key {}   |   F2: edit", selectedTrackKey + 1), L"F2: edit key"});
         } else {
-            drawText(canvas, L"Wheel: zoom    Shift+Wheel: scroll    Ctrl+Wheel: tracks    0: fit    Right-click: parameter panels and keys    Double-click a track: add key    Delete: remove key",
-                     guidance, theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+            guideText = fittingText(canvas, smallFont, guidanceWidth,
+                                    {L"Double-click a track: add key    |    Drag: scrub preview    |    "
+                                     L"Wheel: zoom    |    F1: all controls",
+                                     L"Double-click: add key    |    Drag: scrub    |    F1: controls",
+                                     L"Double-click: add key    |    F1: controls", L"F1: all controls"});
         }
+        drawText(canvas, guideText, guidance, theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE,
+                 smallFont);
 
         const int playheadX = depthX(previewDepth, viewStart, viewEnd, axis);
         if (visibleX(playheadX, axis, 0)) {
-            const HPEN playhead = CreatePen(PS_SOLID, sc(2), theme.accent);
+            const HPEN playhead = CreatePen(PS_SOLID, sc(2), theme.accentText);
             const HGDIOBJ oldPlayhead = SelectObject(canvas, playhead);
             MoveToEx(canvas, playheadX, timeRowTop, nullptr);
             LineTo(canvas, playheadX, axis.bottom);
             SelectObject(canvas, oldPlayhead);
             DeleteObject(playhead);
             // The head of the playhead, so where the preview stands is visible at a glance.
-            const HBRUSH headBrush = CreateSolidBrush(theme.accent);
+            const HBRUSH headBrush = CreateSolidBrush(theme.accentText);
             const HPEN headPen = CreatePen(PS_SOLID, 1, theme.accentText);
             const HGDIOBJ oldHeadBrush = SelectObject(canvas, headBrush);
             const HGDIOBJ oldHeadPen = SelectObject(canvas, headPen);
-            const POINT head[3] = {{playheadX - sc(7), timeRowTop - sc(9)}, {playheadX + sc(7), timeRowTop - sc(9)},
+            const POINT head[3] = {{playheadX - sc(7), timeRowTop - sc(9)},
+                                   {playheadX + sc(7), timeRowTop - sc(9)},
                                    {playheadX, timeRowTop + sc(1)}};
             Polygon(canvas, head, 3);
             SelectObject(canvas, oldHeadPen);
@@ -3237,7 +4306,7 @@ namespace merutilm::rff2 {
             DeleteObject(headBrush);
         }
 
-        for (const auto &hold: attribute.video.timeline.holds) {
+        for (const auto &hold : attribute.video.timeline.holds) {
             const int x = depthX(hold.depth, viewStart, viewEnd, axis);
             if (!visibleX(x, axis, 0)) {
                 continue;
@@ -3250,18 +4319,603 @@ namespace merutilm::rff2 {
             DeleteObject(holdPen);
         }
 
-        BitBlt(target, 0, 0, width, height, canvas, 0, 0, SRCCOPY);
-        SelectObject(canvas, previousBitmap);
-        DeleteObject(bitmap);
-        DeleteDC(canvas);
+        presentPaint(target, activeEditRect);
+    }
+
+    std::vector<workspace::AccessibleItem> TimelineWindow::accessibleItems() {
+        using Id = workspace::TimelineItems;
+        using Item = workspace::AccessibleItem;
+        const TimelineDpiScope dpiScope(uiDpi);
+        std::vector<Item> items;
+        const auto add = [&](long id, const wchar_t *name, RECT bounds, const wchar_t *help = L"",
+                             long role = ROLE_SYSTEM_PUSHBUTTON) {
+            if (IsRectEmpty(&bounds)) {
+                return;
+            }
+            items.push_back({id, name, help, L"Activate", bounds, role, STATE_SYSTEM_FOCUSABLE});
+        };
+        add(Id::frames, L"Keyframe folder", framesButton, L"Select the source keyframe folder.");
+        if (frameSource && !items.empty()) {
+            items.back().help += L" Current source: " + frameSource->getDirectory().wstring();
+        }
+        add(Id::load, L"Load timeline", loadButton);
+        add(Id::save, L"Save timeline", saveButton);
+        add(Id::exportVideo, L"Export", exportButton);
+        add(Id::ai, L"AI Edit", aiButton);
+        add(Id::theme, L"Theme", themeButton);
+        add(Id::fullscreen, L"Fullscreen", fullscreenButton);
+        add(Id::play, L"Play / Pause", playButton, L"Play or pause at the current time.",
+            ROLE_SYSTEM_CHECKBUTTON);
+        add(Id::pause, L"Pause", pauseButton);
+        add(Id::stop, L"Stop", stopButton, L"Stop playback and return to the beginning.");
+        add(Id::loop, L"Loop", loopButton, L"Repeat playback.", ROLE_SYSTEM_CHECKBUTTON);
+        add(Id::distance, L"Timeline Distance", distanceField,
+            L"Distance from the first frame. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
+        add(Id::keyframe, L"Timeline Keyframe", keyframeField,
+            L"Source keyframe depth. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
+        add(Id::zoom, L"Source zoom", zoomField, L"Zoom read from the source keyframes.",
+            ROLE_SYSTEM_STATICTEXT);
+        add(Id::time, L"Timeline Time", timeField,
+            L"Elapsed seconds. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
+        const auto native = [&](long id, HWND control, const wchar_t *name) {
+            if (!control || !IsWindowVisible(control)) {
+                return;
+            }
+            RECT bounds;
+            GetWindowRect(control, &bounds);
+            MapWindowPoints(nullptr, window, reinterpret_cast<POINT *>(&bounds), 2);
+            add(id, name, bounds);
+            items.back().native = control;
+        };
+        native(Id::divider, dockSplitter ? dockSplitter->handle() : nullptr, L"Resize timeline tracks");
+        native(Id::toggle, dockToggle, L"Show or hide tracks");
+        const int rowHeight =
+            trackLayouts.empty() ? 0 : int(trackLayouts.front().row.bottom - trackLayouts.front().row.top);
+        for (int row = 0; row < int(reorderRowTargets.size()) && rowHeight > 0; ++row) {
+            const auto target = reorderRowTargets[row];
+            const auto *current = track(target);
+            if (!current) {
+                continue;
+            }
+            const int top = timelineAxis.top - trackScrollOffset + row * rowHeight;
+            RECT label{timelinePanel.left + sc(8), top + sc(4), timelineAxis.left - sc(20),
+                       top + rowHeight - sc(4)};
+            Item item{Id::track(target),
+                      rowName(target, linkColorCycle),
+                      L"Up and Down select tracks; Left and Right select keys; Insert adds a key; "
+                      L"Alt+Up/Down reorders; Shift+F10 opens the track menu.",
+                      L"Select track",
+                      label,
+                      ROLE_SYSTEM_LISTITEM,
+                      STATE_SYSTEM_FOCUSABLE | STATE_SYSTEM_SELECTABLE};
+            item.value = workspace::AttributeFormModel::number(playheadValue(target));
+            if (trackRowSelected(target)) {
+                item.state |= STATE_SYSTEM_SELECTED;
+            }
+            items.push_back(std::move(item));
+            const auto limits = valueRange(target);
+            const RECT plot{timelineAxis.left, top, timelineAxis.right, top + rowHeight};
+            for (int key = 0; key < int(current->keys.size()); ++key) {
+                const auto &value = current->keys[key];
+                const int x = depthX(value.depth, viewStartDepth, viewEndDepth, timelineAxis),
+                          y = editableTarget(target) ? valueY(value.value, limits.first, limits.second, plot)
+                                                     : top + rowHeight / 2;
+                Item keyItem{
+                    itemIds.key(target, key),
+                    rowName(target, linkColorCycle) + L" key " + std::to_wstring(key + 1),
+                    L"Distance " + workspace::AttributeFormModel::number(displayDistance(value.depth)) +
+                        L". Enter or F2 edits this key; Delete removes it; 1-4 change interpolation.",
+                    L"Edit key",
+                    {x - sc(8), y - sc(8), x + sc(8), y + sc(8)},
+                    ROLE_SYSTEM_LISTITEM,
+                    STATE_SYSTEM_FOCUSABLE | STATE_SYSTEM_SELECTABLE};
+                keyItem.value = workspace::AttributeFormModel::number(value.value);
+                keyItem.writable = editableTarget(target);
+                if (selectedTrackTarget == target && selectedTrackKey == key) {
+                    keyItem.state |= STATE_SYSTEM_SELECTED;
+                }
+                items.push_back(std::move(keyItem));
+            }
+        }
+        add(Id::viewZoom, L"Timeline zoom", zoomPresetButton, L"Choose the visible timeline range.");
+        add(Id::overlay, L"Zoom Overlay", overlayButton, L"Configure the zoom ratio shown in the video.");
+        add(Id::controls, L"Timeline controls", controlsButton,
+            L"F1 shows the controls, preview status and source folder.");
+        native(Id::editor, fieldEdit, L"Timeline formula");
+        RECT client;
+        GetClientRect(window, &client);
+        for (auto &item : items) {
+            if ((item.id == Id::play && playing) || (item.id == Id::loop && loopPlayback)) {
+                item.state |= STATE_SYSTEM_CHECKED;
+            }
+            if (item.id == Id::distance || item.id == Id::keyframe || item.id == Id::time) {
+                item.writable = true;
+                item.value = workspace::AttributeFormModel::number(item.id == Id::distance
+                                                                       ? displayDistance(previewDepth)
+                                                                   : item.id == Id::time ? previewSeconds()
+                                                                                         : previewDepth);
+            }
+            if (item.id == Id::zoom) {
+                item.state = STATE_SYSTEM_READONLY;
+                item.action.clear();
+                item.value =
+                    frameSource ? std::format(L"1E{:.1f}", zoomExponentAt(previewDepth)) : L"No keyframes";
+            }
+            if ((item.native && GetFocus() == item.native) ||
+                (!item.native && GetFocus() == window && keyboardFocus == item.id)) {
+                item.state |= STATE_SYSTEM_FOCUSED;
+            }
+            if (exporting || (item.native && !IsWindowEnabled(item.native))) {
+                item.state |= STATE_SYSTEM_UNAVAILABLE;
+            }
+            if (!IsWindowVisible(window)) {
+                item.state |= STATE_SYSTEM_INVISIBLE;
+            }
+            RECT clip = client;
+            if (Id::isTrack(item.id) || Id::isKey(item.id)) {
+                clip.top = timelineAxis.top;
+                clip.bottom = timelineAxis.bottom;
+                if (Id::isKey(item.id)) {
+                    clip.left = timelineAxis.left;
+                    clip.right = timelineAxis.right;
+                }
+            }
+            RECT intersection;
+            if (!IntersectRect(&intersection, &clip, &item.bounds)) {
+                item.bounds = {};
+                item.state |= STATE_SYSTEM_OFFSCREEN;
+            } else {
+                item.bounds = intersection;
+            }
+        }
+        return items;
+    }
+
+    bool TimelineWindow::focusItem(long id) {
+        using Id = workspace::TimelineItems;
+        const TimelineDpiScope dpiScope(uiDpi);
+        if (!IsWindowVisible(window) || exporting) {
+            return false;
+        }
+        const auto items = accessibleItems();
+        const auto found = std::ranges::find(items, id, &workspace::AccessibleItem::id);
+        if (found == items.end() || (found->state & STATE_SYSTEM_UNAVAILABLE) ||
+            !(found->state & STATE_SYSTEM_FOCUSABLE)) {
+            return false;
+        }
+        if (id == Id::editor && fieldEdit) {
+            SetFocus(fieldEdit);
+            return true;
+        }
+        if (!commitFieldEdit()) {
+            SetFocus(fieldEdit);
+            return false;
+        }
+        keyboardFocus = id;
+        if (found->native) {
+            SetFocus(found->native);
+            accessibilityDirty = true;
+            return true;
+        }
+        if (Id::isTrack(id) || Id::isKey(id)) {
+            const auto target = itemIds.target(id);
+            const auto row = std::ranges::find(reorderRowTargets, target);
+            if (row == reorderRowTargets.end() || trackLayouts.empty()) {
+                return false;
+            }
+            const int height = trackLayouts.front().row.bottom - trackLayouts.front().row.top;
+            const int top = int(row - reorderRowTargets.begin()) * height, bottom = top + height,
+                      viewport = timelineAxis.bottom - timelineAxis.top;
+            if (top < trackScrollOffset) {
+                trackScrollOffset = top;
+            } else if (bottom > trackScrollOffset + viewport) {
+                trackScrollOffset = std::min(top, bottom - viewport);
+            }
+            selectTrackRow(target, false, false);
+            if (Id::isKey(id)) {
+                auto *current = track(target);
+                const int key = itemIds.index(id);
+                if (!current || key >= int(current->keys.size())) {
+                    return false;
+                }
+                selectedTrackKey = key;
+                previewDepth = current->keys[key].depth;
+                syncPlaybackClock();
+                if (previewDepth < viewEndDepth || previewDepth > viewStartDepth) {
+                    const float span = viewSpan();
+                    viewStartDepth = previewDepth + span * .5f;
+                    viewEndDepth = viewStartDepth - span;
+                    clampView();
+                }
+                requestFramePreview();
+            }
+        }
+        SetFocus(window);
+        accessibilityDirty = true;
+        RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        return true;
+    }
+
+    bool TimelineWindow::activateItem(long id) {
+        using Id = workspace::TimelineItems;
+        if (!focusItem(id)) {
+            return false;
+        }
+        if (Id::isTrack(id)) {
+            return true;
+        }
+        if (Id::isKey(id)) {
+            openTrackKeyEditor();
+            return true;
+        }
+        switch (id) {
+        case Id::frames:
+            loadKeyframeDirectory();
+            break;
+        case Id::load:
+            loadTimeline();
+            break;
+        case Id::save:
+            saveTimeline();
+            break;
+        case Id::exportVideo:
+            openExportMenu();
+            break;
+        case Id::ai:
+            openAiExchangeMenu();
+            break;
+        case Id::theme:
+            toggleTheme();
+            break;
+        case Id::fullscreen:
+            toggleFullscreen();
+            break;
+        case Id::play:
+            setPlaying(!playing);
+            break;
+        case Id::pause:
+            setPlaying(false);
+            break;
+        case Id::stop:
+            stopPlayback();
+            break;
+        case Id::loop:
+            loopPlayback = !loopPlayback;
+            break;
+        case Id::distance:
+            beginFieldEdit(FieldEdit::DISTANCE);
+            break;
+        case Id::keyframe:
+            beginFieldEdit(FieldEdit::KEYFRAME);
+            break;
+        case Id::time:
+            beginFieldEdit(FieldEdit::TIME);
+            break;
+        case Id::viewZoom:
+            openZoomMenu();
+            break;
+        case Id::overlay:
+            openOverlaySettings();
+            break;
+        case Id::controls:
+            openControlsGuide();
+            break;
+        case Id::toggle:
+            toggleWorkspaceDock();
+            break;
+        case Id::divider:
+        case Id::editor:
+            return true;
+        default:
+            return false;
+        }
+        accessibilityDirty = true;
+        InvalidateRect(window, nullptr, FALSE);
+        return true;
+    }
+
+    bool TimelineWindow::writeItem(long id, std::wstring_view text) {
+        using Id = workspace::TimelineItems;
+        const auto value = NumericExpression::evaluate(std::wstring(text));
+        if (!value || std::abs(*value) > std::numeric_limits<float>::max() || exporting) {
+            return false;
+        }
+        const float parsed = static_cast<float>(*value);
+        if (Id::isKey(id)) {
+            const auto target = itemIds.target(id);
+            const int key = itemIds.index(id);
+            const auto *current = track(target);
+            if (!current || key >= int(current->keys.size()) || !editableTarget(target)) {
+                return false;
+            }
+            const auto *parameter = TimelineParams::find(target);
+            if (parameter &&
+                (parameter->kind == TimelineParamKind::BOOL || parameter->kind == TimelineParamKind::ENUM) &&
+                std::round(parsed) != parsed) {
+                return false;
+            }
+            if (target == SPEED_TARGET
+                    ? parsed < VidTimelineAttribute::MIN_SPEED
+                    : !parameter || parsed < parameter->minValue || parsed > parameter->maxValue) {
+                return false;
+            }
+            if (!focusItem(id)) {
+                return false;
+            }
+            current = track(target);
+            if (current->keys[key].value == parsed) {
+                return true;
+            }
+            auto *edited = track(target);
+            lastUndoStep = 0;
+            edited->keys[key].value = parsed;
+            edited->enabled = true;
+            (void)syncLinkedColorCycle(target);
+            commitTimeline();
+        } else {
+            if (id != Id::distance && id != Id::keyframe && id != Id::time) {
+                return false;
+            }
+            const float minimum = id == Id::keyframe ? schedule.getEndDepth() : 0.f,
+                        maximum = id == Id::distance ? schedule.getStartDepth() - schedule.getEndDepth()
+                                  : id == Id::time   ? schedule.getTotalSeconds()
+                                                     : schedule.getStartDepth();
+            if (parsed < minimum || parsed > maximum || !focusItem(id)) {
+                return false;
+            }
+            previewDepth = id == Id::distance ? depthFromDistance(parsed)
+                           : id == Id::time   ? schedule.depthAt(parsed)
+                                              : parsed;
+            syncPlaybackClock();
+            if (id == Id::time) {
+                playSeconds = parsed;
+            }
+            requestFramePreview();
+        }
+        accessibilityDirty = true;
+        InvalidateRect(window, nullptr, FALSE);
+        return true;
+    }
+
+    void TimelineWindow::tabItem(int direction) {
+        using Id = workspace::TimelineItems;
+        if (!commitFieldEdit()) {
+            return;
+        }
+        std::vector<long> order;
+        const auto items = accessibleItems();
+        long row = 0, key = 0;
+        const auto focusTarget = (Id::isTrack(keyboardFocus) || Id::isKey(keyboardFocus))
+                                     ? itemIds.target(keyboardFocus)
+                                     : selectedTrackTarget;
+        for (const auto &item : items) {
+            if (item.state & (STATE_SYSTEM_UNAVAILABLE | STATE_SYSTEM_INVISIBLE) ||
+                !(item.state & STATE_SYSTEM_FOCUSABLE)) {
+                continue;
+            }
+            if (Id::isTrack(item.id)) {
+                if (!row || itemIds.target(item.id) == focusTarget) {
+                    row = item.id;
+                }
+                continue;
+            }
+            if (Id::isKey(item.id)) {
+                if (itemIds.target(item.id) == focusTarget &&
+                    (!key || itemIds.index(item.id) == selectedTrackKey)) {
+                    key = item.id;
+                }
+                continue;
+            }
+            if (item.id == Id::editor) {
+                continue;
+            }
+            if (item.id == Id::viewZoom) {
+                if (row) {
+                    order.push_back(row);
+                }
+                if (key) {
+                    order.push_back(key);
+                }
+            }
+            if (!(item.state & STATE_SYSTEM_OFFSCREEN)) {
+                order.push_back(item.id);
+            }
+        }
+        if (order.empty()) {
+            return;
+        }
+        const auto found = std::ranges::find(order, keyboardFocus);
+        int index = found == order.end() ? (direction > 0 ? -1 : 0) : int(found - order.begin());
+        (void)focusItem(order[(index + direction + int(order.size())) % order.size()]);
+    }
+
+    bool TimelineWindow::keyItem(WPARAM key) {
+        using Id = workspace::TimelineItems;
+        const bool ctrl = GetKeyState(VK_CONTROL) < 0, shift = GetKeyState(VK_SHIFT) < 0,
+                   alt = GetKeyState(VK_MENU) < 0;
+        if (key == VK_F1) {
+            openControlsGuide();
+            return true;
+        }
+        if (key == VK_TAB) {
+            tabItem(shift ? -1 : 1);
+            return true;
+        }
+        if (exporting) {
+            return true;
+        }
+        if (key == VK_SPACE && (Id::isTrack(keyboardFocus) || Id::isKey(keyboardFocus))) {
+            setPlaying(!playing);
+            InvalidateRect(window, nullptr, FALSE);
+            return true;
+        }
+        if (key == VK_RETURN || key == VK_SPACE) {
+            (void)activateItem(keyboardFocus);
+            return true;
+        }
+        if (keyboardFocus == Id::distance || keyboardFocus == Id::keyframe || keyboardFocus == Id::time) {
+            if (key == VK_LEFT || key == VK_RIGHT) {
+                const float step = (key == VK_RIGHT ? 1.f : -1.f) * (shift ? 10.f : 1.f);
+                const float seconds = std::clamp(previewSeconds() + step, 0.0f, schedule.getTotalSeconds());
+                previewDepth =
+                    keyboardFocus == Id::time
+                        ? schedule.depthAt(seconds)
+                        : std::clamp(previewDepth - step, schedule.getEndDepth(), schedule.getStartDepth());
+                syncPlaybackClock();
+                if (keyboardFocus == Id::time) {
+                    playSeconds = seconds;
+                }
+                requestFramePreview();
+                InvalidateRect(window, nullptr, FALSE);
+                return true;
+            }
+        }
+        if (!Id::isTrack(keyboardFocus) && !Id::isKey(keyboardFocus)) {
+            return key == VK_DELETE || key == VK_BACK || key == VK_F2 || (key >= '1' && key <= '4');
+        }
+        const auto target = itemIds.target(keyboardFocus);
+        auto *current = track(target);
+        if (!current) {
+            return false;
+        }
+        const auto row = std::ranges::find(reorderRowTargets, target);
+        if (row == reorderRowTargets.end()) {
+            return false;
+        }
+        const int index = int(row - reorderRowTargets.begin());
+        if (key == VK_DELETE || key == VK_BACK) {
+            lastUndoStep = 0;
+            if (Id::isKey(keyboardFocus)) {
+                deleteTrackKey();
+                if (selectedTrackKey >= 0) {
+                    (void)focusItem(itemIds.key(target, selectedTrackKey));
+                }
+            } else {
+                const auto next = reorderRowTargets[std::min(index + 1, int(reorderRowTargets.size()) - 1)];
+                removeTrack(target);
+                RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+                if (!reorderRowTargets.empty()) {
+                    (void)focusItem(Id::track(track(next) ? next : reorderRowTargets.back()));
+                }
+            }
+            return true;
+        }
+        if (key == VK_UP || key == VK_DOWN) {
+            const int direction = key == VK_DOWN ? 1 : -1,
+                      next = std::clamp(index + direction, 0, int(reorderRowTargets.size()) - 1);
+            if (alt) {
+                if (next != index) {
+                    std::vector<uint16_t> carried;
+                    int first = index, last = index;
+                    for (int i = 0; i < int(reorderRowTargets.size()); ++i) {
+                        if (trackRowSelected(reorderRowTargets[i])) {
+                            carried.push_back(reorderRowTargets[i]);
+                            first = std::min(first, i);
+                            last = std::max(last, i);
+                        }
+                    }
+                    lastUndoStep = 0;
+                    moveTrackRows(carried, direction > 0 ? last + 2 : first - 1);
+                    RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+                    (void)focusItem(Id::track(target));
+                    selectedTrackTargets = std::move(carried);
+                }
+            } else {
+                const auto nextTarget = reorderRowTargets[next];
+                const auto anchor = selectedTrackTarget;
+                (void)focusItem(Id::track(nextTarget));
+                if (shift) {
+                    selectedTrackTarget = anchor;
+                    selectTrackRow(nextTarget, false, true);
+                }
+            }
+            accessibilityDirty = true;
+            InvalidateRect(window, nullptr, FALSE);
+            return true;
+        }
+        if (!ctrl && (key == VK_LEFT || key == VK_RIGHT || key == VK_HOME || key == VK_END)) {
+            if (current->keys.empty()) {
+                return true;
+            }
+            int next = selectedTrackKey;
+            if (key == VK_HOME) {
+                next = 0;
+            } else if (key == VK_END) {
+                next = int(current->keys.size()) - 1;
+            } else if (next < 0) {
+                next = key == VK_RIGHT ? 0 : int(current->keys.size()) - 1;
+            } else {
+                next += key == VK_RIGHT ? 1 : -1;
+            }
+            (void)focusItem(itemIds.key(target, std::clamp(next, 0, int(current->keys.size()) - 1)));
+            return true;
+        }
+        if (key == VK_ESCAPE && Id::isKey(keyboardFocus)) {
+            (void)focusItem(Id::track(target));
+            return true;
+        }
+        if (key == VK_INSERT) {
+            if (const auto *row = layout(target); row && row->editable) {
+                lastUndoStep = 0;
+                const int x = std::clamp(depthX(previewDepth, viewStartDepth, viewEndDepth, timelineAxis),
+                                         int(row->row.left), int(row->row.right) - 1);
+                addTrackKey(target, {x, (row->row.top + row->row.bottom) / 2});
+                if (selectedTrackKey >= 0) {
+                    (void)focusItem(itemIds.key(target, selectedTrackKey));
+                }
+            }
+            return true;
+        }
+        if (key == VK_APPS || (key == VK_F10 && shift)) {
+            if (const auto *row = layout(target)) {
+                POINT point{row->row.left + sc(12), (row->row.top + row->row.bottom) / 2};
+                if (selectedTrackKey >= 0) {
+                    point.x = depthX(current->keys[selectedTrackKey].depth, viewStartDepth, viewEndDepth,
+                                     timelineAxis);
+                    point.y = row->editable ? valueY(current->keys[selectedTrackKey].value, row->minValue,
+                                                     row->maxValue, row->row)
+                                            : (row->row.top + row->row.bottom) / 2;
+                }
+                openTrackMenu(point);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    void TimelineWindow::paintItemFocus(HDC dc) {
+        if (!dc || GetFocus() != window) {
+            return;
+        }
+        const auto items = accessibleItems();
+        const auto found = std::ranges::find(items, keyboardFocus, &workspace::AccessibleItem::id);
+        if (found == items.end() || (found->state & (STATE_SYSTEM_OFFSCREEN | STATE_SYSTEM_INVISIBLE))) {
+            return;
+        }
+        RECT bounds = found->bounds;
+        InflateRect(&bounds, -2, -2);
+        const auto theme = timelineTheme(lightMode);
+        const auto pen = CreatePen(PS_SOLID, std::max(2, UiDpi::pixels(1, uiDpi)), theme.focusRing);
+        const auto oldPen = SelectObject(dc, pen), oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Rectangle(dc, bounds.left, bounds.top, bounds.right, bounds.bottom);
+        SelectObject(dc, oldBrush);
+        SelectObject(dc, oldPen);
+        DeleteObject(pen);
+    }
+
+    void TimelineWindow::presentPaint(HDC target, const RECT &activeEditRect) {
+        RECT client;
+        GetClientRect(window, &client);
+        paintItemFocus(paintBuffer.begin(target, client.right, client.bottom));
+        paintBuffer.present(target);
         if (fieldEdit != nullptr && activeEditRect.right > activeEditRect.left) {
             SetWindowPos(fieldEdit, nullptr, activeEditRect.left, activeEditRect.top,
-                         activeEditRect.right - activeEditRect.left, activeEditRect.bottom - activeEditRect.top,
-                         SWP_NOACTIVATE | SWP_NOZORDER);
+                         activeEditRect.right - activeEditRect.left,
+                         activeEditRect.bottom - activeEditRect.top, SWP_NOACTIVATE | SWP_NOZORDER);
         }
         if (fieldTooltip != nullptr) {
-            const RECT tooltipRects[2] = {distanceField, keyframeField};
-            for (UINT_PTR id = 1; id <= 2; ++id) {
+            const RECT tooltipRects[3] = {distanceField, keyframeField, timeField};
+            for (UINT_PTR id = 1; id <= 3; ++id) {
                 TOOLINFOW tool = {};
                 tool.cbSize = sizeof(tool);
                 tool.hwnd = window;
@@ -3269,6 +4923,12 @@ namespace merutilm::rff2 {
                 tool.rect = tooltipRects[id - 1];
                 SendMessageW(fieldTooltip, TTM_NEWTOOLRECTW, 0, reinterpret_cast<LPARAM>(&tool));
             }
+        }
+        const auto now = GetTickCount64();
+        if (accessibility && (accessibilityDirty || (playing && now - accessibilityTick >= 500))) {
+            accessibilityDirty = false;
+            accessibilityTick = now;
+            accessibility->changed();
         }
     }
 
@@ -3279,10 +4939,24 @@ namespace merutilm::rff2 {
         if (self == nullptr) {
             return DefSubclassProc(hwnd, message, wParam, lParam);
         }
+        const TimelineDpiScope dpiScope(self->uiDpi);
         if (message == WM_GETDLGCODE) {
             return DLGC_WANTALLKEYS;
         }
         if (message == WM_KEYDOWN) {
+            MSG key{};
+            key.hwnd = hwnd;
+            key.message = message;
+            key.wParam = wParam;
+            if (workspace::PaneSplitter::handleCapturedShortcut(key)) {
+                return 0;
+            }
+            if (wParam == VK_TAB) {
+                if (self->commitFieldEdit()) {
+                    self->tabItem(GetKeyState(VK_SHIFT) < 0 ? -1 : 1);
+                }
+                return 0;
+            }
             if (wParam == VK_RETURN) {
                 if (self->commitFieldEdit()) {
                     SetFocus(self->window);
@@ -3295,7 +4969,8 @@ namespace merutilm::rff2 {
                 return 0;
             }
         }
-        if (message == WM_CHAR && (wParam == VK_RETURN || wParam == L'\n' || wParam == VK_ESCAPE)) {
+        if (message == WM_CHAR &&
+            (wParam == VK_RETURN || wParam == L'\n' || wParam == VK_ESCAPE || wParam == VK_TAB)) {
             return 0;
         }
         if (message == WM_KILLFOCUS && self->fieldEdit == hwnd) {
@@ -3314,10 +4989,10 @@ namespace merutilm::rff2 {
         try {
             return handleMessage(hwnd, message, wParam, lParam);
         } catch (const std::exception &e) {
-            MessageBoxA(hwnd, e.what(), "Timeline Editor", MB_OK | MB_ICONERROR);
+            NativeDialogs::message(hwnd, e.what(), "Timeline Editor", MB_OK | MB_ICONERROR);
         } catch (...) {
-            MessageBoxW(hwnd, L"The Timeline Editor ran into an unexpected error.", L"Timeline Editor",
-                        MB_OK | MB_ICONERROR);
+            NativeDialogs::message(hwnd, L"The Timeline Editor ran into an unexpected error.",
+                                   L"Timeline Editor", MB_OK | MB_ICONERROR);
         }
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
@@ -3334,628 +5009,848 @@ namespace merutilm::rff2 {
         if (self == nullptr) {
             return DefWindowProcW(hwnd, message, wParam, lParam);
         }
+        const TimelineDpiScope dpiScope(self->uiDpi);
 
         switch (message) {
-            case WM_GETMINMAXINFO: {
-                if (self->fullscreen) {
-                    break;
-                }
-                auto *info = reinterpret_cast<MINMAXINFO *>(lParam);
-                // The prefilled maximize box follows the primary monitor, which runs the panel bars off the screen on any other one.
-                MONITORINFO monitor = {};
-                monitor.cbSize = sizeof(MONITORINFO);
-                if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor)) {
-                    info->ptMaxPosition.x = monitor.rcWork.left - monitor.rcMonitor.left;
-                    info->ptMaxPosition.y = monitor.rcWork.top - monitor.rcMonitor.top;
-                    info->ptMaxSize.x = monitor.rcWork.right - monitor.rcWork.left;
-                    info->ptMaxSize.y = monitor.rcWork.bottom - monitor.rcWork.top;
-                    info->ptMaxTrackSize.x = std::max(info->ptMaxTrackSize.x, info->ptMaxSize.x);
-                    info->ptMaxTrackSize.y = std::max(info->ptMaxTrackSize.y, info->ptMaxSize.y);
-                }
-                // A screen smaller than the design minimum keeps the window inside it rather than hanging it off the edge.
-                info->ptMinTrackSize.x = std::min<LONG>(sc(760), info->ptMaxSize.x);
-                info->ptMinTrackSize.y = std::min<LONG>(sc(560), info->ptMaxSize.y);
-                return 0;
+        case WM_APP + 0x270:
+            self->finishAiImages(static_cast<uint64_t>(wParam));
+            return 0;
+        case WM_APP + 0x271:
+            self->openAiExchangeMenu();
+            return 0;
+        case WM_APP + 0x272:
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_SYSCOLORCHANGE:
+        case WM_SETTINGCHANGE:
+            refreshSystemSettingsTheme();
+            self->refreshTheme();
+            break;
+        case WM_GETOBJECT:
+            if (static_cast<DWORD>(lParam) == static_cast<DWORD>(OBJID_CLIENT) && self->accessibility) {
+                return self->accessibility->object(wParam);
             }
-            case WM_ERASEBKGND:
-                return 1;
-            case WM_SIZE:
-                InvalidateRect(hwnd, nullptr, FALSE);
-                return 0;
-            case WM_CTLCOLOREDIT:
-                if (reinterpret_cast<HWND>(lParam) == self->fieldEdit) {
-                    const TimelineTheme &theme = timelineTheme(self->lightMode);
-                    const HDC editDc = reinterpret_cast<HDC>(wParam);
-                    SetTextColor(editDc, theme.text);
-                    SetBkColor(editDc, theme.panelRaised);
-                    return reinterpret_cast<LRESULT>(self->fieldEditBrush);
-                }
+            break;
+        case WM_GETDLGCODE:
+            return DLGC_WANTALLKEYS;
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+            self->accessibilityDirty = true;
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_DPICHANGED: {
+            self->updateDpi(HIWORD(wParam));
+            if ((!self->embedded || self->floatingWorkspace) && lParam) {
+                const auto &r = *reinterpret_cast<const RECT *>(lParam);
+                SetWindowPos(hwnd, nullptr, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            return 0;
+        }
+        case WM_GETMINMAXINFO: {
+            if (self->fullscreen || (self->embedded && !self->floatingWorkspace)) {
                 break;
-            case WM_TIMELINE_PREVIEW_READY:
-                self->previewPending = false;
-                self->previewBusy = false;
-                KillTimer(hwnd, PREVIEW_STATUS_TIMER);
-                InvalidateRect(hwnd, nullptr, FALSE);
-                return 0;
-            case WM_TIMELINE_EXPORT_FINISHED:
-                if (reinterpret_cast<TimelineWindow *>(wParam) != self) {
+            }
+            auto *info = reinterpret_cast<MINMAXINFO *>(lParam);
+            // The prefilled maximize box follows the primary monitor, which runs the panel bars off the screen on any other one.
+            MONITORINFO monitor = {};
+            monitor.cbSize = sizeof(MONITORINFO);
+            if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &monitor)) {
+                info->ptMaxPosition.x = monitor.rcWork.left - monitor.rcMonitor.left;
+                info->ptMaxPosition.y = monitor.rcWork.top - monitor.rcMonitor.top;
+                info->ptMaxSize.x = monitor.rcWork.right - monitor.rcWork.left;
+                info->ptMaxSize.y = monitor.rcWork.bottom - monitor.rcWork.top;
+                info->ptMaxTrackSize.x = std::max(info->ptMaxTrackSize.x, info->ptMaxSize.x);
+                info->ptMaxTrackSize.y = std::max(info->ptMaxTrackSize.y, info->ptMaxSize.y);
+            }
+            // A screen smaller than the design minimum keeps the window inside it rather than hanging it off the edge.
+            info->ptMinTrackSize.x = std::min<LONG>(sc(760), info->ptMaxSize.x);
+            info->ptMinTrackSize.y = std::min<LONG>(sc(560), info->ptMaxSize.y);
+            return 0;
+        }
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_SIZE:
+            self->accessibilityDirty = true;
+            self->layoutWorkspaceDock();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_COMMAND:
+            if (LOWORD(wParam) == inspectorToggleId && HIWORD(wParam) == BN_CLICKED) {
+                if (self->inspector && !self->inspector->applyPending()) {
+                    self->inspector->focus();
                     return 0;
                 }
-                self->exporting = false;
-                (void) self->initializeFramePreview();
+                self->dockState.inspectorOpen = !self->dockState.inspectorOpen;
+                self->layoutWorkspaceDock();
+                self->saveWorkspaceDock();
+                return 0;
+            }
+            if (reinterpret_cast<HWND>(lParam) == self->fieldEdit && HIWORD(wParam) == EN_CHANGE) {
+                workspace::AccessibleControl::validation(self->fieldEdit, L"");
+                return 0;
+            }
+            if (LOWORD(wParam) == WORKSPACE_DOCK_TOGGLE && HIWORD(wParam) == BN_CLICKED) {
+                self->toggleWorkspaceDock();
+                return 0;
+            }
+            break;
+        case WM_DRAWITEM: {
+            const auto *item = reinterpret_cast<DRAWITEMSTRUCT *>(lParam);
+            if (item && item->hwndItem == self->inspectorToggle) {
+                const workspace::WorkspaceButton::Context context{&self->inspectorTheme, self->smallFont,
+                                                                  self->uiDpi / 96.f};
+                auto bufferedItem = *item;
+                const auto buffer =
+                    self->inspectorToggleBuffer.begin(item->hDC, item->rcItem.right, item->rcItem.bottom);
+                if (buffer) {
+                    bufferedItem.hDC = buffer;
+                }
+                workspace::WorkspaceButton::draw(bufferedItem, context);
+                if (buffer) {
+                    self->inspectorToggleBuffer.present(item->hDC);
+                }
+                return TRUE;
+            }
+            if (item && item->hwndItem == self->dockToggle) {
+                auto theme = timelineTheme(self->lightMode);
+                if (item->itemState & ODS_DISABLED) {
+                    theme.text = theme.mutedText;
+                }
+                const auto buffered =
+                    self->dockToggleBuffer.begin(item->hDC, item->rcItem.right, item->rcItem.bottom);
+                const auto dc = buffered ? buffered : item->hDC;
+                fillRect(dc, item->rcItem, theme.panel);
+                drawButton(
+                    dc, item->rcItem,
+                    UiLanguage::label(self->dockLayout.tracksVisible ? L"Hide Tracks" : L"Show Tracks"),
+                    (item->itemState & ODS_SELECTED) != 0, false, self->smallFont, theme);
+                if (item->itemState & ODS_FOCUS) {
+                    RECT focus = item->rcItem;
+                    InflateRect(&focus, -3, -3);
+                    DrawFocusRect(dc, &focus);
+                }
+                if (buffered) {
+                    self->dockToggleBuffer.present(item->hDC);
+                }
+                return TRUE;
+            }
+            break;
+        }
+        case WM_CTLCOLOREDIT:
+            if (reinterpret_cast<HWND>(lParam) == self->fieldEdit) {
+                const TimelineTheme &theme = timelineTheme(self->lightMode);
+                const HDC editDc = reinterpret_cast<HDC>(wParam);
+                SetTextColor(editDc, theme.text);
+                SetBkColor(editDc, theme.panelRaised);
+                return reinterpret_cast<LRESULT>(self->fieldEditBrush);
+            }
+            break;
+        case WM_TIMELINE_CACHE_PROGRESS:
+            self->accessibilityDirty = true;
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_TIMELINE_PREVIEW_READY:
+            if (wParam) {
+                std::scoped_lock lock(self->previewRequestMutex);
+                if (static_cast<uint64_t>(wParam) != self->previewRequestGeneration &&
+                    !self->previewWorkerFailed.load()) {
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                    return 0;
+                }
+            }
+            self->previewPending = false;
+            self->previewBusy = false;
+            KillTimer(hwnd, PREVIEW_STATUS_TIMER);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case WM_TIMELINE_EXPORT_FINISHED:
+            if (reinterpret_cast<TimelineWindow *>(wParam) != self) {
+                return 0;
+            }
+            self->exporting = false;
+            if (!self->embedded || IsWindowVisible(hwnd)) {
+                (void)self->initializeFramePreview();
+            }
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        case RenderSceneRequests::WM_SHADER_EDITED:
+            self->recordShaderEdits();
+            return 0;
+        case WM_SETCURSOR: {
+            if (LOWORD(lParam) == HTCLIENT) {
+                POINT point = {};
+                GetCursorPos(&point);
+                ScreenToClient(hwnd, &point);
+                const bool interactive =
+                    contains(self->framesButton, point) || contains(self->loadButton, point) ||
+                    contains(self->saveButton, point) || contains(self->exportButton, point) || contains(self->aiButton, point) ||
+                    contains(self->controlsButton, point) || contains(self->themeButton, point) ||
+                    contains(self->fullscreenButton, point) || self->hitTrackKey(point).valid() ||
+                    self->hitTrackLabel(point) != UINT16_MAX;
+                // The readouts that carry the playhead are dragged sideways, and say so.
+                const bool slider = contains(self->distanceField, point) ||
+                                    contains(self->keyframeField, point) || contains(self->timeField, point);
+                const int cursor = slider                                ? 32644
+                                   : interactive                         ? 32649
+                                   : contains(self->timelineAxis, point) ? 32515
+                                                                         : 32512;
+                SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(cursor)));
+                return TRUE;
+            }
+            break;
+        }
+        case WM_APP + 0x266:
+            self->refreshOverlaySettings();
+            return 0;
+        case WM_MOUSEMOVE: {
+            const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (self->draggingOverlay) {
+                auto &o = self->attribute.video.timeline.zoomOverlay;
+                o.x =
+                    std::clamp(self->overlayDragBefore.x + float(point.x - self->overlayDragStart.x) /
+                                                               std::max(1L, self->overlayImageRect.right -
+                                                                                self->overlayImageRect.left),
+                               0.f, 1.f);
+                o.y = std::clamp(self->overlayDragBefore.y + float(point.y - self->overlayDragStart.y) /
+                                                                 std::max(1L, self->overlayImageRect.bottom -
+                                                                                  self->overlayImageRect.top),
+                                 0.f, 1.f);
+                o.custom = true;
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
-            case RenderSceneRequests::WM_SHADER_EDITED:
-                self->recordShaderEdits();
-                return 0;
-            case WM_SETCURSOR: {
-                if (LOWORD(lParam) == HTCLIENT) {
-                    POINT point = {};
-                    GetCursorPos(&point);
-                    ScreenToClient(hwnd, &point);
-                    const bool interactive = contains(self->framesButton, point) ||
-                                              contains(self->loadButton, point) || contains(self->saveButton, point) ||
-                                              contains(self->exportButton, point) ||
-                                              contains(self->themeButton, point) ||
-                                              contains(self->fullscreenButton, point) ||
-                                             self->hitTrackKey(point).valid() ||
-                                             self->hitTrackLabel(point) != UINT16_MAX;
-                    // The readouts that carry the playhead are dragged sideways, and say so.
-                    const bool slider = contains(self->distanceField, point) ||
-                                        contains(self->keyframeField, point) || contains(self->timeField, point);
-                    const int cursor = slider ? 32644 : interactive ? 32649
-                                           : contains(self->timelineAxis, point) ? 32515 : 32512;
-                    SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(cursor)));
-                    return TRUE;
+            }
+            TRACKMOUSEEVENT tracking = {sizeof(tracking), TME_LEAVE, hwnd, 0};
+            TrackMouseEvent(&tracking);
+            if (self->draggingTrackRow) {
+                // A press that has not left the row yet is a click on the name, not a carry.
+                if (!self->trackRowDragMoved && std::abs(point.y - self->trackRowDragOriginY) < sc(4)) {
+                    return 0;
                 }
+                self->trackRowDragMoved = true;
+                self->trackRowDropIndex = self->trackRowDropTarget(point);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            if (self->draggingTrackKey) {
+                self->updateTrackKey(point);
+                return 0;
+            }
+            if (self->scrubbingTimeline) {
+                self->updateScrubDepth(point);
+                return 0;
+            }
+            if (self->fieldDrag != FieldDrag::NONE) {
+                self->updateFieldDrag(point);
+                return 0;
+            }
+            if (self->draggingScrollThumb) {
+                self->updateScrollThumb(point);
+                return 0;
+            }
+            if (self->draggingTrackScrollThumb) {
+                self->updateTrackScrollThumb(point);
+                return 0;
+            }
+            if (self->draggingRuler) {
+                self->panView(self->rulerGrabDepth - self->viewDepthAt(point.x));
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            const KeyHit hoveredKey = self->hitTrackKey(point);
+            const bool frames = contains(self->framesButton, point);
+            const bool load = contains(self->loadButton, point);
+            const bool save = contains(self->saveButton, point);
+            const bool exportVideo = contains(self->exportButton, point);
+            const bool ai = contains(self->aiButton, point);
+            const bool thumb = contains(self->scrollThumb, point);
+            const bool theme = contains(self->themeButton, point);
+            const bool trackThumb = contains(self->trackScrollThumb, point);
+            const bool full = contains(self->fullscreenButton, point);
+            const bool play = contains(self->playButton, point);
+            const bool pause = contains(self->pauseButton, point);
+            const bool stop = contains(self->stopButton, point);
+            const bool loop = contains(self->loopButton, point);
+            const bool zoomPreset = contains(self->zoomPresetButton, point);
+            const bool controls = contains(self->controlsButton, point);
+            const FieldEdit formulaField = contains(self->distanceField, point)   ? FieldEdit::DISTANCE
+                                           : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
+                                           : contains(self->timeField, point)     ? FieldEdit::TIME
+                                                                                  : FieldEdit::NONE;
+            if (hoveredKey.targetId != self->hoveredTrackKey.targetId ||
+                hoveredKey.keyIndex != self->hoveredTrackKey.keyIndex || frames != self->hoverFrames ||
+                load != self->hoverLoad || save != self->hoverSave || exportVideo != self->hoverExport || ai != self->hoverAi ||
+                thumb != self->hoverScrollThumb || theme != self->hoverTheme ||
+                trackThumb != self->hoverTrackScrollThumb || full != self->hoverFullscreen ||
+                play != self->hoverPlay || pause != self->hoverPause || stop != self->hoverStop ||
+                loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset ||
+                formulaField != self->hoveredFieldEdit || controls != self->hoverControls) {
+                self->hoveredTrackKey = hoveredKey;
+                self->hoverFrames = frames;
+                self->hoverLoad = load;
+                self->hoverSave = save;
+                self->hoverExport = exportVideo;
+                self->hoverAi = ai;
+                self->hoverScrollThumb = thumb;
+                self->hoverTheme = theme;
+                self->hoverTrackScrollThumb = trackThumb;
+                self->hoverFullscreen = full;
+                self->hoverPlay = play;
+                self->hoverPause = pause;
+                self->hoverStop = stop;
+                self->hoverLoop = loop;
+                self->hoverZoomPreset = zoomPreset;
+                self->hoverControls = controls;
+                self->hoveredFieldEdit = formulaField;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+        case WM_MOUSELEAVE:
+            if (self->hoveredFieldEdit != FieldEdit::NONE) {
+                self->hoveredFieldEdit = FieldEdit::NONE;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_MOUSEWHEEL: {
+            POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ScreenToClient(hwnd, &point);
+            if (!contains(self->timelinePanel, point) || GET_WHEEL_DELTA_WPARAM(wParam) == 0) {
                 break;
             }
-            case WM_MOUSEMOVE: {
-                const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                TRACKMOUSEEVENT tracking = {sizeof(tracking), TME_LEAVE, hwnd, 0};
-                TrackMouseEvent(&tracking);
-                if (self->draggingTrackRow) {
-                    // A press that has not left the row yet is a click on the name, not a carry.
-                    if (!self->trackRowDragMoved && std::abs(point.y - self->trackRowDragOriginY) < sc(4)) {
+            const float steps = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
+            // Over the track names, and with Ctrl held anywhere on the panel, the wheel moves the rows.
+            if ((GetKeyState(VK_CONTROL) & 0x8000) != 0 || point.x < self->timelineAxis.left) {
+                self->scrollTracks(static_cast<int>(-steps * static_cast<float>(sc(38))));
+            } else if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
+                self->panView(self->viewSpan() * 0.25f * steps);
+            } else {
+                self->zoomView(self->viewDepthAt(point.x), std::pow(1.3f, steps));
+            }
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
+        case WM_LBUTTONDOWN: {
+            if (self->fieldEdit && !self->commitFieldEdit()) {
+                return 0;
+            }
+            SetFocus(hwnd);
+            self->accessibilityDirty = true;
+            const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            for (const auto &item : self->accessibleItems()) {
+                if (item.id >= workspace::TimelineItems::frames && item.id < workspace::TimelineItems::divider &&
+                    (item.state & STATE_SYSTEM_FOCUSABLE) &&
+                    contains(item.bounds, point)) {
+                    self->keyboardFocus = item.id;
+                    if (item.id < workspace::TimelineItems::distance ||
+                        item.id >= workspace::TimelineItems::viewZoom) {
+                        (void)self->activateItem(item.id);
                         return 0;
                     }
-                    self->trackRowDragMoved = true;
-                    self->trackRowDropIndex = self->trackRowDropTarget(point);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (self->draggingTrackKey) {
-                    self->updateTrackKey(point);
-                    return 0;
-                }
-                if (self->scrubbingTimeline) {
-                    self->updateScrubDepth(point);
-                    return 0;
-                }
-                if (self->fieldDrag != FieldDrag::NONE) {
-                    self->updateFieldDrag(point);
-                    return 0;
-                }
-                if (self->draggingScrollThumb) {
-                    self->updateScrollThumb(point);
-                    return 0;
-                }
-                if (self->draggingTrackScrollThumb) {
-                    self->updateTrackScrollThumb(point);
-                    return 0;
-                }
-                if (self->draggingRuler) {
-                    self->panView(self->rulerGrabDepth - self->viewDepthAt(point.x));
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                const KeyHit hoveredKey = self->hitTrackKey(point);
-                const bool frames = contains(self->framesButton, point);
-                const bool load = contains(self->loadButton, point);
-                const bool save = contains(self->saveButton, point);
-                const bool exportVideo = contains(self->exportButton, point);
-                const bool thumb = contains(self->scrollThumb, point);
-                const bool theme = contains(self->themeButton, point);
-                const bool trackThumb = contains(self->trackScrollThumb, point);
-                const bool full = contains(self->fullscreenButton, point);
-                const bool play = contains(self->playButton, point);
-                const bool pause = contains(self->pauseButton, point);
-                const bool stop = contains(self->stopButton, point);
-                const bool loop = contains(self->loopButton, point);
-                const bool zoomPreset = contains(self->zoomPresetButton, point);
-                const FieldEdit formulaField = contains(self->distanceField, point) ? FieldEdit::DISTANCE
-                                               : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
-                                                                                     : FieldEdit::NONE;
-                if (hoveredKey.targetId != self->hoveredTrackKey.targetId ||
-                    hoveredKey.keyIndex != self->hoveredTrackKey.keyIndex ||
-                    frames != self->hoverFrames || load != self->hoverLoad || save != self->hoverSave ||
-                    exportVideo != self->hoverExport ||
-                    thumb != self->hoverScrollThumb || theme != self->hoverTheme ||
-                    trackThumb != self->hoverTrackScrollThumb || full != self->hoverFullscreen ||
-                    play != self->hoverPlay || pause != self->hoverPause || stop != self->hoverStop ||
-                    loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset ||
-                    formulaField != self->hoveredFieldEdit) {
-                    self->hoveredTrackKey = hoveredKey;
-                    self->hoverFrames = frames;
-                    self->hoverLoad = load;
-                    self->hoverSave = save;
-                    self->hoverExport = exportVideo;
-                    self->hoverScrollThumb = thumb;
-                    self->hoverTheme = theme;
-                    self->hoverTrackScrollThumb = trackThumb;
-                    self->hoverFullscreen = full;
-                    self->hoverPlay = play;
-                    self->hoverPause = pause;
-                    self->hoverStop = stop;
-                    self->hoverLoop = loop;
-                    self->hoverZoomPreset = zoomPreset;
-                    self->hoveredFieldEdit = formulaField;
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                }
-                return 0;
-            }
-            case WM_MOUSELEAVE:
-                if (self->hoveredFieldEdit != FieldEdit::NONE) {
-                    self->hoveredFieldEdit = FieldEdit::NONE;
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                }
-                return 0;
-            case WM_MOUSEWHEEL: {
-                POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                ScreenToClient(hwnd, &point);
-                if (!contains(self->timelinePanel, point) || GET_WHEEL_DELTA_WPARAM(wParam) == 0) {
                     break;
                 }
-                const float steps = static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / WHEEL_DELTA;
-                // Over the track names, and with Ctrl held anywhere on the panel, the wheel moves the rows.
-                if ((GetKeyState(VK_CONTROL) & 0x8000) != 0 || point.x < self->timelineAxis.left) {
-                    self->scrollTracks(static_cast<int>(-steps * static_cast<float>(sc(38))));
-                } else if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
-                    self->panView(self->viewSpan() * 0.25f * steps);
-                } else {
-                    self->zoomView(self->viewDepthAt(point.x), std::pow(1.3f, steps));
-                }
+            }
+            if (self->overlayPositionMode && contains(self->overlayImageRect, point)) {
+                self->overlayDragBefore = self->attribute.video.timeline.zoomOverlay;
+                self->overlayDragStart = point;
+                self->draggingOverlay = true;
+                SetCapture(hwnd);
+                return 0;
+            }
+            // The distance, keyframe and time readouts scrub the preview when they are dragged sideways.
+            if (contains(self->distanceField, point) || contains(self->keyframeField, point) ||
+                contains(self->timeField, point)) {
+                self->fieldDrag = contains(self->timeField, point) ? FieldDrag::TIME : FieldDrag::DEPTH;
+                self->pendingFieldEdit = contains(self->distanceField, point)   ? FieldEdit::DISTANCE
+                                         : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
+                                                                                : FieldEdit::TIME;
+                self->fieldDragMoved = false;
+                self->fieldDragOriginX = point.x;
+                self->fieldDragDepth = self->previewDepth;
+                SetCapture(hwnd);
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
-            case WM_LBUTTONDOWN: {
-                SetFocus(hwnd);
-                const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                if (contains(self->framesButton, point)) {
-                    self->loadKeyframeDirectory();
-                    return 0;
-                }
-                if (contains(self->loadButton, point)) {
-                    self->loadTimeline();
-                    return 0;
-                }
-                if (contains(self->saveButton, point)) {
-                    self->saveTimeline();
-                    return 0;
-                }
-                if (contains(self->exportButton, point)) {
-                    self->openExportMenu();
-                    return 0;
-                }
-                if (contains(self->themeButton, point)) {
-                    self->toggleTheme();
-                    return 0;
-                }
-                if (contains(self->fullscreenButton, point)) {
-                    self->toggleFullscreen();
-                    return 0;
-                }
-                if (contains(self->playButton, point)) {
-                    self->setPlaying(!self->playing);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->pauseButton, point)) {
-                    self->setPlaying(false);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->stopButton, point)) {
-                    self->stopPlayback();
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->loopButton, point)) {
-                    self->loopPlayback = !self->loopPlayback;
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->zoomPresetButton, point)) {
-                    self->openZoomMenu();
-                    return 0;
-                }
-                // The distance, keyframe and time readouts scrub the preview when they are dragged sideways.
-                if (contains(self->distanceField, point) || contains(self->keyframeField, point) ||
-                    contains(self->timeField, point)) {
-                    self->fieldDrag = contains(self->timeField, point) ? FieldDrag::TIME : FieldDrag::DEPTH;
-                    self->pendingFieldEdit = contains(self->distanceField, point) ? FieldEdit::DISTANCE
-                                             : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
-                                                                                   : FieldEdit::NONE;
-                    self->fieldDragMoved = false;
-                    self->fieldDragOriginX = point.x;
-                    self->fieldDragDepth = self->previewDepth;
-                    SetCapture(hwnd);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->trackScrollThumb, point)) {
-                    self->draggingTrackScrollThumb = true;
-                    self->trackScrollGrabOffset = point.y - static_cast<int>(self->trackScrollThumb.top);
-                    SetCapture(hwnd);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->trackScrollTrack, point)) {
-                    self->pageScrollTracks(point);
-                    return 0;
-                }
-                if (contains(self->scrollThumb, point)) {
-                    self->draggingScrollThumb = true;
-                    self->scrollGrabOffset = point.x - static_cast<int>(self->scrollThumb.left);
-                    SetCapture(hwnd);
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                if (contains(self->scrollTrack, point)) {
-                    self->pageScrollView(point);
-                    return 0;
-                }
-                // The ruler drags the view sideways, the way the depth axis itself would be grabbed.
-                if (contains(self->rulerStrip, point)) {
-                    self->draggingRuler = true;
-                    self->rulerGrabDepth = self->viewDepthAt(point.x);
-                    SetCapture(hwnd);
-                    return 0;
-                }
-                // A row is selected from its name as readily as from one of its keys.
-                if (const uint16_t labelTarget = self->hitTrackLabel(point); labelTarget != UINT16_MAX) {
-                    // Ctrl adds the row to the ones picked or drops it, Shift takes the run up to it.
-                    self->selectTrackRow(labelTarget, (GetKeyState(VK_CONTROL) & 0x8000) != 0,
-                                         (GetKeyState(VK_SHIFT) & 0x8000) != 0);
-                    // The name cell is the handle the rows picked are carried by, all of them at once.
-                    if (self->trackRowSelected(labelTarget)) {
-                        self->carriedRows.clear();
-                        for (const uint16_t id: self->reorderRowTargets) {
-                            if (self->trackRowSelected(id)) {
-                                self->carriedRows.push_back(id);
-                            }
+            if (contains(self->trackScrollThumb, point)) {
+                self->draggingTrackScrollThumb = true;
+                self->trackScrollGrabOffset = point.y - static_cast<int>(self->trackScrollThumb.top);
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            if (contains(self->trackScrollTrack, point)) {
+                self->pageScrollTracks(point);
+                return 0;
+            }
+            if (contains(self->scrollThumb, point)) {
+                self->draggingScrollThumb = true;
+                self->scrollGrabOffset = point.x - static_cast<int>(self->scrollThumb.left);
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
+            if (contains(self->scrollTrack, point)) {
+                self->pageScrollView(point);
+                return 0;
+            }
+            // The ruler drags the view sideways, the way the depth axis itself would be grabbed.
+            if (contains(self->rulerStrip, point)) {
+                self->draggingRuler = true;
+                self->rulerGrabDepth = self->viewDepthAt(point.x);
+                SetCapture(hwnd);
+                return 0;
+            }
+            // A row is selected from its name as readily as from one of its keys.
+            if (const uint16_t labelTarget = self->hitTrackLabel(point); labelTarget != UINT16_MAX) {
+                self->keyboardFocus = workspace::TimelineItems::track(labelTarget);
+                // Ctrl adds the row to the ones picked or drops it, Shift takes the run up to it.
+                self->selectTrackRow(labelTarget, (GetKeyState(VK_CONTROL) & 0x8000) != 0,
+                                     (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+                // The name cell is the handle the rows picked are carried by, all of them at once.
+                if (self->trackRowSelected(labelTarget)) {
+                    self->carriedRows.clear();
+                    for (const uint16_t id : self->reorderRowTargets) {
+                        if (self->trackRowSelected(id)) {
+                            self->carriedRows.push_back(id);
                         }
-                        self->draggingTrackRow = true;
-                        self->trackRowDragMoved = false;
-                        self->trackRowDragOriginY = point.y;
-                        self->trackRowDropIndex = -1;
-                        SetCapture(hwnd);
-                        // Carried past an end of the stack, the rows go on to the ones below it.
-                        SetTimer(hwnd, EDGE_SCROLL_TIMER, EDGE_SCROLL_INTERVAL, nullptr);
                     }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                    return 0;
-                }
-                const KeyHit hit = self->hitTrackKey(point);
-                if (hit.valid()) {
-                    self->selectedTrackTarget = hit.targetId;
-                    self->selectedTrackKey = hit.keyIndex;
-                    if (const VidTimelineTrack *current = self->track(hit.targetId); current != nullptr) {
-                        self->previewDepth = current->keys[hit.keyIndex].depth;
-                        self->syncPlaybackClock();
-                    }
-                    self->draggingTrackKey = true;
-                    if (const TrackLayout *item = self->layout(hit.targetId); item != nullptr) {
-                        self->dragValueMin = item->minValue;
-                        self->dragValueMax = item->maxValue;
-                    }
+                    self->draggingTrackRow = true;
+                    self->trackRowDragMoved = false;
+                    self->trackRowDragOriginY = point.y;
+                    self->trackRowDropIndex = -1;
                     SetCapture(hwnd);
-                } else if (contains(self->timelineAxis, point)) {
-                    self->scrubbingTimeline = true;
-                    self->updateScrubDepth(point);
-                    SetCapture(hwnd);
-                    // Held at an end of the axis the playhead goes on moving, and the view with it.
+                    // Carried past an end of the stack, the rows go on to the ones below it.
                     SetTimer(hwnd, EDGE_SCROLL_TIMER, EDGE_SCROLL_INTERVAL, nullptr);
                 }
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             }
-            case WM_LBUTTONDBLCLK: {
-                const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                const KeyHit hit = self->hitTrackKey(point);
-                if (self->draggingTrackKey) {
-                    self->draggingTrackKey = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
+            const KeyHit hit = self->hitTrackKey(point);
+            if (hit.valid()) {
+                self->keyboardFocus = self->itemIds.key(hit.targetId, hit.keyIndex);
+                self->selectedTrackTarget = hit.targetId;
+                self->selectedTrackKey = hit.keyIndex;
+                if (const VidTimelineTrack *current = self->track(hit.targetId); current != nullptr) {
+                    self->previewDepth = current->keys[hit.keyIndex].depth;
+                    self->syncPlaybackClock();
                 }
-                if (self->scrubbingTimeline) {
-                    self->scrubbingTimeline = false;
-                    KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
+                self->draggingTrackKey = true;
+                self->dragHasUndoStep = false;
+                if (const TrackLayout *item = self->layout(hit.targetId); item != nullptr) {
+                    self->dragValueMin = item->minValue;
+                    self->dragValueMax = item->maxValue;
                 }
-                if (self->draggingTrackRow) {
-                    self->draggingTrackRow = false;
-                    self->trackRowDragMoved = false;
-                    self->trackRowDropIndex = -1;
-                    self->carriedRows.clear();
-                    KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                }
-                if (hit.valid()) {
-                    self->selectedTrackTarget = hit.targetId;
-                    self->selectedTrackKey = hit.keyIndex;
-                } else {
-                    const uint16_t targetId = self->hitTrackRow(point);
-                    if (targetId == UINT16_MAX) {
-                        return 0;
-                    }
-                    self->addTrackKey(targetId, point);
-                }
-                self->openTrackKeyEditor();
-                return 0;
+                SetCapture(hwnd);
+            } else if (contains(self->timelineAxis, point)) {
+                self->scrubbingTimeline = true;
+                self->updateScrubDepth(point);
+                SetCapture(hwnd);
+                // Held at an end of the axis the playhead goes on moving, and the view with it.
+                SetTimer(hwnd, EDGE_SCROLL_TIMER, EDGE_SCROLL_INTERVAL, nullptr);
             }
-            case WM_LBUTTONUP:
-                if (self->draggingTrackRow) {
-                    const std::vector<uint16_t> carried = self->carriedRows;
-                    const int dropIndex = self->trackRowDropIndex;
-                    const bool moved = self->trackRowDragMoved;
-                    self->draggingTrackRow = false;
-                    self->trackRowDragMoved = false;
-                    self->trackRowDropIndex = -1;
-                    self->carriedRows.clear();
-                    KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    if (moved) {
-                        self->moveTrackRows(carried, dropIndex);
-                    }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->fieldDrag != FieldDrag::NONE) {
-                    const FieldEdit clickedField = self->pendingFieldEdit;
-                    const bool dragged = self->fieldDragMoved;
-                    self->fieldDrag = FieldDrag::NONE;
-                    self->pendingFieldEdit = FieldEdit::NONE;
-                    self->fieldDragMoved = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    if (!dragged && clickedField != FieldEdit::NONE) {
-                        self->beginFieldEdit(clickedField);
-                    } else if (dragged) {
-                        self->requestFramePreview();
-                    }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->draggingRuler) {
-                    self->draggingRuler = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->draggingTrackScrollThumb) {
-                    self->draggingTrackScrollThumb = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->draggingScrollThumb) {
-                    self->draggingScrollThumb = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->draggingTrackKey) {
-                    self->draggingTrackKey = false;
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    self->requestFramePreview();
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                } else if (self->scrubbingTimeline) {
-                    self->scrubbingTimeline = false;
-                    KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                    if (GetCapture() == hwnd) {
-                        ReleaseCapture();
-                    }
-                    self->requestFramePreview();
-                    InvalidateRect(hwnd, nullptr, FALSE);
-                }
-                return 0;
-            case WM_CAPTURECHANGED:
-                self->fieldDrag = FieldDrag::NONE;
-                self->pendingFieldEdit = FieldEdit::NONE;
-                self->fieldDragMoved = false;
-                self->draggingRuler = false;
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
+        case WM_LBUTTONDBLCLK: {
+            const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            const KeyHit hit = self->hitTrackKey(point);
+            if (self->draggingTrackKey) {
                 self->draggingTrackKey = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+            }
+            if (self->scrubbingTimeline) {
+                self->scrubbingTimeline = false;
+                KillTimer(hwnd, EDGE_SCROLL_TIMER);
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+            }
+            if (self->draggingTrackRow) {
                 self->draggingTrackRow = false;
                 self->trackRowDragMoved = false;
                 self->trackRowDropIndex = -1;
                 self->carriedRows.clear();
+                KillTimer(hwnd, EDGE_SCROLL_TIMER);
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+            }
+            if (hit.valid()) {
+                self->keyboardFocus = self->itemIds.key(hit.targetId, hit.keyIndex);
+                self->selectedTrackTarget = hit.targetId;
+                self->selectedTrackKey = hit.keyIndex;
+            } else {
+                const uint16_t targetId = self->hitTrackRow(point);
+                if (targetId == UINT16_MAX) {
+                    return 0;
+                }
+                self->addTrackKey(targetId, point);
+            }
+            self->openTrackKeyEditor();
+            return 0;
+        }
+        case WM_LBUTTONUP:
+            if (self->draggingOverlay) {
+                self->draggingOverlay = false;
+                ReleaseCapture();
+                self->lastUndoStep = 0;
+                self->commitOverlay();
+                PostMessageW(hwnd, WM_APP + 0x266, 0, 0);
+                return 0;
+            }
+            if (self->draggingTrackRow) {
+                const std::vector<uint16_t> carried = self->carriedRows;
+                const int dropIndex = self->trackRowDropIndex;
+                const bool moved = self->trackRowDragMoved;
+                self->draggingTrackRow = false;
+                self->trackRowDragMoved = false;
+                self->trackRowDropIndex = -1;
+                self->carriedRows.clear();
+                KillTimer(hwnd, EDGE_SCROLL_TIMER);
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                if (moved) {
+                    self->moveTrackRows(carried, dropIndex);
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->fieldDrag != FieldDrag::NONE) {
+                const FieldEdit clickedField = self->pendingFieldEdit;
+                const bool dragged = self->fieldDragMoved;
+                self->fieldDrag = FieldDrag::NONE;
+                self->pendingFieldEdit = FieldEdit::NONE;
+                self->fieldDragMoved = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                if (!dragged && clickedField != FieldEdit::NONE) {
+                    self->beginFieldEdit(clickedField);
+                } else if (dragged) {
+                    self->requestFramePreview();
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->draggingRuler) {
+                self->draggingRuler = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->draggingTrackScrollThumb) {
+                self->draggingTrackScrollThumb = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->draggingScrollThumb) {
+                self->draggingScrollThumb = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->draggingTrackKey) {
+                self->draggingTrackKey = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                self->requestFramePreview();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            } else if (self->scrubbingTimeline) {
                 self->scrubbingTimeline = false;
                 KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                self->draggingScrollThumb = false;
-                self->draggingTrackScrollThumb = false;
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
+                self->requestFramePreview();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_CAPTURECHANGED: {
+            const bool previewChanged = (self->fieldDrag != FieldDrag::NONE && self->fieldDragMoved) ||
+                                        self->draggingTrackKey || self->scrubbingTimeline;
+            if (self->draggingOverlay) {
+                self->attribute.video.timeline.zoomOverlay = self->overlayDragBefore;
+                self->draggingOverlay = false;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            self->fieldDrag = FieldDrag::NONE;
+            self->pendingFieldEdit = FieldEdit::NONE;
+            self->fieldDragMoved = false;
+            self->draggingRuler = false;
+            self->draggingTrackKey = false;
+            self->draggingTrackRow = false;
+            self->trackRowDragMoved = false;
+            self->trackRowDropIndex = -1;
+            self->carriedRows.clear();
+            self->scrubbingTimeline = false;
+            KillTimer(hwnd, EDGE_SCROLL_TIMER);
+            self->draggingScrollThumb = false;
+            self->draggingTrackScrollThumb = false;
+            if (previewChanged) {
+                self->requestFramePreview();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+        case WM_RBUTTONDOWN: {
+            const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (point.y >= self->timelineAxis.top && point.y <= self->timelineAxis.bottom &&
+                point.x <= self->timelineAxis.right) {
+                self->openTrackMenu(point);
+            }
+            return 0;
+        }
+        case WM_SYSKEYDOWN:
+            if ((wParam == VK_UP || wParam == VK_DOWN) && (GetKeyState(VK_MENU) < 0) &&
+                self->keyItem(wParam)) {
                 return 0;
-            case WM_RBUTTONDOWN: {
-                const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-                if (point.y >= self->timelineAxis.top && point.y <= self->timelineAxis.bottom &&
-                    point.x <= self->timelineAxis.right) {
-                    self->openTrackMenu(point);
+            }
+            break;
+        case WM_KEYDOWN:
+            if (self->overlayPositionMode && wParam == VK_ESCAPE) {
+                if (self->draggingOverlay) {
+                    self->attribute.video.timeline.zoomOverlay = self->overlayDragBefore;
+                    self->draggingOverlay = false;
+                    ReleaseCapture();
+                } else {
+                    self->overlayPositionMode = false;
+                }
+                InvalidateRect(hwnd, nullptr, FALSE);
+                PostMessageW(hwnd, WM_APP + 0x266, 0, 0);
+                return 0;
+            }
+            if (self->overlayPositionMode && wParam >= VK_LEFT && wParam <= VK_DOWN) {
+                const float step = GetKeyState(VK_SHIFT) < 0 ? 10.f : 1.f;
+                const float w = self->frameSource ? float(self->frameSource->getWidth()) /
+                                                        std::max(1u, self->attribute.render.ssaa)
+                                                  : 1920.f;
+                const float h = self->frameSource ? float(self->frameSource->getHeight()) /
+                                                        std::max(1u, self->attribute.render.ssaa)
+                                                  : 1080.f;
+                auto &o = self->attribute.video.timeline.zoomOverlay;
+                o.x = std::clamp(o.x + (wParam == VK_LEFT    ? -step
+                                        : wParam == VK_RIGHT ? step
+                                                             : 0) /
+                                           w,
+                                 0.f, 1.f);
+                o.y = std::clamp(o.y + (wParam == VK_UP     ? -step
+                                        : wParam == VK_DOWN ? step
+                                                            : 0) /
+                                           h,
+                                 0.f, 1.f);
+                o.custom = true;
+                self->commitOverlay();
+                return 0;
+            }
+            self->accessibilityDirty = true;
+            if (self->keyItem(wParam)) {
+                return 0;
+            }
+            if (self->dockToggle && !self->dockLayout.tracksVisible &&
+                (wParam == VK_DELETE || wParam == VK_BACK || wParam == VK_RETURN || wParam == VK_F2 ||
+                 (wParam >= '1' && wParam <= '4'))) {
+                return 0;
+            }
+            switch (wParam) {
+            case VK_DELETE:
+            case VK_BACK:
+                // A key is what Delete takes while one is picked. With the row picked and no
+                // key on it, what Delete takes is the parameter the row stands for.
+                if (self->selectedTrackKey >= 0) {
+                    self->deleteTrackKey();
+                } else {
+                    self->removeTrack(self->selectedTrackTarget);
+                }
+                return 0;
+            case VK_RETURN:
+            case VK_F2:
+                self->openTrackKeyEditor();
+                return 0;
+            case VK_F11:
+                self->toggleFullscreen();
+                return 0;
+            case VK_SPACE:
+                self->setPlaying(!self->playing);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_ESCAPE:
+                if (self->fullscreen) {
+                    self->toggleFullscreen();
+                    return 0;
+                }
+                break;
+            case VK_HOME:
+                self->previewDepth = self->schedule.getStartDepth();
+                self->syncPlaybackClock();
+                self->requestFramePreview();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_END:
+                self->previewDepth = self->schedule.getEndDepth();
+                self->syncPlaybackClock();
+                self->requestFramePreview();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case 'Z':
+                if (GetKeyState(VK_CONTROL) & 0x8000) {
+                    if (self->historyRequest) {
+                        self->historyRequest(false);
+                    } else {
+                        self->undoTimeline();
+                    }
+                    return 0;
+                }
+                break;
+            case 'Y':
+                if (GetKeyState(VK_CONTROL) & 0x8000) {
+                    if (self->historyRequest) {
+                        self->historyRequest(true);
+                    } else {
+                        self->redoTimeline();
+                    }
+                    return 0;
+                }
+                break;
+            case '0':
+                self->resetView();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_OEM_PLUS:
+            case VK_ADD:
+                self->zoomView(std::clamp(self->previewDepth, self->viewEndDepth, self->viewStartDepth),
+                               1.5f);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_OEM_MINUS:
+            case VK_SUBTRACT:
+                self->zoomView(std::clamp(self->previewDepth, self->viewEndDepth, self->viewStartDepth),
+                               1.0f / 1.5f);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_LEFT:
+                self->panView(self->viewSpan() * 0.1f);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_RIGHT:
+                self->panView(-self->viewSpan() * 0.1f);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            case VK_UP:
+                self->scrollTracks(-sc(38));
+                return 0;
+            case VK_DOWN:
+                self->scrollTracks(sc(38));
+                return 0;
+            case VK_PRIOR:
+                self->scrollTracks(-sc(220));
+                return 0;
+            case VK_NEXT:
+                self->scrollTracks(sc(220));
+                return 0;
+            case '1':
+                self->setTrackInterpolation(VidKeyInterpolation::STEP);
+                return 0;
+            case '2':
+                self->setTrackInterpolation(VidKeyInterpolation::LINEAR);
+                return 0;
+            case '3':
+                self->setTrackInterpolation(VidKeyInterpolation::SMOOTH);
+                return 0;
+            case '4':
+                self->setTrackInterpolation(VidKeyInterpolation::CUBIC);
+                return 0;
+            default:
+                break;
+            }
+            break;
+        case WM_TIMER:
+            if (wParam == inspectorTimerId) {
+                self->refreshInspector();
+                return 0;
+            }
+            if (wParam == PLAYBACK_TIMER) {
+                self->advancePlayback();
+                return 0;
+            }
+            if (wParam == EDGE_SCROLL_TIMER) {
+                if (!self->scrubbingTimeline && !self->draggingTrackRow) {
+                    KillTimer(hwnd, EDGE_SCROLL_TIMER);
+                    return 0;
+                }
+                POINT point = {};
+                GetCursorPos(&point);
+                ScreenToClient(hwnd, &point);
+                if (self->draggingTrackRow) {
+                    if (self->trackRowDragMoved && self->rowEdgeScroll(point)) {
+                        self->trackRowDropIndex = self->trackRowDropTarget(point);
+                        InvalidateRect(hwnd, nullptr, FALSE);
+                    }
+                    return 0;
+                }
+                // The playhead follows the view it has just pulled along, and stops where it does.
+                if (self->scrubEdgeScroll(point)) {
+                    self->updateScrubDepth(point);
                 }
                 return 0;
             }
-            case WM_KEYDOWN:
-                switch (wParam) {
-                    case VK_DELETE:
-                    case VK_BACK:
-                        // A key is what Delete takes while one is picked. With the row picked and no
-                        // key on it, what Delete takes is the parameter the row stands for.
-                        if (self->selectedTrackKey >= 0) {
-                            self->deleteTrackKey();
-                        } else {
-                            self->removeTrack(self->selectedTrackTarget);
-                        }
-                        return 0;
-                    case VK_RETURN:
-                    case VK_F2:
-                        self->openTrackKeyEditor();
-                        return 0;
-                    case VK_F11:
-                        self->toggleFullscreen();
-                        return 0;
-                    case VK_SPACE:
-                        self->setPlaying(!self->playing);
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_ESCAPE:
-                        if (self->fullscreen) {
-                            self->toggleFullscreen();
-                            return 0;
-                        }
-                        break;
-                    case VK_HOME:
-                        self->previewDepth = self->schedule.getStartDepth();
-                        self->syncPlaybackClock();
-                        self->requestFramePreview();
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_END:
-                        self->previewDepth = self->schedule.getEndDepth();
-                        self->syncPlaybackClock();
-                        self->requestFramePreview();
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case 'Z':
-                        if (GetKeyState(VK_CONTROL) & 0x8000) {
-                            self->undoTimeline();
-                            return 0;
-                        }
-                        break;
-                    case 'Y':
-                        if (GetKeyState(VK_CONTROL) & 0x8000) {
-                            self->redoTimeline();
-                            return 0;
-                        }
-                        break;
-                    case '0':
-                        self->resetView();
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_OEM_PLUS:
-                    case VK_ADD:
-                        self->zoomView(std::clamp(self->previewDepth, self->viewEndDepth, self->viewStartDepth),
-                                       1.5f);
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_OEM_MINUS:
-                    case VK_SUBTRACT:
-                        self->zoomView(std::clamp(self->previewDepth, self->viewEndDepth, self->viewStartDepth),
-                                       1.0f / 1.5f);
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_LEFT:
-                        self->panView(self->viewSpan() * 0.1f);
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_RIGHT:
-                        self->panView(-self->viewSpan() * 0.1f);
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                        return 0;
-                    case VK_UP:
-                        self->scrollTracks(-sc(38));
-                        return 0;
-                    case VK_DOWN:
-                        self->scrollTracks(sc(38));
-                        return 0;
-                    case VK_PRIOR:
-                        self->scrollTracks(-sc(220));
-                        return 0;
-                    case VK_NEXT:
-                        self->scrollTracks(sc(220));
-                        return 0;
-                    case '1':
-                        self->setTrackInterpolation(VidKeyInterpolation::STEP);
-                        return 0;
-                    case '2':
-                        self->setTrackInterpolation(VidKeyInterpolation::LINEAR);
-                        return 0;
-                    case '3':
-                        self->setTrackInterpolation(VidKeyInterpolation::SMOOTH);
-                        return 0;
-                    case '4':
-                        self->setTrackInterpolation(VidKeyInterpolation::CUBIC);
-                        return 0;
-                    default:
-                        break;
+            if (wParam == PREVIEW_STATUS_TIMER) {
+                KillTimer(hwnd, PREVIEW_STATUS_TIMER);
+                if (self->previewPending) {
+                    self->previewBusy = true;
+                    InvalidateRect(hwnd, nullptr, FALSE);
                 }
-                break;
-            case WM_TIMER:
-                if (wParam == PLAYBACK_TIMER) {
-                    self->advancePlayback();
-                    return 0;
-                }
-                if (wParam == EDGE_SCROLL_TIMER) {
-                    if (!self->scrubbingTimeline && !self->draggingTrackRow) {
-                        KillTimer(hwnd, EDGE_SCROLL_TIMER);
-                        return 0;
-                    }
-                    POINT point = {};
-                    GetCursorPos(&point);
-                    ScreenToClient(hwnd, &point);
-                    if (self->draggingTrackRow) {
-                        if (self->trackRowDragMoved && self->rowEdgeScroll(point)) {
-                            self->trackRowDropIndex = self->trackRowDropTarget(point);
-                            InvalidateRect(hwnd, nullptr, FALSE);
-                        }
-                        return 0;
-                    }
-                    // The playhead follows the view it has just pulled along, and stops where it does.
-                    if (self->scrubEdgeScroll(point)) {
-                        self->updateScrubDepth(point);
-                    }
-                    return 0;
-                }
-                if (wParam == PREVIEW_STATUS_TIMER) {
-                    KillTimer(hwnd, PREVIEW_STATUS_TIMER);
-                    if (self->previewPending) {
-                        self->previewBusy = true;
-                        InvalidateRect(hwnd, nullptr, FALSE);
-                    }
-                    return 0;
-                }
-                break;
-            case WM_PAINT: {
-                PAINTSTRUCT ps = {};
-                const HDC hdc = BeginPaint(hwnd, &ps);
+                return 0;
+            }
+            break;
+        case WM_PAINT: {
+            PAINTSTRUCT ps = {};
+            const HDC hdc = BeginPaint(hwnd, &ps);
+            try {
                 RECT client = {};
                 GetClientRect(hwnd, &client);
                 self->paint(hdc, client);
+            } catch (...) {
                 EndPaint(hwnd, &ps);
+                throw;
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_PRINTCLIENT: {
+            RECT client;
+            GetClientRect(hwnd, &client);
+            self->paint(reinterpret_cast<HDC>(wParam), client);
+            return 0;
+        }
+        case WM_CLOSE:
+            if (NativeDialogs::isOpen()) {
                 return 0;
             }
-            case WM_CLOSE:
-                DestroyWindow(hwnd);
+            if (self->floatingWorkspace) {
+                showWorkspace(hwnd, {}, false);
                 return 0;
-            case WM_NCDESTROY:
-                // The shader panels report to this window; nothing may be posted to it after here.
-                if (self->renderScene != nullptr) {
-                    HWND listening = hwnd;
-                    self->renderScene->getRequests().shaderEditListener.compare_exchange_strong(
-                        listening, nullptr);
-                }
-                self->stopFramePreviewWorker();
-                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-                self->window = nullptr;
-                delete self;
-                return DefWindowProcW(hwnd, message, wParam, lParam);
-            default:
-                return DefWindowProcW(hwnd, message, wParam, lParam);
+            }
+            if (self->embedded) {
+                return 0;
+            }
+            DestroyWindow(hwnd);
+            return 0;
+        case WM_NCDESTROY:
+            // The shader panels report to this window; nothing may be posted to it after here.
+            if (self->renderScene != nullptr) {
+                HWND listening = hwnd;
+                self->renderScene->getRequests().shaderEditListener.compare_exchange_strong(listening,
+                                                                                            nullptr);
+            }
+            self->stopFramePreviewWorker();
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            self->window = nullptr;
+            delete self;
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        default:
+            return DefWindowProcW(hwnd, message, wParam, lParam);
         }
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
-}
+} // namespace merutilm::rff2

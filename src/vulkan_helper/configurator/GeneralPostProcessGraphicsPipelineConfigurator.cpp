@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-05.
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "GeneralPostProcessGraphicsPipelineConfigurator.hpp"
@@ -19,33 +20,32 @@ namespace merutilm::vkh {
     }
 
 
-    void GeneralPostProcessGraphicsPipelineConfigurator::configureVertexBuffer(HostDataObjectManagerRef som) {
-        som.addArray(0, std::vector{
-                         Vertex::generate({1, 1, 0}, {1, 1, 1}, {1, 1}),
-                         Vertex::generate({1, -1, 0}, {1, 1, 1}, {1, 0}),
-                         Vertex::generate({-1, -1, 0}, {1, 1, 1}, {0, 0}),
-                         Vertex::generate({-1, 1, 0}, {1, 1, 1}, {0, 1}),
-                     });
+    void GeneralPostProcessGraphicsPipelineConfigurator::configureVertexBuffer(HostDataObjectManagerRef vertexData) {
+        vertexData.addArray(0, std::vector{
+                                Vertex::generate({1, 1, 0}, {1, 1, 1}, {1, 1}),
+                                Vertex::generate({1, -1, 0}, {1, 1, 1}, {1, 0}),
+                                Vertex::generate({-1, -1, 0}, {1, 1, 1}, {0, 0}),
+                                Vertex::generate({-1, 1, 0}, {1, 1, 1}, {0, 1}),
+                            });
     }
 
-    void GeneralPostProcessGraphicsPipelineConfigurator::configureIndexBuffer(HostDataObjectManagerRef som) {
-        som.addArray(0, std::vector<uint32_t>{0, 1, 2, 2, 3, 0});
+    void GeneralPostProcessGraphicsPipelineConfigurator::configureIndexBuffer(HostDataObjectManagerRef indexData) {
+        indexData.addArray(0, std::vector<uint32_t>{0, 1, 2, 2, 3, 0});
     }
 
     void GeneralPostProcessGraphicsPipelineConfigurator::configure() {
         auto pipelineLayoutManager = factory::create<PipelineLayoutManager>();
 
-        std::vector<DescriptorPtr> descriptors = {};
+        std::vector<DescriptorPtr> descriptors;
         configureDescriptors(descriptors);
 
-        for (const auto descriptor: descriptors) {
+        for (const auto descriptor : descriptors) {
             pipelineLayoutManager->appendDescriptorSetLayout(&descriptor->getLayout());
         }
 
         configurePushConstant(*pipelineLayoutManager);
-        PipelineLayoutRef pipelineLayout = engine.getGlobalRepositories().getRepository<GlobalPipelineLayoutRepo>()->pick(
-            std::move(pipelineLayoutManager));
-
+        PipelineLayoutRef pipelineLayout = engine.getGlobalRepositories()
+            .getRepository<GlobalPipelineLayoutRepo>()->pick(std::move(pipelineLayoutManager));
 
         auto pipelineManager = factory::create<PipelineManager>(pipelineLayout);
 
@@ -53,18 +53,16 @@ namespace merutilm::vkh {
         pipelineManager->attachShader(&vertexShader);
         pipelineManager->attachShader(&fragmentShader);
         pipelineManager->attachSpecialization(specializationConstants());
-
-
         if (!initializedVertexIndex) {
-            auto vertManager = factory::create<HostDataObjectManager>();;
-            auto indexManager = factory::create<HostDataObjectManager>();;
+            auto vertexData = factory::create<HostDataObjectManager>();
+            auto indexData = factory::create<HostDataObjectManager>();
 
-            configureVertexBuffer(*vertManager);
-            configureIndexBuffer(*indexManager);
+            configureVertexBuffer(*vertexData);
+            configureIndexBuffer(*indexData);
 
-            vertexBufferPP = factory::create<VertexBuffer>(wc.core, std::move(vertManager),
+            vertexBufferPP = factory::create<VertexBuffer>(wc.core, std::move(vertexData),
                                                            BufferLock::LOCK_ONLY, false);
-            indexBufferPP = factory::create<IndexBuffer>(wc.core, std::move(indexManager),
+            indexBufferPP = factory::create<IndexBuffer>(wc.core, std::move(indexData),
                                                          BufferLock::LOCK_ONLY, false);
             vertexBufferPP->update();
             indexBufferPP->update();
@@ -73,11 +71,8 @@ namespace merutilm::vkh {
             initializedVertexIndex = true;
         }
 
-        if (initializedVertexIndex) {
-            pipeline = factory::create<GraphicsPipeline>(wc, pipelineLayout, getVertexBuffer(), getIndexBuffer(),
-                                                         renderContextIndex,
-                                                         primarySubpassIndex,
-                                                         std::move(pipelineManager));
-        }
+        pipeline = factory::create<GraphicsPipeline>(wc, pipelineLayout, getVertexBuffer(), getIndexBuffer(),
+                                                     renderContextIndex, primarySubpassIndex,
+                                                     std::move(pipelineManager));
     }
 }

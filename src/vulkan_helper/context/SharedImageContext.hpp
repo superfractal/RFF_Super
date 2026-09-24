@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-09-03.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -31,11 +32,13 @@ namespace merutilm::vkh {
         void appendMultiframeImageContext(const uint32_t expected, ImageInitInfo &&iii) {
             safe_array::check_index_equal(expected, multiframeContexts.size(),
                                           "Shared Multiframe Image Context append");
+            multiframeContexts.reserve(multiframeContexts.size() + 1);
             multiframeContexts.emplace_back(ImageContext::createMultiframeContext(core, iii));
         }
 
         void appendImageContext(const uint32_t expected, ImageInitInfo &&iii) {
             safe_array::check_index_equal(expected, imageContexts.size(), "Shared Image Context append");
+            imageContexts.reserve(imageContexts.size() + 1);
             imageContexts.emplace_back(ImageContext::createContext(core, iii));
         }
 

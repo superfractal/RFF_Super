@@ -1,9 +1,18 @@
 //
 // Created by Merutilm on 2025-08-24.
 // Modified by Opus 5 on 2026-08-24, 2026-08-26, 2026-08-31
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
 #include "../core/config.hpp"
 #include "../struct/QueueFamilyIndices.hpp"
 #include "../struct/StringHasher.hpp"
@@ -32,6 +41,7 @@ namespace merutilm::vkh {
             return properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
                    features.geometryShader &&
                    features.shaderFloat64 &&
+                   properties.limits.maxBoundDescriptorSets >= 8 &&
                    checkComputeLimits(properties.limits) &&
                    indices.isComplete() &&
                    checkDeviceExtensionSupport(physicalDevice) &&
@@ -75,28 +85,30 @@ namespace merutilm::vkh {
                 VkSurfaceFormatKHR{config::SWAPCHAIN_IMAGE_FORMAT, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
                 VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
             };
-            for (const auto &[format, colorSpace]: PREFERRED) {
-                for (const auto &available: formats) {
+            for (const auto &[format, colorSpace] : PREFERRED) {
+                for (const auto &available : formats) {
                     if (available.format == format && available.colorSpace == colorSpace) {
                         return available;
                     }
                 }
             }
-            for (const auto &available: formats) {
+            for (const auto &available : formats) {
                 if (available.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                     return available;
                 }
             }
-            return formats.empty()
-                       ? VkSurfaceFormatKHR{config::SWAPCHAIN_IMAGE_FORMAT, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR}
-                       : formats.front();
+            if (formats.empty()) {
+                return {config::SWAPCHAIN_IMAGE_FORMAT, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+            }
+            return formats.front();
         }
 
         // FIFO is the one mode Vulkan guarantees, so it is what a driver without MAILBOX falls back to.
         static VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR> &presentModes) {
-            return std::ranges::find(presentModes, VK_PRESENT_MODE_MAILBOX_KHR) != presentModes.end()
-                       ? VK_PRESENT_MODE_MAILBOX_KHR
-                       : VK_PRESENT_MODE_FIFO_KHR;
+            if (std::ranges::find(presentModes, VK_PRESENT_MODE_MAILBOX_KHR) != presentModes.end()) {
+                return VK_PRESENT_MODE_MAILBOX_KHR;
+            }
+            return VK_PRESENT_MODE_FIFO_KHR;
         }
 
         // Opaque is what the window wants, but a compositor may only offer the pre/post-multiplied
@@ -108,7 +120,7 @@ namespace merutilm::vkh {
                 VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
                 VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
             };
-            for (const auto bit: PREFERRED) {
+            for (const auto bit : PREFERRED) {
                 if (supported & bit) {
                     return bit;
                 }
@@ -130,15 +142,19 @@ namespace merutilm::vkh {
             vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
             std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
             vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
-            for (uint32_t i = 0; i < queueFamilyCount; i++) {
-                if (const auto &queueFamily = queueFamilies[i]; (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)) {
-                    indices.graphicsAndComputeFamily = i;
+            for (uint32_t index = 0; index < queueFamilyCount; ++index) {
+                const auto &family = queueFamilies[index];
+                const bool supportsGraphicsAndCompute =
+                    (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) &&
+                    (family.queueFlags & VK_QUEUE_COMPUTE_BIT);
+                if (supportsGraphicsAndCompute) {
+                    indices.graphicsAndComputeFamily = index;
                 }
 
                 VkBool32 presentSupport = false;
-                vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+                vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, index, surface, &presentSupport);
                 if (presentSupport) {
-                    indices.presentFamily = i;
+                    indices.presentFamily = index;
                 }
 
                 if (indices.isComplete()) {
@@ -164,13 +180,13 @@ namespace merutilm::vkh {
                                                      availableExtensions.data()) != VK_SUCCESS) {
                 return false;
             }
-            auto required = std::unordered_set<std::string, StringHasher, std::equal_to<> >(
+            auto missingExtensions = std::unordered_set<std::string, StringHasher, std::equal_to<>>(
                 PHYSICAL_DEVICE_EXTENSIONS.begin(),
                 PHYSICAL_DEVICE_EXTENSIONS.end());
-            for (const auto &[extensionName, specVersion]: availableExtensions) {
-                required.erase(extensionName);
+            for (const auto &extension : availableExtensions) {
+                missingExtensions.erase(extension.extensionName);
             }
-            return required.empty();
+            return missingExtensions.empty();
         }
     };
 }

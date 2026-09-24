@@ -1,0 +1,5006 @@
+[
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "High-precision center coordinate.",
+        "id": "explore.real",
+        "label": "Real",
+        "value": "-0.849999999999999991673"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "High-precision center coordinate.",
+        "id": "explore.imag",
+        "label": "Imaginary",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Natural-log magnification. 0 to 16777216.",
+        "id": "explore.zoom",
+        "label": "Log Zoom (e)",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Degrees. Also controls panorama yaw.",
+        "id": "explore.rotation",
+        "label": "Rotation",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "O",
+          "X"
+        ],
+        "group": 1,
+        "hint": "Mandelbrot only. Period detection stays automatic.",
+        "id": "explore.autoIterations",
+        "label": "Automatic Iterations",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Used when Automatic Iterations is off.",
+        "id": "explore.maxIterations",
+        "label": "Max Iteration",
+        "value": "300"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Used when Automatic Iterations is on.",
+        "id": "explore.autoMultiplier",
+        "label": "Auto Iteration Multiplier",
+        "value": "150"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Escape radius, 2 to 1e38.",
+        "id": "explore.bailout",
+        "label": "Bailout",
+        "value": "1e+30"
+      },
+      {
+        "choices": [
+          "Linear",
+          "Square root",
+          "Log",
+          "LogLog"
+        ],
+        "group": 1,
+        "hint": "Fractional iteration coloring.",
+        "id": "explore.decimalize",
+        "label": "Decimalize Iteration",
+        "value": "4"
+      },
+      {
+        "choices": [
+          "O",
+          "X"
+        ],
+        "group": 1,
+        "hint": "Uses absolute iteration counts.",
+        "id": "explore.absolute",
+        "label": "Absolute Iteration Mode",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Current",
+          "Centered",
+          "Disabled"
+        ],
+        "group": 2,
+        "hint": "Disable when the saved reference belongs to another location.",
+        "id": "explore.reuse",
+        "label": "Reuse Reference",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Minimum reference batch; 0 disables compression.",
+        "id": "explore.compressionCriteria",
+        "label": "Compression Criteria",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Negative power of ten; 0 disables compression.",
+        "id": "explore.compressionThreshold",
+        "label": "Compression Threshold",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "O",
+          "X"
+        ],
+        "group": 2,
+        "hint": "Advanced reference-compression option.",
+        "id": "explore.noNormalization",
+        "label": "Disable Normalization",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "MPA follows periodic structure; minimum 4.",
+        "id": "explore.minSkip",
+        "label": "Min Skip Reference",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Ratio between adjacent period levels, 1 to 255.",
+        "id": "explore.maxMultiplier",
+        "label": "Max Multiplier Between Levels",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-15 to -3. Lower values favor accuracy.",
+        "id": "explore.precision",
+        "label": "Precision Level",
+        "value": "-3"
+      },
+      {
+        "choices": [
+          "Lowest",
+          "Highest"
+        ],
+        "group": 3,
+        "hint": "MPA period-level selection strategy.",
+        "id": "explore.mpaSelection",
+        "label": "Selection Method",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "No compression",
+          "Little compression",
+          "Strongest"
+        ],
+        "group": 3,
+        "hint": "MPA table compression strategy.",
+        "id": "explore.mpaCompression",
+        "label": "Compression Method",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Mandelbrot",
+          "Custom"
+        ],
+        "group": 4,
+        "hint": "Changing the formula resets the view; explicit location edits take precedence.",
+        "id": "explore.formulaType",
+        "label": "Formula Type",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Examples: z^3+c; conj(z)^2+c. Custom formulas use manual iterations.",
+        "id": "explore.formula",
+        "label": "Custom Formula",
+        "value": "z^3+c"
+      },
+      {
+        "choices": [
+          "Planar",
+          "360° Equirectangular",
+          "360° Camera"
+        ],
+        "group": 5,
+        "hint": "Planar or a 360-degree view.",
+        "id": "explore.projection",
+        "label": "Projection",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Ground and Sky",
+          "Full Sphere"
+        ],
+        "group": 5,
+        "hint": "Ground and Sky or Full Sphere.",
+        "id": "explore.panoramaLayout",
+        "label": "Layout",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "-90 to 90 degrees. Used by the 360 Camera.",
+        "id": "explore.pitch",
+        "label": "Pitch",
+        "value": "-90"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "1 to 179 degrees. Used by the 360 Camera.",
+        "id": "explore.fov",
+        "label": "Field of View",
+        "value": "100"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Furthest radius, log10 scale: 0 to 6.",
+        "id": "explore.panoramaRange",
+        "label": "Panorama Range",
+        "value": "3"
+      }
+    ],
+    "groups": [
+      {
+        "image": "explore-0.png",
+        "label": "Location"
+      },
+      {
+        "image": "explore-1.png",
+        "label": "Iterations"
+      },
+      {
+        "image": "explore-2.png",
+        "label": "Reference"
+      },
+      {
+        "image": "explore-3.png",
+        "label": "MP-Approximation"
+      },
+      {
+        "image": "explore-4.png",
+        "label": "Formula"
+      },
+      {
+        "image": "explore-5.png",
+        "label": "Projection"
+      },
+      {
+        "image": "explore-6.png",
+        "label": "Tools"
+      }
+    ],
+    "title": "Explore"
+  },
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Palette iterations per second. Negative reverses direction; 0 stops drift.",
+        "id": "animation.speed",
+        "label": "Color Animation Speed",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Linear",
+          "Breathing",
+          "Turbulence",
+          "Psychedelic"
+        ],
+        "group": 0,
+        "hint": "Linear, Breathing, Turbulence or Psychedelic motion.",
+        "id": "animation.mode",
+        "label": "Animation Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Displacement of the color cycle in iterations; 0 or greater.",
+        "id": "animation.flowAmount",
+        "label": "Flow Amount",
+        "value": "80"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Density of fluid bands, 0 to 12.",
+        "id": "animation.flowScale",
+        "label": "Flow Scale",
+        "value": "3"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2. Negative values reverse the flow.",
+        "id": "animation.flowSpeed",
+        "label": "Flow Speed",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Twist around the center, -2 to 2. Used by Psychedelic motion.",
+        "id": "animation.swirl",
+        "label": "Swirl",
+        "value": "0.4"
+      },
+      {
+        "choices": [
+          "None",
+          "Normal",
+          "Reversed"
+        ],
+        "group": 0,
+        "hint": "Animation edits enable Normal smoothing when currently None.",
+        "id": "animation.smoothing",
+        "label": "Color Smoothing",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Starting position in the palette cycle, 0 to 1.",
+        "id": "animation.offset",
+        "label": "Palette Start Offset",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Fraction of one color cycle, 0 to 1. Lower values freeze a narrower band.",
+        "id": "animation.freezeTolerance",
+        "label": "Freeze Match Tolerance",
+        "value": "0.02"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Up to 16 comma-separated iteration values. Empty removes all frozen colors.",
+        "id": "animation.frozenIterations",
+        "label": "Frozen Iteration Values",
+        "value": ""
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Keyframes per second; greater than 0.",
+        "id": "animation.zoomSpeed",
+        "label": "Zoom Speed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Additional zoom at the end of the video; 0 to 8.",
+        "id": "animation.overZoom",
+        "label": "Extra Final Zoom-in",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Adds the zoom readout to video output.",
+        "id": "animation.showZoom",
+        "label": "Show Zoom Ratio",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Uses the existing keyframe tracks during video playback and export.",
+        "id": "animation.timelineEnabled",
+        "label": "Timeline Enabled",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Preview length before loading keyframes: 1 to 100000.",
+        "id": "animation.estimatedKeyframes",
+        "label": "Estimated Keyframes",
+        "value": "100"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Logarithmic zoom step; greater than 1.",
+        "id": "animation.keyframeStep",
+        "label": "Zoom Step per Keyframe",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 4,
+        "hint": "Generates larger planar keyframes for camera movement.",
+        "id": "animation.cameraPadding",
+        "label": "Rotation / 360 Padding",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "2 to 64. Memory and disk use grow with the square of this value.",
+        "id": "animation.paddingScale",
+        "label": "Camera Padding Scale",
+        "value": "4"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 4,
+        "hint": "PNG sources support finishing effects; iteration-based effects require maps.",
+        "id": "animation.pngSource",
+        "label": "Render from PNG Images",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Keyframes",
+          "Constant Period"
+        ],
+        "group": 5,
+        "hint": "Constant Period replaces rotation keys and keeps turning during zoom holds. Other camera tracks still apply.",
+        "id": "animation.rotationMode",
+        "label": "Rotation Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Duration of one complete turn, 0.01 to 86400 seconds. Used by Constant Period.",
+        "id": "animation.rotationPeriod",
+        "label": "Seconds per Turn",
+        "value": "10"
+      },
+      {
+        "choices": [
+          "Clockwise",
+          "Counterclockwise"
+        ],
+        "group": 5,
+        "hint": "Direction of continuous rotation. Used by Constant Period.",
+        "id": "animation.rotationDirection",
+        "label": "Rotation Direction",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Angle at video time zero, in degrees. Used by Constant Period.",
+        "id": "animation.rotationStartAngle",
+        "label": "Rotation Start Angle",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Degrees, -360000 to 360000. Values beyond 360 allow multiple turns.",
+        "id": "animation.cameraRotation",
+        "label": "Camera Rotation",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Planar",
+          "360° Equirectangular",
+          "360° Camera"
+        ],
+        "group": 5,
+        "hint": "Video projection; rotation and 360 modes require padded keyframes.",
+        "id": "animation.cameraProjection",
+        "label": "Camera Projection",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "-90 to 90 degrees.",
+        "id": "animation.cameraPitch",
+        "label": "Camera Pitch",
+        "value": "-90"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "1 to 179 degrees.",
+        "id": "animation.cameraFov",
+        "label": "Camera Field of View",
+        "value": "100"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Log10 radius limit, 0 to 6. Available detail depends on saved padding.",
+        "id": "animation.cameraRange",
+        "label": "Camera Panorama Range",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Ground and Sky",
+          "Full Sphere"
+        ],
+        "group": 5,
+        "hint": "Ground and Sky or Full Sphere.",
+        "id": "animation.cameraLayout",
+        "label": "Camera Layout",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "animation-0.png",
+        "label": "Color Motion"
+      },
+      {
+        "image": "animation-1.png",
+        "label": "Frozen Colors"
+      },
+      {
+        "image": "animation-2.png",
+        "label": "Zoom Motion"
+      },
+      {
+        "image": "animation-3.png",
+        "label": "Timeline"
+      },
+      {
+        "image": "animation-4.png",
+        "label": "Keyframe Generation"
+      },
+      {
+        "image": "animation-5.png",
+        "label": "Camera"
+      }
+    ],
+    "title": "Animation"
+  },
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Live rendering limit: 1 to 1000 frames per second. Lower values reduce rendering load. Video export has a separate FPS setting.",
+        "id": "render.fps",
+        "label": "Rendering FPS",
+        "value": "60"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 up to this computer's logical core count. Applied to the next calculation.",
+        "id": "render.threads",
+        "label": "Calculation Threads",
+        "value": "16"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Recomputes the view with boundary tracing enabled or disabled.",
+        "id": "render.boundaryTraceFill",
+        "label": "Boundary Trace Fill",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Recomputes the view with a two-color preview.",
+        "id": "render.preview2Color",
+        "label": "Two-Color Preview",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Recomputes the view with an initial coarse preview.",
+        "id": "render.coarsePreview",
+        "label": "Coarse Preview",
+        "value": "1"
+      }
+    ],
+    "groups": [
+      {
+        "image": "performance-0.png",
+        "label": "Performance"
+      },
+      {
+        "image": "performance-1.png",
+        "label": "Calculation Preview"
+      }
+    ],
+    "title": "Render & Preview"
+  },
+  {
+    "actions": [
+      {
+        "group": 8,
+        "label": "Use Current Zoom"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "Overlay",
+          "OKLab Lightness"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.shadingBlend",
+        "label": "Shading Blend",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "On replaces the palette with the selected style, ignoring palette tint, Surface Blend, Chrome Strength and Slope Opacity. Off preserves legacy compositing. Requires Studio and a non-Original style.",
+        "id": "slope.replaceSurfaceStyle",
+        "label": "Replace Surface Style Completely",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Mix",
+          "Add",
+          "Multiply",
+          "Screen"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.surfaceBlend",
+        "label": "Surface Blend",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 10000",
+        "id": "slope.depth",
+        "label": "Shading Depth",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "slope.reflectionRatio",
+        "label": "Shadow Floor",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "slope.opacity",
+        "label": "Slope Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "slope.terminatorSoftness",
+        "label": "Terminator Softness",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "slope.lumaAmount",
+        "label": "Relief Lightness",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 359.99997",
+        "id": "slope.zenith",
+        "label": "Light Zenith",
+        "value": "60"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 359.99997",
+        "id": "slope.azimuth",
+        "label": "Light Direction",
+        "value": "135"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "slope.fillIntensity",
+        "label": "Fill Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 359.99997",
+        "id": "slope.fillZenith",
+        "label": "Fill Zenith",
+        "value": "60"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 359.99997",
+        "id": "slope.fillAzimuth",
+        "label": "Fill Direction",
+        "value": "315"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "slope.specularIntensity",
+        "label": "Specular Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "1 to 100000",
+        "id": "slope.specularPower",
+        "label": "Specular Power",
+        "value": "32"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "slope.reliefResponse",
+        "label": "Relief Response",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "slope.specularColor",
+        "label": "Specular Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.specularIndependent",
+        "label": "Independent Specular Light",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 359.99997",
+        "id": "slope.specularZenith",
+        "label": "Specular Zenith",
+        "value": "60"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 359.99997",
+        "id": "slope.specularAzimuth",
+        "label": "Specular Direction",
+        "value": "135"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "slope.specularAnisotropy",
+        "label": "Specular Anisotropy",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 359.99997",
+        "id": "slope.specularAnisotropyAngle",
+        "label": "Anisotropy Angle",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "slope.macroRelief",
+        "label": "Macro Relief",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "1 to 12",
+        "id": "slope.macroRadius",
+        "label": "Macro Radius",
+        "value": "8"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "slope.aoIntensity",
+        "label": "Cavity Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "0 to 1",
+        "id": "slope.ambientIntensity",
+        "label": "Tint Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "slope.skyColor",
+        "label": "Light-Facing Color",
+        "value": "1, 0.93, 0.82"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "slope.groundColor",
+        "label": "Shadow-Facing Color",
+        "value": "0.45, 0.55, 0.78"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "OKLab Tint"
+        ],
+        "group": 4,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.tintBlend",
+        "label": "Tint Blend",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "0.1 to 4",
+        "id": "slope.tintResponse",
+        "label": "Tint Response",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "0 to 2",
+        "id": "slope.shadowChroma",
+        "label": "Shadow Chroma",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Brightness multiplier, 0 to 100; 0 turns it off.",
+        "id": "slope.brightness",
+        "label": "Slope Brightness",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "Shadow curve, 0.01 to 10; 1 preserves the curve.",
+        "id": "slope.gamma",
+        "label": "Slope Gamma",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "0 to 1",
+        "id": "slope.highlightKnee",
+        "label": "Highlight Knee",
+        "value": "0.75"
+      },
+      {
+        "choices": [
+          "Direct",
+          "Linear RGB Add"
+        ],
+        "group": 5,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.lightBlend",
+        "label": "Light Blend",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 6,
+        "hint": "0 to 1",
+        "id": "slope.rimIntensity",
+        "label": "Rim Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 6,
+        "hint": "1 to 64",
+        "id": "slope.rimPower",
+        "label": "Rim Power",
+        "value": "3"
+      },
+      {
+        "choices": [],
+        "group": 6,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "slope.rimColor",
+        "label": "Rim Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "0 to 1",
+        "id": "slope.glossIntensity",
+        "label": "Gloss Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Fine Shading",
+          "Shading",
+          "Relief Detail",
+          "Slope Facing"
+        ],
+        "group": 7,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.glossSource",
+        "label": "Gloss Source",
+        "value": "3"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "0 to 16",
+        "id": "slope.glossRelief",
+        "label": "Gloss Relief",
+        "value": "8"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "1 to 32",
+        "id": "slope.glossBands",
+        "label": "Gloss Bands",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "1 to 256",
+        "id": "slope.glossSharpness",
+        "label": "Gloss Sharpness",
+        "value": "6"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "0 to 1",
+        "id": "slope.glossPhase",
+        "label": "Gloss Phase",
+        "value": "0.25"
+      },
+      {
+        "choices": [],
+        "group": 7,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "slope.glossColor",
+        "label": "Gloss Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 8,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.lustreRelief",
+        "label": "Lustre Relief",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 8,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.reliefAutoZoom",
+        "label": "Auto Zoom Compensation",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 8,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "slope.invertRelief",
+        "label": "Invert Relief",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "0 to 16",
+        "id": "slope.reliefDepth",
+        "label": "Lustre Depth",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "0 to 1",
+        "id": "slope.normalSmooth",
+        "label": "Normal Smoothing",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "1 to 64",
+        "id": "slope.aoRadius",
+        "label": "AO Radius",
+        "value": "8"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "0 to 1",
+        "id": "slope.boundaryGuard",
+        "label": "Boundary Reflection Guard",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "0 to 1",
+        "id": "slope.reliefWaves",
+        "label": "Relief Waves",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "0.03 to 1.5",
+        "id": "slope.waveFrequency",
+        "label": "Wave Frequency",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 8,
+        "hint": "Saved reference zoom: 0 to 16777216, or -1 for an unbound reference.",
+        "id": "slope.reliefZoomReference",
+        "label": "Zoom Reference",
+        "value": "-1"
+      }
+    ],
+    "groups": [
+      {
+        "image": "lighting-0.png",
+        "label": "Slope Shading"
+      },
+      {
+        "image": "lighting-1.png",
+        "label": "Light Direction"
+      },
+      {
+        "image": "lighting-2.png",
+        "label": "Specular"
+      },
+      {
+        "image": "lighting-3.png",
+        "label": "Relief Detail"
+      },
+      {
+        "image": "lighting-4.png",
+        "label": "Lit / Shadow Tint"
+      },
+      {
+        "image": "lighting-5.png",
+        "label": "Tone Mapping"
+      },
+      {
+        "image": "lighting-6.png",
+        "label": "Rim Light"
+      },
+      {
+        "image": "lighting-7.png",
+        "label": "Gloss"
+      },
+      {
+        "image": "lighting-8.png",
+        "label": "Lustre Relief"
+      }
+    ],
+    "title": "Lighting & Relief"
+  },
+  {
+    "actions": [
+      {
+        "group": 2,
+        "label": "Create 8 Stops (Lossy)"
+      },
+      {
+        "group": 3,
+        "label": "Add Stop"
+      },
+      {
+        "group": 3,
+        "label": "Remove Selected Stop"
+      },
+      {
+        "group": 3,
+        "label": "Equal Spacing"
+      },
+      {
+        "group": 3,
+        "label": "Reverse Colors"
+      },
+      {
+        "group": 4,
+        "label": "Apply Palette Preset"
+      },
+      {
+        "group": 5,
+        "label": "Read Color File"
+      },
+      {
+        "group": 5,
+        "label": "Apply Imported Colors"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 to 1e18 iterations per channel cycle.",
+        "id": "palette.cycle0",
+        "label": "Cycle Length (R)",
+        "value": "64"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 to 1e18 iterations per channel cycle.",
+        "id": "palette.cycle1",
+        "label": "Cycle Length (G)",
+        "value": "64"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 to 1e18 iterations per channel cycle.",
+        "id": "palette.cycle2",
+        "label": "Cycle Length (B)",
+        "value": "64"
+      },
+      {
+        "choices": [
+          "Linear",
+          "Square root",
+          "Cube root",
+          "Log",
+          "LogLog",
+          "Smoothstep",
+          "Smootherstep"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.iterationColoring",
+        "label": "Iteration Coloring",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "None",
+          "Normal",
+          "Reversed"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.colorSmoothing",
+        "label": "Color Smoothing",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "RGB",
+          "OKLab",
+          "Linear RGB"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.colorInterpolation",
+        "label": "Color Interpolation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "palette.offsetRatio",
+        "label": "Start Offset",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.1 to 4",
+        "id": "palette.cycleBias",
+        "label": "Cycle Bias",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "Power",
+          "Wave"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.cycleCurve",
+        "label": "Cycle Curve",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.seamless",
+        "label": "Seamless (Mirror)",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.enableGloss",
+        "label": "Palette Gloss",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "palette.glossColor",
+        "label": "Gloss Color",
+        "value": "1, 1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "palette.mandelbrotColor",
+        "label": "Mandelbrot Color",
+        "value": "0, 0, 0, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.bandLineEnabled",
+        "label": "Band Lines",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "1 to 256",
+        "id": "palette.bandLineCount",
+        "label": "Lines per Cycle",
+        "value": "16"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "palette.bandLineWidth",
+        "label": "Line Width",
+        "value": "0.03"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "palette.bandLineOpacity",
+        "label": "Line Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "palette.bandLineSoftness",
+        "label": "Line Softness",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "palette.bandLineColor",
+        "label": "Line Color",
+        "value": "0, 0, 0, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.bandLineGroove",
+        "label": "Recessed Grooves",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.grooveAuto",
+        "label": "Auto Groove",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 5",
+        "id": "palette.grooveDepth",
+        "label": "Groove Depth",
+        "value": "1.5"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 0.5",
+        "id": "palette.grooveWidth",
+        "label": "Groove Width",
+        "value": "0.05"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 Linear, 1 Smoothstep, 2 Smootherstep.",
+        "id": "palette.stopEasing",
+        "label": "Stop Easing",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandSpineAmount",
+        "label": "Spine Amount",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandSpineLength",
+        "label": "Spine Length",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandSpineDensity",
+        "label": "Spine Density",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandBranchAmount",
+        "label": "Branch Amount",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandOrnamentAmount",
+        "label": "Ornament Amount",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandOrnamentSize",
+        "label": "Ornament Size",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandOrnamentDensity",
+        "label": "Ornament Density",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses Band Line color, width and opacity. Independent of Studio and materials.",
+        "id": "palette.bandOrnamentInset",
+        "label": "Ornament Inset",
+        "value": "0.032"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 4",
+        "id": "bandGlow.strength",
+        "label": "Line Glow",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.1 to 32",
+        "id": "bandGlow.width",
+        "label": "Glow Width",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "bandGlow.color",
+        "label": "Glow Color",
+        "value": "1, 1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Apply the selection before editing its color or position.",
+        "id": "palette.selectedStop",
+        "label": "Selected Stop",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Ordered position from 0 up to, but excluding, 1.",
+        "id": "palette.stopPosition",
+        "label": "Stop Position",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "#RRGGBB or R, G, B, A in 0–1.",
+        "id": "palette.stopColor",
+        "label": "Stop Color",
+        "value": "0, 0, 0, 1"
+      },
+      {
+        "choices": [
+          "LongRandom64 [Recommend]",
+          "RandomSmooth [Recommend]",
+          "Classic 1",
+          "Classic 2",
+          "Arctic Aurora",
+          "Azure",
+          "Cinematic",
+          "Crimson Magma",
+          "Deep Space",
+          "Desert",
+          "Electric Dreams",
+          "Flame",
+          "Glossy Berry",
+          "Glossy Cyber",
+          "Glossy Fire",
+          "Glossy Forest",
+          "Glossy Ice",
+          "Glossy Metal",
+          "Glossy Neon",
+          "Glossy Ocean",
+          "Glossy Pastel",
+          "Glossy Sunset",
+          "Long Rainbow 7",
+          "Midnight Neon",
+          "Misty Forest",
+          "Pastel Dream",
+          "Rainbow",
+          "Volcanic Ash",
+          "LongRandom64 2 [DANGER]"
+        ],
+        "group": 4,
+        "hint": "Applies the preset's complete palette settings.",
+        "id": "source.preset",
+        "label": "Palette Preset",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Whole number from 0 to 4294967295 for repeatable generation.",
+        "id": "source.seed",
+        "label": "Seed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 5,
+        "hint": "RFC, RFSP, KFR or KFP. Read first, then apply.",
+        "id": "source.path",
+        "label": "Color Settings File",
+        "value": ""
+      },
+      {
+        "choices": [
+          "Off",
+          "On"
+        ],
+        "group": 5,
+        "hint": "Also imports Gamma, Exposure, Hue, Saturation, Brightness and Contrast.",
+        "id": "source.correction",
+        "label": "Include Color Correction",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "palette-0.png",
+        "label": "Color Cycle"
+      },
+      {
+        "image": "palette-1.png",
+        "label": "Band Line"
+      },
+      {
+        "image": "palette-2.png",
+        "label": "Color Stops"
+      },
+      {
+        "image": "palette-3.png",
+        "label": "Arrange Stops"
+      },
+      {
+        "image": "palette-4.png",
+        "label": "Preset Library"
+      },
+      {
+        "image": "palette-5.png",
+        "label": "Import Colors"
+      }
+    ],
+    "title": "Palette"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 0,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 0,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 1,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 1,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 2,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 2,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 3,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 3,
+        "label": "Move Toward Bottom"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.0.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose an image file. Enable the layer to display it.",
+        "id": "texture.0.path",
+        "label": "Image File",
+        "value": ""
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.0.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.0.blendMode",
+        "label": "Blend Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "texture.0.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "texture.0.periodIterations",
+        "label": "Texture Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.1 to 20",
+        "id": "texture.0.size",
+        "label": "Size",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.0.keepAspect",
+        "label": "Keep Aspect",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 20",
+        "id": "texture.0.scaleU",
+        "label": "Repeat U",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 20",
+        "id": "texture.0.scaleV",
+        "label": "Repeat V",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "texture.0.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "texture.0.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "texture.0.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.1.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose an image file. Enable the layer to display it.",
+        "id": "texture.1.path",
+        "label": "Image File",
+        "value": ""
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.1.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.1.blendMode",
+        "label": "Blend Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "texture.1.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "texture.1.periodIterations",
+        "label": "Texture Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.1 to 20",
+        "id": "texture.1.size",
+        "label": "Size",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.1.keepAspect",
+        "label": "Keep Aspect",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 20",
+        "id": "texture.1.scaleU",
+        "label": "Repeat U",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 20",
+        "id": "texture.1.scaleV",
+        "label": "Repeat V",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "texture.1.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "texture.1.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "texture.1.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.2.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose an image file. Enable the layer to display it.",
+        "id": "texture.2.path",
+        "label": "Image File",
+        "value": ""
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.2.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.2.blendMode",
+        "label": "Blend Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "texture.2.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "texture.2.periodIterations",
+        "label": "Texture Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.1 to 20",
+        "id": "texture.2.size",
+        "label": "Size",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.2.keepAspect",
+        "label": "Keep Aspect",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 20",
+        "id": "texture.2.scaleU",
+        "label": "Repeat U",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 20",
+        "id": "texture.2.scaleV",
+        "label": "Repeat V",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "texture.2.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "texture.2.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "texture.2.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.3.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Choose an image file. Enable the layer to display it.",
+        "id": "texture.3.path",
+        "label": "Image File",
+        "value": ""
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.3.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.3.blendMode",
+        "label": "Blend Mode",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "texture.3.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "texture.3.periodIterations",
+        "label": "Texture Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.1 to 20",
+        "id": "texture.3.size",
+        "label": "Size",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "texture.3.keepAspect",
+        "label": "Keep Aspect",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 20",
+        "id": "texture.3.scaleU",
+        "label": "Repeat U",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 20",
+        "id": "texture.3.scaleV",
+        "label": "Repeat V",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "texture.3.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "texture.3.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "texture.3.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "texture-0.png",
+        "label": "Layer 1 (Bottom)"
+      },
+      {
+        "image": "texture-1.png",
+        "label": "Layer 2"
+      },
+      {
+        "image": "texture-2.png",
+        "label": "Layer 3"
+      },
+      {
+        "image": "texture-3.png",
+        "label": "Layer 4 (Top)"
+      }
+    ],
+    "title": "Textures"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 0,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 0,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 1,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 1,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 2,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 2,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 3,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 3,
+        "label": "Move Toward Bottom"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Stripes",
+          "Checker",
+          "Grid",
+          "Dots",
+          "Diamond",
+          "Honeycomb",
+          "Waves",
+          "Cloud"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.type",
+        "label": "Pattern",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Palette Shift",
+          "Solid Color"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.inkMode",
+        "label": "Ink Mode",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.0.color",
+        "label": "Ink Color",
+        "value": "0, 0, 0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "pattern.0.paletteShift",
+        "label": "Palette Shift",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "pattern.0.sharpness",
+        "label": "Sharpness",
+        "value": "0.5"
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.blendMode",
+        "label": "Blend Mode",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "pattern.0.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "pattern.0.periodIterations",
+        "label": "Pattern Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 200",
+        "id": "pattern.0.scaleU",
+        "label": "Repeat U",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 200",
+        "id": "pattern.0.scaleV",
+        "label": "Repeat V",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "pattern.0.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "pattern.0.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "pattern.0.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.edgeEnabled",
+        "label": "Edge Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.0.edgeColor",
+        "label": "Edge Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-0.5 to 1",
+        "id": "pattern.0.edgeWidth",
+        "label": "Edge Width",
+        "value": "0.15"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "pattern.0.edgeOpacity",
+        "label": "Edge Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.0.edgeRelative",
+        "label": "Relative Edge Width",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Stripes",
+          "Checker",
+          "Grid",
+          "Dots",
+          "Diamond",
+          "Honeycomb",
+          "Waves",
+          "Cloud"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.type",
+        "label": "Pattern",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Palette Shift",
+          "Solid Color"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.inkMode",
+        "label": "Ink Mode",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.1.color",
+        "label": "Ink Color",
+        "value": "0, 0, 0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "pattern.1.paletteShift",
+        "label": "Palette Shift",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "pattern.1.sharpness",
+        "label": "Sharpness",
+        "value": "0.5"
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.blendMode",
+        "label": "Blend Mode",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "pattern.1.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "pattern.1.periodIterations",
+        "label": "Pattern Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 200",
+        "id": "pattern.1.scaleU",
+        "label": "Repeat U",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 200",
+        "id": "pattern.1.scaleV",
+        "label": "Repeat V",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "pattern.1.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "pattern.1.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-2 to 2",
+        "id": "pattern.1.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.edgeEnabled",
+        "label": "Edge Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.1.edgeColor",
+        "label": "Edge Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-0.5 to 1",
+        "id": "pattern.1.edgeWidth",
+        "label": "Edge Width",
+        "value": "0.15"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "pattern.1.edgeOpacity",
+        "label": "Edge Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.1.edgeRelative",
+        "label": "Relative Edge Width",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Stripes",
+          "Checker",
+          "Grid",
+          "Dots",
+          "Diamond",
+          "Honeycomb",
+          "Waves",
+          "Cloud"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.type",
+        "label": "Pattern",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Palette Shift",
+          "Solid Color"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.inkMode",
+        "label": "Ink Mode",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.2.color",
+        "label": "Ink Color",
+        "value": "0, 0, 0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "pattern.2.paletteShift",
+        "label": "Palette Shift",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "pattern.2.sharpness",
+        "label": "Sharpness",
+        "value": "0.5"
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.blendMode",
+        "label": "Blend Mode",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "pattern.2.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "pattern.2.periodIterations",
+        "label": "Pattern Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 200",
+        "id": "pattern.2.scaleU",
+        "label": "Repeat U",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 200",
+        "id": "pattern.2.scaleV",
+        "label": "Repeat V",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "pattern.2.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "pattern.2.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-2 to 2",
+        "id": "pattern.2.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.edgeEnabled",
+        "label": "Edge Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.2.edgeColor",
+        "label": "Edge Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-0.5 to 1",
+        "id": "pattern.2.edgeWidth",
+        "label": "Edge Width",
+        "value": "0.15"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "pattern.2.edgeOpacity",
+        "label": "Edge Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.2.edgeRelative",
+        "label": "Relative Edge Width",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Stripes",
+          "Checker",
+          "Grid",
+          "Dots",
+          "Diamond",
+          "Honeycomb",
+          "Waves",
+          "Cloud"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.type",
+        "label": "Pattern",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Palette Shift",
+          "Solid Color"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.inkMode",
+        "label": "Ink Mode",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.3.color",
+        "label": "Ink Color",
+        "value": "0, 0, 0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "pattern.3.paletteShift",
+        "label": "Palette Shift",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "pattern.3.sharpness",
+        "label": "Sharpness",
+        "value": "0.5"
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [
+          "Multiply",
+          "Overlay",
+          "Replace"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.blendMode",
+        "label": "Blend Mode",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "pattern.3.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "pattern.3.periodIterations",
+        "label": "Pattern Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 200",
+        "id": "pattern.3.scaleU",
+        "label": "Repeat U",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 200",
+        "id": "pattern.3.scaleV",
+        "label": "Repeat V",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "pattern.3.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "pattern.3.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-2 to 2",
+        "id": "pattern.3.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.edgeEnabled",
+        "label": "Edge Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B in 0–1.",
+        "id": "pattern.3.edgeColor",
+        "label": "Edge Color",
+        "value": "1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-0.5 to 1",
+        "id": "pattern.3.edgeWidth",
+        "label": "Edge Width",
+        "value": "0.15"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "pattern.3.edgeOpacity",
+        "label": "Edge Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "pattern.3.edgeRelative",
+        "label": "Relative Edge Width",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "pattern-0.png",
+        "label": "Layer 1 (Bottom)"
+      },
+      {
+        "image": "pattern-1.png",
+        "label": "Layer 2"
+      },
+      {
+        "image": "pattern-2.png",
+        "label": "Layer 3"
+      },
+      {
+        "image": "pattern-3.png",
+        "label": "Layer 4 (Top)"
+      }
+    ],
+    "title": "Patterns"
+  },
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "warp.enabled",
+        "label": "Warp Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Noise",
+          "Texture 1",
+          "Texture 2",
+          "Texture 3",
+          "Texture 4"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "warp.source",
+        "label": "Warp Source",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Cycle x Band",
+          "Cycle x Angle",
+          "Cycle x Screen",
+          "Screen"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "warp.uvMode",
+        "label": "UV Source",
+        "value": "3"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 2",
+        "id": "warp.amount",
+        "label": "Warp Amount",
+        "value": "0.25"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 to 6",
+        "id": "warp.octaves",
+        "label": "Warp Detail",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 200",
+        "id": "warp.scaleU",
+        "label": "Repeat U",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 200",
+        "id": "warp.scaleV",
+        "label": "Repeat V",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Iterations per tile; 0 follows the palette.",
+        "id": "warp.periodIterations",
+        "label": "Warp Period",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "warp.paletteFollow",
+        "label": "Palette Follow",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "warp.scrollU",
+        "label": "Scroll U",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-2 to 2",
+        "id": "warp.scrollV",
+        "label": "Scroll V",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "None",
+          "Single Direction",
+          "Smooth",
+          "Squared"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "stripe.stripeType",
+        "label": "Stripe Type",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Positive iteration interval.",
+        "id": "stripe.firstInterval",
+        "label": "Interval 1",
+        "value": "10"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Positive iteration interval.",
+        "id": "stripe.secondInterval",
+        "label": "Interval 2",
+        "value": "50"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "stripe.opacity",
+        "label": "Opacity",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Signed stripe offset.",
+        "id": "stripe.offset",
+        "label": "Offset",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Signed speed; 0 stops stripe motion.",
+        "id": "stripe.animationSpeed",
+        "label": "Animation Speed",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "warp-0.png",
+        "label": "Domain Warp"
+      },
+      {
+        "image": "warp-1.png",
+        "label": "Stripe"
+      }
+    ],
+    "title": "Warp & Stripe"
+  },
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Brightness curve.",
+        "id": "color.gamma",
+        "label": "Gamma",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 preserves exposure; negative values darken.",
+        "id": "color.exposure",
+        "label": "Exposure",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Hue rotation from -1 to 1 turns; 0 keeps the palette hue.",
+        "id": "color.hue",
+        "label": "Hue",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 keeps saturation; -1 is grayscale.",
+        "id": "color.saturation",
+        "label": "Saturation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Offset added to every color channel.",
+        "id": "color.brightness",
+        "label": "Brightness",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-1 to 0.999",
+        "id": "color.contrast",
+        "label": "Contrast",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "bloom.threshold",
+        "label": "Threshold",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "bloom.radius",
+        "label": "Radius",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "bloom.softness",
+        "label": "Softness",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Bloom strength; 0 disables the halo.",
+        "id": "bloom.intensity",
+        "label": "Intensity",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "bloom.linearAdd",
+        "label": "Linear Light",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "fog.radius",
+        "label": "Radius",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "fog.opacity",
+        "label": "Opacity",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "fog.centerStart",
+        "label": "Center Start",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "fog.centerInvert",
+        "label": "Invert Falloff",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "fog.rimMask",
+        "label": "Rim Mask",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Mask multiplier, 1 to 100.",
+        "id": "fog.rimMaskBoost",
+        "label": "Rim Mask Boost",
+        "value": "20"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Blur radius in pixels relative to 1280 width.",
+        "id": "fog.rimBlur",
+        "label": "Rim Blur",
+        "value": "6"
+      },
+      {
+        "choices": [
+          "Speed",
+          "Appearance"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "fog.blurQuality",
+        "label": "Blur Quality",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "fog.focusAmount",
+        "label": "Focus Amount",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "fog.focusRatio",
+        "label": "Focus Depth",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.01 to 1",
+        "id": "fog.focusRange",
+        "label": "Focus Range",
+        "value": "0.25"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.1 to 4",
+        "id": "fog.focusFalloff",
+        "label": "Focus Falloff",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Blur radius in pixels relative to 1280 width.",
+        "id": "fog.focusBlur",
+        "label": "Focus Blur",
+        "value": "10"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Blurs locally intricate fractal regions. Zero disables it; smooth surfaces stay sharp.",
+        "id": "fog.chaosAmount",
+        "label": "Chaos Amount",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Detail detection radius in pixels at 1280 width. One targets fine structure; larger values include broader structure.",
+        "id": "fog.chaosScale",
+        "label": "Chaos Detail Scale",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Minimum local irregularity to blur. Increase to protect more of the smooth surface.",
+        "id": "fog.chaosThreshold",
+        "label": "Chaos Threshold",
+        "value": "0.35"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Smooth transition from sharp through medium blur to full blur as local irregularity increases.",
+        "id": "fog.chaosTransition",
+        "label": "Chaos Transition",
+        "value": "0.5"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Softens the detected region boundary, in pixels at 1280 width. Detection follows the current zoom and location.",
+        "id": "fog.chaosFeather",
+        "label": "Chaos Feather",
+        "value": "6"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality controls sampling.",
+        "id": "fog.chaosBlur",
+        "label": "Chaos Blur Radius",
+        "value": "4"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Retains a little of the original bright detail over the lens blur. Zero gives a pure circular blur.",
+        "id": "fog.chaosHighlights",
+        "label": "Chaos Highlight Detail",
+        "value": "0.2"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Darkens intricate defocused regions to separate them from smooth foreground surfaces.",
+        "id": "fog.chaosShade",
+        "label": "Chaos Shade",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "finishing-0.png",
+        "label": "Color Correction"
+      },
+      {
+        "image": "finishing-1.png",
+        "label": "Bloom"
+      },
+      {
+        "image": "finishing-2.png",
+        "label": "Fog"
+      },
+      {
+        "image": "finishing-3.png",
+        "label": "Focus Band"
+      },
+      {
+        "image": "finishing-4.png",
+        "label": "Chaos Blur"
+      }
+    ],
+    "title": "Finishing"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 0,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 0,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 1,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 1,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 1,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 2,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 2,
+        "label": "Copy to Next Layer"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Bottom"
+      },
+      {
+        "group": 2,
+        "label": "Move Toward Top"
+      },
+      {
+        "group": 3,
+        "label": "Reset Layer"
+      },
+      {
+        "group": 3,
+        "label": "Move Toward Bottom"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Rain",
+          "Flame",
+          "Embers",
+          "Mist",
+          "Heat Haze",
+          "Ripples",
+          "Flow Light",
+          "Aurora"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.type",
+        "label": "Effect Type",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Normal",
+          "Add",
+          "Screen",
+          "Multiply"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.blend",
+        "label": "Blend",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "Surface",
+          "Exterior",
+          "No Surface",
+          "Bands",
+          "Iteration Edges"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.mask",
+        "label": "Mask",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Raindrops",
+          "Water Streaks"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.rainShape",
+        "label": "Rain Shape",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.1 to 8",
+        "id": "effect.0.dropSize",
+        "label": "Drop Size",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "effect.0.opacity",
+        "label": "Opacity",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.1 to 100",
+        "id": "effect.0.scale",
+        "label": "Surface Scale",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 1",
+        "id": "effect.0.density",
+        "label": "Density",
+        "value": "0.45"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.05 to 2",
+        "id": "effect.0.length",
+        "label": "Shape Length",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0.1 to 10",
+        "id": "effect.0.width",
+        "label": "Shape Width",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 4",
+        "id": "effect.0.distortion",
+        "label": "Surface Depth",
+        "value": "0.3"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 4",
+        "id": "effect.0.glow",
+        "label": "Glow",
+        "value": "0.25"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 0,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.0.syncColorAnimation",
+        "label": "Sync Color Animation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-10 to 10",
+        "id": "effect.0.speed",
+        "label": "Speed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-10 to 10",
+        "id": "effect.0.evolution",
+        "label": "Evolution",
+        "value": "0.4"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "-180 to 180",
+        "id": "effect.0.direction",
+        "label": "Flow Bend",
+        "value": "12"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 65535",
+        "id": "effect.0.seed",
+        "label": "Seed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "1 to 1e+06",
+        "id": "effect.0.period",
+        "label": "Band Period",
+        "value": "80"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.0.color",
+        "label": "Primary Color",
+        "value": "0.64, 0.79, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.0.secondary",
+        "label": "Secondary Color",
+        "value": "1, 0.25, 0.025, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Rain",
+          "Flame",
+          "Embers",
+          "Mist",
+          "Heat Haze",
+          "Ripples",
+          "Flow Light",
+          "Aurora"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.type",
+        "label": "Effect Type",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Normal",
+          "Add",
+          "Screen",
+          "Multiply"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.blend",
+        "label": "Blend",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "Surface",
+          "Exterior",
+          "No Surface",
+          "Bands",
+          "Iteration Edges"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.mask",
+        "label": "Mask",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Raindrops",
+          "Water Streaks"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.rainShape",
+        "label": "Rain Shape",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.1 to 8",
+        "id": "effect.1.dropSize",
+        "label": "Drop Size",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "effect.1.opacity",
+        "label": "Opacity",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.1 to 100",
+        "id": "effect.1.scale",
+        "label": "Surface Scale",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 1",
+        "id": "effect.1.density",
+        "label": "Density",
+        "value": "0.45"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.05 to 2",
+        "id": "effect.1.length",
+        "label": "Shape Length",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0.1 to 10",
+        "id": "effect.1.width",
+        "label": "Shape Width",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 4",
+        "id": "effect.1.distortion",
+        "label": "Surface Depth",
+        "value": "0.3"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 4",
+        "id": "effect.1.glow",
+        "label": "Glow",
+        "value": "0.25"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.1.syncColorAnimation",
+        "label": "Sync Color Animation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-10 to 10",
+        "id": "effect.1.speed",
+        "label": "Speed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-10 to 10",
+        "id": "effect.1.evolution",
+        "label": "Evolution",
+        "value": "0.4"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "-180 to 180",
+        "id": "effect.1.direction",
+        "label": "Flow Bend",
+        "value": "12"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 65535",
+        "id": "effect.1.seed",
+        "label": "Seed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "1 to 1e+06",
+        "id": "effect.1.period",
+        "label": "Band Period",
+        "value": "80"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.1.color",
+        "label": "Primary Color",
+        "value": "0.64, 0.79, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.1.secondary",
+        "label": "Secondary Color",
+        "value": "1, 0.25, 0.025, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Rain",
+          "Flame",
+          "Embers",
+          "Mist",
+          "Heat Haze",
+          "Ripples",
+          "Flow Light",
+          "Aurora"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.type",
+        "label": "Effect Type",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Normal",
+          "Add",
+          "Screen",
+          "Multiply"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.blend",
+        "label": "Blend",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "Surface",
+          "Exterior",
+          "No Surface",
+          "Bands",
+          "Iteration Edges"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.mask",
+        "label": "Mask",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Raindrops",
+          "Water Streaks"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.rainShape",
+        "label": "Rain Shape",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.1 to 8",
+        "id": "effect.2.dropSize",
+        "label": "Drop Size",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "effect.2.opacity",
+        "label": "Opacity",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.1 to 100",
+        "id": "effect.2.scale",
+        "label": "Surface Scale",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 1",
+        "id": "effect.2.density",
+        "label": "Density",
+        "value": "0.45"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.05 to 2",
+        "id": "effect.2.length",
+        "label": "Shape Length",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.1 to 10",
+        "id": "effect.2.width",
+        "label": "Shape Width",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 4",
+        "id": "effect.2.distortion",
+        "label": "Surface Depth",
+        "value": "0.3"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 4",
+        "id": "effect.2.glow",
+        "label": "Glow",
+        "value": "0.25"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.2.syncColorAnimation",
+        "label": "Sync Color Animation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-10 to 10",
+        "id": "effect.2.speed",
+        "label": "Speed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-10 to 10",
+        "id": "effect.2.evolution",
+        "label": "Evolution",
+        "value": "0.4"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-180 to 180",
+        "id": "effect.2.direction",
+        "label": "Flow Bend",
+        "value": "12"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 to 65535",
+        "id": "effect.2.seed",
+        "label": "Seed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "1 to 1e+06",
+        "id": "effect.2.period",
+        "label": "Band Period",
+        "value": "80"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.2.color",
+        "label": "Primary Color",
+        "value": "0.64, 0.79, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.2.secondary",
+        "label": "Secondary Color",
+        "value": "1, 0.25, 0.025, 1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.enabled",
+        "label": "Enabled",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Rain",
+          "Flame",
+          "Embers",
+          "Mist",
+          "Heat Haze",
+          "Ripples",
+          "Flow Light",
+          "Aurora"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.type",
+        "label": "Effect Type",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Normal",
+          "Add",
+          "Screen",
+          "Multiply"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.blend",
+        "label": "Blend",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "Surface",
+          "Exterior",
+          "No Surface",
+          "Bands",
+          "Iteration Edges"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.mask",
+        "label": "Mask",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Raindrops",
+          "Water Streaks"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.rainShape",
+        "label": "Rain Shape",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.1 to 8",
+        "id": "effect.3.dropSize",
+        "label": "Drop Size",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "effect.3.opacity",
+        "label": "Opacity",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.1 to 100",
+        "id": "effect.3.scale",
+        "label": "Surface Scale",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 1",
+        "id": "effect.3.density",
+        "label": "Density",
+        "value": "0.45"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.05 to 2",
+        "id": "effect.3.length",
+        "label": "Shape Length",
+        "value": "0.65"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0.1 to 10",
+        "id": "effect.3.width",
+        "label": "Shape Width",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 4",
+        "id": "effect.3.distortion",
+        "label": "Surface Depth",
+        "value": "0.3"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 4",
+        "id": "effect.3.glow",
+        "label": "Glow",
+        "value": "0.25"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "effect.3.syncColorAnimation",
+        "label": "Sync Color Animation",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-10 to 10",
+        "id": "effect.3.speed",
+        "label": "Speed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-10 to 10",
+        "id": "effect.3.evolution",
+        "label": "Evolution",
+        "value": "0.4"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "-180 to 180",
+        "id": "effect.3.direction",
+        "label": "Flow Bend",
+        "value": "12"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "0 to 65535",
+        "id": "effect.3.seed",
+        "label": "Seed",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "1 to 1e+06",
+        "id": "effect.3.period",
+        "label": "Band Period",
+        "value": "80"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.3.color",
+        "label": "Primary Color",
+        "value": "0.64, 0.79, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Choose a color, enter #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "effect.3.secondary",
+        "label": "Secondary Color",
+        "value": "1, 0.25, 0.025, 1"
+      }
+    ],
+    "groups": [
+      {
+        "image": "effects-0.png",
+        "label": "Layer 1 (Bottom)"
+      },
+      {
+        "image": "effects-1.png",
+        "label": "Layer 2"
+      },
+      {
+        "image": "effects-2.png",
+        "label": "Layer 3"
+      },
+      {
+        "image": "effects-3.png",
+        "label": "Layer 4 (Top)"
+      }
+    ],
+    "title": "Animated Materials"
+  },
+  {
+    "actions": [],
+    "fields": [
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Show the zoom ratio in preview and exported video.",
+        "id": "overlay.visible",
+        "label": "Show Zoom Ratio",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Digits after the decimal point in the zoom ratio: 0 to 9. Default: 6.",
+        "id": "overlay.decimalPlaces",
+        "label": "Decimal Places",
+        "value": "6"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Off preserves the legacy font and placement. Editing a style enables Custom Appearance.",
+        "id": "overlay.custom",
+        "label": "Custom Appearance",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose an anchor and a position with a two-percent margin.",
+        "id": "overlay.anchor",
+        "label": "Alignment",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Horizontal anchor position, 0 to 100 percent of the video width.",
+        "id": "overlay.x",
+        "label": "Position X (%)",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Vertical anchor position, 0 to 100 percent of the video height.",
+        "id": "overlay.y",
+        "label": "Position Y (%)",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Installed font family. Use Choose Font to browse available fonts.",
+        "id": "overlay.family",
+        "label": "Font",
+        "value": "Segoe UI"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Regular, bold, italic, or bold italic.",
+        "id": "overlay.style",
+        "label": "Font Style",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0.5 to 20 percent of video height. Independent of window size and monitor DPI.",
+        "id": "overlay.size",
+        "label": "Font Size (% of height)",
+        "value": "3"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBBAA, #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "overlay.color",
+        "label": "Text Color",
+        "value": "1, 1, 1, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 is transparent; 100 is opaque.",
+        "id": "overlay.colorOpacity",
+        "label": "Text Color Opacity (%)",
+        "value": "100"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Draw a continuous border around each glyph.",
+        "id": "overlay.outline",
+        "label": "Enable Outline",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Outward glyph border, 0 to 25 percent of the font size.",
+        "id": "overlay.outlineWidth",
+        "label": "Outline Width (% of font)",
+        "value": "6"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBBAA, #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "overlay.outlineColor",
+        "label": "Outline Color",
+        "value": "0, 0, 0, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 is transparent; 100 is opaque.",
+        "id": "overlay.outlineOpacity",
+        "label": "Outline Color Opacity (%)",
+        "value": "100"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Draw an offset shadow independently of the outline.",
+        "id": "overlay.shadow",
+        "label": "Enable Shadow",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-100 to 100 percent of the font size.",
+        "id": "overlay.shadowX",
+        "label": "Shadow X (% of font)",
+        "value": "8"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "-100 to 100 percent of the font size.",
+        "id": "overlay.shadowY",
+        "label": "Shadow Y (% of font)",
+        "value": "8"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Choose a color, enter #RRGGBBAA, #RRGGBB, or R, G, B, A in 0–1.",
+        "id": "overlay.shadowColor",
+        "label": "Shadow Color",
+        "value": "0, 0, 0, 1"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "0 is transparent; 100 is opaque.",
+        "id": "overlay.shadowOpacity",
+        "label": "Shadow Color Opacity (%)",
+        "value": "100"
+      }
+    ],
+    "groups": [
+      {
+        "image": "overlay-0.png",
+        "label": ""
+      },
+      {
+        "image": "overlay-1.png",
+        "label": ""
+      },
+      {
+        "image": "overlay-2.png",
+        "label": "Appearance"
+      }
+    ],
+    "title": "Zoom Overlay"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Open Layer List"
+      },
+      {
+        "group": 0,
+        "label": "Move Up"
+      },
+      {
+        "group": 0,
+        "label": "Move Down"
+      },
+      {
+        "group": 0,
+        "label": "Bring to Front"
+      },
+      {
+        "group": 0,
+        "label": "Send to Back"
+      },
+      {
+        "group": 0,
+        "label": "Restore Original Order"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "Off",
+          "On"
+        ],
+        "group": 0,
+        "hint": "Moving a layer enables custom compositing. Disabling restores the original rendering.",
+        "id": "layers.enabled",
+        "label": "Custom Layer Order",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Band Line",
+          "Texture 1",
+          "Texture 2",
+          "Texture 3",
+          "Texture 4",
+          "Pattern 1",
+          "Pattern 2",
+          "Pattern 3",
+          "Pattern 4",
+          "Stripe",
+          "Lighting & Base Material",
+          "Metal",
+          "Cyber Sigilism",
+          "PHONK",
+          "Frost",
+          "Sea",
+          "Print Material",
+          "Material Color & Rim",
+          "Effect 1",
+          "Effect 2",
+          "Effect 3",
+          "Effect 4",
+          "Color Correction",
+          "Fog",
+          "Bloom",
+          "HDR / Tone Mapping",
+          "Print Color Quantization",
+          "VHS Finish",
+          "Monochrome Finish"
+        ],
+        "group": 0,
+        "hint": "Higher layers are applied later.",
+        "id": "layers.selected",
+        "label": "Selected Layer",
+        "value": "1"
+      }
+    ],
+    "groups": [
+      {
+        "image": "layers-0.png",
+        "label": "Layer Order"
+      }
+    ],
+    "title": "Shader Layers"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Choose Image File"
+      },
+      {
+        "group": 0,
+        "label": "Export Image"
+      },
+      {
+        "group": 0,
+        "label": "Cancel Export"
+      },
+      {
+        "group": 1,
+        "label": "Choose Keyframe Folder"
+      },
+      {
+        "group": 1,
+        "label": "Choose Video File"
+      },
+      {
+        "group": 1,
+        "label": "Export Video"
+      },
+      {
+        "group": 1,
+        "label": "Cancel Export"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "PNG or another supported image format. Existing files require confirmation.",
+        "id": "export.imagePath",
+        "label": "Image File",
+        "value": ""
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "Uses existing RFM, RFMZ or PNG keyframes.",
+        "id": "export.keyframes",
+        "label": "Keyframe Folder",
+        "value": ""
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "MP4 for normal video; lossless SDR uses MKV.",
+        "id": "export.videoPath",
+        "label": "Video File",
+        "value": ""
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Base width, 64 to 16384. Clarity scales the image output.",
+        "id": "export.width",
+        "label": "Canvas Width",
+        "value": "512"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Base height, 64 to 16384. Video size comes from its keyframes.",
+        "id": "export.height",
+        "label": "Canvas Height",
+        "value": "288"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "Scales the canvas resolution for both preview and output.",
+        "id": "export.clarity",
+        "label": "Clarity",
+        "value": "1.5"
+      },
+      {
+        "choices": [],
+        "group": 2,
+        "hint": "1 to 8. Computes extra samples and downsamples the output.",
+        "id": "export.ssaa",
+        "label": "Supersampling",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Smooths the final image.",
+        "id": "export.interpolation",
+        "label": "Linear Interpolation",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 2,
+        "hint": "Reduces banding in smooth 8-bit gradients.",
+        "id": "export.dither",
+        "label": "Dither",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "Frames per second; 1 to 1000. Fractional rates are supported.",
+        "id": "export.fps",
+        "label": "Video Frame Rate",
+        "value": "60"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "1 to 1000000. Ignored for lossless output.",
+        "id": "export.bitrate",
+        "label": "Video Bitrate (kbps)",
+        "value": "65535"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 3,
+        "hint": "SDR RGB video in MKV. HDR uses the selected HDR transfer.",
+        "id": "export.lossless",
+        "label": "Lossless Video",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "1 to 8. Improves transitions between saved maps.",
+        "id": "export.keyframeAA",
+        "label": "Keyframe Transition Samples",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 3,
+        "hint": "1 to 8 temporal samples per video frame.",
+        "id": "export.colorAA",
+        "label": "Color Animation Samples",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 4,
+        "hint": "Keeps highlights above white for tone mapping and HDR video.",
+        "id": "export.hdr",
+        "label": "HDR Rendering",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "SDR",
+          "HDR10 (PQ)",
+          "HLG"
+        ],
+        "group": 4,
+        "hint": "SDR, HDR10 (PQ), or HLG. HDR video requires HDR Rendering.",
+        "id": "export.transfer",
+        "label": "Video Transfer",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "100 to 10000. Used by PQ output.",
+        "id": "export.peak",
+        "label": "HDR Peak Brightness (nits)",
+        "value": "1000"
+      },
+      {
+        "choices": [
+          "Clip",
+          "Reinhard",
+          "ACES (Narkowicz fit)",
+          "Filmic",
+          "MFR Shoulder",
+          "MFR Log View",
+          "MFR Linear Clip",
+          "MFR False Color"
+        ],
+        "group": 4,
+        "hint": "Curve used for SDR preview and image output. MFR modes use BT.2020 luminance and preserve source light; enable HDR Rendering. False Color shows -16 to +16 EV.",
+        "id": "export.toneMap",
+        "label": "Tone Mapping",
+        "value": "2"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Exposure adjustment in stops.",
+        "id": "export.exposure",
+        "label": "Exposure",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "MFR display metadata: reference white is 203 nits. Does not change source light. 100 to 10000.",
+        "id": "export.mfrPeak",
+        "label": "MFR Mastering Peak (nits)",
+        "value": "4000"
+      },
+      {
+        "choices": [],
+        "group": 4,
+        "hint": "Linear highlight range before tone mapping.",
+        "id": "export.headroom",
+        "label": "Highlight Headroom",
+        "value": "2"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 5,
+        "hint": "Saves lossless RFMZ maps during keyframe generation.",
+        "id": "export.compress",
+        "label": "Compress Keyframes",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 5,
+        "hint": "Starts video output after keyframe generation completes.",
+        "id": "export.autoVideo",
+        "label": "Create Video After Keyframes",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 5,
+        "hint": "Shows the video while exporting. Turn off to reduce display work; progress and cancellation remain available.",
+        "id": "export.showPreview",
+        "label": "Show Video Export Preview",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 5,
+        "hint": "Reserves the GPU for the video export.",
+        "id": "export.pauseVideo",
+        "label": "Pause Preview During Export",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 5,
+        "hint": "Holds the picture while calculating new keyframes.",
+        "id": "export.pauseKeyframes",
+        "label": "Pause Preview During Generation",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "export-0.png",
+        "label": "Image"
+      },
+      {
+        "image": "export-1.png",
+        "label": "Video"
+      },
+      {
+        "image": "export-2.png",
+        "label": "Resolution & Quality"
+      },
+      {
+        "image": "export-3.png",
+        "label": "Video Encoding"
+      },
+      {
+        "image": "export-4.png",
+        "label": "HDR & Tone Mapping"
+      },
+      {
+        "image": "export-5.png",
+        "label": "Keyframe Output"
+      }
+    ],
+    "title": "Export"
+  },
+  {
+    "actions": [
+      {
+        "group": 0,
+        "label": "Capture Current as A"
+      },
+      {
+        "group": 0,
+        "label": "Toggle Reference / Current"
+      },
+      {
+        "group": 0,
+        "label": "Clear Comparison"
+      }
+    ],
+    "fields": [
+      {
+        "choices": [
+          "Fixed A",
+          "Before Last Edit"
+        ],
+        "group": 0,
+        "hint": "Fixed A is captured manually. Before Last Edit records the start of an appearance edit automatically.",
+        "id": "compare.source",
+        "label": "Reference Source",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Live Preview",
+          "Reference",
+          "Current",
+          "Split Reference / Current"
+        ],
+        "group": 0,
+        "hint": "Space switches reference and current on the canvas. Escape returns to live preview.",
+        "id": "compare.mode",
+        "label": "View",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "0 to 100. Drag the divider or use arrow keys.",
+        "id": "compare.split",
+        "label": "Split Position (%)",
+        "value": "50"
+      },
+      {
+        "choices": [],
+        "group": 0,
+        "hint": "Both looks use this fixed animation time, from 0 to 86400 seconds.",
+        "id": "compare.seconds",
+        "label": "Comparison Time (s)",
+        "value": "0"
+      }
+    ],
+    "groups": [
+      {
+        "image": "comparison-0.png",
+        "label": "Compare Appearance"
+      }
+    ],
+    "title": "A/B Comparison"
+  }
+]

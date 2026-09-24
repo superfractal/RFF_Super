@@ -1,15 +1,20 @@
 //
 // Created by Merutilm on 2025-09-09.
 // Modified by Opus 5 on 2026-08-24, 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "GPCStaticImage2Map.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
 
 #include "SharedDescriptorTemplate.hpp"
 #include "../../vulkan_helper/repo/GlobalSamplerRepo.hpp"
 #include "../../vulkan_helper/util/BufferImageContextUtils.hpp"
 #include "../../vulkan_helper/core/logger.hpp"
-#include "../io/RFFStaticMapBinary.h"
 #include "opencv2/imgproc.hpp"
 
 namespace merutilm::rff2 {
@@ -20,32 +25,33 @@ namespace merutilm::rff2 {
         // bytes out of it as 16-bit BGRA, so anything narrower than that has to be widened first or
         // the copy runs off the end of the picture. Channel order is left as OpenCV lays it out,
         // which is the order the shader's own swizzle expects.
-        bool toColorBGRA16(const cv::Mat &src, cv::Mat &out) {
-            if (src.empty() || src.cols <= 0 || src.rows <= 0 || src.data == nullptr) {
+        bool toColorBGRA16(const cv::Mat &source, cv::Mat &colorImage) {
+            if (source.empty() || source.cols <= 0 || source.rows <= 0 || source.data == nullptr) {
                 return false;
             }
-            cv::Mat wide = src;
-            if (wide.depth() != CV_16U) {
+            cv::Mat sixteenBitImage = source;
+            if (sixteenBitImage.depth() != CV_16U) {
                 // 8-bit levels are stretched over the full 16-bit range rather than left in its
                 // bottom 1/257th, which would come out as a nearly black frame.
-                wide.convertTo(wide, CV_16U, wide.depth() == CV_8U ? 257.0 : 1.0);
+                sixteenBitImage.convertTo(sixteenBitImage, CV_16U,
+                                          sixteenBitImage.depth() == CV_8U ? 257.0 : 1.0);
             }
-            switch (wide.channels()) {
+            switch (sixteenBitImage.channels()) {
                 case 1:
-                    cv::cvtColor(wide, out, cv::COLOR_GRAY2BGRA);
+                    cv::cvtColor(sixteenBitImage, colorImage, cv::COLOR_GRAY2BGRA);
                     break;
                 case 3:
-                    cv::cvtColor(wide, out, cv::COLOR_BGR2BGRA);
+                    cv::cvtColor(sixteenBitImage, colorImage, cv::COLOR_BGR2BGRA);
                     break;
                 case 4:
-                    out = wide;
+                    colorImage = sixteenBitImage;
                     break;
                 default:
                     return false;
             }
             // A copy taken by the row is only whole when the rows sit end to end.
-            if (!out.isContinuous()) {
-                out = out.clone();
+            if (!colorImage.isContinuous()) {
+                colorImage = colorImage.clone();
             }
             return true;
         }
@@ -54,8 +60,8 @@ namespace merutilm::rff2 {
         // behind it and the frame comes out black rather than taking the renderer down.
         vkh::ImageContext uploadColorBGRA16(const vkh::CoreRef core, const vkh::CommandPoolRef commandPool,
                                             const cv::Mat &image) {
-            cv::Mat color;
-            if (!toColorBGRA16(image, color)) {
+            cv::Mat bgraImage;
+            if (!toColorBGRA16(image, bgraImage)) {
                 vkh::logger::w_log(L"ERROR : Cannot read the keyframe image");
                 constexpr std::array<uint16_t, 4> black = {0, 0, 0, 0xFFFF};
                 return vkh::BufferImageContextUtils::imageFromByteColorArray(
@@ -63,9 +69,9 @@ namespace merutilm::rff2 {
                     reinterpret_cast<const std::byte *>(black.data()));
             }
             return vkh::BufferImageContextUtils::imageFromByteColorArray(
-                core, commandPool, VK_FORMAT_R16G16B16A16_UNORM, static_cast<uint32_t>(color.cols),
-                static_cast<uint32_t>(color.rows), 4, 16, false,
-                reinterpret_cast<const std::byte *>(color.data));
+                core, commandPool, VK_FORMAT_R16G16B16A16_UNORM, static_cast<uint32_t>(bgraImage.cols),
+                static_cast<uint32_t>(bgraImage.rows), 4, 16, false,
+                reinterpret_cast<const std::byte *>(bgraImage.data));
         }
     }
 
@@ -84,14 +90,30 @@ namespace merutilm::rff2 {
     void GPCStaticImage2Map::setImages(const cv::Mat &normal, const cv::Mat &zoomed) const {
         // Each image is measured by its own size: the two keyframes are separate files and need not
         // agree, and reading the second one through the first one's dimensions runs past its end.
-        const auto n = uploadColorBGRA16(wc.core, wc.getCommandPool(), normal);
-        const auto z = uploadColorBGRA16(wc.core, wc.getCommandPool(), zoomed);
-        auto &imageDesc = getDescriptor(SET_IMAGES);
-        imageDesc.get<vkh::CombinedImageSampler>(0, BINDING_IMAGES_NORMAL)->setUniqueImageContext(n);
-        imageDesc.get<vkh::CombinedImageSampler>(0, BINDING_IMAGES_ZOOMED)->setUniqueImageContext(z);
-        writeDescriptorMF([&imageDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-            imageDesc.queue(queue, frameIndex, {}, {BINDING_IMAGES_NORMAL, BINDING_IMAGES_ZOOMED});
-        });
+        const auto normalImage = uploadColorBGRA16(wc.core, wc.getCommandPool(), normal);
+        vkh::ImageContext zoomedImage{};
+        bool normalOwned = true;
+        bool zoomedOwned = false;
+        try {
+            zoomedImage = uploadColorBGRA16(wc.core, wc.getCommandPool(), zoomed);
+            zoomedOwned = true;
+            auto &imagesDescriptor = getDescriptor(SET_IMAGES);
+            imagesDescriptor.get<vkh::CombinedImageSampler>(0, BINDING_IMAGES_NORMAL)->setUniqueImageContext(normalImage);
+            normalOwned = false;
+            imagesDescriptor.get<vkh::CombinedImageSampler>(0, BINDING_IMAGES_ZOOMED)->setUniqueImageContext(zoomedImage);
+            zoomedOwned = false;
+            writeDescriptorMF([&imagesDescriptor](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                imagesDescriptor.queue(queue, frameIndex, {}, {BINDING_IMAGES_NORMAL, BINDING_IMAGES_ZOOMED});
+            });
+        } catch (...) {
+            if (normalOwned) {
+                vkh::ImageContext::destroyContext(wc.core, normalImage);
+            }
+            if (zoomedOwned) {
+                vkh::ImageContext::destroyContext(wc.core, zoomedImage);
+            }
+            throw;
+        }
     }
 
     void GPCStaticImage2Map::configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) {

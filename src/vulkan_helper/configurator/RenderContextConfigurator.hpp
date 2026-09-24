@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-22.
+// Modified by GPT-6 on 2026-09-21
 //
 
 #pragma once
@@ -15,7 +16,6 @@ namespace merutilm::vkh {
         CoreRef core;
         SharedImageContextRef sharedImageContext;
         std::function<MultiframeImageContext()> swapchainImageContextGetter;
-        bool firstFrame = true;
 
         template<typename F> requires std::is_invocable_r_v<MultiframeImageContext, F>
         explicit RenderContextConfiguratorAbstract(CoreRef core, SharedImageContextRef sharedImageContext, const F &swapchainImageContextGetter) : core(core), sharedImageContext(sharedImageContext),
@@ -33,10 +33,6 @@ namespace merutilm::vkh {
         RenderContextConfiguratorAbstract &operator=(RenderContextConfiguratorAbstract &&) = delete;
 
         virtual void configure(RenderPassManagerRef rpm) = 0;
-
-        void allFrameInitialized() {
-            firstFrame = false;
-        }
 
     };
 

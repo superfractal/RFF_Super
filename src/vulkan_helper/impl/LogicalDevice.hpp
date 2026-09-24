@@ -1,7 +1,8 @@
 //
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-09, 2026-08-23
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -16,7 +17,6 @@
 
 namespace merutilm::vkh {
     class LogicalDeviceImpl final : public Handler {
-        InstanceRef instance;
         PhysicalDeviceLoaderRef physicalDevice;
         VkDevice logicalDevice = nullptr;
         VkQueue graphicsQueue = nullptr;
@@ -29,7 +29,7 @@ namespace merutilm::vkh {
         std::mutex queueMutex;
 
     public:
-        explicit LogicalDeviceImpl(InstanceRef instance, PhysicalDeviceLoaderRef physicalDevice);
+        explicit LogicalDeviceImpl(PhysicalDeviceLoaderRef physicalDevice);
 
         ~LogicalDeviceImpl() override;
 
@@ -56,9 +56,13 @@ namespace merutilm::vkh {
         // The result code is the only clue these two carry: every other Vulkan call in the
         // codebase discards its VkResult, so a failure that started elsewhere (a rejected
         // allocation, a lost device) first becomes visible here. Name it in the message.
-        void queueSubmit(const uint32_t submitCount, const VkSubmitInfo *pSubmits, const VkFence fence) {
+        VkResult queueSubmitResult(const uint32_t submitCount, const VkSubmitInfo *pSubmits, const VkFence fence) {
             std::scoped_lock lock(queueMutex);
-            if (const VkResult result = allocator::invoke(vkQueueSubmit, graphicsQueue, submitCount, pSubmits, fence);
+            return allocator::invoke(vkQueueSubmit, graphicsQueue, submitCount, pSubmits, fence);
+        }
+
+        void queueSubmit(const uint32_t submitCount, const VkSubmitInfo *pSubmits, const VkFence fence) {
+            if (const VkResult result = queueSubmitResult(submitCount, pSubmits, fence);
                 result != VK_SUCCESS) {
                 throw exception_invalid_state(std::string("Failed to submit queue! ") + string_VkResult(result));
             }
@@ -74,9 +78,9 @@ namespace merutilm::vkh {
             }
         }
 
-        void waitDeviceIdle() {
+        VkResult waitDeviceIdle() {
             std::scoped_lock lock(queueMutex);
-            allocator::invoke(vkDeviceWaitIdle, logicalDevice);
+            return allocator::invoke(vkDeviceWaitIdle, logicalDevice);
         }
 
     private:

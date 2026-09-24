@@ -1,6 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-14.
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
 //
 
 #include "RFFMapCompression.h"

@@ -1,21 +1,19 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-23, 2026-09-01
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <memory>
+#include <iostream>
 #include <string>
-
-#ifndef NDEBUG
-#include <fstream>
-#endif
 
 #include "Application.hpp"
 #include "../io/PreferencesIO.h"
@@ -28,83 +26,97 @@ void registerClasses() {
     using namespace merutilm::rff2;
     using namespace Constants::Win32;
     using namespace merutilm::vkh;
-    WNDCLASSEXW wClass = {};
-    wClass.cbSize = sizeof(WNDCLASSEXW);
-    wClass.hInstance = GetModuleHandleW(nullptr);
+    WNDCLASSEXW baseWindowClass = {};
+    baseWindowClass.cbSize = sizeof(WNDCLASSEXW);
+    baseWindowClass.hInstance = GetModuleHandleW(nullptr);
 
-    WNDCLASSEXW masterWindowClass = wClass;
+    WNDCLASSEXW masterWindowClass = baseWindowClass;
     masterWindowClass.lpszClassName = CLASS_MASTER_WINDOW;
     masterWindowClass.lpfnWndProc = GraphicsContextWindowProc::WinProc;
     // Without a background brush the client area shows whatever the compositor last left there
     // until the first frame is presented, which is the flash of stale pixels as the window opens.
     masterWindowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     masterWindowClass.hIcon = static_cast<HICON>(LoadImageW(
-    GetModuleHandleW(nullptr),
-    MAKEINTRESOURCEW(1),
-    IMAGE_ICON,
-    32, 32,
-    LR_DEFAULTCOLOR));
-    if(!RegisterClassExW(&masterWindowClass)) throw exception_init("Failed to register class : Master Window");
+        GetModuleHandleW(nullptr),
+        MAKEINTRESOURCEW(1),
+        IMAGE_ICON,
+        32, 32,
+        LR_DEFAULTCOLOR));
+    if (!RegisterClassExW(&masterWindowClass)) {
+        throw exception_init("Failed to register class : Master Window");
+    }
 
-    WNDCLASSEXW videoWindowClass = wClass;
+    WNDCLASSEXW videoWindowClass = baseWindowClass;
     videoWindowClass.lpszClassName = CLASS_VIDEO_WINDOW;
     videoWindowClass.lpfnWndProc = VideoWindow::videoWindowProc;
     videoWindowClass.hIcon = masterWindowClass.hIcon;
-    if(!RegisterClassExW(&videoWindowClass)) throw exception_init("Failed to register class : Video Window");
+    if (!RegisterClassExW(&videoWindowClass)) {
+        throw exception_init("Failed to register class : Video Window");
+    }
 
-    WNDCLASSEXW settingsWindowClass = wClass;
+    WNDCLASSEXW settingsWindowClass = baseWindowClass;
     settingsWindowClass.lpszClassName = CLASS_SETTINGS_WINDOW;
     settingsWindowClass.lpfnWndProc = SettingsWindow::settingsWindowProc;
     settingsWindowClass.hbrBackground = CreateSolidBrush(COLOR_LABEL_BACKGROUND);
-    if(!RegisterClassExW(&settingsWindowClass)) throw exception_init("Failed to register class : Settings Window");
+    if (!RegisterClassExW(&settingsWindowClass)) {
+        throw exception_init("Failed to register class : Settings Window");
+    }
 
-    WNDCLASSEXW videoRenderWindowClass = wClass;
+    WNDCLASSEXW videoRenderWindowClass = baseWindowClass;
     videoRenderWindowClass.lpszClassName = CLASS_VIDEO_RENDER_WINDOW;
     videoRenderWindowClass.lpfnWndProc = DefWindowProcW;
-    if (!RegisterClassExW(&videoRenderWindowClass)) throw exception_init("Failed to register class : Video Window");
+    if (!RegisterClassExW(&videoRenderWindowClass)) {
+        throw exception_init("Failed to register class : Video Window");
+    }
 
-    WNDCLASSEXW vkRenderSceneClass = wClass;
+    WNDCLASSEXW vkRenderSceneClass = baseWindowClass;
     vkRenderSceneClass.lpszClassName = CLASS_VK_RENDER_SCENE;
     vkRenderSceneClass.lpfnWndProc = RenderScene::renderSceneProc;
     // The canvas opens on the color the fractal's interior is drawn in, so the first presented frame
     // replaces black with black instead of the window lighting up on its way in.
     vkRenderSceneClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
-    if(!RegisterClassExW(&vkRenderSceneClass)) throw exception_init("Failed to register class : Video Scene");
+    if (!RegisterClassExW(&vkRenderSceneClass)) {
+        throw exception_init("Failed to register class : Video Scene");
+    }
 
-    WNDCLASSEXW boxZoomOverlayClass = wClass;
+    WNDCLASSEXW boxZoomOverlayClass = baseWindowClass;
     boxZoomOverlayClass.lpszClassName = CLASS_BOX_ZOOM_OVERLAY;
     boxZoomOverlayClass.lpfnWndProc = RenderScene::boxZoomOverlayProc;
     // No erase brush and nothing painted here: the overlay is handed its whole picture, position
     // and size at once through UpdateLayeredWindow, so it never sits on screen mid-repaint.
     boxZoomOverlayClass.hbrBackground = nullptr;
-    if(!RegisterClassExW(&boxZoomOverlayClass)) throw exception_init("Failed to register class : Box Zoom Overlay");
-
+    if (!RegisterClassExW(&boxZoomOverlayClass)) {
+        throw exception_init("Failed to register class : Box Zoom Overlay");
+    }
 }
 
 #ifndef NDEBUG
 
-void counter(const std::filesystem::path &path, uint32_t *lines) {
+void countSourceLines(const std::filesystem::path &path, std::uint32_t &lineCount) {
     if (std::filesystem::is_directory(path)) {
-        for (std::filesystem::directory_iterator it(path); it != std::filesystem::directory_iterator(); ++it) {
-            auto child = it->path();
-            counter(child, lines);
+        for (const auto &entry : std::filesystem::directory_iterator(path)) {
+            countSourceLines(entry.path(), lineCount);
         }
-    }else if (path.string().ends_with(".cpp") || path.string().ends_with(".hpp")){
+        return;
+    }
 
-        std::ifstream ifs(path);
-        std::string v;
-        while (std::getline(ifs, v)) {
-            ++*lines;
-        }
+    const std::string pathText = path.string();
+    if (!pathText.ends_with(".cpp") && !pathText.ends_with(".hpp")) {
+        return;
+    }
+
+    std::ifstream source(path);
+    std::string line;
+    while (std::getline(source, line)) {
+        ++lineCount;
     }
 }
 
 void countLines() {
     const std::filesystem::path path("../src");
-    uint32_t lines = 0;
-    counter(path, &lines);
-    std::cout << "Lines : " << lines << std::endl;
-
+    std::uint32_t lineCount = 0;
+    countSourceLines(path, lineCount);
+    std::cout << "Lines : " << lineCount << std::endl;
 }
 #endif
 
@@ -170,7 +182,6 @@ static bool isVulkanGpuFailure(const std::string &message) {
 
 int main() {
     using namespace merutilm::rff2;
-    using namespace merutilm::vkh;
 
     SetUnhandledExceptionFilter(unsupportedCpuFilter);
     std::set_terminate(reportFatalError);

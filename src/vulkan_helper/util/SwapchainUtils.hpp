@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-26.
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -17,7 +18,11 @@ namespace merutilm::vkh {
 
 
         template <typename F> requires std::is_invocable_r_v<void, F, uint32_t>
-        static bool renderFrame(WindowContextRef wc, uint32_t *frameIndex, F&&renderer) {
+        static bool renderFrame(WindowContextRef wc, uint32_t *frameIndex, F&&renderer,
+                                bool *submitted = nullptr) {
+            if (submitted != nullptr) {
+                *submitted = false;
+            }
             if (wc.getWindow().isUnrenderable()) {
                 return false;
             }
@@ -26,12 +31,20 @@ namespace merutilm::vkh {
             if (!acquired.has_value()) {
                 return true;
             }
-            renderer(acquired->index);
+            try {
+                renderer(acquired->index);
+                if (submitted != nullptr) {
+                    *submitted = true;
+                }
+            } catch (...) {
+                wc.getSyncObject().getFence(*frameIndex).markAcquiredImageWithoutSubmission();
+                throw;
+            }
             return end(wc, *frameIndex, acquired->index) || acquired->recreate;
         }
 
         static void changeFrameIndex(CoreRef core, uint32_t *frameIndex) {
-            ++*frameIndex %= core.getPhysicalDevice().getMaxFramesInFlight();
+            *frameIndex = (*frameIndex + 1) % core.getPhysicalDevice().getMaxFramesInFlight();
         }
 
         static std::optional<AcquiredImage> begin(WindowContextRef wc, const uint32_t frameIndex) {
@@ -54,7 +67,6 @@ namespace merutilm::vkh {
                 throw exception_invalid_state(std::string("Failed to acquire swapchain image! ") +
                                               string_VkResult(result));
             }
-            wc.getSyncObject().getFence(frameIndex).reset();
             return AcquiredImage{swapchainImageIndex, result == VK_SUBOPTIMAL_KHR};
         }
 

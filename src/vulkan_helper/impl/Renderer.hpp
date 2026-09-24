@@ -1,7 +1,8 @@
 //
 // Created by Merutilm on 2025-09-08.
 // Modified by Opus 5 on 2026-08-10
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-21, 2026-09-23
 //
 
 #pragma once
@@ -46,12 +47,12 @@ namespace merutilm::vkh {
             }
         };
 
-        bool execute() {
+        bool execute(bool *submitted = nullptr) {
             return SwapchainUtils::renderFrame(wc, &frameIndex, [this](const uint32_t swapchainImageIndex) {
                 recordAndSubmit(swapchainImageIndex,
                                 wc.getSyncObject().getSemaphore(frameIndex).getImageAvailable(),
                                 wc.getSyncObject().getSemaphore(frameIndex).getRenderFinished());
-            });
+            }, submitted);
         }
 
         // Renders one frame without touching the swapchain: no image acquire, no present, and none of
@@ -59,20 +60,20 @@ namespace merutilm::vkh {
         // the previous frame without any way to tell that nothing was rendered.
         void executeOffscreen() {
             SwapchainUtils::changeFrameIndex(wc.core, &frameIndex);
-            wc.getSyncObject().getFence(frameIndex).waitAndReset();
+            wc.getSyncObject().getFence(frameIndex).wait();
             offscreenPass = true;
-            recordAndSubmit(UINT32_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE);
+            try {
+                recordAndSubmit(UINT32_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE);
+            } catch (...) {
+                offscreenPass = false;
+                throw;
+            }
             offscreenPass = false;
         }
 
     private:
         void recordAndSubmit(const uint32_t swapchainImageIndex, const VkSemaphore imageAvailableSemaphore,
                              const VkSemaphore renderFinishedSemaphore) {
-            if (frameIndex == 0) {
-                for (auto &rc: wc.getRenderContexts()) {
-                    rc->getConfigurator()->allFrameInitialized();
-                }
-            }
             DescriptorUpdateQueue queue = DescriptorUpdater::createQueue();
             const VkDevice device = wc.core.getLogicalDevice().getLogicalDeviceHandle();
 
@@ -82,11 +83,11 @@ namespace merutilm::vkh {
 
             DescriptorUpdater::write(device, queue);
 
-            const VkFence fence = wc.getSyncObject().getFence(frameIndex).getFenceHandle();
             beforeCmdRender();
-            ScopedCommandBufferExecutor executor(wc, frameIndex, fence, imageAvailableSemaphore,
+            ScopedCommandBufferExecutor executor(wc, frameIndex, imageAvailableSemaphore,
                                                  renderFinishedSemaphore);
             cmdRender(swapchainImageIndex);
+            executor.finish();
         }
 
         virtual void beforeCmdRender() = 0;

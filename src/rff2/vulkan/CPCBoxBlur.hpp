@@ -1,10 +1,11 @@
 //
 // Created by Merutilm on 2025-08-28.
-//
 // Modified by Opus 5 on 2026-08-19, 2026-08-24
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
 #include "../../vulkan_helper/configurator/ComputePipelineConfigurator.hpp"
 
 namespace merutilm::rff2 {
@@ -30,8 +31,8 @@ namespace merutilm::rff2 {
         // Two axes per box, plus the copy that carries an even number of passes back to the destination.
         static constexpr uint32_t BOX_BLUR_PASS_COUNT = BOX_BLUR_COUNT * 2 + 1;
 
-        explicit CPCBoxBlur(vkh::EngineRef engine, const uint32_t windowContextIndex) : ComputePipelineConfigurator(
-            engine, windowContextIndex, "vk_box_blur.comp") {
+        explicit CPCBoxBlur(vkh::EngineRef engine, const uint32_t windowContextIndex)
+            : ComputePipelineConfigurator(engine, windowContextIndex, "vk_box_blur.comp") {
         }
 
         ~CPCBoxBlur() override = default;
@@ -43,15 +44,12 @@ namespace merutilm::rff2 {
         CPCBoxBlur(CPCBoxBlur &&) = delete;
 
         CPCBoxBlur &operator=(CPCBoxBlur &&) = delete;
-
-
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
 
-        void setGaussianBlur(
-            const vkh::MultiframeImageContext &srcImage, const vkh::MultiframeImageContext &dstImage);
+        void setGaussianBlur(const vkh::MultiframeImageContext &srcImage,
+                             const vkh::MultiframeImageContext &dstImage);
 
-        void cmdGaussianBlur(
-            uint32_t frameIndex, uint32_t blurTargetDescIndex);
+        void cmdGaussianBlur(uint32_t frameIndex, uint32_t blurTargetDescIndex);
 
         void setImages(uint32_t descIndex, const vkh::MultiframeImageContext &srcImage,
                        const vkh::MultiframeImageContext &dstImage) const;

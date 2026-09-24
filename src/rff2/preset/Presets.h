@@ -1,13 +1,15 @@
 //
 // Created by Merutilm on 2025-05-28.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
+// Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 #include <string>
 #include <array>
+#include <cstdint>
 #include "../attr/FrtMPAAttribute.h"
 #include "../attr/FrtReferenceCompAttribute.h"
 #include "../attr/RenderAttribute.h"
@@ -19,14 +21,12 @@
 #include "../attr/ShdBloomAttribute.h"
 #include "../attr/ShaderAttribute.h"
 
-
 namespace merutilm::rff2 {
     struct Preset {
         virtual ~Preset() = default;
 
         virtual std::string getName() const = 0;
     };
-
 
     namespace Presets {
         struct CalculationPreset : public Preset {
@@ -69,7 +69,9 @@ namespace merutilm::rff2 {
 
                 // Stable id used to store/regenerate huge generated palettes as {id, seed} instead
                 // of dumping the color array. -1 = not recipe-eligible (palette saved as raw data).
-                [[nodiscard]] virtual int32_t getPaletteRecipeId() const { return -1; }
+                [[nodiscard]] virtual int32_t getPaletteRecipeId() const {
+                    return -1;
+                }
             };
 
             struct StripePreset : public ShaderPreset {

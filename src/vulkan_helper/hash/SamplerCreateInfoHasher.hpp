@@ -1,10 +1,16 @@
 //
 // Created by Merutilm on 2025-08-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <vulkan/vulkan.h>
+
 #include "BoostHasher.hpp"
-#include "../impl/CombinedImageSampler.hpp"
 
 namespace merutilm::vkh {
 

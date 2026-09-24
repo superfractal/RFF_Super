@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-08-15.
-//
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23
 //
 
 #include "GPCFog.hpp"
@@ -13,7 +13,7 @@
 #include "../constants/VulkanWindowConstants.hpp"
 
 namespace merutilm::rff2 {
-    void GPCFog::updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) {
+    void GPCFog::updateQueue(vkh::DescriptorUpdateQueue &, uint32_t) {
         //no operation
     }
 
@@ -37,6 +37,14 @@ namespace merutilm::rff2 {
         fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_BLUR, fog.focusBlur);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_BLUR_QUALITY,
                               fog.blurQuality == ShdFogBlurQuality::APPEARANCE ? 1.0f : 0.0f);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_AMOUNT, fog.chaosAmount);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_SCALE, fog.chaosScale);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_THRESHOLD, fog.chaosThreshold);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_TRANSITION, fog.chaosTransition);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_FEATHER, fog.chaosFeather);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_BLUR, fog.chaosBlur);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_HIGHLIGHTS, fog.chaosHighlights);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_SHADE, fog.chaosShade);
         fogUBO.update();
     }
 
@@ -60,6 +68,7 @@ namespace merutilm::rff2 {
 
                 break;
             }
+            case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 fogDesc.get<vkh::CombinedImageSampler>(0, BINDING_FOG_CANVAS_ORIGINAL)->setImageContextMF(
                          sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY));
@@ -81,6 +90,7 @@ namespace merutilm::rff2 {
 
 
     void GPCFog::configurePushConstant(vkh::PipelineLayoutManagerRef pipelineLayoutManager) {
+        ShaderLayerControl::configure(layerPush, pipelineLayoutManager);
         //no operation
     }
 

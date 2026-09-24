@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-28.
 // Modified by Opus 5 on 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,9 +10,7 @@
 namespace merutilm::rff2 {
     struct RCCPresentVid final : public vkh::RenderContextConfiguratorAbstract {
         static constexpr uint32_t CONTEXT_INDEX = 5;
-
         static constexpr uint32_t SUBPASS_PRESENT_INDEX = 0;
-
         static constexpr uint32_t PRESENT_ATTACHMENT_INDEX = 0;
 
         using RenderContextConfiguratorAbstract::RenderContextConfiguratorAbstract;
@@ -24,20 +23,26 @@ namespace merutilm::rff2 {
                                                ? vkh::config::SWAPCHAIN_IMAGE_FORMAT
                                                : presentImages.front().imageFormat;
 
-            rpm.appendAttachment(PRESENT_ATTACHMENT_INDEX, {
-                                     .flags = 0,
-                                     .format = presentFormat,
-                                     .samples = VK_SAMPLE_COUNT_1_BIT,
-                                     .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                                     .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-                                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-                                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-                                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                                     .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-                                 }, presentImages);
+            rpm.appendAttachment(
+                PRESENT_ATTACHMENT_INDEX,
+                {
+                    .flags = 0,
+                    .format = presentFormat,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+                },
+                presentImages);
 
             rpm.appendSubpass(SUBPASS_PRESENT_INDEX);
-            rpm.appendReference(PRESENT_ATTACHMENT_INDEX, vkh::RenderPassAttachmentType::COLOR, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            rpm.appendReference(
+                PRESENT_ATTACHMENT_INDEX,
+                vkh::RenderPassAttachmentType::COLOR,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
             rpm.appendDependency({
                 .srcSubpass = SUBPASS_PRESENT_INDEX,

@@ -1,6 +1,8 @@
 //
 // Created by Merutilm on 2025-05-28.
+// Modified by GPT-6 on 2026-09-23
 //
+
 #include "ShdFogPresets.h"
 
 namespace merutilm::rff2 {
@@ -10,7 +12,7 @@ namespace merutilm::rff2 {
     }
 
     ShdFogAttribute ShdFogPresets::Disabled::genFog() const {
-        return ShdFogAttribute{0.0, 0.0};
+        return ShdFogAttribute{.radius = 0.0, .opacity = 0.0};
     }
 
     std::string ShdFogPresets::Low::getName() const {
@@ -18,7 +20,7 @@ namespace merutilm::rff2 {
     }
 
     ShdFogAttribute ShdFogPresets::Low::genFog() const {
-        return ShdFogAttribute{0.1f, 0.2f};
+        return ShdFogAttribute{.radius = 0.1f, .opacity = 0.2f};
     }
 
     std::string ShdFogPresets::Medium::getName() const {
@@ -26,7 +28,7 @@ namespace merutilm::rff2 {
     }
 
     ShdFogAttribute ShdFogPresets::Medium::genFog() const {
-        return ShdFogAttribute{0.1f, 0.5f};
+        return ShdFogAttribute{.radius = 0.1f, .opacity = 0.5f};
     }
 
     std::string ShdFogPresets::High::getName() const {
@@ -34,8 +36,7 @@ namespace merutilm::rff2 {
     }
 
     ShdFogAttribute ShdFogPresets::High::genFog() const {
-        return ShdFogAttribute{0.15f, 0.8f};
-
+        return ShdFogAttribute{.radius = 0.15f, .opacity = 0.8f};
     }
 
     std::string ShdFogPresets::Ultra::getName() const {
@@ -43,6 +44,6 @@ namespace merutilm::rff2 {
     }
 
     ShdFogAttribute ShdFogPresets::Ultra::genFog() const {
-        return ShdFogAttribute{0.15f, 1};
+        return ShdFogAttribute{.radius = 0.15f, .opacity = 1};
     }
 }

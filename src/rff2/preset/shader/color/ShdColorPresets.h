@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-28.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -12,25 +13,28 @@ namespace merutilm::rff2::ShdColorPresets {
 
         [[nodiscard]] ShdColorAttribute genColor() const override;
     };
+
     struct WeakContrast final : public Presets::ShaderPresets::ColorPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdColorAttribute genColor() const override;
     };
+
     struct HighContrast final : public Presets::ShaderPresets::ColorPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdColorAttribute genColor() const override;
     };
+
     struct Dull final : public Presets::ShaderPresets::ColorPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdColorAttribute genColor() const override;
     };
+
     struct Vivid final : public Presets::ShaderPresets::ColorPreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdColorAttribute genColor() const override;
     };
 }
-

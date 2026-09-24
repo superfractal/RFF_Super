@@ -1,9 +1,12 @@
 //
 // Modified by Opus 5 on 2026-08-06, 2026-08-26
 // Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-16, 2026-09-23
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "shader_layer.glsl"
 
 #define DOUBLE_PI 6.2831853071795864
 #define NONE 0
@@ -41,13 +44,10 @@ layout (set = 3, binding = 0) uniform TimeUBO {
     float stripe_phase;
 } time_attr;
 
-layout (location = 0) in vec3 fragColor;
-layout (location = 1) in vec2 fragTexcoord;
-
 layout (location = 0) out vec4 color;
 
 
-double get_iteration(uvec2 iterCoord){
+double get_iteration(uvec2 iterCoord) {
     iterCoord.y = iteration_info_attr.extent.y - 1 - iterCoord.y;
     return iteration_attr.iterations[iterCoord.y * iteration_info_attr.extent.x + iterCoord.x];
 }
@@ -70,20 +70,26 @@ void main() {
     float rat2 = float(mod(iter_curr, stripe_attr.second_interval)) / stripe_attr.second_interval;
 
     switch (stripe_attr.type) {
-        case SINGLE_DIRECTION: {
-                                   black = rat1 * rat2;
-                                   break;
-                               }
-        case SMOOTH: {
-                                   black = pow((sin(rat1 * DOUBLE_PI) + 1) * (sin(rat2 * DOUBLE_PI) + 1) / 4, 2);
-                                   break;
-                               }
-        case SMOOTH_SQUARED: {
-                                   black = pow((sin(rat1 * DOUBLE_PI) + 1) * (sin(rat2 * DOUBLE_PI) + 1) / 4, 4);
-                                   break;
-                               }
-        default: break;
+        case SINGLE_DIRECTION:
+            black = rat1 * rat2;
+            break;
+        case SMOOTH:
+            black = pow((sin(rat1 * DOUBLE_PI) + 1) * (sin(rat2 * DOUBLE_PI) + 1) / 4, 2);
+            break;
+        case SMOOTH_SQUARED:
+            black = pow((sin(rat1 * DOUBLE_PI) + 1) * (sin(rat2 * DOUBLE_PI) + 1) / 4, 4);
+            break;
+        default:
+            break;
     }
 
-    color = vec4((texelFetch(canvas, ivec2(gl_FragCoord.xy), 0).rgb * (1 - black * stripe_attr.opacity)), 1);
+    vec3 base = texelFetch(canvas, ivec2(gl_FragCoord.xy), 0).rgb;
+    if (ordered_layers()) {
+        // IEC 61966-2-1 transfer matches the existing color helpers; see NOTICE.
+        base = mix(base * 12.92, 1.055 * pow(max(base, 0.0), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), base));
+        base *= 1.0 - black * stripe_attr.opacity;
+        color = vec4(mix(base / 12.92, pow(max((base + 0.055) / 1.055, 0.0), vec3(2.4)), step(vec3(0.04045), base)), 1);
+        return;
+    }
+    color = vec4(base * (1 - black * stripe_attr.opacity), 1);
 }

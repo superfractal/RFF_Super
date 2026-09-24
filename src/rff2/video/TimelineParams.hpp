@@ -1,5 +1,8 @@
+//
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-26, 2026-09-01
+// Modified by GPT-6 on 2026-09-08, 2026-09-23
+//
 
 #pragma once
 
@@ -18,12 +21,6 @@ namespace merutilm::rff2 {
         ENUM
     };
 
-    enum class TimelineApplyCost : uint8_t {
-        CHEAP,
-        PALETTE,
-        TEXTURE
-    };
-
     enum class TimelineDirtyMask : uint32_t {
         NONE = 0,
         PALETTE = 1u << 0,
@@ -35,7 +32,8 @@ namespace merutilm::rff2 {
         TEXTURE = 1u << 6,
         PATTERN = 1u << 7,
         WARP = 1u << 8,
-        ALL = (1u << 9) - 1u
+        CAMERA = 1u << 9,
+        ALL = (1u << 10) - 1u
     };
 
     constexpr TimelineDirtyMask operator|(const TimelineDirtyMask a, const TimelineDirtyMask b) {
@@ -65,7 +63,6 @@ namespace merutilm::rff2 {
         const wchar_t *group;
         const wchar_t *name;
         TimelineParamKind kind;
-        TimelineApplyCost cost;
         TimelineDirtyMask dirty;
         float minValue;
         float maxValue;

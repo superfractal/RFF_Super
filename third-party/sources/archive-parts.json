@@ -1,0 +1,228 @@
+{
+  "schema": 1,
+  "archives": [
+    {
+      "file": "mingw-w64-crt-14.0.0.r37.g2bfe61fba-1.src.tar.zst",
+      "sha256": "2eeedd14bf02b8779f9f9f4a3224273cb2c2a8bd22ac95d0f34ffcbecdbb0331",
+      "size": 51645087,
+      "parts": [
+        {
+          "file": "mingw-w64-crt-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part001",
+          "sha256": "fdaa154ea76401ee2c2146908889bdba8392cb6098f83fe6619edf52d5f3d655"
+        },
+        {
+          "file": "mingw-w64-crt-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part002",
+          "sha256": "f8a2a2d3d8ee8dce19a70d949533df46548fb0ac7a13960d1ebd800d76f02419"
+        },
+        {
+          "file": "mingw-w64-crt-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part003",
+          "sha256": "e190418b4e702019d758eb4bac93aeb907b94b389d0e7debbfc4f5414ca20ad5"
+        }
+      ]
+    },
+    {
+      "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst",
+      "sha256": "4448c78d454ead976125e0d859cb73053ee8f0644517fb8292a8ebe451ffc9bb",
+      "size": 102477912,
+      "parts": [
+        {
+          "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst.part001",
+          "sha256": "2c151615fd25a85340970359ac6b84c74011c70e3bc041bfad9c056f64b34bdc"
+        },
+        {
+          "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst.part002",
+          "sha256": "fbdb53aaef4ee527471d78e04d542c4b53b3e4d879468cfc1322b3ef56fad77d"
+        },
+        {
+          "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst.part003",
+          "sha256": "de8601403d5846d242db7e85d321679bd74595c2c492c13e12ad43f049957b22"
+        },
+        {
+          "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst.part004",
+          "sha256": "e5d11e6d7899eabf47ed8385487f69319403a266730d6db897fd989745f21f2c"
+        },
+        {
+          "file": "mingw-w64-gcc-16.1.0-2.src.tar.zst.part005",
+          "sha256": "d21375ebff8746f040845c90f0cfa77f077485c1f5671adeeb65de8fc97675b3"
+        }
+      ]
+    },
+    {
+      "file": "mingw-w64-glm-1.0.3-1.src.tar.zst",
+      "sha256": "994a639b503f3b94ae44af10ae0ab2ef352db361eff254811232dafcaff8483c",
+      "size": 4555863,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-gmp-6.3.0-2.src.tar.zst",
+      "sha256": "f288f944fd9609db220bcf6a8dd0703a5674eeb906ef35eb8485bb8192135994",
+      "size": 2097066,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-headers-14.0.0.r37.g2bfe61fba-1.src.tar.zst",
+      "sha256": "0787b56cee8078520a4f8db95b205facb73c109a8a65ddf3a4d1eefcab7a88b2",
+      "size": 51660003,
+      "parts": [
+        {
+          "file": "mingw-w64-headers-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part001",
+          "sha256": "6c4f9aa33b7f6445f6fad76a30d984832797d959b7eb9ee03332769c7b66bee4"
+        },
+        {
+          "file": "mingw-w64-headers-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part002",
+          "sha256": "abdb048ff7343b703130f1aa1e3781c1748980f800ab404f904aca6b486001e7"
+        },
+        {
+          "file": "mingw-w64-headers-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part003",
+          "sha256": "83359de1c1e0a4274216ce0d29c2c436245d6012fd9b87c8022e63650f42839e"
+        }
+      ]
+    },
+    {
+      "file": "mingw-w64-imath-3.2.2-4.src.tar.zst",
+      "sha256": "459e7f816c3c0877bb9ac95991a4549d440b3adcb9d5c393902e686ce7a20a6a",
+      "size": 532763,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-jbigkit-2.1-5.src.tar.zst",
+      "sha256": "402e264e13ffd10424d3217e83076d9e1e3ab0db16303a33d42a4bd4cda4088b",
+      "size": 443510,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-lerc-4.1.0-1.src.tar.zst",
+      "sha256": "c507ad9437f190ee528c9b53d04bad6effef94d52a2aa84cee93215542a0f28c",
+      "size": 4055174,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-libdeflate-1.25-1.src.tar.zst",
+      "sha256": "53b756599ad6e44975bfe3224475a395e6b1c1c22783ae1216c5553fbfb8d746",
+      "size": 199257,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-libjpeg-turbo-3.1.4.1-2.src.tar.zst",
+      "sha256": "b3863dccfbe5587548dee631bcd71c0bc3504f5bba7bff06944a6d7da969c85e",
+      "size": 2525869,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-libpng-1.6.58-1.src.tar.zst",
+      "sha256": "9e985fc4cef509ec689f982dc6a948e9a8ee5184db25d65e9dd4c21872092348",
+      "size": 1081411,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-libtiff-4.7.1-1.src.tar.zst",
+      "sha256": "7ca1f075da946a3cc4bd6b8d3446ddeb2aff93c5709f7a17896b0a008338f567",
+      "size": 3994514,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-libwebp-1.6.0-1.src.tar.zst",
+      "sha256": "c8c63f98e018a7595d22e8a3e65b7caf83345fed666866a6e67d153b16f48141",
+      "size": 2589761,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-openblas-0.3.33-2.src.tar.zst",
+      "sha256": "34909c5544316bc83adfcedce110fc1bf5d1f83202297f5ebf65bf0549987a3e",
+      "size": 23087039,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst",
+      "sha256": "c9c5581554a306881ab27cb3f1fc3832b47d9150bf322a6ae1224e99123b5d54",
+      "size": 149435938,
+      "parts": [
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part001",
+          "sha256": "18a7d8989a33eb9a62f4b8020bfeaf5835da6160f39254aa956af087098d24d1"
+        },
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part002",
+          "sha256": "15a57df419ca49f6e8254bab433c25198681984230574958b8618b7d7a95a9af"
+        },
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part003",
+          "sha256": "18bf4f63b712bd0d41ab8688b920107401e4abcec8732c40619517262bf061ba"
+        },
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part004",
+          "sha256": "947e6c09bea122a5eedbca79235feb7b26fe924d00d00e9fd6e357998bf4c96d"
+        },
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part005",
+          "sha256": "1365b1abdf48dc40ec6d25b6cd2b4eedb0ddb33ac971fca1948a71ecaa0a1079"
+        },
+        {
+          "file": "mingw-w64-opencv-4.13.0-3.src.tar.zst.part006",
+          "sha256": "641d14662350ef3d8639e4e2aa9ad896848675c71db37c15dae2a3cdd494fd18"
+        }
+      ]
+    },
+    {
+      "file": "mingw-w64-openexr-3.4.11-1.src.tar.zst",
+      "sha256": "f3fddad297d386854cc0d2d79107397b6d47d357b260eabf8bf85e750a9957fc",
+      "size": 24814172,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-openjpeg2-2.5.4-2.src.tar.zst",
+      "sha256": "88be024421b79a557ea9cc94932806f5daddcae5d917895d81ac974df7f38b24",
+      "size": 2156125,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-openjph-0.27.1-1.src.tar.zst",
+      "sha256": "3dabfc148771bd5a95940d60eabf858c8291cf32ac00667ce689c32747906515",
+      "size": 480444,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-tbb-2022.3.0-2.src.tar.zst",
+      "sha256": "0e3a8b1d3af2a102d189a54467de13968172d6bb3bf082bc5d9f503d2da2f608",
+      "size": 6835652,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-winpthreads-14.0.0.r37.g2bfe61fba-1.src.tar.zst",
+      "sha256": "42df29a8de222db31ee2d785191c380d9c8831d31b4f12bd34a4fa71084ceeed",
+      "size": 51700046,
+      "parts": [
+        {
+          "file": "mingw-w64-winpthreads-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part001",
+          "sha256": "c00bf5166e8547032cdb17aeab929e02a1f8a9e2a93043cf7478dc0cdd752d39"
+        },
+        {
+          "file": "mingw-w64-winpthreads-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part002",
+          "sha256": "1ff8329ffc7fcc16c066d85fb12a6d2e0e0490728db61c382fb179c1c28454b5"
+        },
+        {
+          "file": "mingw-w64-winpthreads-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part003",
+          "sha256": "7a0627f8a1a26e4f3cb9db2ef97ed69751e750c6c95a0a8d6344328bd7c0c190"
+        }
+      ]
+    },
+    {
+      "file": "mingw-w64-xz-5.8.3-1.src.tar.zst",
+      "sha256": "a6096b17f7144d3ec4a35f70ebdc0819df0f6ed331f53b04d2a4452d5b66ed55",
+      "size": 1550386,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-zlib-1.3.2-2.src.tar.zst",
+      "sha256": "eef69dea52357e01b272d6fd6dc4d7c0773f71260cb7bcde6047c8c383518db3",
+      "size": 1326375,
+      "parts": []
+    },
+    {
+      "file": "mingw-w64-zstd-1.5.7-2.src.tar.zst",
+      "sha256": "306797282df799e95d550e6d0bb4b0a7b848027b8e13893a24236e060837c217",
+      "size": 2402010,
+      "parts": []
+    }
+  ]
+}

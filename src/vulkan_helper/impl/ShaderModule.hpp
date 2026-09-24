@@ -1,8 +1,12 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-18, 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <string>
+
 #include "../core/vkh_base.hpp"
 #include "../handle/CoreHandler.hpp"
 
@@ -13,7 +17,6 @@ namespace merutilm::vkh {
 
         VkShaderStageFlagBits shaderStage;
         VkShaderModule shaderModule = nullptr;
-        const std::vector<char> code = {};
         const std::string filename;
 
     public:
@@ -33,7 +36,7 @@ namespace merutilm::vkh {
 
         [[nodiscard]] VkShaderModule getShaderModuleHandle() const { return shaderModule; }
 
-        [[nodiscard]] const std::vector<char> &getCode() const { return code; }
+        [[nodiscard]] const std::string &getFilename() const { return filename; }
 
     private:
         [[nodiscard]] static VkShaderStageFlagBits getShaderStage(const std::string &filename);

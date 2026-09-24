@@ -1,13 +1,16 @@
 //
 // Created by Merutilm on 2025-09-09.
 // Modified by Opus 5 on 2026-08-24
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
+
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 #include "opencv2/core/mat.hpp"
 
-namespace merutilm::rff2{
+namespace merutilm::rff2 {
     struct GPCStaticImage2Map final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
         static constexpr uint32_t SET_IMAGES = 0;
         static constexpr uint32_t BINDING_IMAGES_NORMAL = 0;
@@ -19,9 +22,8 @@ namespace merutilm::rff2{
         static constexpr uint32_t SET_BLOOM = 2;
 
         explicit GPCStaticImage2Map(vkh::EngineRef engine, const uint32_t windowContextIndex,
-                                   const uint32_t renderContextIndex,
-                                   const uint32_t
-                                   subpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
+                                   const uint32_t renderContextIndex, const uint32_t subpassIndex)
+            : GeneralPostProcessGraphicsPipelineConfigurator(
             engine, windowContextIndex, renderContextIndex, subpassIndex, "vk_static_2_image.frag") {
         }
 

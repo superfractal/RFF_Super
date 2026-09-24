@@ -2,14 +2,19 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-31
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-23
 //
 
 #pragma once
 #include <cstdint>
 #include <vector>
+
 #include <glm/glm.hpp>
 
+#include "VidAudioAttribute.h"
 #include "VidKeyInterpolation.h"
+#include "VidRotationMode.h"
+#include "VidZoomOverlayAttribute.h"
 
 namespace merutilm::rff2 {
     // One key of an animated parameter. The axis is depth - the keyframe number, which the zoom
@@ -18,8 +23,10 @@ namespace merutilm::rff2 {
     struct VidTimelineKey {
         float depth;
         float value;
+
         // Used by color tracks only; a scalar track leaves it alone.
         glm::vec4 color;
+
         // How this key reaches the next one, the next one being the key below it in depth.
         VidKeyInterpolation out;
     };
@@ -29,6 +36,7 @@ namespace merutilm::rff2 {
         // back and saves out unchanged on a build that does not know what it drives.
         uint16_t targetId;
         bool enabled;
+
         // Held in descending depth, which is playback order.
         std::vector<VidTimelineKey> keys;
     };
@@ -48,12 +56,21 @@ namespace merutilm::rff2 {
         static constexpr float MIN_SPEED = 1e-4f;
 
         // False leaves the export exactly as it is without a timeline: one constant Zoom Speed.
+        VidZoomOverlayAttribute zoomOverlay;
+        VidAudioAttribute audio;
         bool enabled = true;
+
         std::vector<VidTimelineTrack> tracks;
         std::vector<VidTimelineHold> holds;
+
         // Keyframe count the editor's length readout assumes - the top of its depth axis. An export
         // always counts the folder it is given; this exists only so the panel can show a length
         // before a folder is chosen. Held as a float because the axis it stands for is one.
         float estimateKeyframes = 100.0f;
+
+        VidRotationMode rotationMode = VidRotationMode::KEYFRAMES;
+        float rotationPeriod = 10.0f;
+        VidRotationDirection rotationDirection = VidRotationDirection::CLOCKWISE;
+        float rotationStartAngle = 0.0f;
     };
 }

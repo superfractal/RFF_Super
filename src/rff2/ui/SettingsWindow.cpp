@@ -1,11 +1,17 @@
 //
 // Created by Merutilm on 2025-05-13.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-26.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-23, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-26
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23
 //
 
+#include "UiLanguage.hpp"
+#include "NativeDialogs.hpp"
+#include <map>
 #include "SettingsWindow.hpp"
+#include "workspace/SettingsSearchIndex.hpp"
+#include "UiDpi.hpp"
 #include "../constants/Constants.hpp"
 
 #include <algorithm>
@@ -13,7 +19,6 @@
 #include <cwchar>
 #include <optional>
 #include <stdexcept>
-
 
 namespace merutilm::rff2 {
     // Posted once from the constructor: it lands only after the caller finishes registering every
@@ -24,6 +29,7 @@ namespace merutilm::rff2 {
     // caller's whole batch of row changes has been applied. See schedulePanelRepaint.
     static constexpr UINT WM_SW_FLUSH_PAINT = WM_APP + 2;
     static constexpr UINT WM_SW_THEME_CHANGED = WM_APP + 3;
+    static const UINT WM_SW_FIND = RegisterWindowMessageW(FINDMSGSTRINGW);
 
     // Shorthand for the settings-window DPI + shrink scale applied to every design pixel /
     // font size in this file (see Constants::Win32::settingsScaled).
@@ -46,8 +52,8 @@ namespace merutilm::rff2 {
         const int workCenter = workArea.left + (workArea.right - workArea.left) / 2;
         const int masterCenter = masterLeft + (masterRight - masterLeft) / 2;
         const int preferredLeft = masterCenter > workCenter ? masterLeft - outerWidth : rightSide;
-        const int maxLeft = std::max(static_cast<int>(workArea.left),
-                                     static_cast<int>(workArea.right) - outerWidth);
+        const int maxLeft =
+            std::max(static_cast<int>(workArea.left), static_cast<int>(workArea.right) - outerWidth);
         return std::clamp(preferredLeft, static_cast<int>(workArea.left), maxLeft);
     }
 
@@ -63,15 +69,15 @@ namespace merutilm::rff2 {
                                        const int inputHeight) {
         const int availBelow = static_cast<int>(workArea.bottom) - snapTop;
         const int workHeight = static_cast<int>(workArea.bottom - workArea.top);
-        return std::max(inputHeight, std::min(workHeight, std::max(availBelow, masterHeight)) -
-                                     SETTINGS_VERTICAL_MARGIN);
+        return std::max(inputHeight,
+                        std::min(workHeight, std::max(availBelow, masterHeight)) - SETTINGS_VERTICAL_MARGIN);
     }
 
     // Vertical twin of resolveSettingsWindowLeft: prefer the snap edge, and slide up by however far
     // the panel would otherwise hang past the bottom of the work area.
     static int resolveSettingsWindowTop(const int snapTop, const int outerHeight, const RECT &workArea) {
-        const int maxTop = std::max(static_cast<int>(workArea.top),
-                                    static_cast<int>(workArea.bottom) - outerHeight);
+        const int maxTop =
+            std::max(static_cast<int>(workArea.top), static_cast<int>(workArea.bottom) - outerHeight);
         return std::clamp(snapTop, static_cast<int>(workArea.top), maxTop);
     }
 
@@ -101,13 +107,21 @@ namespace merutilm::rff2 {
         return set;
     }
 
-    static HBRUSH windowBackgroundBrush() { return themeBrushes().background; }
+    static HBRUSH windowBackgroundBrush() {
+        return themeBrushes().background;
+    }
 
-    static HBRUSH checkedCheckboxBrush() { return themeBrushes().checked; }
+    static HBRUSH checkedCheckboxBrush() {
+        return themeBrushes().checked;
+    }
 
-    static HBRUSH textFieldBrush() { return themeBrushes().textField; }
+    static HBRUSH textFieldBrush() {
+        return themeBrushes().textField;
+    }
 
-    static HBRUSH disabledControlBrush() { return themeBrushes().disabledControl; }
+    static HBRUSH disabledControlBrush() {
+        return themeBrushes().disabledControl;
+    }
 
     // The panel window itself keeps the native dark class: its scrollbar is the one piece of it
     // comctl32 still draws, and applyDarkWindowFrame recolors the title bar it wears.
@@ -121,11 +135,9 @@ namespace merutilm::rff2 {
                                       const bool enabled = true) {
         FillRect(hdc, &rc, windowBackgroundBrush());
         const HPEN pen = CreatePen(PS_SOLID, 1, settingsTheme().buttonBorder);
-        const HBRUSH brush = CreateSolidBrush(!enabled
-                                                  ? settingsTheme().controlDisabledFace
-                                                  : pressed
-                                                      ? settingsTheme().buttonFacePressed
-                                                      : settingsTheme().buttonFace);
+        const HBRUSH brush = CreateSolidBrush(!enabled  ? settingsTheme().controlDisabledFace
+                                              : pressed ? settingsTheme().buttonFacePressed
+                                                        : settingsTheme().buttonFace);
         const auto oldPen = SelectObject(hdc, pen);
         const auto oldBrush = SelectObject(hdc, brush);
         const int r = sc(Constants::Win32::BUTTON_CORNER_RADIUS);
@@ -148,9 +160,7 @@ namespace merutilm::rff2 {
     // Paints a filled blue accent ("primary") button face into rc.
     static void drawPrimaryButtonFace(const HDC hdc, const RECT &rc, const bool pressed, const bool focused) {
         FillRect(hdc, &rc, windowBackgroundBrush());
-        const COLORREF c = pressed
-                               ? settingsTheme().primaryButtonPressed
-                               : settingsTheme().primaryButton;
+        const COLORREF c = pressed ? settingsTheme().primaryButtonPressed : settingsTheme().primaryButton;
         const HPEN pen = CreatePen(PS_SOLID, 1, c);
         const HBRUSH brush = CreateSolidBrush(c);
         const auto oldPen = SelectObject(hdc, pen);
@@ -190,7 +200,13 @@ namespace merutilm::rff2 {
             const auto oldFont = SelectObject(hdc, font);
             SetBkMode(hdc, TRANSPARENT);
             SetTextColor(hdc, textColor);
-            DrawTextW(hdc, text.c_str(), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            try {
+                UiLanguage::drawText(hdc, text.c_str(), -1, &textRc,
+                                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            } catch (...) {
+                SelectObject(hdc, oldFont);
+                throw;
+            }
             SelectObject(hdc, oldFont);
         }
 
@@ -240,7 +256,7 @@ namespace merutilm::rff2 {
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, settingsTheme().primaryButtonText);
         RECT tr = rc;
-        DrawTextW(hdc, L"i", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        UiLanguage::drawText(hdc, L"i", -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         SelectObject(hdc, oldFont);
     }
 
@@ -383,17 +399,24 @@ namespace merutilm::rff2 {
         : windowWidth(Constants::Win32::settingsWindowScaled(width)),
           labelWidth(labelWidth > 0 ? Constants::Win32::settingsWindowScaled(labelWidth) : labelWidth),
           inputHeight(sc(inputHeight)) {
+        const UiDpi::AwarenessScope awareness(true);
+        const auto dpiScope = scopedDpi(this);
+        windowWidth = sc(width);
+        this->labelWidth = labelWidth > 0 ? sc(labelWidth) : labelWidth;
+        this->inputHeight = sc(inputHeight);
+        topMargin =
+            sc(Constants::Win32::GAP_SETTINGS_INPUT / 3 + Constants::Win32::GAP_SETTINGS_INPUT / 2 + 3);
         // Ensure the trackbar (slider) window class is registered before any
         // SettingsWindow creates one. Idempotent, so calling it per-window is fine.
         static const bool commonControlsReady = [] {
             INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_BAR_CLASSES};
             return InitCommonControlsEx(&icc) != FALSE;
         }();
-        (void) commonControlsReady;
+        (void)commonControlsReady;
         int fractalRight; // RFF render area's right edge, in screen coordinates
         // The panel's owner (see the CreateWindowExW below). Null only if RFF's own window cannot be
         // found, which leaves the panel unowned - the same window it used to be.
-        const HWND master = FindWindowW(Constants::Win32::CLASS_MASTER_WINDOW, nullptr);
+        const HWND master = NativeDialogs::mainWindow();
         {
             RECT cr;
             RECT masterRect;
@@ -439,10 +462,10 @@ namespace merutilm::rff2 {
         // top-level window that merely rides above the window it belongs to. That is what replaces
         // the WS_EX_TOPMOST the panels used to carry, which pinned them over every other program on
         // the desktop.
-        window = CreateWindowExW(Constants::Win32::STYLE_EX_SETTINGS_WINDOW, Constants::Win32::CLASS_SETTINGS_WINDOW,
-                                 name.data(),
-                                 WS_SYSMENU | WS_CLIPCHILDREN, snapLeft, snapTop,
-                                 windowWidth, 0, master, nullptr, nullptr, nullptr);
+        window = CreateWindowExW(Constants::Win32::STYLE_EX_SETTINGS_WINDOW,
+                                 Constants::Win32::CLASS_SETTINGS_WINDOW, UiLanguage::text(name).c_str(),
+                                 WS_SYSMENU | WS_CLIPCHILDREN, snapLeft, snapTop, windowWidth, 0, master,
+                                 nullptr, nullptr, nullptr);
 
         if (window) {
             RECT wr;
@@ -453,8 +476,8 @@ namespace merutilm::rff2 {
             snapLeft = fractalRight - leftFrame;
             const RECT workArea = getWindowWorkArea(window);
             const int outerWidth = static_cast<int>(wr.right - wr.left);
-            const int windowLeft = resolveSettingsWindowLeft(
-                snapLeft, masterLeft, masterRight, outerWidth, workArea);
+            const int windowLeft =
+                resolveSettingsWindowLeft(snapLeft, masterLeft, masterRight, outerWidth, workArea);
             SetWindowPos(window, nullptr, windowLeft, snapTop, 0, 0,
                          SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
         }
@@ -464,24 +487,382 @@ namespace merutilm::rff2 {
         // Stay hidden while the caller registers rows (each one resizes/repaints the window);
         // WM_SW_FINALIZE reveals it once, fully built. See WM_SW_FINALIZE.
         PostMessageW(window, WM_SW_FINALIZE, 0, 0);
-        font = reinterpret_cast<LPARAM>(CreateFontW(sc(Constants::Win32::FONT_SIZE), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                                                    CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS,
-                                                    Constants::Win32::uiFontFace()));
+        font = reinterpret_cast<LPARAM>(
+            CreateFontW(sc(Constants::Win32::FONT_SIZE), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                        DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace()));
         // Bold variant for section header titles / primary button labels.
-        headerFont = reinterpret_cast<LPARAM>(CreateFontW(sc(Constants::Win32::FONT_SIZE_SECTION_HEADER), 0, 0, 0, FW_BOLD,
-                                                          FALSE, FALSE, FALSE,
-                                                          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                                                          CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                                          DEFAULT_PITCH | FF_SWISS,
-                                                          Constants::Win32::uiFontFace()));
+        headerFont = reinterpret_cast<LPARAM>(
+            CreateFontW(sc(Constants::Win32::FONT_SIZE_SECTION_HEADER), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                        DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace()));
         // Small variant for the muted min/max range labels tucked under sliders.
-        smallFont = reinterpret_cast<LPARAM>(CreateFontW(sc(Constants::Win32::FONT_SIZE_RANGE_LABEL), 0, 0, 0, FW_NORMAL,
-                                                         FALSE, FALSE, FALSE,
-                                                         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                                                         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                                         DEFAULT_PITCH | FF_SWISS,
-                                                         Constants::Win32::uiFontFace()));
+        smallFont = reinterpret_cast<LPARAM>(
+            CreateFontW(sc(Constants::Win32::FONT_SIZE_RANGE_LABEL), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                        DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace()));
+    }
+
+    void SettingsWindow::openSearch() {
+        if (IsWindow(findDialog)) {
+            ShowWindow(findDialog, SW_SHOW);
+            SetForegroundWindow(findDialog);
+            return;
+        }
+        findRequest = {};
+        findRequest.lStructSize = sizeof(findRequest);
+        findRequest.hwndOwner = window;
+        findRequest.Flags = FR_DOWN | FR_HIDEUPDOWN | FR_HIDEMATCHCASE | FR_HIDEWHOLEWORD;
+        findRequest.lpstrFindWhat = findText;
+        findRequest.wFindWhatLen = static_cast<WORD>(std::size(findText));
+        findDialog = FindTextW(&findRequest);
+        if (findDialog) {
+            SetWindowTextW(findDialog, UiLanguage::label(L"Find setting"));
+        }
+    }
+
+    bool SettingsWindow::filterSearchMessage(const MSG &message) {
+        const HWND root = GetAncestor(message.hwnd, GA_ROOT);
+        wchar_t className[128]{};
+        GetClassNameW(root, className, static_cast<int>(std::size(className)));
+        HWND panel = root;
+        if (std::wcscmp(className, Constants::Win32::CLASS_SETTINGS_WINDOW) != 0) {
+            panel = GetWindow(root, GW_OWNER);
+            GetClassNameW(panel, className, static_cast<int>(std::size(className)));
+            if (std::wcscmp(className, Constants::Win32::CLASS_SETTINGS_WINDOW) != 0) {
+                return false;
+            }
+        }
+        auto *self = reinterpret_cast<SettingsWindow *>(GetWindowLongPtrW(panel, GWLP_USERDATA));
+        if (!self || !IsWindowEnabled(panel)) {
+            return false;
+        }
+        if (root == self->findDialog) {
+            return IsDialogMessageW(self->findDialog, const_cast<MSG *>(&message)) != FALSE;
+        }
+        if (root != panel || message.message != WM_KEYDOWN || (GetKeyState(VK_MENU) & 0x8000)) {
+            return false;
+        }
+        if (message.wParam == 'F' && (GetKeyState(VK_CONTROL) & 0x8000)) {
+            self->openSearch();
+            return true;
+        }
+        if (message.wParam == VK_F3) {
+            if (self->findText[0]) {
+                self->findNextSetting();
+            } else {
+                self->openSearch();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    void SettingsWindow::findNextSetting() {
+        const auto dpiScope = scopedDpi(this);
+        const auto themeScope = scopedMode(this);
+        const auto query = workspace::SettingsSearchIndex::normalize(findText);
+        if (query.empty()) {
+            return;
+        }
+        if (query != previousQuery) {
+            previousQuery = query;
+            nextSearchEntry = 0;
+        }
+        for (size_t step = 0; step < searchEntries.size(); ++step) {
+            const size_t index = (nextSearchEntry + step) % searchEntries.size();
+            const auto &entry = searchEntries[index];
+            if (rowHidden.contains(entry.label) || !IsWindow(entry.label)) {
+                continue;
+            }
+            bool matches = true;
+            for (size_t start = 0; start < query.size();) {
+                const auto end = query.find(L' ', start);
+                if (entry.terms.find(query.substr(start, end == std::wstring::npos ? end : end - start)) ==
+                    std::wstring::npos) {
+                    matches = false;
+                    break;
+                }
+                if (end == std::wstring::npos) {
+                    break;
+                }
+                start = end + 1;
+            }
+            if (!matches) {
+                continue;
+            }
+            captureSectionLayout();
+            if (const auto top = childOriginalTop.find(entry.label); top != childOriginalTop.end()) {
+                for (size_t section = 0; section < sections.size(); ++section) {
+                    if (sections[section].collapsed && top->second >= sections[section].bodyTop &&
+                        top->second < sections[section].bodyEnd) {
+                        toggleSection(static_cast<int>(section));
+                    }
+                }
+            }
+            RECT bounds{};
+            GetWindowRect(entry.label, &bounds);
+            MapWindowPoints(nullptr, window, reinterpret_cast<POINT *>(&bounds), 2);
+            scrollTo(scrollY + bounds.top - topMargin);
+            HWND focus = nullptr;
+            for (const auto &[row, controls] : rowControlGroups) {
+                if (std::find(controls.begin(), controls.end(), entry.label) == controls.end()) {
+                    continue;
+                }
+                for (auto control : controls) {
+                    if (IsWindowVisible(control) && IsWindowEnabled(control) &&
+                        (GetWindowLongPtrW(control, GWL_STYLE) & WS_TABSTOP)) {
+                        focus = control;
+                        break;
+                    }
+                }
+                break;
+            }
+            if (findDialog) {
+                ShowWindow(findDialog, SW_HIDE);
+            }
+            SetForegroundWindow(window);
+            if (focus) {
+                SetFocus(focus);
+            }
+            nextSearchEntry = (index + 1) % searchEntries.size();
+            return;
+        }
+        MessageBoxW(findDialog ? findDialog : window,
+                    UiLanguage::label(L"No matching setting in this window."),
+                    UiLanguage::label(L"Find setting"), MB_OK | MB_ICONINFORMATION);
+    }
+
+    void SettingsWindow::captureDpiLayout() {
+        if (dpiLayout) {
+            return;
+        }
+        captureSectionLayout();
+        DpiLayout layout;
+        layout.width = windowWidth;
+        layout.labelWidth = labelWidth;
+        layout.inputHeight = inputHeight;
+        layout.topMargin = topMargin;
+        layout.yCursor = yCursor;
+        layout.expandedHeight = expandedContentHeight;
+        layout.scroll = scrollY;
+        layout.lastScroll = scrollY;
+        layout.originalFonts = {reinterpret_cast<HFONT>(font), reinterpret_cast<HFONT>(headerFont),
+                                reinterpret_cast<HFONT>(smallFont)};
+        layout.originalFonts.insert(layout.originalFonts.end(), extraFonts.begin(), extraFonts.end());
+        for (auto handle : layout.originalFonts) {
+            LOGFONTW description{};
+            GetObjectW(handle, sizeof(description), &description);
+            layout.fonts.push_back(description);
+        }
+        for (const auto &section : sections) {
+            layout.sectionBounds.emplace_back(section.bodyTop, section.bodyEnd);
+        }
+        for (const auto child : createdChildWindows) {
+            if (!IsWindow(child) || GetParent(child) != window) {
+                continue;
+            }
+            wchar_t type[64]{};
+            GetClassNameW(child, type, 64);
+            if (!wcscmp(type, TOOLTIPS_CLASSW)) {
+                continue;
+            }
+            DpiLayout::Control control{};
+            GetWindowRect(child, &control.box);
+            MapWindowPoints(nullptr, window, reinterpret_cast<POINT *>(&control.box), 2);
+            const int height = control.box.bottom - control.box.top;
+            control.box.top =
+                childOriginalTop.contains(child) ? childOriginalTop.at(child) : control.box.top + scrollY;
+            control.box.bottom = control.box.top + height;
+            const auto handle = reinterpret_cast<HFONT>(SendMessageW(child, WM_GETFONT, 0, 0));
+            const auto found = std::find(layout.originalFonts.begin(), layout.originalFonts.end(), handle);
+            if (found != layout.originalFonts.end()) {
+                control.fontIndex = int(found - layout.originalFonts.begin());
+            }
+            if (selectionBoxes.contains(child)) {
+                RECT dropped{};
+                SendMessageW(child, CB_GETDROPPEDCONTROLRECT, 0, reinterpret_cast<LPARAM>(&dropped));
+                control.dropHeight = dropped.bottom - dropped.top;
+            }
+            if (trackbarToSlider.contains(child)) {
+                RECT thumb{};
+                SendMessageW(child, TBM_GETTHUMBRECT, 0, reinterpret_cast<LPARAM>(&thumb));
+                control.thumbLength = thumb.bottom - thumb.top;
+            }
+            layout.controls.emplace(child, control);
+        }
+        dpiLayout = std::move(layout);
+    }
+
+    void SettingsWindow::applyDpi(UINT targetDpi, const RECT *suggested) {
+        if (!dpiLayout || targetDpi < 48 || targetDpi > 768 || targetDpi == dpi) {
+            return;
+        }
+        const auto px = [targetDpi](int value) { return MulDiv(value, int(targetDpi), 96); };
+        auto &layout = *dpiLayout;
+        std::vector<HFONT> replacement;
+        for (auto value : layout.fonts) {
+            value.lfHeight = px(value.lfHeight);
+            value.lfWidth = px(value.lfWidth);
+            const auto handle = CreateFontIndirectW(&value);
+            if (!handle) {
+                for (auto created : replacement) {
+                    DeleteObject(created);
+                }
+                return;
+            }
+            replacement.push_back(handle);
+        }
+        if (scrollY != layout.lastScroll) {
+            layout.scroll = double(scrollY) * 96.0 / dpi;
+        }
+        std::vector<HFONT> previous{reinterpret_cast<HFONT>(font), reinterpret_cast<HFONT>(headerFont),
+                                    reinterpret_cast<HFONT>(smallFont)};
+        previous.insert(previous.end(), extraFonts.begin(), extraFonts.end());
+        const bool shown = IsWindowVisible(window);
+        SendMessageW(window, WM_SETREDRAW, FALSE, 0);
+        dpi = targetDpi;
+        const auto dpiScope = scopedDpi(this);
+        font = reinterpret_cast<LPARAM>(replacement[0]);
+        headerFont = reinterpret_cast<LPARAM>(replacement[1]);
+        smallFont = reinterpret_cast<LPARAM>(replacement[2]);
+        extraFonts.assign(replacement.begin() + 3, replacement.end());
+
+        // Re-measure wrapped prose before positioning controls, retaining the canonical 96-DPI geometry.
+        std::map<int, int> flowAdjustments;
+        std::unordered_map<HWND, int> measuredHeights;
+        for (const auto &[child, measure] : dpiHeightMeasures) {
+            const auto found = layout.controls.find(child);
+            if (!IsWindow(child) || found == layout.controls.end()) {
+                continue;
+            }
+            const auto box = found->second.box;
+            const int height = measure(px(box.right) - px(box.left));
+            measuredHeights.emplace(child, height);
+            flowAdjustments[box.bottom] += height - (px(box.bottom) - px(box.top));
+        }
+        const auto flowY = [&](int value) {
+            int result = px(value);
+            for (const auto &[bottom, adjustment] : flowAdjustments) {
+                if (bottom > value) {
+                    break;
+                }
+                result += adjustment;
+            }
+            return result;
+        };
+        windowWidth = px(layout.width);
+        labelWidth = layout.labelWidth > 0 ? px(layout.labelWidth) : layout.labelWidth;
+        inputHeight = px(layout.inputHeight);
+        topMargin = px(layout.topMargin);
+        yCursor = flowY(layout.yCursor);
+        expandedContentHeight = flowY(layout.expandedHeight);
+        contentHeight = expandedContentHeight;
+        for (size_t i = 0; i < sections.size(); ++i) {
+            sections[i].bodyTop = flowY(layout.sectionBounds[i].first);
+            sections[i].bodyEnd = flowY(layout.sectionBounds[i].second);
+            if (sections[i].collapsed) {
+                contentHeight -= sections[i].bodyEnd - sections[i].bodyTop;
+            }
+        }
+        if (!sections.empty() && sections.back().collapsed) {
+            contentHeight += inputHeight + 2 * sc(Constants::Win32::GAP_SETTINGS_INPUT);
+        }
+        for (const auto &[child, control] : layout.controls) {
+            if (!IsWindow(child)) {
+                continue;
+            }
+            if (control.fontIndex >= 0) {
+                SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(replacement[control.fontIndex]),
+                             FALSE);
+            }
+            const int left = px(control.box.left), top = flowY(control.box.top);
+            const int height = measuredHeights.contains(child) ? measuredHeights.at(child)
+                               : control.dropHeight            ? px(control.dropHeight)
+                                                               : px(control.box.bottom) - px(control.box.top);
+            childOriginalTop[child] = top;
+            SetWindowPos(child, nullptr, left, top, px(control.box.right) - left, height,
+                         SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW);
+            if (selectionBoxes.contains(child)) {
+                SendMessageW(child, CB_SHOWDROPDOWN, FALSE, 0);
+                finishSelectionBox(child);
+            }
+            if (control.thumbLength > 0) {
+                SetWindowLongPtrW(child, GWL_STYLE, GetWindowLongPtrW(child, GWL_STYLE) | TBS_FIXEDLENGTH);
+                SendMessageW(child, TBM_SETTHUMBLENGTH, px(control.thumbLength), 0);
+            }
+            wchar_t type[40]{};
+            GetClassNameW(child, type, 40);
+            if (!wcscmp(type, WC_EDITW)) {
+                SendMessageW(child, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(sc(8), sc(8)));
+                layoutEditText(child);
+                applyRoundedRegion(child);
+            }
+        }
+        for (auto &slider : sliders) {
+            const auto position = SendMessageW(slider.trackbar, TBM_GETPOS, 0, 0);
+            measureTrackTravel(slider.trackbar, slider.trackLeft, slider.trackRight);
+            SendMessageW(slider.trackbar, TBM_SETPOS, TRUE, position);
+        }
+        if (suggested) {
+            SetWindowPos(window, nullptr, suggested->left, suggested->top, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        resizeToContent(true);
+        scrollY = std::clamp(int(std::lround(layout.scroll * dpi / 96.0)), 0,
+                             std::max(0, contentHeight - viewportHeight));
+        sectionsCollapsible = sectionsCollapsible || contentHeight > viewportHeight;
+        positionSectionChildren(false);
+        for (const auto &slider : sliders) {
+            if (!slider.minLabel) {
+                continue;
+            }
+            const auto group = rowControlGroups.find(slider.index);
+            if (group == rowControlGroups.end()) {
+                continue;
+            }
+            RECT bar{};
+            GetWindowRect(slider.trackbar, &bar);
+            MapWindowPoints(nullptr, window, reinterpret_cast<POINT *>(&bar), 2);
+            const int width = std::max(1, (slider.trackRight - slider.trackLeft) / 2);
+            for (auto label : group->second) {
+                if (!rangeLabels.contains(label)) {
+                    continue;
+                }
+                RECT box{};
+                GetWindowRect(label, &box);
+                MapWindowPoints(nullptr, window, reinterpret_cast<POINT *>(&box), 2);
+                const int left =
+                    bar.left + (label == slider.minLabel ? slider.trackLeft : slider.trackRight - width);
+                SetWindowPos(label, nullptr, left, box.top, width, box.bottom - box.top,
+                             SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW);
+            }
+        }
+        for (const auto &section : sections) {
+            ShowWindow(section.arrow, sectionsCollapsible ? SW_SHOWNA : SW_HIDE);
+        }
+        for (auto child : createdChildWindows) {
+            wchar_t type[64]{};
+            GetClassNameW(child, type, 64);
+            if (!wcscmp(type, TOOLTIPS_CLASSW)) {
+                SendMessageW(child, TTM_POP, 0, 0);
+                SendMessageW(child, WM_SETFONT, font, FALSE);
+                SendMessageW(child, TTM_SETMAXTIPWIDTH, 0, sc(400));
+            }
+        }
+        refreshScrollInfo();
+        layout.lastScroll = scrollY;
+        SendMessageW(window, WM_SETREDRAW, TRUE, 0);
+        if (!shown) {
+            ShowWindow(window, SW_HIDE);
+        }
+        for (auto handle : previous) {
+            if (std::find(layout.originalFonts.begin(), layout.originalFonts.end(), handle) ==
+                layout.originalFonts.end()) {
+                DeleteObject(handle);
+            }
+        }
+        RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
     }
 
     SettingsWindow::~SettingsWindow() {
@@ -500,6 +881,7 @@ namespace merutilm::rff2 {
         darkOverride = dark;
         // The frame, the control classes and the tooltips were dressed under the View menu's flag.
         const ScopedSettingsMode themeScope = scopedMode(this);
+        const auto dpiScope = scopedDpi(this);
         refreshTheme();
     }
 
@@ -516,6 +898,7 @@ namespace merutilm::rff2 {
     }
 
     void SettingsWindow::refreshTheme() const {
+        const auto dpiScope = scopedDpi(this);
         applyNativeSettingsWindowTheme(window);
         wchar_t className[64] = {};
         for (const HWND child : createdChildWindows) {
@@ -529,10 +912,8 @@ namespace merutilm::rff2 {
                 SendMessageW(child, TTM_SETTIPTEXTCOLOR, settingsTheme().tooltipText, 0);
             }
         }
-        RedrawWindow(window, nullptr, nullptr,
-                     RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
     }
-
 
     int SettingsWindow::getFixedNameWidth() const {
         if (labelWidth > 0) {
@@ -582,12 +963,13 @@ namespace merutilm::rff2 {
         }
 
         RECT rect = {0, 0, windowWidth, viewportHeight};
-        AdjustWindowRectEx(&rect, Constants::Win32::STYLE_SETTINGS_WINDOW, FALSE,
-                           Constants::Win32::STYLE_EX_SETTINGS_WINDOW);
+        const UINT nativeDpi = UiDpi::forWindow(window);
+        UiDpi::adjustWindowRect(rect, Constants::Win32::STYLE_SETTINGS_WINDOW,
+                                Constants::Win32::STYLE_EX_SETTINGS_WINDOW, nativeDpi);
         int outerW = rect.right - rect.left;
         const int outerH = rect.bottom - rect.top;
         if (needScroll) {
-            outerW += GetSystemMetrics(SM_CXVSCROLL);
+            outerW += UiDpi::metric(SM_CXVSCROLL, nativeDpi);
         }
 
         const UINT flags = SWP_NOZORDER | (needScroll != hasScroll ? SWP_FRAMECHANGED : 0);
@@ -681,8 +1063,7 @@ namespace merutilm::rff2 {
                 // slide the region below the header up, then shrink the window.
                 for (const HWND child : createdChildWindows) {
                     const auto it = childOriginalTop.find(child);
-                    if (it != childOriginalTop.end() && it->second >= cs.bodyTop &&
-                        it->second < cs.bodyEnd) {
+                    if (it != childOriginalTop.end() && it->second >= cs.bodyTop && it->second < cs.bodyEnd) {
                         ShowWindow(child, SW_HIDE);
                     }
                 }
@@ -808,8 +1189,8 @@ namespace merutilm::rff2 {
             // to drag hidden children along, which is why this only bit on the path that has to
             // move the scroll offset.
             hdwp = DeferWindowPos(hdwp, child, nullptr, p.x, target, 0, 0,
-                                  (wantVisible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW) |
-                                  SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                                  (wantVisible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW) | SWP_NOSIZE |
+                                      SWP_NOZORDER | SWP_NOACTIVATE);
         }
         if (hdwp) {
             EndDeferWindowPos(hdwp);
@@ -897,8 +1278,8 @@ namespace merutilm::rff2 {
             bands[index].bottom = std::max(bands[index].bottom, r.bottom);
         }
 
-        const HPEN pen = CreatePen(PS_SOLID, sc(Constants::Win32::SECTION_FRAME_THICKNESS),
-                                   settingsTheme().sectionFrame);
+        const HPEN pen =
+            CreatePen(PS_SOLID, sc(Constants::Win32::SECTION_FRAME_THICKNESS), settingsTheme().sectionFrame);
         const auto previousPen = SelectObject(hdc, pen);
         const auto previousBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
         for (size_t i = 0; i < sections.size(); ++i) {
@@ -994,13 +1375,12 @@ namespace merutilm::rff2 {
         if (id < Constants::Win32::ID_OPTIONS || id >= Constants::Win32::ID_SECTION_TOGGLE) {
             return -1;
         }
-        return id - Constants::Win32::ID_OPTIONS & 0x007f;
+        return (id - Constants::Win32::ID_OPTIONS) & Constants::Win32::ID_OPTIONS_INDEX_MASK;
     }
 
     bool SettingsWindow::isCheckbox(const HWND wnd) {
         return GetDlgCtrlID(wnd) & Constants::Win32::ID_OPTIONS_CHECKBOX_FLAG;
     }
-
 
     int SettingsWindow::getRadioIndex(const HWND wnd) {
         const int offset = GetDlgCtrlID(wnd) - Constants::Win32::ID_OPTIONS;
@@ -1051,21 +1431,21 @@ namespace merutilm::rff2 {
     }
 
     HFONT SettingsWindow::createExtraFont(const int fontSize, const bool bold) {
-        const HFONT f = CreateFontW(sc(fontSize), 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
-                                    DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                    CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
+        const HFONT f =
+            CreateFontW(sc(fontSize), 0, 0, 0, bold ? FW_BOLD : FW_NORMAL, FALSE, FALSE, FALSE,
+                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                        DEFAULT_PITCH | FF_SWISS, Constants::Win32::uiFontFace());
         extraFonts.push_back(f);
         return f;
     }
 
     HWND SettingsWindow::createLabel(const std::wstring &settingsName, const std::wstring &descriptionTitle,
-                                     const std::wstring &descriptionDetail, const int nw, const HFONT labelFont) {
+                                     const std::wstring &descriptionDetail, const int nw,
+                                     const HFONT labelFont) {
         const int pad = sc(Constants::Win32::SETTINGS_LABEL_LEFT_PADDING);
-        const HWND text = CreateWindowExW(0, WC_STATICW, settingsName.data(),
-                                          Constants::Win32::STYLE_LABEL, pad,
-                                          getYOffset(), nw - pad,
-                                          inputHeight, window, nullptr,
-                                          GetModuleHandleW(nullptr), nullptr);
+        const HWND text = CreateWindowExW(0, WC_STATICW, UiLanguage::text(settingsName).c_str(),
+                                          Constants::Win32::STYLE_LABEL, pad, getYOffset(), nw - pad,
+                                          inputHeight, window, nullptr, GetModuleHandleW(nullptr), nullptr);
         // A static with no font of its own falls back to the stock SYSTEM_FONT, a raster face that
         // matches nothing else in the panel: every row label was drawn in it while its own value
         // field, the section heading above it and the radio labels beside it were all in the window
@@ -1074,17 +1454,16 @@ namespace merutilm::rff2 {
                      labelFont ? reinterpret_cast<WPARAM>(labelFont) : static_cast<WPARAM>(font), TRUE);
         subclassLabel(text);
         const HWND tooltip = CreateWindowExW(Constants::Win32::STYLE_EX_TOOLTIP, TOOLTIPS_CLASSW, nullptr,
-                                            Constants::Win32::STYLE_TOOLTIP,
-                                            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr,
-                                            nullptr, nullptr);
-        const auto str = descriptionDetail.data();
+                                             Constants::Win32::STYLE_TOOLTIP, CW_USEDEFAULT, CW_USEDEFAULT,
+                                             CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr, nullptr, nullptr);
+        const auto str = UiLanguage::label(descriptionDetail.c_str());
         TTTOOLINFOW toolInfo = {};
-        toolInfo.cbSize = 6 > SendMessage(tooltip, CCM_GETVERSION, 0, 0) ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW); // WTF?
+        toolInfo.cbSize =
+            6 > SendMessage(tooltip, CCM_GETVERSION, 0, 0) ? TTTOOLINFOW_V2_SIZE : sizeof(TOOLINFOW); // WTF?
         toolInfo.hwnd = text;
         toolInfo.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
         toolInfo.uId = reinterpret_cast<UINT_PTR>(text);
         toolInfo.lpszText = const_cast<LPWSTR>(str);
-
 
         SendMessageW(tooltip, TTM_SETMAXTIPWIDTH, 0, windowWidth);
         SendMessageW(tooltip, TTM_SETTIPBKCOLOR, settingsTheme().tooltipBackground, 0);
@@ -1095,10 +1474,14 @@ namespace merutilm::rff2 {
 
         createdChildWindows.push_back(tooltip);
         createdChildWindows.push_back(text);
+        searchEntries.push_back({text, workspace::SettingsSearchIndex::normalize(
+                                           settingsName + L" " + UiLanguage::text(settingsName) + L" " +
+                                           descriptionDetail + L" " + UiLanguage::text(descriptionDetail))});
         return text;
     }
 
     void SettingsWindow::registerRowControls(const int index, std::vector<HWND> &&controls) {
+        const auto dpiScope = scopedDpi(this);
         auto &group = rowControlGroups[index];
         for (const HWND control : controls) {
             if (control != nullptr) {
@@ -1106,8 +1489,6 @@ namespace merutilm::rff2 {
             }
         }
     }
-
-
 
     // Everything WM_DRAWITEM paints, into dis->hDC. The caller has that pointed at an off-screen
     // bitmap, so none of the steps below - the wipe to the panel color, the face, the label -
@@ -1128,20 +1509,22 @@ namespace merutilm::rff2 {
             }
             const RECT rc = dis->rcItem;
             const bool highlighted = (dis->itemState & ODS_SELECTED) != 0;
-            const HBRUSH face = CreateSolidBrush(highlighted
-                                                     ? settingsTheme().radioSelectedBackground
-                                                     : settingsTheme().textFieldBackground);
+            const HBRUSH face = CreateSolidBrush(highlighted ? settingsTheme().radioSelectedBackground
+                                                             : settingsTheme().textFieldBackground);
             FillRect(dis->hDC, &rc, face);
             DeleteObject(face);
             if (dis->itemID != static_cast<UINT>(-1)) {
-                const int len = static_cast<int>(SendMessageW(dis->hwndItem, CB_GETLBTEXTLEN, dis->itemID, 0));
+                const int len =
+                    static_cast<int>(SendMessageW(dis->hwndItem, CB_GETLBTEXTLEN, dis->itemID, 0));
                 std::wstring text(std::max(len, 0) + 1, L'\0');
                 SendMessageW(dis->hwndItem, CB_GETLBTEXT, dis->itemID, reinterpret_cast<LPARAM>(text.data()));
                 RECT textRc = {rc.left + sc(10), rc.top, rc.right - sc(10), rc.bottom};
                 const auto oldFont = SelectObject(dis->hDC, reinterpret_cast<HFONT>(wnd.font));
                 SetBkMode(dis->hDC, TRANSPARENT);
-                SetTextColor(dis->hDC, settingsTheme().text);
-                DrawTextW(dis->hDC, text.c_str(), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                SetTextColor(dis->hDC,
+                             highlighted ? settingsTheme().radioSelectedText : settingsTheme().text);
+                UiLanguage::drawText(dis->hDC, text.c_str(), -1, &textRc,
+                                     DT_LEFT | DT_VCENTER | DT_SINGLELINE);
                 SelectObject(dis->hDC, oldFont);
             }
             return true;
@@ -1167,8 +1550,8 @@ namespace merutilm::rff2 {
             const bool enabled = IsWindowEnabled(dis->hwndItem);
 
             // Soft rounded near-white face (matches the plain push buttons).
-            drawRoundedButtonFace(dis->hDC, rc, pressed && enabled,
-                                  (dis->itemState & ODS_FOCUS) != 0, enabled);
+            drawRoundedButtonFace(dis->hDC, rc, pressed && enabled, (dis->itemState & ODS_FOCUS) != 0,
+                                  enabled);
 
             // Inner content rect (shifted 1px when pressed, like a real button). The inset is
             // scaled: a fixed 4px kept the same size as the row grew with DPI, so the swatch
@@ -1185,7 +1568,8 @@ namespace merutilm::rff2 {
             const int swatchInset = (swatchSlotSide - side) / 2;
             RECT sr = {content.left + swatchInset, content.top + swatchInset,
                        content.left + swatchInset + side, content.top + swatchInset + side};
-            const HBRUSH fill = CreateSolidBrush(enabled ? it->second() : settingsTheme().controlDisabledFace);
+            const HBRUSH fill =
+                CreateSolidBrush(enabled ? it->second() : settingsTheme().controlDisabledFace);
             FillRect(dis->hDC, &sr, fill);
             DeleteObject(fill);
             FrameRect(dis->hDC, &sr, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
@@ -1194,12 +1578,12 @@ namespace merutilm::rff2 {
             const int len = GetWindowTextLengthW(dis->hwndItem) + 1;
             std::wstring text(len, L'\0');
             GetWindowTextW(dis->hwndItem, text.data(), len);
-            RECT textRc = {content.left + swatchSlotSide + sc(Constants::Win32::GAP_SETTINGS_COLOR_SWATCH), content.top,
-                           content.right, content.bottom};
+            RECT textRc = {content.left + swatchSlotSide + sc(Constants::Win32::GAP_SETTINGS_COLOR_SWATCH),
+                           content.top, content.right, content.bottom};
             const auto oldFont = SelectObject(dis->hDC, reinterpret_cast<HFONT>(wnd.font));
             SetBkMode(dis->hDC, TRANSPARENT);
             SetTextColor(dis->hDC, enabled ? settingsTheme().text : settingsTheme().textDisabled);
-            DrawTextW(dis->hDC, text.c_str(), -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            UiLanguage::drawText(dis->hDC, text.c_str(), -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(dis->hDC, oldFont);
             return true;
         }
@@ -1219,13 +1603,12 @@ namespace merutilm::rff2 {
             // Rounded face, like every other control. A checked-but-disabled box is filled
             // grey and keeps the white tick: drawing a grey tick on the near-white disabled
             // face left it invisible.
-            const COLORREF face = !checked
-                                      ? enabled
-                                            ? settingsTheme().textFieldBackground
-                                            : settingsTheme().controlDisabledFace
-                                      : enabled
-                                            ? settingsTheme().checkboxChecked
-                                            : settingsTheme().checkboxDisabledChecked;
+            COLORREF face;
+            if (checked) {
+                face = enabled ? settingsTheme().checkboxChecked : settingsTheme().checkboxDisabledChecked;
+            } else {
+                face = enabled ? settingsTheme().textFieldBackground : settingsTheme().controlDisabledFace;
+            }
             const HPEN boxPen = CreatePen(PS_SOLID, 1, settingsTheme().checkboxBorder);
             const HBRUSH boxBrush = CreateSolidBrush(face);
             const auto oldBoxPen = SelectObject(dis->hDC, boxPen);
@@ -1238,8 +1621,7 @@ namespace merutilm::rff2 {
             // Checkmark. The stroke is derived from the box so it keeps its weight as the
             // box grows with DPI; a fixed 2px left the tick hairline on a large box.
             if (checked) {
-                const HPEN pen = CreatePen(PS_SOLID, std::max(1, w * 2 / 15),
-                                            settingsTheme().checkboxMark);
+                const HPEN pen = CreatePen(PS_SOLID, std::max(1, w * 2 / 15), settingsTheme().checkboxMark);
                 const auto oldPen = SelectObject(dis->hDC, pen);
                 POINT pts[3] = {
                     {rc.left + w * 25 / 100, rc.top + h * 52 / 100},
@@ -1283,7 +1665,8 @@ namespace merutilm::rff2 {
                 const auto oldRowPen = SelectObject(dis->hDC, rowPen);
                 const auto oldRowBrush = SelectObject(dis->hDC, rowBrush);
                 RoundRect(dis->hDC, radioRc.left, radioRc.top, radioRc.right, radioRc.bottom,
-                          sc(Constants::Win32::BUTTON_CORNER_RADIUS), sc(Constants::Win32::BUTTON_CORNER_RADIUS));
+                          sc(Constants::Win32::BUTTON_CORNER_RADIUS),
+                          sc(Constants::Win32::BUTTON_CORNER_RADIUS));
                 SelectObject(dis->hDC, oldRowPen);
                 SelectObject(dis->hDC, oldRowBrush);
                 DeleteObject(rowPen);
@@ -1293,7 +1676,8 @@ namespace merutilm::rff2 {
                 const auto oldFocusPen = SelectObject(dis->hDC, focusPen);
                 const auto oldFocusBrush = SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
                 RoundRect(dis->hDC, radioRc.left, radioRc.top, radioRc.right, radioRc.bottom,
-                          sc(Constants::Win32::BUTTON_CORNER_RADIUS), sc(Constants::Win32::BUTTON_CORNER_RADIUS));
+                          sc(Constants::Win32::BUTTON_CORNER_RADIUS),
+                          sc(Constants::Win32::BUTTON_CORNER_RADIUS));
                 SelectObject(dis->hDC, oldFocusBrush);
                 SelectObject(dis->hDC, oldFocusPen);
                 DeleteObject(focusPen);
@@ -1313,8 +1697,7 @@ namespace merutilm::rff2 {
                 // than asked for and hangs up-left of the ring; outlining it with a pen in
                 // its own color paints that edge back and lands the dot dead center.
                 const int inset = d / 4;
-                const HPEN dotPen = CreatePen(PS_SOLID, 1,
-                                              settingsTheme().checkboxChecked);
+                const HPEN dotPen = CreatePen(PS_SOLID, 1, settingsTheme().checkboxChecked);
                 const auto oldDotPen = SelectObject(dis->hDC, dotPen);
                 SelectObject(dis->hDC, checkedCheckboxBrush());
                 Ellipse(dis->hDC, left + inset, top + inset, left + d - inset, top + d - inset);
@@ -1328,22 +1711,21 @@ namespace merutilm::rff2 {
             const int previewLeft = rc.left + (rc.right - rc.left) * 42 / 100;
 
             // Label text to the right of the circle.
-            RECT textRc = {left + d + sc(8), rc.top,
-                           radioRc.right - sc(4),
-                           rc.bottom};
+            RECT textRc = {left + d + sc(8), rc.top, radioRc.right - sc(4), rc.bottom};
             const auto oldFont = SelectObject(dis->hDC, reinterpret_cast<HFONT>(wnd.font));
             SetBkMode(dis->hDC, TRANSPARENT);
-            SetTextColor(dis->hDC, enabled ? settingsTheme().text : settingsTheme().textDisabled);
-            DrawTextW(dis->hDC, text.c_str(), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            SetTextColor(dis->hDC, !enabled   ? settingsTheme().textDisabled
+                                   : selected ? settingsTheme().radioSelectedText
+                                              : settingsTheme().text);
+            UiLanguage::drawText(dis->hDC, text.c_str(), -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             SelectObject(dis->hDC, oldFont);
 
             if (hasPreview) {
                 RECT pr = {previewLeft, rc.top + 2, rc.right - 1, rc.bottom - 2};
                 (previewIt->second)(dis->hDC, pr);
                 // Frame: highlight color for the chosen option, soft gray otherwise.
-                const HBRUSH frame = CreateSolidBrush(selected
-                                                          ? settingsTheme().previewBorderSelected
-                                                          : settingsTheme().previewBorder);
+                const HBRUSH frame = CreateSolidBrush(selected ? settingsTheme().previewBorderSelected
+                                                               : settingsTheme().previewBorder);
                 FrameRect(dis->hDC, &pr, frame);
                 DeleteObject(frame);
             }
@@ -1360,8 +1742,8 @@ namespace merutilm::rff2 {
             if (primary) {
                 drawPrimaryButtonFace(dis->hDC, rc, pressed && enabled, (dis->itemState & ODS_FOCUS) != 0);
             } else {
-                drawRoundedButtonFace(dis->hDC, rc, pressed && enabled,
-                                      (dis->itemState & ODS_FOCUS) != 0, enabled);
+                drawRoundedButtonFace(dis->hDC, rc, pressed && enabled, (dis->itemState & ODS_FOCUS) != 0,
+                                      enabled);
             }
 
             const int len = GetWindowTextLengthW(dis->hwndItem) + 1;
@@ -1371,15 +1753,13 @@ namespace merutilm::rff2 {
             if (pressed) {
                 OffsetRect(&textRc, 1, 1);
             }
-            const auto oldFont = SelectObject(dis->hDC,
-                                              reinterpret_cast<HFONT>(primary ? wnd.headerFont : wnd.font));
+            const auto oldFont =
+                SelectObject(dis->hDC, reinterpret_cast<HFONT>(primary ? wnd.headerFont : wnd.font));
             SetBkMode(dis->hDC, TRANSPARENT);
-            SetTextColor(dis->hDC, !enabled
-                                       ? settingsTheme().textDisabled
-                                       : primary
-                                        ? settingsTheme().primaryButtonText
-                                        : settingsTheme().text);
-            DrawTextW(dis->hDC, text.c_str(), -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SetTextColor(dis->hDC, !enabled  ? settingsTheme().textDisabled
+                                   : primary ? settingsTheme().primaryButtonText
+                                             : settingsTheme().text);
+            UiLanguage::drawText(dis->hDC, text.c_str(), -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             SelectObject(dis->hDC, oldFont);
             return true;
         }
@@ -1389,345 +1769,438 @@ namespace merutilm::rff2 {
     LRESULT SettingsWindow::settingsWindowProc(const HWND window, const UINT message, const WPARAM wParam,
                                                const LPARAM lParam) {
         const auto self = reinterpret_cast<SettingsWindow *>(GetWindowLongPtr(window, GWLP_USERDATA));
+        if (!self) {
+            return message == WM_ERASEBKGND ? 1 : DefWindowProcW(window, message, wParam, lParam);
+        }
         // Every color below is read through the flag this holds, panel by panel.
         const ScopedSettingsMode themeScope = scopedMode(self);
+        const auto dpiScope = scopedDpi(self);
         SettingsWindow &wnd = *self;
 
+        if (message == WM_SW_FIND) {
+            if (wnd.findRequest.Flags & FR_DIALOGTERM) {
+                wnd.findDialog = nullptr;
+            } else if (wnd.findRequest.Flags & FR_FINDNEXT) {
+                wnd.findNextSetting();
+            }
+            return 0;
+        }
+
         switch (message) {
-            case WM_SW_FINALIZE: {
-                // The whole panel is built now. Pre-capture the section layout so the first toggle
-                // isn't doing extra work, then reveal it and force one full composited paint so the
-                // surface is settled before the user can interact (no first-collapse flicker).
-                if (wnd.sectionsCollapsible) {
-                    wnd.captureSectionLayout();
-                }
-                // The rows exist only now, so this is the first moment their controls can be given
-                // the theme's native class - a panel opened with dark mode already on never gets a
-                // refresh of its own to do it.
-                wnd.refreshTheme();
-                ShowWindow(window, SW_SHOW);
-                RedrawWindow(window, nullptr, nullptr,
-                             RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        case WM_DPICHANGED:
+            wnd.applyDpi(LOWORD(wParam), reinterpret_cast<const RECT *>(lParam));
+            return 0;
+        case WM_SYSCOMMAND:
+            if ((wParam & 0xFFF0) == 0x1EF0) {
+                wnd.openSearch();
                 return 0;
             }
-            case WM_SW_FLUSH_PAINT: {
-                // A batch that was already flushed at the end of its own message leaves this
-                // behind; there is nothing owed, and repainting anyway would cost a full pass.
-                wnd.flushPendingRepaint();
-                return 0;
+            return DefWindowProcW(window, message, wParam, lParam);
+        case WM_SW_FINALIZE: {
+            const HMENU systemMenu = GetSystemMenu(window, FALSE);
+            AppendMenuW(systemMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(systemMenu, MF_STRING, 0x1EF0, UiLanguage::label(L"Find setting...\tCtrl+F"));
+            // The whole panel is built now. Pre-capture the section layout so the first toggle
+            // isn't doing extra work, then reveal it and force one full composited paint so the
+            // surface is settled before the user can interact (no first-collapse flicker).
+            if (wnd.sectionsCollapsible) {
+                wnd.captureSectionLayout();
             }
-            case WM_SW_THEME_CHANGED: {
-                wnd.refreshTheme();
-                return 0;
-            }
-            // Erasing is done inside WM_PAINT instead: the class brush erases on its own pass, and
-            // that blank frame between the erase and the rows redrawing is what flashed across the
-            // panel every time a row was shown or hidden.
-            case WM_ERASEBKGND: return 1;
-            case WM_PAINT: {
-                // WM_PAINT can arrive before the constructor has attached the instance; paint the
-                // background anyway (the frames are drawn from live control positions, so there is
-                // nothing of them to draw yet).
-                PAINTSTRUCT ps;
-                const HDC hdc = BeginPaint(window, &ps);
-                const int w = ps.rcPaint.right - ps.rcPaint.left;
-                const int h = ps.rcPaint.bottom - ps.rcPaint.top;
-                if (w > 0 && h > 0) {
-                    // Compose off-screen and blit once. Painted straight onto the window, the wipe
-                    // to the background color and the frames drawn back over it are two separate
-                    // frames on screen, so every repaint that covers a whole section - folding one,
-                    // showing or hiding a row - blinked its outline away and back.
-                    const HDC mem = CreateCompatibleDC(hdc);
-                    const HBITMAP bmp = CreateCompatibleBitmap(hdc, w, h);
-                    const auto oldBmp = SelectObject(mem, bmp);
+            // The rows exist only now, so this is the first moment their controls can be given
+            // the theme's native class - a panel opened with dark mode already on never gets a
+            // refresh of its own to do it.
+            wnd.captureDpiLayout();
+            wnd.applyDpi(UiDpi::forWindow(window));
+            wnd.refreshTheme();
+            ShowWindow(window, SW_SHOW);
+            RedrawWindow(window, nullptr, nullptr,
+                         RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            return 0;
+        }
+        case WM_SW_FLUSH_PAINT: {
+            // A batch that was already flushed at the end of its own message leaves this
+            // behind; there is nothing owed, and repainting anyway would cost a full pass.
+            wnd.flushPendingRepaint();
+            return 0;
+        }
+        case WM_SW_THEME_CHANGED: {
+            wnd.refreshTheme();
+            return 0;
+        }
+        case WM_SYSCOLORCHANGE:
+        case WM_SETTINGCHANGE:
+            refreshSystemSettingsTheme();
+            wnd.refreshTheme();
+            return DefWindowProcW(window, message, wParam, lParam);
+        // Erasing is done inside WM_PAINT instead: the class brush erases on its own pass, and
+        // that blank frame between the erase and the rows redrawing is what flashed across the
+        // panel every time a row was shown or hidden.
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT: {
+            // WM_PAINT can arrive before the constructor has attached the instance; paint the
+            // background anyway (the frames are drawn from live control positions, so there is
+            // nothing of them to draw yet).
+            PAINTSTRUCT ps;
+            const HDC hdc = BeginPaint(window, &ps);
+            const int w = ps.rcPaint.right - ps.rcPaint.left;
+            const int h = ps.rcPaint.bottom - ps.rcPaint.top;
+            if (w > 0 && h > 0) {
+                // Compose off-screen and blit once. Painted straight onto the window, the wipe
+                // to the background color and the frames drawn back over it are two separate
+                // frames on screen, so every repaint that covers a whole section - folding one,
+                // showing or hiding a row - blinked its outline away and back.
+                const HDC mem = CreateCompatibleDC(hdc);
+                const HBITMAP bmp = mem != nullptr ? CreateCompatibleBitmap(hdc, w, h) : nullptr;
+                const auto oldBmp = bmp != nullptr ? SelectObject(mem, bmp) : nullptr;
+                const bool bitmapSelected = oldBmp != nullptr && oldBmp != HGDI_ERROR;
+                const HDC drawingDc = bitmapSelected ? mem : hdc;
+                try {
                     // Client coordinates throughout, so the painters below need no offset of their own.
-                    SetViewportOrgEx(mem, -ps.rcPaint.left, -ps.rcPaint.top, nullptr);
-                    FillRect(mem, &ps.rcPaint, windowBackgroundBrush());
-                    if (GetWindowLongPtr(window, GWLP_USERDATA)) {
-                        wnd.paintSectionFrames(mem);
+                    if (bitmapSelected) {
+                        SetViewportOrgEx(mem, -ps.rcPaint.left, -ps.rcPaint.top, nullptr);
                     }
-                    BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top, w, h,
-                           mem, ps.rcPaint.left, ps.rcPaint.top, SRCCOPY);
+                    FillRect(drawingDc, &ps.rcPaint, windowBackgroundBrush());
+                    if (GetWindowLongPtr(window, GWLP_USERDATA)) {
+                        wnd.paintSectionFrames(drawingDc);
+                    }
+                    if (bitmapSelected) {
+                        BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top, w, h, mem, ps.rcPaint.left, ps.rcPaint.top,
+                               SRCCOPY);
+                    }
+                } catch (...) {
+                    if (bitmapSelected) {
+                        SelectObject(mem, oldBmp);
+                    }
+                    if (bmp != nullptr) {
+                        DeleteObject(bmp);
+                    }
+                    if (mem != nullptr) {
+                        DeleteDC(mem);
+                    }
+                    EndPaint(window, &ps);
+                    throw;
+                }
+                if (bitmapSelected) {
                     SelectObject(mem, oldBmp);
+                }
+                if (bmp != nullptr) {
                     DeleteObject(bmp);
+                }
+                if (mem != nullptr) {
                     DeleteDC(mem);
                 }
-                EndPaint(window, &ps);
+            }
+            EndPaint(window, &ps);
+            return 0;
+        }
+        case WM_COMMAND: {
+            if (const int ctlId = LOWORD(wParam);
+                ctlId >= Constants::Win32::ID_SECTION_TOGGLE &&
+                ctlId < Constants::Win32::ID_SECTION_TOGGLE + static_cast<int>(wnd.sections.size())) {
+                if (HIWORD(wParam) == STN_CLICKED) {
+                    wnd.toggleSection(ctlId - Constants::Win32::ID_SECTION_TOGGLE);
+                }
                 return 0;
             }
-            case WM_COMMAND: {
-                if (const int ctlId = LOWORD(wParam);
-                    ctlId >= Constants::Win32::ID_SECTION_TOGGLE &&
-                    ctlId < Constants::Win32::ID_SECTION_TOGGLE + static_cast<int>(wnd.sections.size())) {
-                    if (HIWORD(wParam) == STN_CLICKED) {
-                        wnd.toggleSection(ctlId - Constants::Win32::ID_SECTION_TOGGLE);
+            const auto editor = reinterpret_cast<HWND>(lParam);
+            if (const int index = getIndex(editor); wnd.checkIndex(index) && LOWORD(wParam) != 0) {
+                if (isCheckbox(editor)) {
+                    if (HIWORD(wParam) != BN_CLICKED) {
+                        return 0;
                     }
-                    return 0;
-                }
-                const auto editor = reinterpret_cast<HWND>(lParam);
-                if (
-                    const int index = getIndex(editor);
-                    wnd.checkIndex(index) &&
-                    LOWORD(wParam) != 0
-                ) {
-                    if (isCheckbox(editor)) {
-                        // Owner-drawn checkbox: toggle the state we track ourselves.
-                        std::any value = !std::any_cast<bool>(wnd.references[index]);
+                    // Owner-drawn checkbox: toggle the state we track ourselves.
+                    std::any value = !std::any_cast<bool>(wnd.references[index]);
+                    (*wnd.callbacks[index])(value);
+                    wnd.references[index] = value;
+                    // Repaint so the checked-state fill updates immediately.
+                    InvalidateRect(editor, nullptr, TRUE);
+                } else if (HIWORD(wParam) == CBN_SELCHANGE) {
+                    const auto combobox = (HWND)lParam;
+                    const auto selectedIndex = static_cast<int>(SendMessage(combobox, CB_GETCURSEL, 0, 0));
+                    std::any &value = (*wnd.enumValues[index])[selectedIndex];
+                    (*wnd.callbacks[index])(value);
+                    wnd.references[index] = value;
+                } else if (HIWORD(wParam) == BN_CLICKED) {
+                    if (getRadioIndex(editor) >= 0 && wnd.enumValues[index] != nullptr) {
+                        // This IS a radio button group because enumValues is populated
+                        const int radioIndex = getRadioIndex(editor);
+                        std::any &value = (*wnd.enumValues[index])[radioIndex];
                         (*wnd.callbacks[index])(value);
                         wnd.references[index] = value;
-                        // Repaint so the checked-state fill updates immediately.
-                        InvalidateRect(editor, nullptr, TRUE);
-                    } else if (HIWORD(wParam) == CBN_SELCHANGE) {
-                        const auto combobox = (HWND) lParam;
-                        const auto selectedIndex = static_cast<int>(SendMessage(combobox, CB_GETCURSEL, 0, 0));
-                        std::any &value = (*wnd.enumValues[index])[selectedIndex];
-                        (*wnd.callbacks[index])(value);
-                        wnd.references[index] = value;
-                    } else if (HIWORD(wParam) == BN_CLICKED) {
-                        if (getRadioIndex(editor) >= 0 && wnd.enumValues[index] != nullptr) {
-                             // This IS a radio button group because enumValues is populated
-                            const int radioIndex = getRadioIndex(editor);
-                            std::any &value = (*wnd.enumValues[index])[radioIndex];
-                            (*wnd.callbacks[index])(value);
-                            wnd.references[index] = value;
-                            // Owner-drawn radios: repaint the whole group so the previous
-                            // selection clears and the new one fills. Painted here and now, not
-                            // left for the message loop: the button that was clicked redraws
-                            // itself the moment this returns, so a merely invalidated group let
-                            // the new selection appear a frame before the old one let go, and
-                            // both read as filled in between.
-                            for (const HWND child: wnd.createdChildWindows) {
-                                if (getIndex(child) == index) {
-                                    InvalidateRect(child, nullptr, TRUE);
-                                    UpdateWindow(child);
-                                }
+                        // Owner-drawn radios: repaint the whole group so the previous
+                        // selection clears and the new one fills. Painted here and now, not
+                        // left for the message loop: the button that was clicked redraws
+                        // itself the moment this returns, so a merely invalidated group let
+                        // the new selection appear a frame before the old one let go, and
+                        // both read as filled in between.
+                        for (const HWND child : wnd.createdChildWindows) {
+                            if (getIndex(child) == index) {
+                                InvalidateRect(child, nullptr, TRUE);
+                                UpdateWindow(child);
                             }
-                        } else {
-                            // This is a push button
-                            std::any dummy;
-                            (*wnd.callbacks[index])(dummy);
                         }
+                    } else {
+                        // This is a push button
+                        std::any dummy;
+                        (*wnd.callbacks[index])(dummy);
                     }
                 }
-
-                // The callback above may have shown or hidden rows. Those changes are collected
-                // rather than painted one at a time, and this is the end of the batch: paint it
-                // here so the panel settles in the same frame as the control that was clicked,
-                // instead of a trip round the message loop later.
-                wnd.flushPendingRepaint();
-                return 0;
-            }
-            case WM_HSCROLL: {
-                const auto bar = reinterpret_cast<HWND>(lParam);
-                const auto it = wnd.trackbarToSlider.find(bar);
-                if (it == wnd.trackbarToSlider.end()) {
-                    return DefWindowProcW(window, message, wParam, lParam);
-                }
-                SettingsWindow::SliderBinding &sb = wnd.sliders[it->second];
-                if (!wnd.checkIndex(sb.index)) {
-                    return 0;
-                }
-                constexpr int res = Constants::Win32::SLIDER_RESOLUTION;
-                const auto pos = static_cast<int>(SendMessage(bar, TBM_GETPOS, 0, 0));
-                const double t = pos / static_cast<double>(res);
-                const double floorValue = sliderFloor(sb);
-                const double raw = sb.logScale
-                                       ? sliderWindowValue(sb, sb.currentBase, t)
-                                       : sb.minValue + (sb.maxValue - sb.minValue) * t;
-                auto value = static_cast<float>(std::clamp(raw, floorValue, sb.maxValue));
-                if (sb.wholeSteps) {
-                    value = static_cast<float>(std::llround(value));
-                }
-                if (value < static_cast<float>(floorValue)) {
-                    value = static_cast<float>(floorValue);
-                }
-                std::any v = value;
-                (*wnd.callbacks[sb.index])(v);
-                wnd.references[sb.index] = v;
-                wnd.modified[sb.index] = true;
-                wnd.edited[sb.index] = false;
-                {
-                    const std::wstring newText = wnd.currValueToString(sb.index);
-                    wchar_t prevBuf[128] = {};
-                    GetWindowTextW(sb.textField, prevBuf, 128);
-                    if (newText != prevBuf)
-                        SetWindowTextW(sb.textField, newText.data());
-                }
-
-                if (sb.logScale && LOWORD(wParam) == TB_ENDTRACK) {
-                    // Released: if parked at an end, slide the decade window over so the
-                    // current value sits at the opposite end, ready to continue.
-                    const double topBase = sliderTopBase(sb.minValue, sb.maxValue);
-                    double newBase = sb.currentBase;
-                    if (pos >= res) {
-                        newBase = std::min(sb.currentBase * 10.0, topBase);
-                    } else if (pos <= 0) {
-                        newBase = std::max(sb.currentBase / 10.0, sb.minValue);
-                    }
-                    sb.currentBase = newBase;
-                    const double nt = sliderWindowFraction(sb, newBase, value);
-                    SendMessage(bar, TBM_SETPOS, TRUE, static_cast<int>(std::lround(nt * res)));
-                }
-                return 0;
-            }
-            case WM_VSCROLL: {
-                // The window's own vertical scrollbar (shown when content overflows the
-                // screen). Trackbars send WM_HSCROLL, so there is no conflict here.
-                SCROLLINFO si = {};
-                si.cbSize = sizeof(si);
-                si.fMask = SIF_ALL;
-                GetScrollInfo(window, SB_VERT, &si);
-                int pos = si.nPos;
-                switch (LOWORD(wParam)) {
-                    case SB_LINEUP: pos -= sc(Constants::Win32::SETTINGS_INPUT_HEIGHT); break;
-                    case SB_LINEDOWN: pos += sc(Constants::Win32::SETTINGS_INPUT_HEIGHT); break;
-                    case SB_PAGEUP: pos -= static_cast<int>(si.nPage); break;
-                    case SB_PAGEDOWN: pos += static_cast<int>(si.nPage); break;
-                    case SB_THUMBTRACK:
-                    case SB_THUMBPOSITION: pos = si.nTrackPos; break;
-                    case SB_TOP: pos = 0; break;
-                    case SB_BOTTOM: pos = si.nMax; break;
-                    default: break;
-                }
-                wnd.scrollTo(pos);
-                return 0;
-            }
-            case WM_MOUSEWHEEL: {
-                // Scroll three rows per wheel notch when the content overflows.
-                const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-                const int step = sc(Constants::Win32::SETTINGS_INPUT_HEIGHT) * 3;
-                wnd.scrollTo(wnd.scrollY - delta * step / WHEEL_DELTA);
-                return 0;
-            }
-            case WM_CLOSE: {
-                for (const auto hwnd: wnd.createdChildWindows) DestroyWindow(hwnd);
-                DestroyWindow(window);
-                wnd.windowCloseFunction();
-                return 0;
-            }
-            case WM_DESTROY: {
-                DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.font));
-                DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.headerFont));
-                DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.smallFont));
-                for (const HFONT f : wnd.extraFonts) {
-                    DeleteObject(f);
-                }
-                return 0;
-            }
-            case WM_CTLCOLOREDIT: {
-                const auto hdcEdit = (HDC) wParam;
-                const auto hwndEdit = (HWND) lParam;
-                const int index = getIndex(hwndEdit);
-
-                if (!wnd.checkIndex(index)) {
-                    return DefWindowProcW(window, message, wParam, lParam);
-                }
-
-                if (wnd.error[index]) {
-                    SetTextColor(hdcEdit, settingsTheme().textError);
-                } else if (wnd.edited[index]) {
-                    SetTextColor(hdcEdit, settingsTheme().textEdited);
-                } else if (wnd.modified[index]) {
-                    SetTextColor(hdcEdit, settingsTheme().textModified);
-                } else {
-                    SetTextColor(hdcEdit, settingsTheme().text);
-                }
-                // Light fill (clipped to the rounded region) gives the borderless field a
-                // visible rounded-box shape against the white panel.
-                SetBkColor(hdcEdit, settingsTheme().textFieldBackground);
-                return (INT_PTR) textFieldBrush();
             }
 
-            case WM_CTLCOLORLISTBOX: {
-                const auto hdc = reinterpret_cast<HDC>(wParam);
-                SetTextColor(hdc, settingsTheme().text);
-                SetBkColor(hdc, settingsTheme().textFieldBackground);
-                return reinterpret_cast<INT_PTR>(textFieldBrush());
-            }
-
-            case WM_NOTIFY: {
-                // Trackbars draw through custom draw rather than WM_DRAWITEM. Take over the whole
-                // control at the pre-paint stage and report back that nothing else is to be drawn:
-                // the groove, the pointer and the background are all ours from here. Anything else
-                // that notifies the panel (the tooltips are children of it too) falls through.
-                const auto header = reinterpret_cast<NMHDR *>(lParam);
-                if (header->code == NM_CUSTOMDRAW && GetWindowLongPtr(window, GWLP_USERDATA)) {
-                    if (const auto it = wnd.trackbarToSlider.find(header->hwndFrom);
-                        it != wnd.trackbarToSlider.end()) {
-                        if (const auto custom = reinterpret_cast<NMCUSTOMDRAW *>(lParam);
-                            custom->dwDrawStage == CDDS_PREPAINT) {
-                            paintSlider(wnd.sliders[it->second], custom->hdc);
-                        }
-                        return CDRF_SKIPDEFAULT;
-                    }
-                }
+            // The callback above may have shown or hidden rows. Those changes are collected
+            // rather than painted one at a time, and this is the end of the batch: paint it
+            // here so the panel settles in the same frame as the control that was clicked,
+            // instead of a trip round the message loop later.
+            wnd.flushPendingRepaint();
+            return 0;
+        }
+        case WM_HSCROLL: {
+            const auto bar = reinterpret_cast<HWND>(lParam);
+            const auto it = wnd.trackbarToSlider.find(bar);
+            if (it == wnd.trackbarToSlider.end()) {
                 return DefWindowProcW(window, message, wParam, lParam);
             }
-            case WM_DRAWITEM: {
-                const auto dis = reinterpret_cast<DRAWITEMSTRUCT *>(lParam);
-                // Compose the item off-screen and blit it in one go. An owner-drawn button erases
-                // its face through the parent (WM_CTLCOLORBTN) before this ever runs, and the
-                // painters below then wipe and rebuild it step by step - every one of those steps
-                // used to land on screen, so a row flashed each time it was enabled, moved or
-                // scrolled past.
-                const RECT rc = dis->rcItem;
-                const int w = rc.right - rc.left;
-                const int h = rc.bottom - rc.top;
-                if (w <= 0 || h <= 0) {
-                    return TRUE;
+            SettingsWindow::SliderBinding &sb = wnd.sliders[it->second];
+            if (!wnd.checkIndex(sb.index)) {
+                return 0;
+            }
+            constexpr int res = Constants::Win32::SLIDER_RESOLUTION;
+            const auto pos = static_cast<int>(SendMessage(bar, TBM_GETPOS, 0, 0));
+            const double t = pos / static_cast<double>(res);
+            const double floorValue = sliderFloor(sb);
+            const double raw = sb.logScale ? sliderWindowValue(sb, sb.currentBase, t)
+                                           : sb.minValue + (sb.maxValue - sb.minValue) * t;
+            auto value = static_cast<float>(std::clamp(raw, floorValue, sb.maxValue));
+            if (sb.wholeSteps) {
+                value = static_cast<float>(std::llround(value));
+            }
+            if (value < static_cast<float>(floorValue)) {
+                value = static_cast<float>(floorValue);
+            }
+            std::any v = value;
+            (*wnd.callbacks[sb.index])(v);
+            wnd.references[sb.index] = v;
+            wnd.modified[sb.index] = true;
+            wnd.edited[sb.index] = false;
+            {
+                const std::wstring newText = wnd.currValueToString(sb.index);
+                wchar_t prevBuf[128] = {};
+                GetWindowTextW(sb.textField, prevBuf, 128);
+                if (newText != prevBuf) {
+                    SetWindowTextW(sb.textField, newText.data());
                 }
-                const HDC face = dis->hDC;
-                const HDC mem = CreateCompatibleDC(face);
-                const HBITMAP bmp = CreateCompatibleBitmap(face, w, h);
-                const auto oldBmp = SelectObject(mem, bmp);
-                // Item coordinates throughout, so every painter below is left as it was written.
-                SetViewportOrgEx(mem, -rc.left, -rc.top, nullptr);
-                // The painters that leave part of the rect alone (the corners outside a rounded
-                // face) expect the panel behind them, which is what the erase would have left.
-                FillRect(mem, &rc, windowBackgroundBrush());
-                dis->hDC = mem;
-                const bool painted = drawOwnerDrawnItem(wnd, dis);
-                dis->hDC = face;
-                if (painted) {
-                    BitBlt(face, rc.left, rc.top, w, h, mem, rc.left, rc.top, SRCCOPY);
+            }
+
+            if (sb.logScale && LOWORD(wParam) == TB_ENDTRACK) {
+                // Released: if parked at an end, slide the decade window over so the
+                // current value sits at the opposite end, ready to continue.
+                const double topBase = sliderTopBase(sb.minValue, sb.maxValue);
+                double newBase = sb.currentBase;
+                if (pos >= res) {
+                    newBase = std::min(sb.currentBase * 10.0, topBase);
+                } else if (pos <= 0) {
+                    newBase = std::max(sb.currentBase / 10.0, sb.minValue);
                 }
-                SelectObject(mem, oldBmp);
-                DeleteObject(bmp);
-                DeleteDC(mem);
-                if (!painted) {
-                    return DefWindowProcW(window, message, wParam, lParam);
+                sb.currentBase = newBase;
+                const double nt = sliderWindowFraction(sb, newBase, value);
+                SendMessage(bar, TBM_SETPOS, TRUE, static_cast<int>(std::lround(nt * res)));
+            }
+            return 0;
+        }
+        case WM_VSCROLL: {
+            // The window's own vertical scrollbar (shown when content overflows the
+            // screen). Trackbars send WM_HSCROLL, so there is no conflict here.
+            SCROLLINFO si = {};
+            si.cbSize = sizeof(si);
+            si.fMask = SIF_ALL;
+            GetScrollInfo(window, SB_VERT, &si);
+            int pos = si.nPos;
+            switch (LOWORD(wParam)) {
+            case SB_LINEUP:
+                pos -= sc(Constants::Win32::SETTINGS_INPUT_HEIGHT);
+                break;
+            case SB_LINEDOWN:
+                pos += sc(Constants::Win32::SETTINGS_INPUT_HEIGHT);
+                break;
+            case SB_PAGEUP:
+                pos -= static_cast<int>(si.nPage);
+                break;
+            case SB_PAGEDOWN:
+                pos += static_cast<int>(si.nPage);
+                break;
+            case SB_THUMBTRACK:
+            case SB_THUMBPOSITION:
+                pos = si.nTrackPos;
+                break;
+            case SB_TOP:
+                pos = 0;
+                break;
+            case SB_BOTTOM:
+                pos = si.nMax;
+                break;
+            default:
+                break;
+            }
+            wnd.scrollTo(pos);
+            return 0;
+        }
+        case WM_MOUSEWHEEL: {
+            // Scroll three rows per wheel notch when the content overflows.
+            const int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            const int step = sc(Constants::Win32::SETTINGS_INPUT_HEIGHT) * 3;
+            wnd.scrollTo(wnd.scrollY - delta * step / WHEEL_DELTA);
+            return 0;
+        }
+        case WM_CLOSE: {
+            if (NativeDialogs::isOpen()) {
+                return 0;
+            }
+            for (const auto hwnd : wnd.createdChildWindows) {
+                DestroyWindow(hwnd);
+            }
+            DestroyWindow(window);
+            if (wnd.windowCloseFunction) {
+                wnd.windowCloseFunction();
+            }
+            return 0;
+        }
+        case WM_DESTROY: {
+            if (IsWindow(wnd.findDialog)) {
+                DestroyWindow(wnd.findDialog);
+            }
+            if (wnd.dpiLayout) {
+                for (auto original : wnd.dpiLayout->originalFonts) {
+                    if (original != reinterpret_cast<HFONT>(wnd.font) &&
+                        original != reinterpret_cast<HFONT>(wnd.headerFont) &&
+                        original != reinterpret_cast<HFONT>(wnd.smallFont) &&
+                        std::find(wnd.extraFonts.begin(), wnd.extraFonts.end(), original) ==
+                            wnd.extraFonts.end()) {
+                        DeleteObject(original);
+                    }
                 }
+            }
+            DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.font));
+            DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.headerFont));
+            DeleteObject(reinterpret_cast<HGDIOBJ>(wnd.smallFont));
+            for (const HFONT f : wnd.extraFonts) {
+                DeleteObject(f);
+            }
+            return 0;
+        }
+        case WM_CTLCOLOREDIT: {
+            const auto hdcEdit = (HDC)wParam;
+            const auto hwndEdit = (HWND)lParam;
+            const int index = getIndex(hwndEdit);
+
+            if (!wnd.checkIndex(index)) {
+                return DefWindowProcW(window, message, wParam, lParam);
+            }
+
+            if (wnd.error[index]) {
+                SetTextColor(hdcEdit, settingsTheme().textError);
+            } else if (wnd.edited[index]) {
+                SetTextColor(hdcEdit, settingsTheme().textEdited);
+            } else if (wnd.modified[index]) {
+                SetTextColor(hdcEdit, settingsTheme().textModified);
+            } else {
+                SetTextColor(hdcEdit, settingsTheme().text);
+            }
+            // Light fill (clipped to the rounded region) gives the borderless field a
+            // visible rounded-box shape against the white panel.
+            SetBkColor(hdcEdit, settingsTheme().textFieldBackground);
+            return (INT_PTR)textFieldBrush();
+        }
+
+        case WM_CTLCOLORLISTBOX: {
+            const auto hdc = reinterpret_cast<HDC>(wParam);
+            SetTextColor(hdc, settingsTheme().text);
+            SetBkColor(hdc, settingsTheme().textFieldBackground);
+            return reinterpret_cast<INT_PTR>(textFieldBrush());
+        }
+
+        case WM_NOTIFY: {
+            // Trackbars draw through custom draw rather than WM_DRAWITEM. Take over the whole
+            // control at the pre-paint stage and report back that nothing else is to be drawn:
+            // the groove, the pointer and the background are all ours from here. Anything else
+            // that notifies the panel (the tooltips are children of it too) falls through.
+            const auto header = reinterpret_cast<NMHDR *>(lParam);
+            if (header->code == NM_CUSTOMDRAW && GetWindowLongPtr(window, GWLP_USERDATA)) {
+                if (const auto it = wnd.trackbarToSlider.find(header->hwndFrom);
+                    it != wnd.trackbarToSlider.end()) {
+                    if (const auto custom = reinterpret_cast<NMCUSTOMDRAW *>(lParam);
+                        custom->dwDrawStage == CDDS_PREPAINT) {
+                        paintSlider(wnd.sliders[it->second], custom->hdc);
+                    }
+                    return CDRF_SKIPDEFAULT;
+                }
+            }
+            return DefWindowProcW(window, message, wParam, lParam);
+        }
+        case WM_DRAWITEM: {
+            const auto dis = reinterpret_cast<DRAWITEMSTRUCT *>(lParam);
+            // Compose the item off-screen and blit it in one go. An owner-drawn button erases
+            // its face through the parent (WM_CTLCOLORBTN) before this ever runs, and the
+            // painters below then wipe and rebuild it step by step - every one of those steps
+            // used to land on screen, so a row flashed each time it was enabled, moved or
+            // scrolled past.
+            const RECT rc = dis->rcItem;
+            const int w = rc.right - rc.left;
+            const int h = rc.bottom - rc.top;
+            if (w <= 0 || h <= 0) {
                 return TRUE;
             }
-            case WM_CTLCOLORSTATIC: {
-                const auto hwndStatic = (HWND) lParam;
-                const auto hdc = (HDC) wParam;
-                SetBkMode(hdc, TRANSPARENT);
-                // Transparent text still blends against the DC's background color, and the default
-                // white is not what these labels sit on once the panel goes dark.
-                SetBkColor(hdc, settingsTheme().background);
-                if (!IsWindowEnabled(hwndStatic)) {
-                    SetTextColor(hdc, settingsTheme().textDisabled);
-                    return (INT_PTR) windowBackgroundBrush();
-                }
-                // Slider min/max range labels and note text: muted gray on the panel face.
-                if (wnd.rangeLabels.contains(hwndStatic) || wnd.noteLabels.contains(hwndStatic)) {
-                    SetTextColor(hdc, settingsTheme().rangeText);
-                    return (INT_PTR) windowBackgroundBrush();
-                }
-                SetTextColor(hdc, settingsTheme().text);
-                return IsWindowEnabled(hwndStatic)
-                           ? (INT_PTR) windowBackgroundBrush()
-                           : DefWindowProcW(window, message, wParam, lParam);
+            const HDC face = dis->hDC;
+            const HDC mem = CreateCompatibleDC(face);
+            const HBITMAP bmp = CreateCompatibleBitmap(face, w, h);
+            const auto oldBmp = SelectObject(mem, bmp);
+            // Item coordinates throughout, so every painter below is left as it was written.
+            SetViewportOrgEx(mem, -rc.left, -rc.top, nullptr);
+            // The painters that leave part of the rect alone (the corners outside a rounded
+            // face) expect the panel behind them, which is what the erase would have left.
+            FillRect(mem, &rc, windowBackgroundBrush());
+            dis->hDC = mem;
+            const bool painted = drawOwnerDrawnItem(wnd, dis);
+            dis->hDC = face;
+            if (painted) {
+                BitBlt(face, rc.left, rc.top, w, h, mem, rc.left, rc.top, SRCCOPY);
             }
-            case WM_CTLCOLORBTN: {
-                // An owner-drawn button erases its whole face with this brush before it asks the
-                // panel to draw the item, and there is no way to opt out of that pass. Unanswered,
-                // the default is the OS button face - a gray wipe across the row every time one of
-                // these repaints. Hand back the panel's own color so the erase cannot be seen.
-                return (INT_PTR) windowBackgroundBrush();
+            SelectObject(mem, oldBmp);
+            DeleteObject(bmp);
+            DeleteDC(mem);
+            if (!painted) {
+                return DefWindowProcW(window, message, wParam, lParam);
             }
-            default: return DefWindowProcW(window, message, wParam, lParam);
+            return TRUE;
+        }
+        case WM_CTLCOLORSTATIC: {
+            const auto hwndStatic = (HWND)lParam;
+            const auto hdc = (HDC)wParam;
+            SetBkMode(hdc, TRANSPARENT);
+            // Transparent text still blends against the DC's background color, and the default
+            // white is not what these labels sit on once the panel goes dark.
+            SetBkColor(hdc, settingsTheme().background);
+            if (!IsWindowEnabled(hwndStatic)) {
+                SetTextColor(hdc, settingsTheme().textDisabled);
+                return (INT_PTR)windowBackgroundBrush();
+            }
+            // Slider min/max range labels and note text: muted gray on the panel face.
+            if (wnd.rangeLabels.contains(hwndStatic) || wnd.noteLabels.contains(hwndStatic)) {
+                SetTextColor(hdc, settingsTheme().rangeText);
+                return (INT_PTR)windowBackgroundBrush();
+            }
+            SetTextColor(hdc, settingsTheme().text);
+            return (INT_PTR)windowBackgroundBrush();
+        }
+        case WM_CTLCOLORBTN: {
+            // An owner-drawn button erases its whole face with this brush before it asks the
+            // panel to draw the item, and there is no way to opt out of that pass. Unanswered,
+            // the default is the OS button face - a gray wipe across the row every time one of
+            // these repaints. Hand back the panel's own color so the erase cannot be seen.
+            return (INT_PTR)windowBackgroundBrush();
+        }
+        default:
+            return DefWindowProcW(window, message, wParam, lParam);
         }
     }
 
@@ -1745,6 +2218,7 @@ namespace merutilm::rff2 {
                                       const LPARAM lParam, const UINT_PTR uIdSubclass,
                                       const DWORD_PTR dwRefData) {
         const ScopedSettingsMode themeScope = scopedMode(reinterpret_cast<const SettingsWindow *>(dwRefData));
+        const auto dpiScope = scopedDpi(reinterpret_cast<const SettingsWindow *>(dwRefData));
         if (message == WM_NCDESTROY) {
             RemoveWindowSubclass(window, labelProc, uIdSubclass);
         }
@@ -1762,40 +2236,66 @@ namespace merutilm::rff2 {
             const int h = rc.bottom - rc.top;
             if (w > 0 && h > 0) {
                 const HDC mem = CreateCompatibleDC(hdc);
-                const HBITMAP bmp = CreateCompatibleBitmap(hdc, w, h);
-                const auto oldBmp = SelectObject(mem, bmp);
-                FillRect(mem, &rc, windowBackgroundBrush());
-                const auto labelFont = reinterpret_cast<HFONT>(SendMessageW(window, WM_GETFONT, 0, 0));
-                const auto oldFont = SelectObject(mem, labelFont != nullptr
-                                                           ? labelFont
-                                                           : GetStockObject(DEFAULT_GUI_FONT));
-                SetBkMode(mem, TRANSPARENT);
-                SetBkColor(mem, settingsTheme().background);
-                const bool muted = wnd != nullptr &&
-                                   (wnd->rangeLabels.contains(window) || wnd->noteLabels.contains(window));
-                SetTextColor(mem, !IsWindowEnabled(window)
-                                      ? settingsTheme().textDisabled
-                                      : muted
-                                            ? settingsTheme().rangeText
-                                            : settingsTheme().text);
-                // The alignment the static was created with, in the flags DrawText names it by.
-                const LONG style = GetWindowLongW(window, GWL_STYLE);
-                const LONG alignment = style & SS_TYPEMASK;
-                UINT format = alignment == SS_RIGHT
-                                  ? DT_RIGHT
-                                  : alignment == SS_CENTER
-                                        ? DT_CENTER
-                                        : DT_LEFT;
-                format |= (style & SS_CENTERIMAGE) != 0
-                              ? DT_VCENTER | DT_SINGLELINE
-                              : DT_TOP | DT_WORDBREAK;
-                const std::wstring text = windowText(window);
-                DrawTextW(mem, text.c_str(), -1, &rc, format);
-                SelectObject(mem, oldFont);
-                BitBlt(hdc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
-                SelectObject(mem, oldBmp);
-                DeleteObject(bmp);
-                DeleteDC(mem);
+                const HBITMAP bmp = mem != nullptr ? CreateCompatibleBitmap(hdc, w, h) : nullptr;
+                const auto oldBmp = bmp != nullptr ? SelectObject(mem, bmp) : nullptr;
+                const bool bitmapSelected = oldBmp != nullptr && oldBmp != HGDI_ERROR;
+                const HDC drawingDc = bitmapSelected ? mem : hdc;
+                try {
+                    FillRect(drawingDc, &rc, windowBackgroundBrush());
+                    const auto labelFont = reinterpret_cast<HFONT>(SendMessageW(window, WM_GETFONT, 0, 0));
+                    const auto oldFont =
+                        SelectObject(drawingDc, labelFont != nullptr ? labelFont : GetStockObject(DEFAULT_GUI_FONT));
+                    SetBkMode(drawingDc, TRANSPARENT);
+                    SetBkColor(drawingDc, settingsTheme().background);
+                    const bool muted =
+                        wnd != nullptr && (wnd->rangeLabels.contains(window) || wnd->noteLabels.contains(window));
+                    COLORREF textColor;
+                    if (!IsWindowEnabled(window)) {
+                        textColor = settingsTheme().textDisabled;
+                    } else if (muted) {
+                        textColor = settingsTheme().rangeText;
+                    } else {
+                        textColor = settingsTheme().text;
+                    }
+                    SetTextColor(drawingDc, textColor);
+                    // The alignment the static was created with, in the flags DrawText names it by.
+                    const LONG style = GetWindowLongW(window, GWL_STYLE);
+                    const LONG alignment = style & SS_TYPEMASK;
+                    UINT format = alignment == SS_RIGHT ? DT_RIGHT : alignment == SS_CENTER ? DT_CENTER : DT_LEFT;
+                    format |= (style & SS_CENTERIMAGE) != 0 ? DT_VCENTER | DT_SINGLELINE : DT_TOP | DT_WORDBREAK;
+                    try {
+                        const std::wstring text = windowText(window);
+                        UiLanguage::drawText(drawingDc, text.c_str(), -1, &rc, format);
+                    } catch (...) {
+                        SelectObject(drawingDc, oldFont);
+                        throw;
+                    }
+                    SelectObject(drawingDc, oldFont);
+                    if (bitmapSelected) {
+                        BitBlt(hdc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
+                    }
+                } catch (...) {
+                    if (bitmapSelected) {
+                        SelectObject(mem, oldBmp);
+                    }
+                    if (bmp != nullptr) {
+                        DeleteObject(bmp);
+                    }
+                    if (mem != nullptr) {
+                        DeleteDC(mem);
+                    }
+                    EndPaint(window, &ps);
+                    throw;
+                }
+                if (bitmapSelected) {
+                    SelectObject(mem, oldBmp);
+                }
+                if (bmp != nullptr) {
+                    DeleteObject(bmp);
+                }
+                if (mem != nullptr) {
+                    DeleteDC(mem);
+                }
             }
             EndPaint(window, &ps);
             return 0;
@@ -1804,11 +2304,11 @@ namespace merutilm::rff2 {
     }
 
     LRESULT SettingsWindow::textFieldProc(const HWND window, const UINT message, const WPARAM wParam,
-                                          const LPARAM lParam,
-                                          [[maybe_unused]] UINT_PTR uIdSubclass,
+                                          const LPARAM lParam, [[maybe_unused]] UINT_PTR uIdSubclass,
                                           [[maybe_unused]] DWORD_PTR dwRefData) {
         const auto self = reinterpret_cast<SettingsWindow *>(GetWindowLongPtr(window, GWLP_USERDATA));
         const ScopedSettingsMode themeScope = scopedMode(self);
+        const auto dpiScope = scopedDpi(self);
         auto &wnd = *self;
 
         // Skip the pre-paint erase: our WM_PAINT double-buffers, so a separate erase only flashes blank.
@@ -1829,136 +2329,193 @@ namespace merutilm::rff2 {
             POINT caretTarget = {-1, -1};
             PAINTSTRUCT ps;
             const HDC hdc = BeginPaint(window, &ps);
-            // Windows scrolls this control by blitting its pixels sideways and invalidating only the uncovered strip; dropping that clip lets the full-width blit below land every time, so a scroll can never strand the previous view's digits in the untouched part.
-            SelectClipRgn(hdc, nullptr);
-            if (cw > 0 && ch > 0) {
-                const HDC mem = CreateCompatibleDC(hdc);
-                const HBITMAP bmp = CreateCompatibleBitmap(hdc, cw, ch);
-                const auto oldBmp = SelectObject(mem, bmp);
-                FillRect(mem, &rc, IsWindowEnabled(window) ? textFieldBrush() : disabledControlBrush());
-                // Draw the text ourselves, vertically centered: a single-line edit always lays its line against the top of the client area.
-                {
-                    const std::wstring buf = windowText(window);
-                    const int index = getIndex(window);
-                    COLORREF color = settingsTheme().text;
-                    if (!IsWindowEnabled(window)) {
-                        color = settingsTheme().textDisabled;
-                    } else if (wnd.checkIndex(index)) {
-                        if (wnd.error[index]) color = settingsTheme().textError;
-                        else if (wnd.edited[index]) color = settingsTheme().textEdited;
-                        else if (wnd.modified[index]) color = settingsTheme().textModified;
-                    }
-                    const auto oldTextFont = SelectObject(mem, reinterpret_cast<HFONT>(
-                                                              SendMessageW(window, WM_GETFONT, 0, 0)));
-                    SetBkMode(mem, TRANSPARENT);
-                    SetTextColor(mem, color);
-                    // The single-line control lays its text against the top of the client area, so
-                    // both the line we draw and the caret we move below are centered from here.
-                    TEXTMETRICW tm;
-                    GetTextMetricsW(mem, &tm);
-                    const int lineTop = editTextTop(window, tm);
-                    const int lineBottom = lineTop + tm.tmHeight;
-                    const int textLen = static_cast<int>(buf.size());
-                    if (textLen > 0) {
-                        RECT fr;
-                        SendMessageW(window, EM_GETRECT, 0, reinterpret_cast<LPARAM>(&fr));
-                        // The packed return of EM_GETSEL is 16-bit and wraps on a long coordinate, so take the offsets through the out-parameters instead.
-                        DWORD rawStart = 0;
-                        DWORD rawEnd = 0;
-                        SendMessageW(window, EM_GETSEL, reinterpret_cast<WPARAM>(&rawStart),
-                                     reinterpret_cast<LPARAM>(&rawEnd));
-                        const int selStart = std::min(static_cast<int>(rawStart), textLen);
-                        const int selEnd = std::min(static_cast<int>(rawEnd), textLen);
-                        // Width of the first `count` characters, i.e. that caret position's offset from the start of the line.
-                        const auto prefixWidth = [&](const int count) {
-                            SIZE sz = {0, 0};
-                            if (count > 0) {
-                                GetTextExtentPoint32W(mem, buf.c_str(), count, &sz);
-                            }
-                            return static_cast<int>(sz.cx);
-                        };
-                        const int startX = prefixWidth(selStart);
-                        const int endX = prefixWidth(selEnd);
-                        const int totalX = selEnd == textLen ? endX : prefixWidth(textLen);
-
-                        // Where character 0 sits. A value that fits is right-aligned (the control is
-                        // in ES_RIGHT then, and puts it in the same place); one that overflows may be
-                        // scrolled anywhere between its tail and its head.
-                        const int tailOrigin = fr.right - totalX;
-                        const int headOrigin = std::max<int>(tailOrigin, fr.left);
-                        // Ask the control where a character it currently shows actually sits: that pins character 0 exactly and needs no guess about which end of a selection the caret is on.
-                        // The caret cannot answer this. GetCaretPos lags the control by an event and reads back a far-off sentinel when the field owns no caret, and deriving the origin from it slid the text sideways by a character on every keypress.
-                        const auto originAt = [&](const int index) -> std::optional<int> {
-                            const int k = std::min(index, textLen - 1);
-                            const LRESULT pos = SendMessageW(window, EM_POSFROMCHAR, k, 0);
-                            if (pos == -1) {
-                                return std::nullopt;
-                            }
-                            // Off-screen positions may be truncated to 16 bits on a long value, so only trust one the field is actually showing.
-                            if (const int x = static_cast<short>(LOWORD(pos)); x >= rc.left && x <= rc.right) {
-                                return x - prefixWidth(k);
-                            }
-                            return std::nullopt;
-                        };
-                        std::optional<int> reported = originAt(selEnd);
-                        if (!reported) {
-                            reported = originAt(selStart);
-                        }
-                        const int originX = std::clamp(reported.value_or(headOrigin), tailOrigin, headOrigin);
-                        const bool focused = GetFocus() == window;
-                        if (focused) {
-                            // A plain caret and a forward selection both sit at the far end of the selection; if that falls outside the field the selection runs backwards, so the caret is at the near end.
-                            const int atEnd = originX + endX;
-                            const int atStart = originX + startX;
-                            const bool endVisible = atEnd >= fr.left && atEnd <= fr.right;
-                            caretTarget = {std::min(endVisible ? atEnd : atStart, static_cast<int>(fr.right) - 1), lineTop};
-                        }
-                        RECT tr = {originX, lineTop, rc.right, rc.bottom};
-
-                        // The control's own selection highlight never runs (its WM_PAINT is replaced), so draw the selected run here or a select-all would leave no visible mark at all.
-                        // Only while focused, or every field the user has visited would keep showing a live-looking selection after they moved on.
-                        const int hlLeft = std::max<int>(originX + startX, fr.left);
-                        const int hlRight = std::min<int>(originX + endX, fr.right);
-                        const bool drawSelection = focused && selStart != selEnd && hlRight > hlLeft;
-                        if (drawSelection) {
-                            RECT hl = {hlLeft, lineTop, hlRight, lineBottom};
-                            const HBRUSH selBrush = CreateSolidBrush(
-                                darkSettingsMode() ? settingsTheme().primaryButton : GetSysColor(COLOR_HIGHLIGHT));
-                            FillRect(mem, &hl, selBrush);
-                            DeleteObject(selBrush);
-                        }
-                        DrawTextW(mem, buf.c_str(), -1, &tr, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOCLIP);
-                        // Redraw the same line clipped to the highlight so the selected digits stay readable against it.
-                        if (drawSelection) {
-                            SaveDC(mem);
-                            IntersectClipRect(mem, hlLeft, rc.top, hlRight, rc.bottom);
-                            SetTextColor(mem, darkSettingsMode()
-                                                  ? settingsTheme().primaryButtonText
-                                                  : GetSysColor(COLOR_HIGHLIGHTTEXT));
-                            DrawTextW(mem, buf.c_str(), -1, &tr, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOCLIP);
-                            RestoreDC(mem, -1);
-                        }
-                    }
-                    SelectObject(mem, oldTextFont);
-                }
-                // 1px rounded border so the field reads clearly against the white panel.
-                const HPEN pen = CreatePen(PS_SOLID, 1, settingsTheme().textFieldBorder);
-                const auto oldPen = SelectObject(mem, pen);
-                const auto oldBrush = SelectObject(mem, GetStockObject(NULL_BRUSH));
-                RoundRect(mem, rc.left, rc.top, rc.right, rc.bottom,
-                          sc(Constants::Win32::BUTTON_CORNER_RADIUS), sc(Constants::Win32::BUTTON_CORNER_RADIUS));
-                SelectObject(mem, oldPen);
-                SelectObject(mem, oldBrush);
-                DeleteObject(pen);
-                BitBlt(hdc, 0, 0, cw, ch, mem, 0, 0, SRCCOPY);
-                SelectObject(mem, oldBmp);
-                DeleteObject(bmp);
-                DeleteDC(mem);
+            const int savedTarget = SaveDC(hdc);
+            if (savedTarget == 0) {
+                EndPaint(window, &ps);
+                return 0;
             }
+            // Windows scrolls this control by blitting its pixels sideways and invalidating only the uncovered strip; dropping that clip lets the full-width blit below land every time, so a scroll can never strand the previous view's digits in the untouched part.
+            try {
+                SelectClipRgn(hdc, nullptr);
+                if (cw > 0 && ch > 0) {
+                    const HDC mem = CreateCompatibleDC(hdc);
+                    const HBITMAP bmp = mem != nullptr ? CreateCompatibleBitmap(hdc, cw, ch) : nullptr;
+                    const auto oldBmp = bmp != nullptr ? SelectObject(mem, bmp) : nullptr;
+                    const bool bitmapSelected = oldBmp != nullptr && oldBmp != HGDI_ERROR;
+                    const HDC drawingDc = bitmapSelected ? mem : hdc;
+                    try {
+                        FillRect(drawingDc, &rc, IsWindowEnabled(window) ? textFieldBrush() : disabledControlBrush());
+                        // Draw the text ourselves, vertically centered: a single-line edit always lays its line against the top of the client area.
+                        {
+                            const std::wstring buf = windowText(window);
+                            const int index = getIndex(window);
+                            COLORREF color = settingsTheme().text;
+                            if (!IsWindowEnabled(window)) {
+                                color = settingsTheme().textDisabled;
+                            } else if (wnd.checkIndex(index)) {
+                                if (wnd.error[index]) {
+                                    color = settingsTheme().textError;
+                                } else if (wnd.edited[index]) {
+                                    color = settingsTheme().textEdited;
+                                } else if (wnd.modified[index]) {
+                                    color = settingsTheme().textModified;
+                                }
+                            }
+                            const auto oldTextFont =
+                                SelectObject(drawingDc, reinterpret_cast<HFONT>(SendMessageW(window, WM_GETFONT, 0, 0)));
+                            try {
+                                SetBkMode(drawingDc, TRANSPARENT);
+                                SetTextColor(drawingDc, color);
+                                // The single-line control lays its text against the top of the client area, so
+                                // both the line we draw and the caret we move below are centered from here.
+                                TEXTMETRICW tm;
+                                GetTextMetricsW(drawingDc, &tm);
+                                const int lineTop = editTextTop(window, tm);
+                                const int lineBottom = lineTop + tm.tmHeight;
+                                const int textLen = static_cast<int>(buf.size());
+                                if (textLen > 0) {
+                                    RECT fr;
+                                    SendMessageW(window, EM_GETRECT, 0, reinterpret_cast<LPARAM>(&fr));
+                                    // The packed return of EM_GETSEL is 16-bit and wraps on a long coordinate, so take the offsets through the out-parameters instead.
+                                    DWORD rawStart = 0;
+                                    DWORD rawEnd = 0;
+                                    SendMessageW(window, EM_GETSEL, reinterpret_cast<WPARAM>(&rawStart),
+                                                 reinterpret_cast<LPARAM>(&rawEnd));
+                                    const int selStart = std::min(static_cast<int>(rawStart), textLen);
+                                    const int selEnd = std::min(static_cast<int>(rawEnd), textLen);
+                                    // Width of the first `count` characters, i.e. that caret position's offset from the start of the line.
+                                    const auto prefixWidth = [&](const int count) {
+                                        SIZE sz = {0, 0};
+                                        if (count > 0) {
+                                            GetTextExtentPoint32W(drawingDc, buf.c_str(), count, &sz);
+                                        }
+                                        return static_cast<int>(sz.cx);
+                                    };
+                                    const int startX = prefixWidth(selStart);
+                                    const int endX = prefixWidth(selEnd);
+                                    const int totalX = selEnd == textLen ? endX : prefixWidth(textLen);
+
+                                    // Where character 0 sits. A value that fits is right-aligned (the control is
+                                    // in ES_RIGHT then, and puts it in the same place); one that overflows may be
+                                    // scrolled anywhere between its tail and its head.
+                                    const int tailOrigin = fr.right - totalX;
+                                    const int headOrigin = std::max<int>(tailOrigin, fr.left);
+                                    // Ask the control where a character it currently shows actually sits: that pins character 0 exactly and needs no guess about which end of a selection the caret is on.
+                                    // The caret cannot answer this. GetCaretPos lags the control by an event and reads back a far-off sentinel when the field owns no caret, and deriving the origin from it slid the text sideways by a character on every keypress.
+                                    const auto originAt = [&](const int index) -> std::optional<int> {
+                                        const int k = std::min(index, textLen - 1);
+                                        const LRESULT pos = SendMessageW(window, EM_POSFROMCHAR, k, 0);
+                                        if (pos == -1) {
+                                            return std::nullopt;
+                                        }
+                                        // Off-screen positions may be truncated to 16 bits on a long value, so only trust one the field is actually showing.
+                                        if (const int x = static_cast<short>(LOWORD(pos));
+                                            x >= rc.left && x <= rc.right) {
+                                            return x - prefixWidth(k);
+                                        }
+                                        return std::nullopt;
+                                    };
+                                    std::optional<int> reported = originAt(selEnd);
+                                    if (!reported) {
+                                        reported = originAt(selStart);
+                                    }
+                                    const int originX = std::clamp(reported.value_or(headOrigin), tailOrigin, headOrigin);
+                                    const bool focused = GetFocus() == window;
+                                    if (focused) {
+                                        // A plain caret and a forward selection both sit at the far end of the selection; if that falls outside the field the selection runs backwards, so the caret is at the near end.
+                                        const int atEnd = originX + endX;
+                                        const int atStart = originX + startX;
+                                        const bool endVisible = atEnd >= fr.left && atEnd <= fr.right;
+                                        caretTarget = {
+                                            std::min(endVisible ? atEnd : atStart, static_cast<int>(fr.right) - 1),
+                                            lineTop};
+                                    }
+                                    RECT tr = {originX, lineTop, rc.right, rc.bottom};
+
+                                    // The control's own selection highlight never runs (its WM_PAINT is replaced), so draw the selected run here or a select-all would leave no visible mark at all.
+                                    // Only while focused, or every field the user has visited would keep showing a live-looking selection after they moved on.
+                                    const int hlLeft = std::max<int>(originX + startX, fr.left);
+                                    const int hlRight = std::min<int>(originX + endX, fr.right);
+                                    const bool drawSelection = focused && selStart != selEnd && hlRight > hlLeft;
+                                    if (drawSelection) {
+                                        RECT hl = {hlLeft, lineTop, hlRight, lineBottom};
+                                        const HBRUSH selBrush =
+                                            CreateSolidBrush(darkSettingsMode() ? settingsTheme().primaryButton
+                                                                                : GetSysColor(COLOR_HIGHLIGHT));
+                                        FillRect(drawingDc, &hl, selBrush);
+                                        DeleteObject(selBrush);
+                                    }
+                                    UiLanguage::drawText(drawingDc, buf.c_str(), -1, &tr,
+                                                         DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOCLIP);
+                                    // Redraw the same line clipped to the highlight so the selected digits stay readable against it.
+                                    if (drawSelection) {
+                                        const int savedSelection = SaveDC(drawingDc);
+                                        if (savedSelection != 0) {
+                                            try {
+                                                IntersectClipRect(drawingDc, hlLeft, rc.top, hlRight, rc.bottom);
+                                                SetTextColor(drawingDc, darkSettingsMode() ? settingsTheme().primaryButtonText
+                                                                                     : GetSysColor(COLOR_HIGHLIGHTTEXT));
+                                                UiLanguage::drawText(drawingDc, buf.c_str(), -1, &tr,
+                                                                     DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOCLIP);
+                                            } catch (...) {
+                                                RestoreDC(drawingDc, savedSelection);
+                                                throw;
+                                            }
+                                            RestoreDC(drawingDc, savedSelection);
+                                        }
+                                    }
+                                }
+                            } catch (...) {
+                                SelectObject(drawingDc, oldTextFont);
+                                throw;
+                            }
+                            SelectObject(drawingDc, oldTextFont);
+                        }
+                        // 1px rounded border so the field reads clearly against the white panel.
+                        const HPEN pen = CreatePen(PS_SOLID, 1, settingsTheme().textFieldBorder);
+                        const auto oldPen = SelectObject(drawingDc, pen);
+                        const auto oldBrush = SelectObject(drawingDc, GetStockObject(NULL_BRUSH));
+                        RoundRect(drawingDc, rc.left, rc.top, rc.right, rc.bottom,
+                                  sc(Constants::Win32::BUTTON_CORNER_RADIUS),
+                                  sc(Constants::Win32::BUTTON_CORNER_RADIUS));
+                        SelectObject(drawingDc, oldPen);
+                        SelectObject(drawingDc, oldBrush);
+                        DeleteObject(pen);
+                        if (bitmapSelected) {
+                            BitBlt(hdc, 0, 0, cw, ch, mem, 0, 0, SRCCOPY);
+                        }
+                    } catch (...) {
+                        if (bitmapSelected) {
+                            SelectObject(mem, oldBmp);
+                        }
+                        if (bmp != nullptr) {
+                            DeleteObject(bmp);
+                        }
+                        if (mem != nullptr) {
+                            DeleteDC(mem);
+                        }
+                        throw;
+                    }
+                    if (bitmapSelected) {
+                        SelectObject(mem, oldBmp);
+                    }
+                    if (bmp != nullptr) {
+                        DeleteObject(bmp);
+                    }
+                    if (mem != nullptr) {
+                        DeleteDC(mem);
+                    }
+                }
+            } catch (...) {
+                RestoreDC(hdc, savedTarget);
+                EndPaint(window, &ps);
+                throw;
+            }
+            RestoreDC(hdc, savedTarget);
             EndPaint(window, &ps);
             if (caretTarget.x >= 0 && GetFocus() == window) {
-                if (POINT current; !GetCaretPos(&current) || current.x != caretTarget.x ||
-                                   current.y != caretTarget.y) {
+                if (POINT current;
+                    !GetCaretPos(&current) || current.x != caretTarget.x || current.y != caretTarget.y) {
                     SetCaretPos(caretTarget.x, caretTarget.y);
                 }
             }
@@ -1982,28 +2539,28 @@ namespace merutilm::rff2 {
                 }
             };
             switch (message) {
-                case WM_PASTE:
-                case WM_CUT:
-                case WM_CLEAR:
-                case WM_UNDO:
-                case EM_REPLACESEL:
+            case WM_PASTE:
+            case WM_CUT:
+            case WM_CLEAR:
+            case WM_UNDO:
+            case EM_REPLACESEL:
+                markEdited();
+                break;
+            // Control characters are commands rather than text, and Backspace / Delete arrive
+            // as WM_KEYDOWN below. WM_SETTEXT is deliberately absent: it is how a committed
+            // value is written back, which is the opposite of an edit.
+            case WM_CHAR:
+                if (wParam >= L' ') {
                     markEdited();
-                    break;
-                // Control characters are commands rather than text, and Backspace / Delete arrive
-                // as WM_KEYDOWN below. WM_SETTEXT is deliberately absent: it is how a committed
-                // value is written back, which is the opposite of an edit.
-                case WM_CHAR:
-                    if (wParam >= L' ') {
-                        markEdited();
-                    }
-                    break;
-                case WM_KEYDOWN:
-                    if (wParam == VK_DELETE || wParam == VK_BACK) {
-                        markEdited();
-                    }
-                    break;
-                default:
-                    break;
+                }
+                break;
+            case WM_KEYDOWN:
+                if (wParam == VK_DELETE || wParam == VK_BACK) {
+                    markEdited();
+                }
+                break;
+            default:
+                break;
             }
         }
 
@@ -2015,39 +2572,39 @@ namespace merutilm::rff2 {
         // So the control gets to process them with painting switched off, and the field is then
         // re-aligned, its caret put back on the drawn line, and the whole thing repainted in one blit.
         switch (message) {
-            case WM_SETTEXT:
-            case WM_PASTE:
-            case WM_CUT:
-            case WM_CLEAR:
-            case WM_UNDO:
-            case EM_REPLACESEL:
-            case EM_SETSEL:
-            case EM_SCROLLCARET:
-            case EM_LINESCROLL:
-            case WM_HSCROLL:
-            case WM_LBUTTONDOWN:
-            case WM_LBUTTONUP:
-            case WM_LBUTTONDBLCLK:
-            // The control auto-scrolls a drag that has run off the edge on a timer of its own.
-            case WM_TIMER:
+        case WM_SETTEXT:
+        case WM_PASTE:
+        case WM_CUT:
+        case WM_CLEAR:
+        case WM_UNDO:
+        case EM_REPLACESEL:
+        case EM_SETSEL:
+        case EM_SCROLLCARET:
+        case EM_LINESCROLL:
+        case WM_HSCROLL:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        // The control auto-scrolls a drag that has run off the edge on a timer of its own.
+        case WM_TIMER:
+            return relayoutQuietly(window, message, wParam, lParam);
+        // Only while dragging: a plain hover changes nothing and would repaint on every move.
+        case WM_MOUSEMOVE:
+            if (wParam & MK_LBUTTON) {
                 return relayoutQuietly(window, message, wParam, lParam);
-            // Only while dragging: a plain hover changes nothing and would repaint on every move.
-            case WM_MOUSEMOVE:
-                if (wParam & MK_LBUTTON) {
-                    return relayoutQuietly(window, message, wParam, lParam);
-                }
-                break;
-            // Focus is left to paint normally: suppressing redraw across it interferes with the
-            // control creating and showing its caret.
-            case WM_SETFOCUS:
-            case WM_KILLFOCUS: {
-                const LRESULT res = DefSubclassProc(window, message, wParam, lParam);
-                layoutEditText(window);
-                InvalidateRect(window, nullptr, FALSE);
-                return res;
             }
-            default:
-                break;
+            break;
+        // Focus is left to paint normally: suppressing redraw across it interferes with the
+        // control creating and showing its caret.
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS: {
+            const LRESULT res = DefSubclassProc(window, message, wParam, lParam);
+            layoutEditText(window);
+            InvalidateRect(window, nullptr, FALSE);
+            return res;
+        }
+        default:
+            break;
         }
 
         // Swallow the Enter/Esc characters so committing or cancelling a value does not beep.
@@ -2068,8 +2625,7 @@ namespace merutilm::rff2 {
                 }
                 // Plain (non-slider) float fields that opted into arrow nudging (linear or
                 // decade-adaptive).
-                if (wnd.textFieldArrowSteps.contains(index) ||
-                    wnd.textFieldDecadeRanges.contains(index)) {
+                if (wnd.textFieldArrowSteps.contains(index) || wnd.textFieldDecadeRanges.contains(index)) {
                     wnd.nudgeTextFieldValue(window, index, wParam == VK_UP ? 1 : -1, coarse);
                     return 0;
                 }
@@ -2081,13 +2637,15 @@ namespace merutilm::rff2 {
             if (wParam == VK_RETURN && wnd.checkIndex(index)) {
                 const int length = GetWindowTextLengthW(window) + 1; //include NULL character
                 std::wstring buf(length, '\0');
-                GetWindowTextW(window, buf.data(), length);
+                buf.resize(GetWindowTextW(window, buf.data(), length));
+                if (buf == wnd.currValueToString(index)) {
+                    wnd.edited[index] = false;
+                    return 0;
+                }
 
                 const HDC hdc = GetDC(window);
                 try {
-                    if (std::any value = (*wnd.parsers[index])(buf);
-                        (*wnd.validConditions[index])(value)
-                    ) {
+                    if (std::any value = (*wnd.parsers[index])(buf); (*wnd.validConditions[index])(value)) {
                         (*wnd.callbacks[index])(value);
                         wnd.references[index] = value;
                         wnd.modified[index] = true;
@@ -2106,7 +2664,8 @@ namespace merutilm::rff2 {
                 // Keep the paired slider in sync when this field belongs to one.
                 if (const auto sit = wnd.indexToSlider.find(index); sit != wnd.indexToSlider.end()) {
                     SliderBinding &sb = wnd.sliders[sit->second];
-                    setTrackbarFromValue(sb, static_cast<double>(std::any_cast<float>(wnd.references[index])));
+                    setTrackbarFromValue(sb,
+                                         static_cast<double>(std::any_cast<float>(wnd.references[index])));
                 }
                 ReleaseDC(window, hdc);
                 return 0;
@@ -2122,8 +2681,7 @@ namespace merutilm::rff2 {
     }
 
     LRESULT SettingsWindow::ownerDrawnButtonProc(const HWND window, const UINT message, const WPARAM wParam,
-                                                 const LPARAM lParam,
-                                                 [[maybe_unused]] UINT_PTR uIdSubclass,
+                                                 const LPARAM lParam, [[maybe_unused]] UINT_PTR uIdSubclass,
                                                  [[maybe_unused]] DWORD_PTR dwRefData) {
         // An owner-drawn button fills its whole face with the parent's WM_CTLCOLORBTN brush before
         // it asks for WM_DRAWITEM, and the panel cannot answer that in a way that costs nothing:
@@ -2161,66 +2719,89 @@ namespace merutilm::rff2 {
     // theme's own arrow - and none of that follows the panel. The face is painted here instead, on
     // the rounded button face every other value control in the column carries.
     LRESULT SettingsWindow::selectionBoxProc(const HWND window, const UINT message, const WPARAM wParam,
-                                             const LPARAM lParam,
-                                             [[maybe_unused]] UINT_PTR uIdSubclass,
+                                             const LPARAM lParam, [[maybe_unused]] UINT_PTR uIdSubclass,
                                              const DWORD_PTR dwRefData) {
         const auto wnd = reinterpret_cast<SettingsWindow *>(dwRefData);
         const ScopedSettingsMode themeScope = scopedMode(wnd);
+        const auto dpiScope = scopedDpi(wnd);
         switch (message) {
-            // The face below covers every pixel of the control, so an erase pass only flashes the
-            // panel color through it.
-            case WM_ERASEBKGND:
-                return 1;
-            case WM_PAINT: {
-                PAINTSTRUCT ps;
-                const HDC dc = BeginPaint(window, &ps);
-                RECT rc;
-                GetClientRect(window, &rc);
-                const int w = rc.right - rc.left;
-                const int h = rc.bottom - rc.top;
-                if (w <= 0 || h <= 0) {
-                    EndPaint(window, &ps);
-                    return 0;
-                }
-                // Composed off-screen for the same reason the owner-drawn buttons are: the face,
-                // the label and the arrow are separate writes, and a refresh landing between them
-                // catches the control half drawn.
-                const HDC mem = CreateCompatibleDC(dc);
-                const HBITMAP bmp = CreateCompatibleBitmap(dc, w, h);
-                const auto oldBmp = SelectObject(mem, bmp);
-                paintSelectionBoxFace(window, mem, rc, reinterpret_cast<HFONT>(wnd->font));
-                BitBlt(dc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
-                SelectObject(mem, oldBmp);
-                DeleteObject(bmp);
-                DeleteDC(mem);
+        // The face below covers every pixel of the control, so an erase pass only flashes the
+        // panel color through it.
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            const HDC dc = BeginPaint(window, &ps);
+            RECT rc;
+            GetClientRect(window, &rc);
+            const int w = rc.right - rc.left;
+            const int h = rc.bottom - rc.top;
+            if (w <= 0 || h <= 0) {
                 EndPaint(window, &ps);
                 return 0;
             }
-            // Everything that changes what the face shows: the value, the focus ring, the pressed
-            // look while the list is down, and the greyed face of a row switched off.
-            case WM_SETFOCUS:
-            case WM_KILLFOCUS:
-            case WM_ENABLE:
-            case WM_MOUSEWHEEL:
-            case WM_KEYDOWN:
-            case WM_LBUTTONDOWN:
-            case WM_LBUTTONUP:
-            case CB_SETCURSEL:
-            case CB_SHOWDROPDOWN:
-            case CB_SELECTSTRING: {
-                const LRESULT result = DefSubclassProc(window, message, wParam, lParam);
-                InvalidateRect(window, nullptr, FALSE);
-                return result;
+            // Composed off-screen for the same reason the owner-drawn buttons are: the face,
+            // the label and the arrow are separate writes, and a refresh landing between them
+            // catches the control half drawn.
+            const HDC mem = CreateCompatibleDC(dc);
+            const HBITMAP bmp = mem != nullptr ? CreateCompatibleBitmap(dc, w, h) : nullptr;
+            const auto oldBmp = bmp != nullptr ? SelectObject(mem, bmp) : nullptr;
+            const bool bitmapSelected = oldBmp != nullptr && oldBmp != HGDI_ERROR;
+            const HDC drawingDc = bitmapSelected ? mem : dc;
+            try {
+                paintSelectionBoxFace(window, drawingDc, rc, reinterpret_cast<HFONT>(wnd->font));
+                if (bitmapSelected) {
+                    BitBlt(dc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
+                }
+            } catch (...) {
+                if (bitmapSelected) {
+                    SelectObject(mem, oldBmp);
+                }
+                if (bmp != nullptr) {
+                    DeleteObject(bmp);
+                }
+                if (mem != nullptr) {
+                    DeleteDC(mem);
+                }
+                EndPaint(window, &ps);
+                throw;
             }
-            default:
-                break;
+            if (bitmapSelected) {
+                SelectObject(mem, oldBmp);
+            }
+            if (bmp != nullptr) {
+                DeleteObject(bmp);
+            }
+            if (mem != nullptr) {
+                DeleteDC(mem);
+            }
+            EndPaint(window, &ps);
+            return 0;
+        }
+        // Everything that changes what the face shows: the value, the focus ring, the pressed
+        // look while the list is down, and the greyed face of a row switched off.
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_ENABLE:
+        case WM_MOUSEWHEEL:
+        case WM_KEYDOWN:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case CB_SETCURSEL:
+        case CB_SHOWDROPDOWN:
+        case CB_SELECTSTRING: {
+            const LRESULT result = DefSubclassProc(window, message, wParam, lParam);
+            InvalidateRect(window, nullptr, FALSE);
+            return result;
+        }
+        default:
+            break;
         }
         return DefSubclassProc(window, message, wParam, lParam);
     }
 
     LRESULT SettingsWindow::trackbarProc(const HWND window, const UINT message, const WPARAM wParam,
-                                         const LPARAM lParam,
-                                         [[maybe_unused]] UINT_PTR uIdSubclass,
+                                         const LPARAM lParam, [[maybe_unused]] UINT_PTR uIdSubclass,
                                          [[maybe_unused]] DWORD_PTR dwRefData) {
         // Skip the erase pass: paintSlider covers every pixel of the control, so a separate erase
         // only flashes the panel color through the bar.
@@ -2239,22 +2820,21 @@ namespace merutilm::rff2 {
         return DefSubclassProc(window, message, wParam, lParam);
     }
 
-
     void SettingsWindow::callError(const int index) {
         error[index] = true;
-        MessageBox(window, "Invalid value!", "Error", MB_OK | MB_ICONERROR);
+        NativeDialogs::message(window, "Invalid value!", "Error", MB_OK | MB_ICONERROR);
         error[index] = false;
     }
-
 
     std::wstring SettingsWindow::currValueToString(const int index) const {
         return (*unparsers[index])(references[index]);
     }
 
-
     HWND SettingsWindow::registerButton(const std::wstring &settingsName, const std::wstring &buttonText,
                                         std::function<void()> &&callback,
-                                        const std::wstring &descriptionTitle, const std::wstring &descriptionDetail) {
+                                        const std::wstring &descriptionTitle,
+                                        const std::wstring &descriptionDetail) {
+        const auto dpiScope = scopedDpi(this);
         // Inline layout: label on the left, button on the right, matching the
         // checkbox/text-input rows.
         const int nw = getFixedNameWidth();
@@ -2263,16 +2843,10 @@ namespace merutilm::rff2 {
         const int index = count;
         const HWND label = createLabel(settingsName, descriptionTitle, descriptionDetail, nw);
 
-        const HWND button = CreateWindowExW(0, WC_BUTTONW, buttonText.data(),
-                                            Constants::Win32::STYLE_PUSHBUTTON,
-                                            nw,
-                                            getYOffset(),
-                                            vw,
-                                            inputHeight,
-                                            window,
-                                            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + index),
-                                            nullptr,
-                                            nullptr);
+        const HWND button =
+            CreateWindowExW(0, WC_BUTTONW, UiLanguage::text(buttonText).c_str(),
+                            Constants::Win32::STYLE_PUSHBUTTON, nw, getYOffset(), vw, inputHeight, window,
+                            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + index), nullptr, nullptr);
 
         SendMessage(button, WM_SETFONT, font, TRUE);
         SetWindowSubclass(button, ownerDrawnButtonProc, 1, 0);
@@ -2282,14 +2856,14 @@ namespace merutilm::rff2 {
         // We need to register a dummy action so the index matches
         bool dummy = false;
         references.emplace_back(dummy);
-        unparsers.emplace_back(std::make_unique<std::function<std::wstring(const std::any &)>>([](const std::any &) { return L""; }));
+        unparsers.emplace_back(std::make_unique<std::function<std::wstring(const std::any &)>>(
+            [](const std::any &) { return L""; }));
         parsers.emplace_back(nullptr);
         validConditions.emplace_back(nullptr);
 
         // The callback for button needs to be wrapped to match signature
-        callbacks.emplace_back(std::make_unique<std::function<void(std::any &)>>([callback](std::any &) {
-            callback();
-        }));
+        callbacks.emplace_back(
+            std::make_unique<std::function<void(std::any &)>>([callback](std::any &) { callback(); }));
 
         enumValues.emplace_back(nullptr);
         error.emplace_back(false);
@@ -2303,7 +2877,6 @@ namespace merutilm::rff2 {
         adjustWindowHeight();
         return button;
     }
-
 
     // Highest decade window a log slider opens: the largest power of ten strictly below maxValue,
     // so that window ([topBase, maxValue]) still has somewhere to run. Every base being a power of
@@ -2338,7 +2911,8 @@ namespace merutilm::rff2 {
         return std::clamp(std::log10(value / base) / sliderWindowDecades(base, binding.maxValue), 0.0, 1.0);
     }
 
-    double SettingsWindow::sliderWindowValue(const SliderBinding &binding, const double base, const double t) {
+    double SettingsWindow::sliderWindowValue(const SliderBinding &binding, const double base,
+                                             const double t) {
         if (binding.zeroStop && base <= binding.minValue) {
             return t * binding.minValue * 10.0;
         }
@@ -2350,7 +2924,8 @@ namespace merutilm::rff2 {
         if (!binding.logScale) {
             const double span = binding.maxValue - binding.minValue;
             const double t = span <= 0.0 ? 0.0 : (value - binding.minValue) / span;
-            const auto pos = static_cast<int>(std::lround(std::clamp(t, 0.0, 1.0) * Constants::Win32::SLIDER_RESOLUTION));
+            const auto pos =
+                static_cast<int>(std::lround(std::clamp(t, 0.0, 1.0) * Constants::Win32::SLIDER_RESOLUTION));
             SendMessage(binding.trackbar, TBM_SETPOS, TRUE, pos);
             return;
         }
@@ -2358,15 +2933,13 @@ namespace merutilm::rff2 {
         // hold 0, whose log10 is -inf and so names no decade at all.
         const double base = binding.zeroStop && value < binding.minValue * 10.0
                                 ? binding.minValue
-                                : std::clamp(std::pow(10.0, std::floor(std::log10(value))),
-                                             binding.minValue,
+                                : std::clamp(std::pow(10.0, std::floor(std::log10(value))), binding.minValue,
                                              sliderTopBase(binding.minValue, binding.maxValue));
         binding.currentBase = base;
-        const auto pos = static_cast<int>(std::lround(
-            sliderWindowFraction(binding, base, value) * Constants::Win32::SLIDER_RESOLUTION));
+        const auto pos = static_cast<int>(
+            std::lround(sliderWindowFraction(binding, base, value) * Constants::Win32::SLIDER_RESOLUTION));
         SendMessage(binding.trackbar, TBM_SETPOS, TRUE, pos);
     }
-
 
     // Parks the thumb at each end and reads back where the control put it. The trackbar's channel
     // rect is not this range - it is inset from the control's edges by less than half a thumb, so
@@ -2384,7 +2957,6 @@ namespace merutilm::rff2 {
         left = thumbCenter(0);
         right = thumbCenter(Constants::Win32::SLIDER_RESOLUTION);
     }
-
 
     // The slider's whole face, drawn in place of the trackbar's own groove and pointer: a thin
     // rounded track with everything left of the thumb filled in the accent color, and a round thumb
@@ -2409,10 +2981,8 @@ namespace merutilm::rff2 {
         constexpr int ss = Constants::Win32::SLIDER_SUPERSAMPLE;
         // Never bigger than the room left beyond the ends of the thumb's travel, or the circle
         // would be cut off by the control's own edge at the ends of the bar.
-        const int radius = std::max(1, std::min({
-            sc(Constants::Win32::SLIDER_THUMB_DIAMETER) / 2, h / 2,
-            binding.trackLeft, w - binding.trackRight
-        }));
+        const int radius = std::max(1, std::min({sc(Constants::Win32::SLIDER_THUMB_DIAMETER) / 2, h / 2,
+                                                 binding.trackLeft, w - binding.trackRight}));
         const int half = std::max(1, std::min(sc(Constants::Win32::SLIDER_TRACK_THICKNESS), h) / 2) * ss;
 
         const HDC mem = CreateCompatibleDC(hdc);
@@ -2448,7 +3018,6 @@ namespace merutilm::rff2 {
         DeleteDC(mem);
     }
 
-
     void SettingsWindow::nudgeSliderValue(const int sliderIdx, const int direction, const bool coarse) {
         SliderBinding &sb = sliders[sliderIdx];
         if (!checkIndex(sb.index)) {
@@ -2460,13 +3029,12 @@ namespace merutilm::rff2 {
         if (sb.logScale) {
             const double factor = coarse ? 10.0 : 1.1220184543019633;
             const double raw = direction > 0 ? current * factor : current / factor;
-            value = static_cast<float>(sb.wholeSteps
-                                           ? std::llround(std::clamp(raw, floorValue, sb.maxValue))
-                                           : std::clamp(raw, floorValue, sb.maxValue));
+            value = static_cast<float>(sb.wholeSteps ? std::llround(std::clamp(raw, floorValue, sb.maxValue))
+                                                     : std::clamp(raw, floorValue, sb.maxValue));
             const auto curWhole = static_cast<float>(std::llround(current));
             if (sb.wholeSteps && value == curWhole) {
-                value = static_cast<float>(std::clamp(
-                    static_cast<double>(curWhole) + direction, floorValue, sb.maxValue));
+                value = static_cast<float>(
+                    std::clamp(static_cast<double>(curWhole) + direction, floorValue, sb.maxValue));
             }
         } else {
             const double step = (sb.maxValue - sb.minValue) / (coarse ? 10.0 : 100.0);
@@ -2484,7 +3052,6 @@ namespace merutilm::rff2 {
         SetWindowTextW(sb.textField, currValueToString(sb.index).data());
         setTrackbarFromValue(sb, static_cast<double>(value));
     }
-
 
     void SettingsWindow::nudgeTextFieldValue(const HWND field, const int index, const int direction,
                                              const bool coarse) {
@@ -2551,17 +3118,13 @@ namespace merutilm::rff2 {
         SetWindowTextW(field, currValueToString(index).data());
     }
 
-
-    HWND SettingsWindow::registerSliderInput(const std::wstring &settingsName, float *ptr,
-                                             const float minValue, const float maxValue,
-                                             std::function<std::wstring(const float &)> &&unparser,
-                                             std::function<float(std::wstring &)> &&parser,
-                                             std::function<bool(const float &)> &&validCondition,
-                                             std::function<void()> &&callback,
-                                             const std::wstring &descriptionTitle,
-                                             const std::wstring &descriptionDetail,
-                                             const std::wstring &trailingButtonText,
-                                             std::function<void()> &&trailingButtonCallback) {
+    HWND SettingsWindow::registerSliderInput(
+        const std::wstring &settingsName, float *ptr, const float minValue, const float maxValue,
+        std::function<std::wstring(const float &)> &&unparser, std::function<float(std::wstring &)> &&parser,
+        std::function<bool(const float &)> &&validCondition, std::function<void()> &&callback,
+        const std::wstring &descriptionTitle, const std::wstring &descriptionDetail,
+        const std::wstring &trailingButtonText, std::function<void()> &&trailingButtonCallback) {
+        const auto dpiScope = scopedDpi(this);
         const int nw = getFixedNameWidth();
         const int vw = getFixedValueWidth();
         const int textGap = sc(Constants::Win32::GAP_SETTINGS_COLOR_SWATCH);
@@ -2579,11 +3142,9 @@ namespace merutilm::rff2 {
         const int index = count;
         const HWND label = createLabel(settingsName, descriptionTitle, descriptionDetail, nw);
 
-        const HWND text = CreateWindowExW(0, WC_EDITW, unparser(*ptr).data(),
-                                          Constants::Win32::STYLE_TEXT_FIELD, nw, y, textW,
-                                          inputHeight, window,
-                                          reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count),
-                                          nullptr, nullptr);
+        const HWND text = CreateWindowExW(
+            0, WC_EDITW, unparser(*ptr).data(), Constants::Win32::STYLE_TEXT_FIELD, nw, y, textW, inputHeight,
+            window, reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count), nullptr, nullptr);
         SetWindowSubclass(text, textFieldProc, 1, 0);
         SetWindowLongPtr(text, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
         SendMessage(text, WM_SETFONT, font, TRUE);
@@ -2596,13 +3157,12 @@ namespace merutilm::rff2 {
 
         // Thinner trackbar, vertically centered in the row, leaving a gap underneath for
         // the min/max range labels.
-        const int barH = std::min(inputHeight, std::max(
-            sc(Constants::Win32::SETTINGS_SLIDER_HEIGHT), GetSystemMetrics(SM_CYHSCROLL)));
+        const int barH = std::min(inputHeight, std::max(sc(Constants::Win32::SETTINGS_SLIDER_HEIGHT),
+                                                        GetSystemMetrics(SM_CYHSCROLL)));
         const int barY = y + (inputHeight - barH) / 2;
         const int barX = nw + textW + textGap;
-        const HWND bar = CreateWindowExW(0, TRACKBAR_CLASSW, L"", Constants::Win32::STYLE_TRACKBAR,
-                                         barX, barY, sliderW, barH, window,
-                                         nullptr, nullptr, nullptr);
+        const HWND bar = CreateWindowExW(0, TRACKBAR_CLASSW, L"", Constants::Win32::STYLE_TRACKBAR, barX,
+                                         barY, sliderW, barH, window, nullptr, nullptr, nullptr);
         SendMessage(bar, TBM_SETRANGE, TRUE, MAKELONG(0, Constants::Win32::SLIDER_RESOLUTION));
         SendMessage(bar, WM_SETFONT, font, TRUE);
         // The face is owner-drawn from the parent's WM_NOTIFY; this only keeps the control from
@@ -2622,9 +3182,9 @@ namespace merutilm::rff2 {
             // Stop short of where the next row begins: running the static all the way down to it
             // left the two boxes touching, so a range label and the row under it had nothing
             // between them. Never shorter than the label's own line, or the text would clip.
-            const int labelH = std::max(sc(Constants::Win32::FONT_SIZE_RANGE_LABEL),
-                                        y + inputHeight + sc(Constants::Win32::GAP_SETTINGS_INPUT)
-                                        - labelY - sc(4));
+            const int labelH =
+                std::max(sc(Constants::Win32::FONT_SIZE_RANGE_LABEL),
+                         y + inputHeight + sc(Constants::Win32::GAP_SETTINGS_INPUT) - labelY - sc(4));
             // Line the captions up with the ends of the drawn track, not with the trackbar's own
             // rect: the track spans the thumb's travel, which is inset from the control's edges, so
             // a caption pinned to the window edge sits visibly outside the bar it is labelling.
@@ -2633,14 +3193,12 @@ namespace merutilm::rff2 {
             const int channelRight = barX + (hasTravel ? trackRight : sliderW);
             const int labelW = std::max(1, (channelRight - channelLeft) / 2);
             minLabel = CreateWindowExW(0, WC_STATICW, unparser(minValue).data(),
-                                       WS_CHILD | WS_VISIBLE | SS_LEFT, channelLeft, labelY,
-                                       labelW, labelH, window, nullptr,
-                                       GetModuleHandleW(nullptr), nullptr);
-            const HWND maxLabel = CreateWindowExW(0, WC_STATICW, unparser(maxValue).data(),
-                                                  WS_CHILD | WS_VISIBLE | SS_RIGHT,
-                                                  channelRight - labelW, labelY,
-                                                  labelW, labelH, window, nullptr,
-                                                  GetModuleHandleW(nullptr), nullptr);
+                                       WS_CHILD | WS_VISIBLE | SS_LEFT, channelLeft, labelY, labelW, labelH,
+                                       window, nullptr, GetModuleHandleW(nullptr), nullptr);
+            const HWND maxLabel =
+                CreateWindowExW(0, WC_STATICW, unparser(maxValue).data(), WS_CHILD | WS_VISIBLE | SS_RIGHT,
+                                channelRight - labelW, labelY, labelW, labelH, window, nullptr,
+                                GetModuleHandleW(nullptr), nullptr);
             SendMessage(minLabel, WM_SETFONT, smallFont, TRUE);
             SendMessage(maxLabel, WM_SETFONT, smallFont, TRUE);
             rangeLabels.insert(minLabel);
@@ -2661,21 +3219,19 @@ namespace merutilm::rff2 {
         const auto sliderIdx = static_cast<int>(sliders.size());
         const bool logScale = minValue > 0.0f && maxValue / minValue >= 100.0f;
         const bool wholeSteps = maxValue - minValue > 10.0f;
-        sliders.push_back(SliderBinding{
-            bar, text, index, static_cast<double>(minValue), static_cast<double>(maxValue),
-            static_cast<double>(minValue), logScale, wholeSteps, minLabel, trackLeft, trackRight
-        });
+        sliders.push_back(SliderBinding{bar, text, index, static_cast<double>(minValue),
+                                        static_cast<double>(maxValue), static_cast<double>(minValue),
+                                        logScale, wholeSteps, minLabel, trackLeft, trackRight});
         trackbarToSlider.emplace(bar, sliderIdx);
         indexToSlider.emplace(index, sliderIdx);
         setTrackbarFromValue(sliders[sliderIdx], static_cast<double>(*ptr));
 
         if (!trailingButtonText.empty()) {
             const int buttonX = nw + textW + textGap + sliderW + buttonGap;
-            const HWND button = CreateWindowExW(0, WC_BUTTONW, trailingButtonText.data(),
-                                                Constants::Win32::STYLE_PUSHBUTTON, buttonX, y, buttonW,
-                                                inputHeight, window,
-                                                reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count),
-                                                nullptr, nullptr);
+            const HWND button = CreateWindowExW(
+                0, WC_BUTTONW, UiLanguage::text(trailingButtonText).c_str(),
+                Constants::Win32::STYLE_PUSHBUTTON, buttonX, y, buttonW, inputHeight, window,
+                reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count), nullptr, nullptr);
             SendMessage(button, WM_SETFONT, font, TRUE);
             SetWindowSubclass(button, ownerDrawnButtonProc, 1, 0);
             createdChildWindows.push_back(button);
@@ -2688,7 +3244,11 @@ namespace merutilm::rff2 {
             parsers.emplace_back(nullptr);
             validConditions.emplace_back(nullptr);
             callbacks.emplace_back(std::make_unique<std::function<void(std::any &)>>(
-                [cb = std::move(trailingButtonCallback)](std::any &) { if (cb) cb(); }));
+                [cb = std::move(trailingButtonCallback)](std::any &) {
+                    if (cb) {
+                        cb();
+                    }
+                }));
             enumValues.emplace_back(nullptr);
             error.emplace_back(false);
             edited.emplace_back(false);
@@ -2702,13 +3262,12 @@ namespace merutilm::rff2 {
         return text;
     }
 
-
     HWND SettingsWindow::registerColorButton(const std::wstring &settingsName, const std::wstring &buttonText,
                                              std::function<COLORREF()> &&colorProvider,
                                              std::function<void()> &&callback,
                                              const std::wstring &descriptionTitle,
-                                             const std::wstring &descriptionDetail,
-                                             const void *boundValue) {
+                                             const std::wstring &descriptionDetail, const void *boundValue) {
+        const auto dpiScope = scopedDpi(this);
         // Same inline layout as registerButton, but the button is owner-drawn so a
         // small black-framed color swatch can be painted inside it (see WM_DRAWITEM).
         const int nw = getFixedNameWidth();
@@ -2717,16 +3276,10 @@ namespace merutilm::rff2 {
         const int index = count;
         const HWND label = createLabel(settingsName, descriptionTitle, descriptionDetail, nw);
 
-        const HWND button = CreateWindowExW(0, WC_BUTTONW, buttonText.data(),
-                                            WS_CHILD | WS_TABSTOP | WS_VISIBLE | BS_OWNERDRAW,
-                                            nw,
-                                            getYOffset(),
-                                            vw,
-                                            inputHeight,
-                                            window,
-                                            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + index),
-                                            nullptr,
-                                            nullptr);
+        const HWND button = CreateWindowExW(
+            0, WC_BUTTONW, UiLanguage::text(buttonText).c_str(),
+            WS_CHILD | WS_TABSTOP | WS_VISIBLE | BS_OWNERDRAW, nw, getYOffset(), vw, inputHeight, window,
+            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + index), nullptr, nullptr);
 
         SendMessage(button, WM_SETFONT, font, TRUE);
         SetWindowSubclass(button, ownerDrawnButtonProc, 1, 0);
@@ -2738,13 +3291,15 @@ namespace merutilm::rff2 {
         // callback also repaints the button so a newly-picked color shows at once.
         bool dummy = false;
         references.emplace_back(dummy);
-        unparsers.emplace_back(std::make_unique<std::function<std::wstring(const std::any &)>>([](const std::any &) { return L""; }));
+        unparsers.emplace_back(std::make_unique<std::function<std::wstring(const std::any &)>>(
+            [](const std::any &) { return L""; }));
         parsers.emplace_back(nullptr);
         validConditions.emplace_back(nullptr);
-        callbacks.emplace_back(std::make_unique<std::function<void(std::any &)>>([callback, button](std::any &) {
-            callback();
-            InvalidateRect(button, nullptr, TRUE);
-        }));
+        callbacks.emplace_back(
+            std::make_unique<std::function<void(std::any &)>>([callback, button](std::any &) {
+                callback();
+                InvalidateRect(button, nullptr, TRUE);
+            }));
         enumValues.emplace_back(nullptr);
         error.emplace_back(false);
         edited.emplace_back(false);
@@ -2759,7 +3314,6 @@ namespace merutilm::rff2 {
         return button;
     }
 
-
     void SettingsWindow::setSliderFractionalSteps(const HWND textField) {
         const int index = getIndex(textField);
         if (!checkIndex(index)) {
@@ -2769,7 +3323,6 @@ namespace merutilm::rff2 {
             sliders[it->second].wholeSteps = false;
         }
     }
-
 
     void SettingsWindow::setSliderZeroStop(const HWND textField) {
         const int index = getIndex(textField);
@@ -2790,7 +3343,6 @@ namespace merutilm::rff2 {
             }
         }
     }
-
 
     void SettingsWindow::setFloatValueByField(const HWND textField, const float value) {
         const int index = getIndex(textField);
@@ -2813,7 +3365,6 @@ namespace merutilm::rff2 {
         }
     }
 
-
     void SettingsWindow::setRadioValueByGroup(const std::vector<HWND> &items, const std::any &value) {
         if (items.empty()) {
             return;
@@ -2830,7 +3381,6 @@ namespace merutilm::rff2 {
         }
     }
 
-
     void SettingsWindow::setCheckboxValue(const HWND checkbox, const bool value) {
         const int index = getIndex(checkbox);
         if (!checkIndex(index)) {
@@ -2841,8 +3391,8 @@ namespace merutilm::rff2 {
         InvalidateRect(checkbox, nullptr, TRUE);
     }
 
-
     void SettingsWindow::registerStaticText(const std::wstring &text) {
+        const auto dpiScope = scopedDpi(this);
         RECT rect;
         GetClientRect(window, &rect);
         const int width = rect.right - rect.left - sc(Constants::Win32::GAP_SETTINGS_INPUT) * 2;
@@ -2852,22 +3402,27 @@ namespace merutilm::rff2 {
         const HDC hdc = GetDC(window);
         const auto oldFont = SelectObject(hdc, reinterpret_cast<HFONT>(font));
         RECT calc = {0, 0, width, 0};
-        DrawTextW(hdc, text.data(), -1, &calc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
+        UiLanguage::drawText(hdc, text.data(), -1, &calc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
         SelectObject(hdc, oldFont);
         ReleaseDC(window, hdc);
         const int textHeight = calc.bottom - calc.top;
 
-        const HWND staticText = CreateWindowExW(0, WC_STATICW, text.data(),
-                                                WS_CHILD | WS_VISIBLE | SS_LEFT,
-                                                sc(Constants::Win32::GAP_SETTINGS_INPUT),
-                                                getYOffset(),
-                                                width,
-                                                textHeight,
-                                                window, nullptr,
-                                                GetModuleHandleW(nullptr), nullptr);
+        const HWND staticText =
+            CreateWindowExW(0, WC_STATICW, UiLanguage::text(text).c_str(), WS_CHILD | WS_VISIBLE | SS_LEFT,
+                            sc(Constants::Win32::GAP_SETTINGS_INPUT), getYOffset(), width, textHeight, window,
+                            nullptr, GetModuleHandleW(nullptr), nullptr);
 
         SendMessage(staticText, WM_SETFONT, font, TRUE);
         noteLabels.insert(staticText);
+        dpiHeightMeasures.emplace(staticText, [this, text](int width) {
+            const HDC dc = GetDC(window);
+            const auto previous = SelectObject(dc, reinterpret_cast<HFONT>(font));
+            RECT measured{0, 0, width, 0};
+            UiLanguage::drawText(dc, text.c_str(), -1, &measured, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
+            SelectObject(dc, previous);
+            ReleaseDC(window, dc);
+            return int(measured.bottom);
+        });
         subclassLabel(staticText);
         createdChildWindows.push_back(staticText);
         // Advance the cursor by the exact measured text height (+ a gap), no row rounding.
@@ -2875,12 +3430,12 @@ namespace merutilm::rff2 {
         adjustWindowHeight();
     }
 
-
     HWND SettingsWindow::registerOwnerDrawnPanel(const int pixelHeight,
                                                  std::function<void(HDC, const RECT &)> &&painter,
                                                  const std::wstring &rowLabel,
                                                  const std::wstring &descriptionTitle,
                                                  const std::wstring &descriptionDetail) {
+        const auto dpiScope = scopedDpi(this);
         RECT rect;
         GetClientRect(window, &rect);
         const bool asRow = !rowLabel.empty();
@@ -2891,10 +3446,9 @@ namespace merutilm::rff2 {
         if (asRow) {
             createLabel(rowLabel, descriptionTitle, descriptionDetail, left);
         }
-        const HWND panel = CreateWindowExW(0, WC_STATICW, L"",
-                                           WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
-                                           left, getYOffset(), width, height,
-                                           window, nullptr, GetModuleHandleW(nullptr), nullptr);
+        const HWND panel =
+            CreateWindowExW(0, WC_STATICW, L"", WS_CHILD | WS_VISIBLE | SS_OWNERDRAW, left, getYOffset(),
+                            width, height, window, nullptr, GetModuleHandleW(nullptr), nullptr);
         cardPainters.emplace(panel, std::move(painter));
         createdChildWindows.push_back(panel);
         if (asRow) {
@@ -2907,12 +3461,13 @@ namespace merutilm::rff2 {
         return panel;
     }
 
-
-    HWND SettingsWindow::registerPrimaryButton(const std::wstring &buttonText, std::function<void()> &&callback,
+    HWND SettingsWindow::registerPrimaryButton(const std::wstring &buttonText,
+                                               std::function<void()> &&callback,
                                                const std::wstring &descriptionTitle,
                                                const std::wstring &descriptionDetail) {
-        (void) descriptionTitle;
-        (void) descriptionDetail;
+        const auto dpiScope = scopedDpi(this);
+        (void)descriptionTitle;
+        (void)descriptionDetail;
         RECT rect;
         GetClientRect(window, &rect);
         const int margin = sc(Constants::Win32::GAP_SETTINGS_INPUT);
@@ -2922,10 +3477,10 @@ namespace merutilm::rff2 {
         // A little extra space above the prominent button sets it apart from the card above.
         const int y = getYOffset() + gap;
 
-        const HWND button = CreateWindowExW(0, WC_BUTTONW, buttonText.data(),
-                                            Constants::Win32::STYLE_PUSHBUTTON, margin, y, width, h, window,
-                                            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count),
-                                            nullptr, nullptr);
+        const HWND button =
+            CreateWindowExW(0, WC_BUTTONW, UiLanguage::text(buttonText).c_str(),
+                            Constants::Win32::STYLE_PUSHBUTTON, margin, y, width, h, window,
+                            reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count), nullptr, nullptr);
         SendMessage(button, WM_SETFONT, headerFont, TRUE);
         SetWindowSubclass(button, ownerDrawnButtonProc, 1, 0);
         primaryButtons.insert(button);
@@ -2938,8 +3493,8 @@ namespace merutilm::rff2 {
             [](const std::any &) { return L""; }));
         parsers.emplace_back(nullptr);
         validConditions.emplace_back(nullptr);
-        callbacks.emplace_back(std::make_unique<std::function<void(std::any &)>>(
-            [callback](std::any &) { callback(); }));
+        callbacks.emplace_back(
+            std::make_unique<std::function<void(std::any &)>>([callback](std::any &) { callback(); }));
         enumValues.emplace_back(nullptr);
         error.emplace_back(false);
         edited.emplace_back(false);
@@ -2954,17 +3509,17 @@ namespace merutilm::rff2 {
         return button;
     }
 
-
     void SettingsWindow::registerNotesCard(const std::wstring &title,
                                            const std::vector<std::pair<std::wstring, std::wstring>> &notes) {
+        const auto dpiScope = scopedDpi(this);
         RECT rect;
         GetClientRect(window, &rect);
         const int margin = sc(Constants::Win32::GAP_SETTINGS_INPUT);
         const int width = rect.right - rect.left - margin * 2;
         // titleGap sets the header apart from the notes; without it the first heading runs
         // straight into the title and the card reads as one undivided block of text.
-        const int pad = sc(16), topPad = sc(8), bulletIndent = sc(22), titleH = sc(34),
-                  titleGap = sc(12), lineGap = sc(2), noteGap = sc(14);
+        const int pad = sc(16), topPad = sc(8), bulletIndent = sc(22), titleH = sc(34), titleGap = sc(12),
+                  lineGap = sc(2), noteGap = sc(14);
         const int textLeft = pad + bulletIndent;
         const int textWidth = width - textLeft - pad;
 
@@ -2988,7 +3543,7 @@ namespace merutilm::rff2 {
         auto measure = [&](const HFONT fnt, const std::wstring &s) {
             const auto of = SelectObject(mdc, fnt);
             RECT c = {0, 0, textWidth, 0};
-            DrawTextW(mdc, s.c_str(), -1, &c, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
+            UiLanguage::drawText(mdc, s.c_str(), -1, &c, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
             SelectObject(mdc, of);
             return static_cast<int>(c.bottom - c.top);
         };
@@ -3010,6 +3565,27 @@ namespace merutilm::rff2 {
         const int height = topPad + titleH + titleGap + notesH + pad;
 
         auto painter = [=, this](const HDC hdc, const RECT &rc) {
+            const int pad = sc(16), topPad = sc(8), textLeft = pad + sc(22), titleH = sc(34),
+                      titleGap = sc(12), lineGap = sc(2), noteGap = sc(14);
+            const HFONT bodyFont = reinterpret_cast<HFONT>(font),
+                        boldFont = reinterpret_cast<HFONT>(headerFont);
+            const auto previousFont = SelectObject(hdc, boldFont);
+            TEXTMETRICW metrics{};
+            GetTextMetricsW(hdc, &metrics);
+            SelectObject(hdc, previousFont);
+            const int headingCentre = (metrics.tmInternalLeading + metrics.tmAscent) / 2;
+            std::vector<int> headH, detailH;
+            const auto measure = [&](HFONT font, const std::wstring &text) {
+                const auto old = SelectObject(hdc, font);
+                RECT r{0, 0, std::max(1L, rc.right - rc.left - textLeft - pad), 0};
+                UiLanguage::drawText(hdc, text.c_str(), -1, &r, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
+                SelectObject(hdc, old);
+                return int(r.bottom);
+            };
+            for (const auto &note : notes) {
+                headH.push_back(measure(boldFont, note.first));
+                detailH.push_back(measure(bodyFont, note.second));
+            }
             drawCardFace(hdc, rc, settingsTheme().cardNoteBackground, settingsTheme().cardNoteBorder);
             SetBkMode(hdc, TRANSPARENT);
             const int x = rc.left + pad;
@@ -3025,7 +3601,7 @@ namespace merutilm::rff2 {
             SelectObject(hdc, boldFont);
             SetTextColor(hdc, settingsTheme().cardNoteAccent);
             RECT tr = {x + icoSz + sc(12), y, rc.right - pad, y + titleH};
-            DrawTextW(hdc, title.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            UiLanguage::drawText(hdc, title.c_str(), -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
             y += titleH + titleGap;
 
             const int tl = rc.left + textLeft;
@@ -3054,14 +3630,14 @@ namespace merutilm::rff2 {
                 SelectObject(hdc, boldFont);
                 SetTextColor(hdc, settingsTheme().cardNoteTitle);
                 RECT hr = {tl, y, tl + tw, y + headH[i]};
-                DrawTextW(hdc, notes[i].first.c_str(), -1, &hr, DT_LEFT | DT_WORDBREAK);
+                UiLanguage::drawText(hdc, notes[i].first.c_str(), -1, &hr, DT_LEFT | DT_WORDBREAK);
                 y += headH[i] + lineGap;
 
                 // Detail line (muted).
                 SelectObject(hdc, bodyFont);
                 SetTextColor(hdc, settingsTheme().rangeText);
                 RECT dr = {tl, y, tl + tw, y + detailH[i]};
-                DrawTextW(hdc, notes[i].second.c_str(), -1, &dr, DT_LEFT | DT_WORDBREAK);
+                UiLanguage::drawText(hdc, notes[i].second.c_str(), -1, &dr, DT_LEFT | DT_WORDBREAK);
                 y += detailH[i] + noteGap;
             }
         };
@@ -3070,14 +3646,35 @@ namespace merutilm::rff2 {
         // control in the stack; the extra breathing room on both sides marks it as an aside.
         const int standoff = sc(Constants::Win32::GAP_SETTINGS_INPUT);
         yCursor += standoff;
-        registerOwnerDrawnPanel(height, std::move(painter));
+        const auto card = registerOwnerDrawnPanel(height, std::move(painter));
+        dpiHeightMeasures.emplace(card, [this, notes](int width) {
+            const HDC dc = GetDC(window);
+            const int textWidth = std::max(1, width - sc(16) * 2 - sc(22));
+            const auto measure = [&](HFONT selected, const std::wstring &text) {
+                const auto previous = SelectObject(dc, selected);
+                RECT measured{0, 0, textWidth, 0};
+                UiLanguage::drawText(dc, text.c_str(), -1, &measured, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
+                SelectObject(dc, previous);
+                return int(measured.bottom);
+            };
+            int height = sc(8) + sc(34) + sc(12) + sc(16);
+            for (size_t i = 0; i < notes.size(); ++i) {
+                height += measure(reinterpret_cast<HFONT>(headerFont), notes[i].first) + sc(2) +
+                          measure(reinterpret_cast<HFONT>(font), notes[i].second);
+                if (i + 1 < notes.size()) {
+                    height += sc(14);
+                }
+            }
+            ReleaseDC(window, dc);
+            return height;
+        });
         yCursor += standoff;
         adjustWindowHeight();
     }
 
-
     void SettingsWindow::registerHelpButton(const std::wstring &title,
                                             const std::vector<std::pair<std::wstring, std::wstring>> &notes) {
+        const auto dpiScope = scopedDpi(this);
         std::wstring text;
         for (size_t i = 0; i < notes.size(); ++i) {
             text += notes[i].first + L"\n" + notes[i].second;
@@ -3085,14 +3682,17 @@ namespace merutilm::rff2 {
                 text += L"\n\n";
             }
         }
-        registerButton(L"Help", L"Open Guide", [parent = window, title, text] {
-            MessageBoxW(parent, text.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
-        }, title, text);
+        registerButton(
+            L"Help", L"Open Guide",
+            [parent = window, title, text] {
+                NativeDialogs::message(parent, text.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
+            },
+            title, text);
     }
-
 
     void SettingsWindow::registerInsertChips(const HWND targetField, const std::vector<std::wstring> &chips,
                                              const bool replaceWhole) {
+        const auto dpiScope = scopedDpi(this);
         const int margin = sc(Constants::Win32::GAP_SETTINGS_INPUT);
         RECT rect;
         GetClientRect(window, &rect);
@@ -3126,11 +3726,10 @@ namespace merutilm::rff2 {
             const int chipX = margin + x;
             const int chipY = baseY + row * rowStep;
 
-            const HWND btn = CreateWindowExW(0, WC_BUTTONW, chip.data(),
-                                             Constants::Win32::STYLE_PUSHBUTTON, chipX, chipY, w, rowH,
-                                             window,
-                                             reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count),
-                                             nullptr, nullptr);
+            const HWND btn = CreateWindowExW(
+                0, WC_BUTTONW, UiLanguage::text(chip).c_str(), Constants::Win32::STYLE_PUSHBUTTON, chipX,
+                chipY, w, rowH, window, reinterpret_cast<HMENU>(Constants::Win32::ID_OPTIONS + count),
+                nullptr, nullptr);
             SendMessage(btn, WM_SETFONT, font, TRUE);
             SetWindowSubclass(btn, ownerDrawnButtonProc, 1, 0);
             createdChildWindows.push_back(btn);
@@ -3148,8 +3747,7 @@ namespace merutilm::rff2 {
                         // Select all (for undo) then overwrite with the full example.
                         SendMessageW(targetField, EM_SETSEL, 0, -1);
                     }
-                    SendMessageW(targetField, EM_REPLACESEL, TRUE,
-                                 reinterpret_cast<LPARAM>(snippet.data()));
+                    SendMessageW(targetField, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(snippet.data()));
                     SetFocus(targetField);
                     // Color the field as edited so it reads as "unsaved, press Enter".
                     if (const int ti = getIndex(targetField); checkIndex(ti)) {
@@ -3176,8 +3774,8 @@ namespace merutilm::rff2 {
         adjustWindowHeight();
     }
 
-
     void SettingsWindow::registerSectionHeader(const std::wstring &title, const bool separateFromPrevious) {
+        const auto dpiScope = scopedDpi(this);
         if (yCursor == 0) {
             topMargin = sc(Constants::Win32::GAP_SETTINGS_INPUT / 3);
         }
@@ -3210,21 +3808,18 @@ namespace merutilm::rff2 {
         // its code point (U+25BC open / U+25B6 folded) so the source stays plain ASCII. It starts
         // hidden and is only shown once the panel grows long enough to be worth collapsing.
         const wchar_t arrowGlyph[2] = {static_cast<wchar_t>(0x25BC), 0};
-        const HWND arrow = CreateWindowExW(0, WC_STATICW, arrowGlyph,
-                                           WS_CHILD | (sectionsCollapsible ? WS_VISIBLE : 0) |
-                                           SS_CENTER | SS_CENTERIMAGE | SS_NOTIFY,
-                                           margin, headerY, pad - margin, inputHeight,
-                                           window, toggleId, GetModuleHandleW(nullptr), nullptr);
+        const HWND arrow = CreateWindowExW(
+            0, WC_STATICW, arrowGlyph,
+            WS_CHILD | (sectionsCollapsible ? WS_VISIBLE : 0) | SS_CENTER | SS_CENTERIMAGE | SS_NOTIFY,
+            margin, headerY, pad - margin, inputHeight, window, toggleId, GetModuleHandleW(nullptr), nullptr);
         SendMessage(arrow, WM_SETFONT, font, TRUE);
         subclassLabel(arrow);
         createdChildWindows.push_back(arrow);
 
-        const HWND header = CreateWindowExW(0, WC_STATICW, title.data(),
-                                            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY,
-                                            pad, headerY,
-                                            fullWidth - pad - margin,
-                                            inputHeight,
-                                            window, toggleId, GetModuleHandleW(nullptr), nullptr);
+        const HWND header = CreateWindowExW(0, WC_STATICW, UiLanguage::text(title).c_str(),
+                                            WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY, pad,
+                                            headerY, fullWidth - pad - margin, inputHeight, window, toggleId,
+                                            GetModuleHandleW(nullptr), nullptr);
         SendMessage(header, WM_SETFONT, headerFont, TRUE);
         subclassLabel(header);
         createdChildWindows.push_back(header);
@@ -3237,14 +3832,12 @@ namespace merutilm::rff2 {
         adjustWindowHeight();
     }
 
-
     void SettingsWindow::setRowPreview(const HWND control, std::function<void(HDC, const RECT &)> &&painter) {
         rowPreviews[control] = std::move(painter);
         SetWindowPos(control, nullptr, 0, 0, getFixedValueWidth(), inputHeight,
                      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         InvalidateRect(control, nullptr, TRUE);
     }
-
 
     void SettingsWindow::setRowEnabled(const HWND control, const bool enabled) {
         const int index = getIndex(control);
@@ -3278,14 +3871,15 @@ namespace merutilm::rff2 {
             const auto *at = static_cast<const std::byte *>(value);
             // A row bound outside the object is one the panel holds for itself - which layer it is
             // pointed at, what it is staging - and is left as it is.
-            if (value == nullptr || std::less<>{}(at, begin) || !std::less<>{}(at, end) || kept.contains(value)) {
+            if (value == nullptr || std::less<>{}(at, begin) || !std::less<>{}(at, end) ||
+                kept.contains(value)) {
                 continue;
             }
             const auto it = rowControlGroups.find(index);
             if (it == rowControlGroups.end()) {
                 continue;
             }
-            for (const HWND item: it->second) {
+            for (const HWND item : it->second) {
                 if (!IsWindowEnabled(item)) {
                     continue;
                 }
@@ -3335,8 +3929,7 @@ namespace merutilm::rff2 {
         }
     }
 
-
     void SettingsWindow::setWindowCloseFunction(std::function<void()> &&function) {
         this->windowCloseFunction = std::move(function);
     }
-}
+} // namespace merutilm::rff2

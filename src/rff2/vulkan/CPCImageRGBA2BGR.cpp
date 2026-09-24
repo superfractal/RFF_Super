@@ -1,9 +1,14 @@
 //
 // Created by Merutilm on 2025-09-10.
-// Modified by Opus 5 on 2026-08-10, 2026-08-19.
+// Modified by Opus 5 on 2026-08-10, 2026-08-19
+// Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23
 //
 
 #include "CPCImageRGBA2BGR.hpp"
+
+#include <limits>
+#include <stdexcept>
 
 #include "SharedImageContextIndices.hpp"
 #include "../../vulkan_helper/repo/GlobalSamplerRepo.hpp"
@@ -46,18 +51,31 @@ namespace merutilm::rff2 {
         auto &desc = getDescriptor(SET_INFO);
         const auto &prevImg = *desc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_IMAGE_SAMPLER);
         const auto &srcExtent = prevImg.getImageContextMF()[0].extent;
-        outputExtent = VkExtent2D{
+        const VkExtent2D nextExtent{
             std::max<uint32_t>(1, srcExtent.width / downsample),
             std::max<uint32_t>(1, srcExtent.height / downsample)
         };
+        const uint64_t pixels = uint64_t{nextExtent.width} * nextExtent.height;
+        const uint64_t maxShaderInt = std::numeric_limits<int32_t>::max();
+        const uint64_t maxHostBytes = std::numeric_limits<uint32_t>::max();
+        if (pixels > maxShaderInt ||
+            (!hdr && pixels * 3 + 3 > maxShaderInt)) {
+            throw std::overflow_error("Video output exceeds compute shader index limits");
+        }
+        // Keep the SDR extra word used by the existing buffer layout.
+        const uint64_t words = hdr ? pixels * 2 : pixels * 3 / 4 + 1;
+        if (words > maxHostBytes / sizeof(uint32_t)) {
+            throw std::overflow_error("Video output exceeds the host buffer size limit");
+        }
+        outputExtent = nextExtent;
 
         auto &ssbo = *desc.get<vkh::ShaderStorage>(0, BINDING_OUTPUT_SSBO);
         // Two words per pixel for rgba64le; the BGR24 path packs three bytes into every word instead.
-        const uint32_t words = hdr
-                                   ? outputExtent.width * outputExtent.height * 2
-                                   : outputExtent.width * outputExtent.height * 3 / 4 + 1;
-        ssbo.getHostObject().resizeAndClear<uint32_t>(TARGET_OUTPUT_SSBO_DATA, words);
+        ssbo.getHostObject().resizeAndClear<uint32_t>(TARGET_OUTPUT_SSBO_DATA,
+                                                      static_cast<uint32_t>(words));
         ssbo.reloadBuffer();
+        // lock() copies the staging mapping, so the cleared host words must be in it first.
+        ssbo.upload();
         ssbo.lock(wc.getCommandPool());
 
         const auto &ubo = *desc.get<vkh::Uniform>(0, BINDING_OUTPUT_EXTENT_UBO);

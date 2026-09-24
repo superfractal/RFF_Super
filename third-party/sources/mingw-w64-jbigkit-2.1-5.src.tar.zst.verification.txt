@@ -1,0 +1,3 @@
+gpgv: Signature made Fri Aug 18 21:47:08 2023    
+gpgv:                using RSA key 5F944B027F7FE2091985AA2EFA11531AA0AA7F57
+gpgv: Good signature from "Christoph Reiter (MSYS2 development key) <reiter.christoph@gmail.com>"

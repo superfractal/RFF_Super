@@ -1,16 +1,19 @@
 //
 // Created by Merutilm on 2025-07-11.
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-20, 2026-09-22, 2026-09-23
 //
 
 #pragma once
 
 #include "../manage/PipelineManager.hpp"
+#include "PipelinePreparation.hpp"
 #include "../handle/WindowContextHandler.hpp"
 
 namespace merutilm::vkh {
     struct PipelineAbstract : public WindowContextHandler {
-        VkPipeline pipeline = nullptr;
+        std::shared_ptr<PipelinePreparation::Job> preparation;
+        VkPipeline pipeline = VK_NULL_HANDLE;
         PipelineLayoutRef pipelineLayout;
         const std::vector<DescriptorPtr> descriptors;
         const std::vector<ShaderModulePtr> shaderModules;
@@ -20,16 +23,12 @@ namespace merutilm::vkh {
         VkSpecializationInfo specializationInfo = {};
 
         explicit PipelineAbstract(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
-                                  PipelineManager &&pipelineManager) : WindowContextHandler(wc),
-                                                                       pipelineLayout(pipelineLayout),
-                                                                       descriptors(
-                                                                           std::move(pipelineManager->descriptors)),
-                                                                       shaderModules(
-                                                                           std::move(
-                                                                               pipelineManager->shaderModules)),
-                                                                       specialization(
-                                                                           std::move(
-                                                                               pipelineManager->specialization)) {
+                                  PipelineManager &&pipelineManager)
+            : WindowContextHandler(wc),
+              pipelineLayout(pipelineLayout),
+              descriptors(std::move(pipelineManager->descriptors)),
+              shaderModules(std::move(pipelineManager->shaderModules)),
+              specialization(std::move(pipelineManager->specialization)) {
         }
 
         ~PipelineAbstract() override = default;
@@ -45,7 +44,6 @@ namespace merutilm::vkh {
         virtual void cmdBindAll(VkCommandBuffer cbh, uint32_t frameIndex, DescIndexPicker &&descIndices = {}) const = 0;
 
 
-        [[nodiscard]] VkPipeline getPipelineHandle() const { return pipeline; }
 
         [[nodiscard]] DescriptorRef getDescriptor(const uint32_t setIndex) const {
             return *descriptors[setIndex];
@@ -53,7 +51,6 @@ namespace merutilm::vkh {
 
         [[nodiscard]] PipelineLayoutRef getLayout() const { return pipelineLayout; }
 
-        [[nodiscard]] std::span<const DescriptorPtr> getDescriptors() const { return descriptors; }
 
         [[nodiscard]] std::span<const ShaderModulePtr> getShaderModules() const {
             return shaderModules;
@@ -81,7 +78,8 @@ namespace merutilm::vkh {
         // Rebuilds the pipeline with new constants. A pipeline is immutable once created, so the
         // device is drained and the old one destroyed first; unchanged words cost nothing.
         void respecialize(std::vector<uint32_t> &&data) {
-            if (data == specialization) {
+            finishPreparation();
+            if (data == specialization && pipeline != VK_NULL_HANDLE) {
                 return;
             }
             wc.core.getLogicalDevice().waitDeviceIdle();
@@ -92,23 +90,45 @@ namespace merutilm::vkh {
 
 
         [[nodiscard]] std::vector<VkDescriptorSet> enumerateDescriptorSets(const uint32_t frameIndex, DescIndexPicker &&descIndices = {}) const {
-            std::vector<VkDescriptorSet> sets(descriptors.size());
+            std::vector<VkDescriptorSet> descriptorSets(descriptors.size());
 
             if (!descIndices.empty()) {
                 safe_array::check_size_equal(descriptors.size(), descIndices.size(), "Descriptor Index");
-            }else {
+            } else {
                 descIndices = std::vector<uint32_t>(descriptors.size(), 0);
             }
 
-            for (uint32_t i = 0; i < descriptors.size(); i++) {
-                sets[i] = descriptors[i]->getDescriptorSetHandle(frameIndex, descIndices[i]);
+            for (uint32_t descriptorIndex = 0; descriptorIndex < descriptors.size(); ++descriptorIndex) {
+                descriptorSets[descriptorIndex] =
+                    descriptors[descriptorIndex]->getDescriptorSetHandle(frameIndex, descIndices[descriptorIndex]);
             }
-            return sets;
+            return descriptorSets;
         }
 
     protected:
+        template<class Create> void prepare(Create create) {
+            const auto& device = wc.core.getPhysicalDevice().getPhysicalDeviceProperties();
+            preparation = PipelinePreparation::enqueue(wc.getWindow().getWindowHandle(), shaderModules.back()->getFilename(),
+                std::to_string(device.vendorID) + ":" + std::to_string(device.deviceID) + ":" + std::to_string(device.driverVersion), std::move(create));
+        }
+        void finishPreparation() {
+            if (preparation) {
+                auto pending = std::move(preparation);
+                pending->result.get();
+            }
+        }
+        void waitPreparation() const noexcept {
+            if (preparation) {
+                preparation->result.wait();
+            }
+        }
+
         void destroy() override {
+            if (pipeline == VK_NULL_HANDLE) {
+                return;
+            }
             allocator::invoke(vkDestroyPipeline, wc.core.getLogicalDevice().getLogicalDeviceHandle(), pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
         }
     };
 

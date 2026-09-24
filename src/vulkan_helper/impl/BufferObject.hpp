@@ -1,8 +1,15 @@
 //
 // Created by Merutilm on 2025-07-10.
+// Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23
 //
 
 #pragma once
+
+#include <cstdint>
+#include <memory>
+#include <variant>
+
 #include "CommandPool.hpp"
 #include "Fence.hpp"
 #include "../handle/CoreHandler.hpp"
@@ -22,7 +29,8 @@ namespace merutilm::vkh {
 
     public:
         explicit BufferObjectAbstract(CoreRef core, HostDataObjectManager &&dataManager,
-                              VkBufferUsageFlags bufferUsage, BufferLock bufferLock, bool multiframeEnabled);
+                                      VkBufferUsageFlags bufferUsage, BufferLock bufferLock,
+                                      bool multiframeEnabled);
 
         ~BufferObjectAbstract() override;
 
@@ -41,26 +49,37 @@ namespace merutilm::vkh {
         void unlock(CommandPoolRef commandPool, FencePtr fence = VK_NULL_HANDLE);
 
         [[nodiscard]] MultiframeBufferContext &getBufferContextMF() {
-            if (multiframeEnabled) return std::get<MultiframeBufferContext>(bufferContext);
+            if (multiframeEnabled) {
+                return std::get<MultiframeBufferContext>(bufferContext);
+            }
             throw exception_invalid_state("current object is not multiframed");
         }
 
         [[nodiscard]] const MultiframeBufferContext &getBufferContextMF() const {
-            if (multiframeEnabled) return std::get<MultiframeBufferContext>(bufferContext);
+            if (multiframeEnabled) {
+                return std::get<MultiframeBufferContext>(bufferContext);
+            }
             throw exception_invalid_state("current object is not multiframed (const)");
         }
 
         [[nodiscard]] const BufferContext &getBufferContextMF(const uint32_t frameIndex) const {
-            if (multiframeEnabled) return std::get<MultiframeBufferContext>(bufferContext)[frameIndex];
+            if (multiframeEnabled) {
+                return std::get<MultiframeBufferContext>(bufferContext)[frameIndex];
+            }
             throw exception_invalid_state("current object is not multiframed");
         }
+
         [[nodiscard]] BufferContext &getBufferContext() {
-            if (!multiframeEnabled) return std::get<BufferContext>(bufferContext);
+            if (!multiframeEnabled) {
+                return std::get<BufferContext>(bufferContext);
+            }
             throw exception_invalid_state("current object is multiframed");
         }
 
         [[nodiscard]] const BufferContext &getBufferContext() const {
-            if (!multiframeEnabled) return std::get<BufferContext>(bufferContext);
+            if (!multiframeEnabled) {
+                return std::get<BufferContext>(bufferContext);
+            }
             throw exception_invalid_state("current object is multiframed (const)");
         }
 
@@ -72,13 +91,22 @@ namespace merutilm::vkh {
 
         void updateMF(uint32_t frameIndex, uint32_t target) const;
 
+        // Copies the host data into every frame's mapping; init() maps a fresh allocation without doing so.
+        void upload() const;
+
         void checkFinalizedBeforeUpdate() const;
 
-        [[nodiscard]] HostDataObjectRef getHostObject() const { return *hostDataObject; }
+        [[nodiscard]] HostDataObjectRef getHostObject() const {
+            return *hostDataObject;
+        }
 
-        [[nodiscard]] bool isLocked() const { return locked; }
+        [[nodiscard]] bool isLocked() const {
+            return locked;
+        }
 
-        [[nodiscard]] bool isMultiframe() const { return multiframeEnabled; }
+        [[nodiscard]] bool isMultiframe() const {
+            return multiframeEnabled;
+        }
 
     protected:
         void init() override;

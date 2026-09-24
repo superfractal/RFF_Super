@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-15.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -14,8 +15,7 @@ namespace merutilm::rff2 {
 
         explicit GPCBloomThreshold(vkh::EngineRef engine, const uint32_t windowContextIndex,
                                    const uint32_t renderContextIndex,
-                                   const uint32_t
-                                   subpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
+                                   const uint32_t subpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
             engine, windowContextIndex, renderContextIndex, subpassIndex, "vk_bloom_threshold.frag") {
         }
 

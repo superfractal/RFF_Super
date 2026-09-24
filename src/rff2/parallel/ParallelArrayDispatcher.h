@@ -1,9 +1,18 @@
 //
 // Created by Merutilm on 2025-05-09.
 // Modified by Opus 5 on 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <thread>
+#include <utility>
+#include <vector>
+
 #include "ParallelRenderState.h"
 #include "../data/Matrix.h"
 namespace merutilm::rff2 {
@@ -27,7 +36,7 @@ namespace merutilm::rff2 {
         void dispatch();
 
     private:
-        static std::vector<uint16_t> getRenderPriority(uint16_t rpy);
+        static std::vector<uint16_t> getRenderPriority(uint16_t rowsPerWorker);
 
 
         void renderForward(uint16_t xRes, uint16_t yRes, uint16_t y, std::vector<std::atomic<bool> > &rendered);
@@ -44,77 +53,75 @@ namespace merutilm::rff2 {
 
 
     template<typename T>
-    ParallelArrayDispatcher<T>::ParallelArrayDispatcher(ParallelRenderState &state, Matrix<T> &matrix, const uint32_t threads,
-                                                        ParallelArrayRenderer<T> renderer) : state(state), matrix(matrix),
-        renderer(std::move(renderer)), threads(threads) {
+    ParallelArrayDispatcher<T>::ParallelArrayDispatcher(ParallelRenderState &state, Matrix<T> &matrix,
+                                                        const uint32_t threads, ParallelArrayRenderer<T> renderer)
+        : state(state), matrix(matrix), renderer(std::move(renderer)), threads(threads) {
     }
 
     template<typename T>
     void ParallelArrayDispatcher<T>::dispatch() {
-        const uint16_t rpy = matrix.getHeight() / threads + 1;
+        const uint16_t rowsPerWorker = matrix.getHeight() / threads + 1;
         if (state.interruptRequested()) {
             return;
         }
 
+        const std::vector<uint16_t> rowPriority = getRenderPriority(rowsPerWorker);
+        const auto xRes = matrix.getWidth();
+        const auto yRes = matrix.getHeight();
+        const auto pixelCount = matrix.getLength();
+        std::vector<std::atomic<bool>> rendered(pixelCount);
+        std::vector<std::jthread> workers;
+        workers.reserve(threads);
 
-        const std::vector<uint16_t> rpyIndices = getRenderPriority(rpy);
-        auto threadPool = std::vector<std::jthread>();
-        threadPool.reserve(threads);
-        auto xRes = matrix.getWidth();
-        auto yRes = matrix.getHeight();
-        auto len = matrix.getLength();
-        auto rendered = std::vector<std::atomic<bool> >(len);
-
-        for (uint16_t sy = 0; sy < matrix.getHeight(); sy += rpy) {
-            threadPool.emplace_back([sy, &rpyIndices, xRes, yRes, this, &rendered, len] {
-                for (const auto vy: rpyIndices) {
-                    renderForward(xRes, yRes, sy + vy, rendered);
+        for (uint16_t startRow = 0; startRow < matrix.getHeight(); startRow += rowsPerWorker) {
+            workers.emplace_back([startRow, &rowPriority, xRes, yRes, this, &rendered, pixelCount] {
+                for (const auto rowOffset : rowPriority) {
+                    renderForward(xRes, yRes, startRow + rowOffset, rendered);
                 }
-                renderBackward(xRes, yRes, len, rendered);
+                renderBackward(xRes, yRes, pixelCount, rendered);
             });
         }
 
-
-        for (auto &t: threadPool) {
-            if (t.joinable()) {
-                t.join();
+        for (auto &worker : workers) {
+            if (worker.joinable()) {
+                worker.join();
             }
         }
     }
 
-
     template<typename T>
-    std::vector<uint16_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint16_t rpy) {
-        auto result = std::vector<uint16_t>(rpy, 0);
-        uint16_t count = rpy >> 1;
-        uint16_t repetition = 1;
-        uint16_t index = 1;
+    std::vector<uint16_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint16_t rowsPerWorker) {
+        std::vector<uint16_t> priority(rowsPerWorker, 0);
+        uint16_t offset = rowsPerWorker >> 1;
+        uint16_t repetitionCount = 1;
+        uint16_t writeIndex = 1;
 
-        while (count > 0) {
-            for (uint16_t j = 0; j < repetition; ++j) {
-                result[index] = result[j] + count;
-                ++index;
+        while (offset > 0) {
+            for (uint16_t j = 0; j < repetitionCount; ++j) {
+                priority[writeIndex] = priority[j] + offset;
+                ++writeIndex;
             }
 
-            repetition <<= 1;
-            count >>= 1;
+            repetitionCount <<= 1;
+            offset >>= 1;
         }
 
-        auto cpy = result;
-        cpy.resize(index);
-        std::ranges::sort(cpy);
+        auto sortedPriority = priority;
+        sortedPriority.resize(writeIndex);
+        std::ranges::sort(sortedPriority);
 
-        uint16_t cpyIndex = 0;
-        while (index < result.size()) {
-            if (
-                const uint16_t missing = cpyIndex + count;
-                cpy.size() <= cpyIndex || cpy[cpyIndex] != missing) {
-                result[index] = missing;
-                ++index;
-                ++count;
-                } else ++cpyIndex;
+        uint16_t sortedIndex = 0;
+        while (writeIndex < priority.size()) {
+            const uint16_t missing = sortedIndex + offset;
+            if (sortedPriority.size() <= sortedIndex || sortedPriority[sortedIndex] != missing) {
+                priority[writeIndex] = missing;
+                ++writeIndex;
+                ++offset;
+            } else {
+                ++sortedIndex;
+            }
         }
-        return result;
+        return priority;
     }
 
 
@@ -130,13 +137,14 @@ namespace merutilm::rff2 {
                 return;
             }
 
-            uint32_t i = static_cast<uint32_t>(xRes) * y + x;
+            const uint32_t index = static_cast<uint32_t>(xRes) * y + x;
 
-            if (!rendered[i].exchange(true)) {
+            if (!rendered[index].exchange(true)) {
                 // Relaxed: the preview reads this matrix as it fills, so the elements are written
                 // the same way it reads them.
-                matrix.storeRelaxed(i, renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
-                                                static_cast<float>(y) / yRes, i, matrix.loadRelaxed(i)));
+                matrix.storeRelaxed(index, renderer(x, y, xRes, yRes, static_cast<float>(x) / xRes,
+                                                    static_cast<float>(y) / yRes, index,
+                                                    matrix.loadRelaxed(index)));
             }
         }
     }
@@ -152,9 +160,9 @@ namespace merutilm::rff2 {
             const auto [px, py] = matrix.getLocation(i);
 
             if (!rendered[i].exchange(true)) {
-                T c = renderer(px, py, xRes, yRes, static_cast<float>(px) / xRes, static_cast<float>(py) / yRes, i,
-                                    matrix.loadRelaxed(i));
-                matrix.storeRelaxed(i, c);
+                const T value = renderer(px, py, xRes, yRes, static_cast<float>(px) / xRes,
+                                         static_cast<float>(py) / yRes, i, matrix.loadRelaxed(i));
+                matrix.storeRelaxed(i, value);
             }
         }
     }

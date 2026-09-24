@@ -2,11 +2,17 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-15, 2026-08-26
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <span>
+#include <vector>
+
 #include "../core/vkh_base.hpp"
 #include "../handle/CoreHandler.hpp"
+#include "Surface.hpp"
 
 namespace merutilm::vkh {
     class SwapchainImpl final : public CoreHandler {
@@ -40,17 +46,27 @@ namespace merutilm::vkh {
 
         [[nodiscard]] VkExtent2D populateSwapchainExtent() const;
 
-        [[nodiscard]] VkExtent2D getCurrentExtent() const { return currentExtent; }
+        [[nodiscard]] VkExtent2D getCurrentExtent() const {
+            return currentExtent;
+        }
 
         // The format the present images were really created with, which the render pass built over
         // them has to name too.
-        [[nodiscard]] VkFormat getImageFormat() const { return surfaceFormat.format; }
+        [[nodiscard]] VkFormat getImageFormat() const {
+            return surfaceFormat.format;
+        }
 
-        [[nodiscard]] VkSwapchainKHR getSwapchainHandle() const { return swapchain; }
+        [[nodiscard]] VkSwapchainKHR getSwapchainHandle() const {
+            return swapchain;
+        }
 
-        [[nodiscard]] std::span<const VkImage> getSwapchainImages() const { return swapchainImages; }
+        [[nodiscard]] std::span<const VkImage> getSwapchainImages() const {
+            return swapchainImages;
+        }
 
-        [[nodiscard]] std::span<const VkImageView> getSwapchainImageViews() const { return swapchainImageViews; }
+        [[nodiscard]] std::span<const VkImageView> getSwapchainImageViews() const {
+            return swapchainImageViews;
+        }
 
     private:
         void init() override;
@@ -59,8 +75,10 @@ namespace merutilm::vkh {
 
         void createSwapchain(VkSwapchainKHR *target, VkSwapchainKHR old, VkExtent2D extent) const;
 
-        void setupSwapchainImages(VkSwapchainKHR target, std::vector<VkImage> *images,
-                                  std::vector<VkImageView> *imageViews) const;
+        void setupSwapchainImages(
+            VkSwapchainKHR target,
+            std::vector<VkImage> *images,
+            std::vector<VkImageView> *imageViews) const;
 
         void destroy() override;
 

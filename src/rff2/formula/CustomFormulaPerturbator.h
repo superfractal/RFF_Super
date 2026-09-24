@@ -1,6 +1,8 @@
 //
 // Created and modified by AI; earlier exact dates unavailable.
-// Modified by GPT-5 on 2026-08-21.
+
+//
+// Modified by GPT-5 on 2026-08-21
 //
 
 #pragma once

@@ -1,11 +1,13 @@
 //
 // Created by Merutilm on 2025-05-13.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-26.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-23, 2026-08-26, 2026-08-31, 2026-09-01
+// Modified by GPT-5 on 2026-08-21, 2026-08-26
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22
 //
 
 #pragma once
+#include "UiLanguage.hpp"
 #include <any>
 #include <functional>
 #include <iostream>
@@ -15,6 +17,7 @@
 #include "SettingsTheme.hpp"
 #include <windows.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -25,6 +28,26 @@
 
 namespace merutilm::rff2 {
     class SettingsWindow {
+        UINT dpi = 96;
+        struct DpiLayout {
+            struct Control {
+                RECT box{};
+                int fontIndex = -1;
+                int dropHeight = 0;
+                int thumbLength = 0;
+            };
+            std::unordered_map<HWND, Control> controls;
+            std::vector<LOGFONTW> fonts;
+            std::vector<HFONT> originalFonts;
+            std::vector<std::pair<int, int>> sectionBounds;
+            int width = 0, labelWidth = 0, inputHeight = 0, topMargin = 0, yCursor = 0, expandedHeight = 0;
+            double scroll = 0;
+            int lastScroll = 0;
+        };
+        std::optional<DpiLayout> dpiLayout;
+        std::unordered_map<HWND, std::function<int(int)>> dpiHeightMeasures;
+        void captureDpiLayout();
+        void applyDpi(UINT targetDpi, const RECT* suggested = nullptr);
         HWND window;
         int count = 0;
         int yCursor = 0;
@@ -36,6 +59,15 @@ namespace merutilm::rff2 {
         std::vector<std::unique_ptr<std::vector<std::any> > > enumValues;
         std::vector<HWND> createdChildWindows;
         std::unordered_map<int, std::vector<HWND>> rowControlGroups;
+        struct SearchEntry { HWND label; std::wstring terms; };
+        std::vector<SearchEntry> searchEntries;
+        HWND findDialog = nullptr;
+        FINDREPLACEW findRequest{};
+        wchar_t findText[256]{};
+        std::wstring previousQuery;
+        size_t nextSearchEntry = 0;
+        void openSearch();
+        void findNextSetting();
         std::unordered_map<HWND, std::function<COLORREF()> > colorSwatches;
         struct SliderBinding {
             HWND trackbar;
@@ -125,6 +157,7 @@ namespace merutilm::rff2 {
         std::optional<bool> darkOverride;
 
     public:
+        static bool filterSearchMessage(const MSG &message);
         explicit SettingsWindow(const std::wstring &name,
                                 int width = Constants::Win32::INIT_SETTINGS_WINDOW_WIDTH,
                                 int labelWidth = -1,
@@ -249,6 +282,9 @@ namespace merutilm::rff2 {
         // The choice a panel's colors are read under while its procedures run.
         [[nodiscard]] static ScopedSettingsMode scopedMode(const SettingsWindow *panel) {
             return ScopedSettingsMode(panel == nullptr ? std::nullopt : panel->darkOverride);
+        }
+        [[nodiscard]] static Constants::Win32::SettingsDpiScope scopedDpi(const SettingsWindow* panel) {
+            return Constants::Win32::SettingsDpiScope(panel ? panel->dpi : 96);
         }
 
         // Full-width owner-drawn block whose painter renders its whole client rect (used for cards
@@ -445,6 +481,7 @@ namespace merutilm::rff2 {
                                            const double arrowStep,
                                            const double decadeMin, const double decadeMax,
                                            const int fieldFontSize) {
+        const auto dpiScope=scopedDpi(this);
         const int nw = getFixedNameWidth();
         const int vw = getFixedValueWidth();
 
@@ -493,6 +530,7 @@ namespace merutilm::rff2 {
                                                 std::function<void()> &&callback,
                                                 const std::wstring &descriptionTitle,
                                                 const std::wstring &descriptionDetail) {
+        const auto dpiScope=scopedDpi(this);
         const int nw = getFixedNameWidth();
         const int vw = getFixedValueWidth();
         const int index = count;
@@ -511,7 +549,7 @@ namespace merutilm::rff2 {
         int defaultValueIndex = 0;
 
         for (int i = 0; i < values.size(); ++i) {
-            SendMessageW(combobox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(Selectable::toString(values[i]).data()));
+            SendMessageW(combobox, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(UiLanguage::text(Selectable::toString(values[i])).c_str()));
             if (values[i] == *ptr) {
                 defaultValueIndex = i;
             }
@@ -533,6 +571,7 @@ namespace merutilm::rff2 {
                                                                std::function<void()> &&callback,
                                                                const std::wstring &descriptionTitle,
                                                                const std::wstring &descriptionDetail) {
+        const auto dpiScope=scopedDpi(this);
         const int nw = getFixedNameWidth();
         const int vw = getFixedValueWidth();
         const int index = count;
@@ -579,6 +618,7 @@ namespace merutilm::rff2 {
                                                                std::function<void()> &&callback,
                                                                const std::wstring &descriptionTitle,
                                                                const std::wstring &descriptionDetail) {
+        const auto dpiScope=scopedDpi(this);
         const int nw = getFixedNameWidth();
         // The checkbox control is sized to the box itself (not the full value column)
         // so the checked-state highlight color only covers the square + checkmark.
@@ -613,50 +653,50 @@ namespace merutilm::rff2 {
                                          const std::optional<std::function<bool(const T &)> > &validCondition,
                                          const std::function<void()> &callback,
                                          const std::optional<std::vector<T> > values) {
+        const auto dpiScope = scopedDpi(this);
         const std::any defaultValue = *defaultValuePtr;
         references.emplace_back(defaultValue);
         unparsers.emplace_back(std::make_unique<std::function<std::wstring(const std::any &)> >(
             [unparser](const std::any &value) {
                 return unparser(std::any_cast<T>(value));
-            }
-        ));
+            }));
 
-        parsers.emplace_back(parser == std::nullopt
-                                 ? nullptr
-                                 : std::make_unique<std::function<std::any(std::wstring &)> >(
-                                     [parser](std::wstring &value) {
-                                         auto f = *parser;
-                                         std::any result = f(value);
-                                         return result;
-                                     }));
+        if (parser == std::nullopt) {
+            parsers.emplace_back(nullptr);
+        } else {
+            parsers.emplace_back(std::make_unique<std::function<std::any(std::wstring &)> >(
+                [parser](std::wstring &value) {
+                    auto f = *parser;
+                    std::any result = f(value);
+                    return result;
+                }));
+        }
 
-
-        validConditions.emplace_back(validCondition == std::nullopt
-                                         ? nullptr
-                                         : std::make_unique<std::function<bool(const std::any &)> >(
-                                             [validCondition](const std::any &value) {
-                                                 auto f = *validCondition;
-                                                 return f(std::any_cast<T>(value));
-                                             }
-                                         )
-        );
+        if (validCondition == std::nullopt) {
+            validConditions.emplace_back(nullptr);
+        } else {
+            validConditions.emplace_back(std::make_unique<std::function<bool(const std::any &)> >(
+                [validCondition](const std::any &value) {
+                    auto f = *validCondition;
+                    return f(std::any_cast<T>(value));
+                }));
+        }
 
         callbacks.emplace_back(std::make_unique<std::function<void(std::any &v)> >(
             [defaultValuePtr, callback](std::any &v) {
                 *defaultValuePtr = std::any_cast<T &>(v);
                 callback();
+            }));
+        if (values == std::nullopt) {
+            enumValues.emplace_back(nullptr);
+        } else {
+            auto convertedValues = std::make_unique<std::vector<std::any> >();
+            convertedValues->reserve((*values).size());
+            for (const auto &value: *values) {
+                convertedValues->push_back(value);
             }
-        ));
-        enumValues.emplace_back(values == std::nullopt
-                                    ? nullptr
-                                    : [&values] {
-                                        auto result = std::make_unique<std::vector<std::any> >();
-                                        result->reserve((*values).size());
-                                        for (const auto &value: *values) {
-                                            result->push_back(value);
-                                        }
-                                        return result;
-                                    }());
+            enumValues.emplace_back(std::move(convertedValues));
+        }
         error.emplace_back(false);
         edited.emplace_back(false);
         modified.emplace_back(false);

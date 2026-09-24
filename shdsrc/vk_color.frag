@@ -1,8 +1,11 @@
 //
 // Modified by Opus 5 on 2026-08-06
+// Modified by GPT-6 on 2026-09-10, 2026-09-16, 2026-09-23
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "shader_layer.glsl"
 
 layout (input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput canvas;
 
@@ -13,10 +16,8 @@ layout (set = 1, binding = 0) uniform ColorUBO {
     float saturation;
     float brightness;
     float contrast;
+    float scene_linear;
 } color_attr;
-
-layout (location = 0) in vec3 fragColor;
-layout (location = 1) in vec2 fragTexcoord;
 
 layout (location = 0) out vec4 color;
 
@@ -83,7 +84,7 @@ vec3 add_hue(vec3 col, float add) {
     float high = max(max(col.r, col.g), col.b);
     float low = min(min(col.r, col.g), col.b);
     float hue = get_hue(col);
-    float off = mod(hue + add, 1) * 6;
+    float off = mod(hue + mod(add, 1), 1) * 6;
     int ioff = int(off);
     float doff = mod(off, 1);
 
@@ -127,9 +128,32 @@ vec3 add_hue(vec3 col, float add) {
     return result;
 }
 
+// IEC 61966-2-1 transfer, reused from the project's shaders under GPL; see NOTICE.
+vec3 studio_decode(vec3 c) {
+    c = max(c, 0.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+vec3 studio_encode(vec3 c) {
+    c = max(c, 0.0);
+    return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
 void main() {
 
     vec3 c = subpassLoad(canvas).rgb;
+    if (ordered_layers() && !layer_is(23)) { color = vec4(c, 1); return; }
+    float sceneScale = 1.0;
+    if (color_attr.scene_linear > 0.5) {
+        if (color_attr.gamma == 1.0 && color_attr.exposure == 0.0 && color_attr.hue == 0.0 &&
+            color_attr.saturation == 0.0 && color_attr.brightness == 0.0 && color_attr.contrast == 0.0) {
+            color = vec4(c, 1);
+            return;
+        }
+        // Apply the native artistic grade to peak-normalized encoded color, preserving radiance above white.
+        sceneScale = max(1.0, max(c.r, max(c.g, c.b)));
+        c = studio_encode(c / sceneScale);
+    }
 
     // Every divisor is bounded away from zero: the UI accepts any float, so gamma 0 and exposure/contrast 1 are reachable.
     float gamma = max(color_attr.gamma, 1e-3);
@@ -143,5 +167,5 @@ void main() {
     c = fix_color(c + (c - vec3(gray, gray, gray)) * color_attr.saturation);
     c = fix_color(c + color_attr.brightness);
     c = fix_color((c - 0.5) / (1 - contrast) * (1 + contrast) + 0.5);
-    color = vec4(c, 1);
+    color = vec4(color_attr.scene_linear > 0.5 ? studio_decode(c) * sceneScale : c, 1);
 }

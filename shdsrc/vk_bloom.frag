@@ -1,8 +1,11 @@
 //
 // Modified by Opus 5 on 2026-08-16, 2026-08-19, 2026-08-24
+// Modified by GPT-6 on 2026-09-10, 2026-09-16, 2026-09-23
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "shader_layer.glsl"
 
 layout (set = 0, binding = 0) uniform sampler2D bloom_canvas;
 layout (set = 0, binding = 1) uniform sampler2D bloom_blurred;
@@ -15,11 +18,9 @@ layout (set = 1, binding = 0) uniform BloomUBO {
     float hdr;
     float headroom;
     float linear_add;
+    float scene_linear;
 } bloom_attr;
 
-
-layout (location = 0) in vec3 fragColor;
-layout (location = 1) in vec2 fragTexcoord;
 
 layout (location = 0) out vec4 color;
 
@@ -40,33 +41,38 @@ vec3 linear_to_srgb(vec3 c) {
 }
 
 void main() {
+    if (ordered_layers() && !layer_is(25)) { color = texelFetch(bloom_canvas, ivec2(gl_FragCoord.xy), 0); return; }
 
-    vec2 coord = gl_FragCoord.xy / textureSize(bloom_canvas, 0);
+    vec2 normalizedCoord = gl_FragCoord.xy / textureSize(bloom_canvas, 0);
 
-    float x = coord.x;
-    float y = coord.y;
+    float normalizedX = normalizedCoord.x;
+    float normalizedY = normalizedCoord.y;
 
-    if (x < 0 || y < 0){
+    if (normalizedX < 0 || normalizedY < 0){
         discard;
     }
 
-    if (x >= 1 || y >= 1){
+    if (normalizedX >= 1 || normalizedY >= 1){
         discard;
     }
 
-    color = texture(bloom_canvas, coord);
-    vec3 blur = texture(bloom_blurred, coord).rgb;
+    color = texture(bloom_canvas, normalizedCoord);
+    vec3 blurredGlow = texture(bloom_blurred, normalizedCoord).rgb;
     // The sharp end of the glow is the thresholded image, not the canvas: only the blurred half
     // ever went through the threshold pass, so mixing the canvas in handed every pixel below the
     // threshold a share of its own light, and at softness 1 lifted the whole frame by intensity.
-    vec3 sharp = grayScale(color.rgb) < bloom_attr.threshold ? vec3(0.0) : color.rgb;
+    vec3 thresholdedGlow = grayScale(color.rgb) < bloom_attr.threshold ? vec3(0.0) : color.rgb;
     // Softness runs from that hard glow towards the blurred one, the direction the name reads in.
-    vec3 add = mix(sharp, blur, bloom_attr.softness);
+    vec3 glow = mix(thresholdedGlow, blurredGlow, bloom_attr.softness);
+    if (bloom_attr.scene_linear > 0.5) {
+        color = vec4(clamp(color.rgb + glow * bloom_attr.intensity, 0.0, 60000.0), 1);
+        return;
+    }
     if (bloom_attr.linear_add > 0.5) {
         // Summed in proportion to light, as vk_slope.frag's LIGHT_BLEND_LINEAR is, and re-encoded past 1 for the store below to carry.
-        color = vec4(linear_to_srgb(srgb_to_linear(color.rgb) + srgb_to_linear(add) * bloom_attr.intensity), 1);
+        color = vec4(linear_to_srgb(srgb_to_linear(color.rgb) + srgb_to_linear(glow) * bloom_attr.intensity), 1);
     } else {
-        color = color + vec4(add * bloom_attr.intensity, 1);
+        color = color + vec4(glow * bloom_attr.intensity, 1);
     }
     // This is the one pass that makes light brighter than white, and the image it writes into holds
     // 0 to 1. With HDR on the sum is stored as its fraction of the headroom, so that light survives

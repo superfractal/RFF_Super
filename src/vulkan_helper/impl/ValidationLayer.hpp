@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-08.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -13,7 +14,6 @@ namespace merutilm::vkh {
         VkDebugUtilsMessengerEXT debugMessenger = nullptr;
 
     public:
-
         explicit ValidationLayerImpl(VkInstance instance);
 
         ~ValidationLayerImpl() override;
@@ -26,7 +26,6 @@ namespace merutilm::vkh {
 
         ValidationLayerImpl &operator=(ValidationLayerImpl &&) = delete;
 
-
     private:
         static void checkValidationLayerSupport();
 
@@ -34,15 +33,16 @@ namespace merutilm::vkh {
 
         void setupDebugMessenger();
 
-        static VkResult createDebugUtilsMessengerEXT(VkInstance instance,
-                                                     const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-                                                     const VkAllocationCallbacks *pAllocator,
-                                                     VkDebugUtilsMessengerEXT *pDebugMessenger);
+        static VkResult createDebugUtilsMessengerEXT(
+            VkInstance instance,
+            const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+            const VkAllocationCallbacks *pAllocator,
+            VkDebugUtilsMessengerEXT *pDebugMessenger);
 
-        static void destroyDebugUtilsMessengerEXT(VkInstance instance,
-                                                  VkDebugUtilsMessengerEXT debugMessenger,
-                                                  const VkAllocationCallbacks *pAllocator);
-
+        static void destroyDebugUtilsMessengerEXT(
+            VkInstance instance,
+            VkDebugUtilsMessengerEXT debugMessenger,
+            const VkAllocationCallbacks *pAllocator);
 
         void destroy() override;
     };
@@ -50,5 +50,4 @@ namespace merutilm::vkh {
     using ValidationLayer = std::unique_ptr<ValidationLayerImpl>;
     using ValidationLayerPtr = ValidationLayerImpl *;
     using ValidationLayerRef = ValidationLayerImpl &;
-
 }

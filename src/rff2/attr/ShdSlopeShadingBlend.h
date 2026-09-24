@@ -1,6 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-15.
-// Modified by Opus 5 on 2026-08-16.
+// Modified by Opus 5 on 2026-08-16
 //
 
 #pragma once

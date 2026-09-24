@@ -1,8 +1,9 @@
 //
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18
-// Modified by ox-alpha on 2026-08-22.
+// Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-27, 2026-08-31
+// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
 //
 
 #pragma once
@@ -14,6 +15,13 @@ namespace merutilm::rff2 {
     // forever - the same rule the palette recipe presets carry (docs/palette-recipe-stability.md).
     enum class VidTimelineTarget : uint16_t {
         SPEED = 0,
+
+        CAMERA_ROTATION = 1100,
+        CAMERA_PROJECTION = 1101,
+        CAMERA_PITCH = 1102,
+        CAMERA_FOV = 1103,
+        CAMERA_RANGE = 1104,
+        CAMERA_LAYOUT = 1105,
 
         PALETTE_INTERVAL_R = 100,
         PALETTE_INTERVAL_G = 101,
@@ -91,6 +99,14 @@ namespace merutilm::rff2 {
         FOG_FOCUS_RANGE = 509,
         FOG_FOCUS_FALLOFF = 510,
         FOG_FOCUS_BLUR = 511,
+        FOG_CHAOS_AMOUNT = 512,
+        FOG_CHAOS_SCALE = 513,
+        FOG_CHAOS_THRESHOLD = 514,
+        FOG_CHAOS_TRANSITION = 515,
+        FOG_CHAOS_FEATHER = 516,
+        FOG_CHAOS_BLUR = 517,
+        FOG_CHAOS_HIGHLIGHTS = 518,
+        FOG_CHAOS_SHADE = 519,
 
         BLOOM_THRESHOLD = 600,
         BLOOM_RADIUS = 601,
@@ -109,6 +125,7 @@ namespace merutilm::rff2 {
         TEXTURE_1_PERIOD = 709,
         TEXTURE_1_SIZE = 710,
         TEXTURE_1_KEEP_ASPECT = 711,
+
         TEXTURE_2_ENABLED = 720,
         TEXTURE_2_UV_MODE = 721,
         TEXTURE_2_BLEND_MODE = 722,
@@ -121,6 +138,7 @@ namespace merutilm::rff2 {
         TEXTURE_2_PERIOD = 729,
         TEXTURE_2_SIZE = 730,
         TEXTURE_2_KEEP_ASPECT = 731,
+
         TEXTURE_3_ENABLED = 740,
         TEXTURE_3_UV_MODE = 741,
         TEXTURE_3_BLEND_MODE = 742,
@@ -133,6 +151,7 @@ namespace merutilm::rff2 {
         TEXTURE_3_PERIOD = 749,
         TEXTURE_3_SIZE = 750,
         TEXTURE_3_KEEP_ASPECT = 751,
+
         TEXTURE_4_ENABLED = 760,
         TEXTURE_4_UV_MODE = 761,
         TEXTURE_4_BLEND_MODE = 762,
@@ -166,6 +185,7 @@ namespace merutilm::rff2 {
         PATTERN_1_EDGE_WIDTH = 817,
         PATTERN_1_EDGE_OPACITY = 818,
         PATTERN_1_EDGE_RELATIVE = 819,
+
         PATTERN_2_ENABLED = 830,
         PATTERN_2_TYPE = 831,
         PATTERN_2_UV_MODE = 832,
@@ -186,6 +206,7 @@ namespace merutilm::rff2 {
         PATTERN_2_EDGE_WIDTH = 847,
         PATTERN_2_EDGE_OPACITY = 848,
         PATTERN_2_EDGE_RELATIVE = 849,
+
         PATTERN_3_ENABLED = 860,
         PATTERN_3_TYPE = 861,
         PATTERN_3_UV_MODE = 862,
@@ -206,6 +227,7 @@ namespace merutilm::rff2 {
         PATTERN_3_EDGE_WIDTH = 877,
         PATTERN_3_EDGE_OPACITY = 878,
         PATTERN_3_EDGE_RELATIVE = 879,
+
         PATTERN_4_ENABLED = 890,
         PATTERN_4_TYPE = 891,
         PATTERN_4_UV_MODE = 892,
@@ -238,6 +260,12 @@ namespace merutilm::rff2 {
         WARP_SCROLL_V = 1008,
         WARP_PALETTE_FOLLOW = 1009,
         WARP_PERIOD = 1010,
+
+        STUDIO_ENVIRONMENT_ROTATION = 1200,
+        STUDIO_ENVIRONMENT_FOLLOW = 1201,
+        // IDs 1202 through 1221 belonged to retired Softbox tracks and must never be reused.
+
+
     };
 
     constexpr uint16_t vidTimelineTargetId(const VidTimelineTarget target) {

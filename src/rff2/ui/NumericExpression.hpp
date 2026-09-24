@@ -1,8 +1,14 @@
+//
 // Modified by GPT-5 on 2026-08-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-22
+//
 
 #pragma once
 
 #include <cmath>
+#include <bit>
+#include <cstdint>
+#include <limits>
 #include <cwchar>
 #include <cwctype>
 #include <optional>
@@ -14,6 +20,11 @@ namespace merutilm::rff2 {
         bool valid = true;
 
         explicit NumericExpression(const std::wstring &text) : cursor(text.c_str()) {}
+        static bool finite(double value) {
+            static_assert(sizeof(double) == sizeof(uint64_t) && std::numeric_limits<double>::is_iec559);
+            return (std::bit_cast<uint64_t>(value) & UINT64_C(0x7ff0000000000000)) !=
+                   UINT64_C(0x7ff0000000000000);
+        }
 
         void skipSpaces() {
             while (std::iswspace(*cursor)) {
@@ -37,7 +48,7 @@ namespace merutilm::rff2 {
 
             wchar_t *end = nullptr;
             const double value = std::wcstod(cursor, &end);
-            if (end == cursor) {
+            if (end == cursor || !finite(value)) {
                 valid = false;
                 return 0.0;
             }
@@ -68,7 +79,15 @@ namespace merutilm::rff2 {
                 }
                 ++cursor;
                 const double right = unary();
+                if (operation == L'/' && right == 0.0) {
+                    valid = false;
+                    return 0.0;
+                }
                 value = operation == L'*' ? value * right : value / right;
+                if (!finite(value)) {
+                    valid = false;
+                    return 0.0;
+                }
             }
         }
 
@@ -83,15 +102,19 @@ namespace merutilm::rff2 {
                 ++cursor;
                 const double right = term();
                 value = operation == L'+' ? value + right : value - right;
+                if (!finite(value)) {
+                    valid = false;
+                    return 0.0;
+                }
             }
         }
 
-    public:
+      public:
         [[nodiscard]] static std::optional<double> evaluate(const std::wstring &text) {
             NumericExpression parser(text);
             const double value = parser.expression();
             parser.skipSpaces();
-            if (!parser.valid || *parser.cursor != L'\0' || !std::isfinite(value)) {
+            if (!parser.valid || *parser.cursor != L'\0' || !finite(value)) {
                 return std::nullopt;
             }
             return value;

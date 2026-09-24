@@ -1,9 +1,14 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
-#include "../core/vkh_base.hpp"
+
+#include <cstddef>
+#include <functional>
+#include <span>
+#include <vector>
 
 #include "BoostHasher.hpp"
 
@@ -13,14 +18,14 @@ namespace merutilm::vkh {
     struct VectorHasher {
         using is_transparent = void;
 
-        size_t operator()(const std::vector<T>& v) const {
-            return operator()(std::span<const T>(v));
+        size_t operator()(const std::vector<T> &values) const {
+            return operator()(std::span<const T>(values));
         }
 
-        size_t operator()(const std::span<const T>& v) const {
+        size_t operator()(const std::span<const T> &values) const {
             size_t seed = 0;
-            for (size_t i = 0; i < v.size(); i++) {
-                BoostHasher::hash(Hasher{}(v[i]), &seed);
+            for (size_t index = 0; index < values.size(); ++index) {
+                BoostHasher::hash(Hasher{}(values[index]), &seed);
             }
             return seed;
         }

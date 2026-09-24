@@ -1,20 +1,25 @@
 //
 // Created by Merutilm on 2025-06-08.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-14
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-14, 2026-09-23
 //
 
 #pragma once
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cstring>
-#include <utility>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <limits>
+#include <memory>
+#include <ostream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <shlobj.h>
 #include <opencv2/core/mat.hpp>
@@ -67,12 +72,12 @@ namespace merutilm::rff2 {
                                       uint64_t maxCount);
 
         template<typename T> requires std::is_arithmetic_v<T>
-        static void encodeAndWrite(std::ofstream &out, const T &t);
+        static void encodeAndWrite(std::ostream &out, const T &t);
 
-        static void encodeAndWrite(std::ofstream &out, const char *t, uint64_t length);
+        static void encodeAndWrite(std::ostream &out, const char *t, uint64_t length);
 
         template<typename T> requires std::is_arithmetic_v<T>
-        static void encodeAndWrite(std::ofstream &out, const std::vector<T> &t);
+        static void encodeAndWrite(std::ostream &out, const std::vector<T> &values);
 
         template<typename T> requires std::is_arithmetic_v<T>
         static void readAndDecode(std::ifstream &in, T *t);
@@ -80,7 +85,7 @@ namespace merutilm::rff2 {
         static void readAndDecode(std::ifstream &in, uint64_t length, char *t);
 
         template<typename T> requires std::is_arithmetic_v<T>
-        static void readAndDecode(std::ifstream &in, std::vector<T> *t);
+        static void readAndDecode(std::ifstream &in, std::vector<T> *values);
 
         template<typename T> requires std::is_arithmetic_v<T>
         static std::array<char, sizeof(T)> toBinaryArray(const T &v);
@@ -91,7 +96,7 @@ namespace merutilm::rff2 {
 
 
     template<typename T> requires std::is_arithmetic_v<T>
-    void IOUtilities::encodeAndWrite(std::ofstream &out, const T &t) {
+    void IOUtilities::encodeAndWrite(std::ostream &out, const T &t) {
         const auto ot = toBinaryArray(t);
         out.write(ot.data(), ot.size());
     }
@@ -115,18 +120,19 @@ namespace merutilm::rff2 {
         return true;
     }
 
-    inline void IOUtilities::encodeAndWrite(std::ofstream &out, const char *t, const uint64_t length) {
+    inline void IOUtilities::encodeAndWrite(std::ostream &out, const char *t, const uint64_t length) {
         out.write(t, length);
     }
 
     template<typename T> requires std::is_arithmetic_v<T>
-    void IOUtilities::encodeAndWrite(std::ofstream &out, const std::vector<T> &t) {
-        std::vector<char> ot;
-        for (double et: t) {
-            const auto oi = toBinaryArray(et);
-            ot.insert(ot.end(), oi.begin(), oi.end());
+    void IOUtilities::encodeAndWrite(std::ostream &out, const std::vector<T> &values) {
+        std::vector<char> bytes;
+        bytes.reserve(values.size() * sizeof(T));
+        for (const T &element : values) {
+            const auto elementBytes = toBinaryArray(element);
+            bytes.insert(bytes.end(), elementBytes.begin(), elementBytes.end());
         }
-        out.write(ot.data(), ot.size());
+        out.write(bytes.data(), bytes.size());
     }
 
 
@@ -142,14 +148,14 @@ namespace merutilm::rff2 {
     }
 
     template<typename T> requires std::is_arithmetic_v<T>
-    void IOUtilities::readAndDecode(std::ifstream &in, std::vector<T> *t) {
-        auto it = std::vector<char>(t->size() * sizeof(T));
-        in.read(it.data(), it.size());
+    void IOUtilities::readAndDecode(std::ifstream &in, std::vector<T> *values) {
+        std::vector<char> bytes(values->size() * sizeof(T));
+        in.read(bytes.data(), bytes.size());
 
-        for (uint32_t i = 0; i < it.size(); i += sizeof(T)) {
-            auto iSubArr = std::array<char, sizeof(T)>();
-            std::memcpy(&iSubArr, &it[i], sizeof(T));
-            fromBinaryArray(iSubArr, &(*t)[i / sizeof(T)]);
+        for (size_t offset = 0; offset < bytes.size(); offset += sizeof(T)) {
+            std::array<char, sizeof(T)> elementBytes{};
+            std::memcpy(elementBytes.data(), bytes.data() + offset, sizeof(T));
+            fromBinaryArray(elementBytes, &(*values)[offset / sizeof(T)]);
         }
     }
 

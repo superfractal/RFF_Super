@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-09-03.
 // Modified by Opus 5 on 2026-09-04
+// Modified by GPT-6 on 2026-09-22
 //
 
 #include "ImageCanvas.hpp"
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 #include <format>
+#include <new>
 
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
@@ -104,10 +106,6 @@ namespace merutilm::rff2 {
 
     void ImageCanvas::setDismissCallback(std::function<void()> callback) {
         dismiss = std::move(callback);
-    }
-
-    bool ImageCanvas::visible() const {
-        return window != nullptr && IsWindowVisible(window);
     }
 
     void ImageCanvas::releaseScaled() {
@@ -242,13 +240,26 @@ namespace merutilm::rff2 {
             }
         }
 
-        ensureScaled(width, height);
+        // A failed resize uses the background path and still finishes painting.
+        try {
+            ensureScaled(width, height);
+        } catch (const cv::Exception &) {
+        } catch (const std::bad_alloc &) {
+        }
+        bool imageDrawn = false;
         if (scaled != nullptr) {
             const HDC memory = CreateCompatibleDC(hdc);
-            const HGDIOBJ previous = SelectObject(memory, scaled);
-            BitBlt(hdc, x, y, width, height, memory, 0, 0, SRCCOPY);
-            SelectObject(memory, previous);
-            DeleteDC(memory);
+            if (memory != nullptr) {
+                const HGDIOBJ previous = SelectObject(memory, scaled);
+                if (previous != nullptr && previous != HGDI_ERROR) {
+                    imageDrawn = BitBlt(hdc, x, y, width, height, memory, 0, 0, SRCCOPY) != FALSE;
+                    SelectObject(memory, previous);
+                }
+                DeleteDC(memory);
+            }
+        }
+        if (!imageDrawn) {
+            FillRect(hdc, &client, background);
         }
 
         DeleteObject(background);

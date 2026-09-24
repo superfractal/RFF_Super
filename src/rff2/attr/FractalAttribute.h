@@ -1,27 +1,30 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
+// Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 
+#include <cstdint>
+#include <string>
+
+#include "../calc/fp_complex.h"
 #include "FrtDecimalizeIterationMethod.h"
 #include "FrtMPAAttribute.h"
-#include "FrtReferenceCompAttribute.h"
 #include "FrtPanoramaLayout.h"
 #include "FrtProjectionMethod.h"
+#include "FrtReferenceCompAttribute.h"
 #include "FrtReuseReferenceMethod.h"
-#include "../calc/fp_complex.h"
-
 
 namespace merutilm::rff2 {
     enum class FractalFormulaType {
-        MANDELBROT,
-        CUSTOM
+        MANDELBROT = 0,
+        CUSTOM = 1
     };
 
-    struct FractalAttribute final{
+    struct FractalAttribute final {
         fp_complex center;
         float logZoom;
         uint64_t maxIteration;

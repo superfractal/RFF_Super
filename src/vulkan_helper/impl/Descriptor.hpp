@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -45,9 +46,6 @@ namespace merutilm::vkh {
             return descriptorSets[frameIndex][descIndex];
         }
 
-        [[nodiscard]] VkDescriptorPool getDescriptorPoolHandle(const uint32_t frameIndex) const {
-            return descriptorPools[frameIndex];
-        }
 
         template<typename T>
         [[nodiscard]] uint32_t getElementCount() const {

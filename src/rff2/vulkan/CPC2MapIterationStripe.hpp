@@ -1,13 +1,16 @@
 //
 // Created by Merutilm on 2025-09-06.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23.
+// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-24, 2026-08-25, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23
 //
 
 #pragma once
+#include "ShaderLayerControl.hpp"
 #include <array>
+#include "../attr/ShaderAttribute.h"
 #include <string>
 
 #include "ShaderAnimationPhases.hpp"
@@ -21,6 +24,7 @@
 
 namespace merutilm::rff2 {
     struct CPC2MapIterationStripe final : public vkh::ComputePipelineConfigurator {
+        vkh::PushConstant layerPush;
 
         static constexpr uint32_t SET_I2MAP = 0;
         static constexpr uint32_t BINDING_I2MAP_SSBO_NORMAL = 0;
@@ -38,15 +42,24 @@ namespace merutilm::rff2 {
 
         // Path currently resident in each layer's sampler; guards against reloading on every shader edit.
         std::array<std::string, TEXTURE_LAYER_COUNT> loadedTexturePaths = {};
+        uint32_t pendingTextureBindings = 0;
 
         // The merged image this writes is 8-bit for an SDR export and half float for an HDR one, and a
         // storage image's format is fixed in the compiled shader, so the two are separate binaries.
         explicit CPC2MapIterationStripe(vkh::EngineRef engine, const uint32_t windowContextIndex,
-                                        const bool hdrChain)
+                                        const bool hdrChain, const ShaderAttribute* shader = nullptr, const bool dither = false)
             : ComputePipelineConfigurator(engine, windowContextIndex,
                                           hdrChain
                                               ? "vk_2_map_iter_stripe_hdr.comp"
                                               : "vk_2_map_iter_stripe.comp") {
+            if (shader) {
+                specModes.setPalette(shader->palette);
+                specModes.setStripe(shader->stripe);
+                specModes.setTextures(shader->textures);
+                specModes.setPattern(shader->patterns);
+                specModes.setWarp(shader->warp);
+                specModes.dither = dither;
+            }
         }
 
         ~CPC2MapIterationStripe() override = default;
@@ -60,10 +73,6 @@ namespace merutilm::rff2 {
         CPC2MapIterationStripe &operator=(CPC2MapIterationStripe &&) = delete;
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
-
-        [[nodiscard]] const vkh::ImageContext &getOutputColorImage() const {
-            return getDescriptor(SET_OUTPUT_IMAGE).get<vkh::StorageImage>(0, BINDING_OUTPUT_MERGED_IMAGE).ctx[0];
-        }
 
         void pipelineInitialized() override;
 
@@ -89,6 +98,8 @@ namespace merutilm::rff2 {
 
         // Reads the paths setTextures loaded, so call it after that: a warp pointed at a layer
         // holding no image is switched off rather than left reading the placeholder.
+        void setEffects(const ShdEffectsAttribute &effects);
+
         void setWarp(const ShdWarpAttribute &warp);
 
         void setDefaultZoomIncrement(float defaultZoomIncrement) const;
@@ -96,6 +107,8 @@ namespace merutilm::rff2 {
         void setSampleJitter(float jitterX, float jitterY) const;
 
         void setDither(bool use);
+
+        void setCamera(const VidCameraAttribute &camera, uint32_t sourceScale) const;
 
         void setAllIterations(const std::vector<double> &normal, const std::vector<double> &zoomed) const;
 
@@ -109,6 +122,11 @@ namespace merutilm::rff2 {
         // Call it before the timeline replaces any of them, or the new speed is charged for time
         // it was not running. A backwards or long jump is a seek, and re-derives them instead.
         void advanceAnimationTo(float sec);
+
+        void seekAnimationTo(float sec) { phases.seekTo(sec); }
+
+        void setTimelinePhases(const std::array<double, ShaderAnimationPhases::TIMELINE_AXIS_COUNT> &values,
+                               float sec) { phases.setTimelinePhases(values, sec); }
 
         [[nodiscard]] std::vector<uint32_t> specializationConstants() const override;
 

@@ -1,11 +1,16 @@
 //
 // Created and modified by AI; earlier exact dates unavailable.
-// Modified by GPT-5 on 2026-08-21.
+
+//
+// Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-09-24, 2026-09-25
 //
 
 #pragma once
+#include <cstdint>
 #include <filesystem>
+#include <ostream>
 
 #include "../attr/Attribute.h"
 
@@ -16,9 +21,12 @@ namespace merutilm::rff2 {
         ConfigIO() = delete;
 
         static constexpr uint32_t MAGIC = 0x52464643; // "RFFC"
-        static constexpr uint32_t VERSION = 5;
+        static constexpr uint32_t VERSION = 7;
         // Marks the projection block, behind a marker of its own for the same reason.
         static constexpr uint32_t PROJECTION_MAGIC = 0x50524A43; // "PRJC"
+
+        // The exact RFC byte stream, shared by saving and document-state comparison.
+        static void write(std::ostream &out, const Attribute &attr, uint16_t width, uint16_t height);
 
         static bool save(const std::filesystem::path &path, const Attribute &attr,
                          uint16_t width, uint16_t height);

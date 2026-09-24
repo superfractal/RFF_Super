@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,9 +10,9 @@
 
 namespace merutilm::vkh {
     struct EngineHandler : public Handler {
-        const EngineRef engine;
+        EngineRef engine;
 
-        explicit EngineHandler(const EngineRef engine) : engine(engine) {};
+        explicit EngineHandler(EngineRef engine) : engine(engine) {}
 
         ~EngineHandler() override = default;
 

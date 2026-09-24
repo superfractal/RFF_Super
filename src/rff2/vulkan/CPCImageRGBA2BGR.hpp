@@ -1,12 +1,14 @@
 //
 // Created by Merutilm on 2025-09-10.
-// Modified by Opus 5 on 2026-08-10, 2026-08-19.
+// Modified by Opus 5 on 2026-08-10, 2026-08-19
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
 #include "../../vulkan_helper/configurator/ComputePipelineConfigurator.hpp"
 
-namespace merutilm::rff2{
+namespace merutilm::rff2 {
     struct CPCImageRGBA2BGR final : public vkh::ComputePipelineConfigurator {
         static constexpr uint32_t SET_INFO = 0;
         static constexpr uint32_t BINDING_PREV_IMAGE_SAMPLER = 0;
@@ -16,8 +18,8 @@ namespace merutilm::rff2{
         static constexpr uint32_t TARGET_OUTPUT_EXTENT_UBO_EXTENT = 0;
         static constexpr uint32_t TARGET_OUTPUT_EXTENT_UBO_HDR = 1;
 
-        explicit CPCImageRGBA2BGR(vkh::EngineRef engine, const uint32_t windowContextIndex) : ComputePipelineConfigurator(
-            engine, windowContextIndex, "vk_image_rgba2bgr.comp") {
+        explicit CPCImageRGBA2BGR(vkh::EngineRef engine, const uint32_t windowContextIndex)
+            : ComputePipelineConfigurator(engine, windowContextIndex, "vk_image_rgba2bgr.comp") {
         }
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
@@ -54,5 +56,4 @@ namespace merutilm::rff2{
 
         void applyOutputSize();
     };
-
 }

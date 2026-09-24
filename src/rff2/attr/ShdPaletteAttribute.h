@@ -1,12 +1,14 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-27.
 // Modified by Opus 5 on 2026-08-15, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-31
-// Modified by ox-alpha on 2026-08-22.
+// Modified by GPT-5 on 2026-08-21, 2026-08-27
+// Modified by ox-alpha on 2026-08-22
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-19, 2026-09-23
 //
 
 #pragma once
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -56,20 +58,47 @@ namespace merutilm::rff2 {
         if (interp == ShdPalColorInterpolationMethod::RGB) {
             return glm::mix(c0, c1, t);
         }
-        auto toLinear = [](const glm::vec4 &c) {
-            return glm::vec3(std::pow(std::max(c.r, 0.0f), 2.2f),
-                             std::pow(std::max(c.g, 0.0f), 2.2f),
-                             std::pow(std::max(c.b, 0.0f), 2.2f));
+        if (interp == ShdPalColorInterpolationMethod::LINEAR_RGB) {
+            // IEC 61966-2-1 transfer, matching the project's palette shaders; project GPL implementation, see NOTICE.
+            const auto decode = [](float v) {
+                v = std::max(v, 0.0f);
+                return v < 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+            };
+            const auto encode = [](float v) {
+                v = std::max(v, 0.0f);
+                return v < 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+            };
+            return {encode(std::lerp(decode(c0.r), decode(c1.r), t)),
+                    encode(std::lerp(decode(c0.g), decode(c1.g), t)),
+                    encode(std::lerp(decode(c0.b), decode(c1.b), t)),
+                    std::lerp(c0.a, c1.a, t)};
+        }
+        // IEC 61966-2-1 transfer matches the GPU OKLab interpolation; see NOTICE.
+        const auto decode = [](float v) {
+            v = std::max(v, 0.0f);
+            return v < 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+        };
+        const auto encode = [](float v) {
+            v = std::max(v, 0.0f);
+            return v < 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+        };
+        auto toLinear = [&decode](const glm::vec4 &c) {
+            return glm::vec3(decode(c.r), decode(c.g), decode(c.b));
         };
         const glm::vec3 lab = glm::mix(paletteLinearToOklab(toLinear(c0)), paletteLinearToOklab(toLinear(c1)), t);
         const glm::vec3 lin = paletteOklabToLinear(lab);
         return {
-            std::clamp(std::pow(std::max(lin.r, 0.0f), 1.0f / 2.2f), 0.0f, 1.0f),
-            std::clamp(std::pow(std::max(lin.g, 0.0f), 1.0f / 2.2f), 0.0f, 1.0f),
-            std::clamp(std::pow(std::max(lin.b, 0.0f), 1.0f / 2.2f), 0.0f, 1.0f),
+            std::clamp(encode(lin.r), 0.0f, 1.0f),
+            std::clamp(encode(lin.g), 0.0f, 1.0f),
+            std::clamp(encode(lin.b), 0.0f, 1.0f),
             std::lerp(c0.a, c1.a, t)
         };
     }
+
+    struct PaletteStop {
+        float position = 0;
+        glm::vec4 color{1};
+    };
 
     struct ShdPaletteAttribute {
         // Upper bound on eyedropper-frozen colors (must match the array size in the palette SSBO/shaders).
@@ -95,6 +124,19 @@ namespace merutilm::rff2 {
         // Band Line: a line laid across the palette at even points of its cycle, so the color
         // bands are separated instead of running into one another.
         bool bandLineEnabled = false;
+        float bandSpineAmount = 0.0f;
+        float bandSpineLength = 1.0f;
+        float bandSpineDensity = 1.0f;
+        float bandBranchAmount = 1.0f;
+        float bandOrnamentAmount = 0.0f;
+        float bandOrnamentSize = 1.0f;
+        float bandOrnamentDensity = 1.0f;
+        float bandOrnamentInset = 0.032f;
+
+        bool bandLineGroove = false;
+        float grooveDepth = 1.5f;
+        float grooveWidth = 0.05f;
+        bool grooveAuto = true;
         // Lines in one full cycle. Matching the color count puts one on every color boundary.
         uint32_t bandLineCount = 16;
         // Thickness as a fraction of one band, measured across the boundary the line sits on.
@@ -114,6 +156,8 @@ namespace merutilm::rff2 {
         // so saves store only {id, seed} and regenerate on load instead of dumping the full color array.
         int32_t recipePresetId = -1;
         uint32_t recipeSeed = 0;
+        std::vector<PaletteStop> stops;
+        uint32_t stopEasing = 1;
 
         // Cycle Bias: pow curve on the cycle position, reshaping where a cycle spends its colors.
         // 1.0 is the straight mapping every earlier version drew.
@@ -133,8 +177,74 @@ namespace merutilm::rff2 {
         [[nodiscard]] float bandLineCoverage(float cycleRatio) const;
     };
 
+    inline bool finitePaletteStopValue(float value) {
+        return (std::bit_cast<uint32_t>(value) & 0x7f800000u) != 0x7f800000u;
+    }
+
+    inline bool validPaletteStops(const ShdPaletteAttribute &p) {
+        if (p.stopEasing > 2 || p.stops.size() > 32 || p.stops.size() == 1) {
+            return false;
+        }
+        float previous = -1;
+        for (const auto &stop : p.stops) {
+            if (!finitePaletteStopValue(stop.position) || stop.position < 0 ||
+                stop.position >= 1 || stop.position <= previous) {
+                return false;
+            }
+            for (int c = 0; c < 4; ++c) {
+                if (!finitePaletteStopValue(stop.color[c])) {
+                    return false;
+                }
+            }
+            previous = stop.position;
+        }
+        return true;
+    }
+
+    inline glm::vec4 samplePaletteStops(const ShdPaletteAttribute &p, float t) {
+        if (p.stops.empty()) {
+            return glm::vec4(0, 0, 0, 1);
+        }
+        t -= std::floor(t);
+        auto hi = std::upper_bound(p.stops.begin(), p.stops.end(), t,
+                                   [](float x, const PaletteStop &s) { return x < s.position; });
+        const auto &right = hi == p.stops.end() ? p.stops.front() : *hi;
+        const auto &left = hi == p.stops.begin() ? p.stops.back() : *(hi - 1);
+        float end = right.position, start = left.position;
+        if (end <= start) {
+            end += 1;
+        }
+        if (t < start) {
+            t += 1;
+        }
+        float f = std::clamp((t - start) / (end - start), 0.0f, 1.0f);
+        if (f == 0) {
+            return left.color;
+        }
+        if (f == 1) {
+            return right.color;
+        }
+        if (p.stopEasing == 1) {
+            f = f * f * (3 - 2 * f);
+        } else if (p.stopEasing == 2) {
+            f = f * f * f * (f * (f * 6 - 15) + 10);
+        }
+        return blendPaletteColors(left.color, right.color, f, p.colorInterpolation);
+    }
+
+    inline void bakePaletteStops(ShdPaletteAttribute &p) {
+        if (p.stops.empty() || !validPaletteStops(p)) {
+            return;
+        }
+        p.colors.resize(4096);
+        for (size_t i = 0; i < p.colors.size(); ++i) {
+            p.colors[i] = samplePaletteStops(p, float(i) / p.colors.size());
+        }
+        p.recipePresetId = -1;
+    }
+
     inline float ShdPaletteAttribute::bandLineCoverage(const float cycleRatio) const {
-        if (!bandLineEnabled || bandLineCount == 0 || bandLineWidth <= 0.0f) {
+        if (!bandLineEnabled || bandLineGroove || bandLineCount == 0 || bandLineWidth <= 0.0f) {
             return 0.0f;
         }
         float f = std::fmod(cycleRatio * static_cast<float>(bandLineCount), 1.0f);
@@ -168,29 +278,29 @@ namespace merutilm::rff2 {
 
     inline glm::vec4 ShdPaletteAttribute::getMidColor(const float rat) const {
 
-        auto get_val = [&](int channel, float val, float interval) {
-             const float ratio = std::fmod(val / interval + offsetRatio, 1.0f);
-             const float i = ratio * static_cast<float>(colors.size());
-             const auto i0 = static_cast<int>(i);
-             const auto i1 = i0 + 1;
-             const float d = std::fmod(i, 1.0f);
+        auto sampleChannel = [&](int channel, float samplePosition, float interval) {
+             const float cyclePosition = std::fmod(samplePosition / interval + offsetRatio, 1.0f);
+             const float colorIndex = cyclePosition * static_cast<float>(colors.size());
+             const auto leftIndex = static_cast<int>(colorIndex);
+             const auto rightIndex = leftIndex + 1;
+             const float blendFraction = std::fmod(colorIndex, 1.0f);
 
              // handle wrap around
-             const glm::vec4 &c1 = colors[i0 % colors.size()];
-             const glm::vec4 &c2 = colors[i1 % colors.size()];
+             const glm::vec4 &leftColor = colors[leftIndex % colors.size()];
+             const glm::vec4 &rightColor = colors[rightIndex % colors.size()];
 
              // access specific channel
-             return std::lerp(c1[channel], c2[channel], d);
+             return std::lerp(leftColor[channel], rightColor[channel], blendFraction);
         };
 
         // 'rat' passed to getMidColor seems to be treated as "iteration count" in original code?
         // "rat / iterationInterval"
 
         return glm::vec4{
-            get_val(0, rat, iterationInterval.r),
-            get_val(1, rat, iterationInterval.g),
-            get_val(2, rat, iterationInterval.b),
-            get_val(3, rat, iterationInterval.a)
+            sampleChannel(0, rat, iterationInterval.r),
+            sampleChannel(1, rat, iterationInterval.g),
+            sampleChannel(2, rat, iterationInterval.b),
+            sampleChannel(3, rat, iterationInterval.a)
         };
     }
 }

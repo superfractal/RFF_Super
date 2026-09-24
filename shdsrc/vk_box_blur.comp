@@ -1,6 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-08-24
+// Modified by GPT-6 on 2026-09-23
 //
 
 #version 450
@@ -21,37 +22,42 @@ const uint BLUR_AXIS_X = 0;
 
 void main() {
     ivec2 size = imageSize(srcImage);
-    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
-    if (gid.x >= size.x || gid.y >= size.y) {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    if (pixel.x >= size.x || pixel.y >= size.y) {
         return;
     }
-    vec3 v = imageLoad(srcImage, gid).rgb;
+    vec3 accumulatedColor = imageLoad(srcImage, pixel).rgb;
     float scaled_radius = float(size.y) * blur_attr.blur_size;
     int max_radius = min(max(size.y - 1, 0), MAX_BLUR_RADIUS);
     float bounded_radius = isnan(scaled_radius) ? 0.0 : clamp(scaled_radius, 0.0, float(max_radius));
     int blur_radius = int(bounded_radius);
     if (blur_radius <= 0) {
-        imageStore(dstImage, gid, vec4(v, 1));
+        imageStore(dstImage, pixel, vec4(accumulatedColor, 1));
         return;
     }
 
-
-    int count = 1;
+    int sampleCount = 1;
 
     // Both spans in one pass would be a cross, whose corners are never sampled however often it repeats.
     if (blur_attr.axis == BLUR_AXIS_X) {
-        for (int i = max(0, gid.x - blur_radius); i <= min(size.x - 1, gid.x + blur_radius); i++) {
-            if (i == gid.x) continue;
-            v += imageLoad(srcImage, ivec2(i, gid.y)).rgb;
-            count++;
+        for (int sampleX = max(0, pixel.x - blur_radius);
+             sampleX <= min(size.x - 1, pixel.x + blur_radius); sampleX++) {
+            if (sampleX == pixel.x) {
+                continue;
+            }
+            accumulatedColor += imageLoad(srcImage, ivec2(sampleX, pixel.y)).rgb;
+            sampleCount++;
         }
     } else {
-        for (int i = max(0, gid.y - blur_radius); i <= min(size.y - 1, gid.y + blur_radius); i++) {
-            if (i == gid.y) continue;
-            v += imageLoad(srcImage, ivec2(gid.x, i)).rgb;
-            count++;
+        for (int sampleY = max(0, pixel.y - blur_radius);
+             sampleY <= min(size.y - 1, pixel.y + blur_radius); sampleY++) {
+            if (sampleY == pixel.y) {
+                continue;
+            }
+            accumulatedColor += imageLoad(srcImage, ivec2(pixel.x, sampleY)).rgb;
+            sampleCount++;
         }
     }
-    vec4 color = vec4(v / count, 1);
-    imageStore(dstImage, gid, color);
+    vec4 color = vec4(accumulatedColor / sampleCount, 1);
+    imageStore(dstImage, pixel, color);
 }

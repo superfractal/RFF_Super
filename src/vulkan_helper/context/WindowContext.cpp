@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-09-07.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "WindowContext.hpp"
@@ -8,8 +9,9 @@
 #include "../util/PhysicalDeviceUtils.hpp"
 
 namespace merutilm::vkh {
-    WindowContextImpl::WindowContextImpl(CoreRef core, const uint32_t index, GraphicsContextWindow &&window) : CoreHandler(core), attachmentIndex(index),
-        window(std::move(window)) {
+    WindowContextImpl::WindowContextImpl(CoreRef core, const uint32_t attachmentIndex,
+                                         GraphicsContextWindow &&window)
+        : CoreHandler(core), attachmentIndex(attachmentIndex), window(std::move(window)) {
         WindowContextImpl::init();
     }
 
@@ -39,7 +41,7 @@ namespace merutilm::vkh {
     }
 
     void WindowContextImpl::destroy() {
-        renderContext.clear();
+        renderContexts.clear();
         sharedImageContext = nullptr;
         syncObject = nullptr;
         commandBuffer = nullptr;

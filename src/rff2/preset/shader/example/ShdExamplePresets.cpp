@@ -1,11 +1,13 @@
 //
 // Created by Opus 5 on 2026-08-31.
 // Modified by Opus 5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "ShdExamplePresets.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <utility>
 
@@ -40,7 +42,10 @@ namespace merutilm::rff2 {
 
     ShaderAttribute ShdExamplePresets::FromFile::genShader() const {
         ShaderAttribute shader = {};
-        if (wholeConfig ? ConfigIO::loadShader(path, shader) : ShaderPresetIO::load(path, shader)) {
+        const bool loaded = wholeConfig
+            ? ConfigIO::loadShader(path, shader)
+            : ShaderPresetIO::load(path, shader);
+        if (loaded) {
             return shader;
         }
         vkh::logger::w_log(L"ERROR : Cannot read the example shader");
@@ -59,10 +64,12 @@ namespace merutilm::rff2 {
                 continue;
             }
             const uint32_t magic = readMagic(entry.path());
-            if (magic != ConfigIO::MAGIC && magic != ShaderPresetIO::MAGIC) {
+            const bool isConfig = magic == ConfigIO::MAGIC;
+            const bool isShaderPreset = magic == ShaderPresetIO::MAGIC;
+            if (!isConfig && !isShaderPreset) {
                 continue;
             }
-            presets.emplace_back(entry.path(), entry.path().stem().string(), magic == ConfigIO::MAGIC);
+            presets.emplace_back(entry.path(), entry.path().stem().string(), isConfig);
         }
         std::ranges::sort(presets, [](const FromFile &a, const FromFile &b) { return a.name < b.name; });
         return presets;

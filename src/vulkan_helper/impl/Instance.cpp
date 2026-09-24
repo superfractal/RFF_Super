@@ -1,9 +1,12 @@
 //
 // Created by Merutilm on 2025-07-08.
 // Modified by Opus 5 on 2026-08-09
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "Instance.hpp"
+
+#include <vector>
 
 #include "../core/factory.hpp"
 #include "../core/exception.hpp"
@@ -21,13 +24,18 @@ namespace merutilm::vkh {
     }
 
     void InstanceImpl::init() {
-        createInstance();
-        if constexpr(config::ENABLE_VALIDATION) {
-            validationLayer = factory::create<ValidationLayer>(instance);
-        }else {
-            validationLayer = nullptr;
+        if (instance != VK_NULL_HANDLE) {
+            throw exception_invalid_state("Vulkan instance is already initialized");
         }
-
+        createInstance();
+        try {
+            if constexpr (config::ENABLE_VALIDATION) {
+                validationLayer = factory::create<ValidationLayer>(instance);
+            }
+        } catch (...) {
+            destroy();
+            throw;
+        }
     }
 
     void InstanceImpl::createInstance() {
@@ -39,6 +47,10 @@ namespace merutilm::vkh {
             .pEngineName = "1.0.0",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
             .apiVersion = VK_API_VERSION_1_0,
+        };
+        std::vector<const char *> extensions = {
+            VK_KHR_SURFACE_EXTENSION_NAME,
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
         };
         if constexpr (config::ENABLE_VALIDATION) {
             extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -59,14 +71,19 @@ namespace merutilm::vkh {
             .ppEnabledExtensionNames = extensions.data(),
         };
 
-        if (allocator::invoke(vkCreateInstance, &instanceCreateInfo, nullptr, &instance)) {
+        VkInstance createdInstance = VK_NULL_HANDLE;
+        if (allocator::invoke(vkCreateInstance, &instanceCreateInfo, nullptr, &createdInstance) != VK_SUCCESS) {
             throw exception_init("Failed to create instance!");
         }
-
+        instance = createdInstance;
     }
 
     void InstanceImpl::destroy() {
-        validationLayer = nullptr;
+        validationLayer.reset();
+        if (instance == VK_NULL_HANDLE) {
+            return;
+        }
         allocator::invoke(vkDestroyInstance, instance, nullptr);
+        instance = VK_NULL_HANDLE;
     }
 }

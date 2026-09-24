@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-09-03.
-// Modified by GPT-5 on 2026-08-31.
+// Modified by GPT-5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -8,23 +9,10 @@
 
 namespace merutilm::vkh {
     struct BarrierUtils {
-        static void cmdMemoryBarrier(const VkCommandBuffer commandBuffer, const VkAccessFlags srcAccessMask,
-                                     const VkAccessFlags dstAccessMask, const VkPipelineStageFlags srcStageMask,
-                                     const VkPipelineStageFlags dstStageMask) {
-            const VkMemoryBarrier memoryBarrier = {
-                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-                .pNext = nullptr,
-                .srcAccessMask = srcAccessMask,
-                .dstAccessMask = dstAccessMask
-            };
-            vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0, 1, &memoryBarrier, 0, nullptr, 0,
-                                 nullptr);
-        }
-
         static void cmdBufferMemoryBarrier(const VkCommandBuffer commandBuffer, const VkAccessFlags srcAccessMask,
-                                           const VkAccessFlags dstAccessMask, const VkBuffer buffer,
-                                           const VkDeviceSize offset,
-                                           const VkDeviceSize size,
+                                           const VkAccessFlags dstAccessMask,
+                                           const VkBuffer buffer,
+                                           const VkDeviceSize offset, const VkDeviceSize size,
                                            const VkPipelineStageFlags srcStageMask,
                                            const VkPipelineStageFlags dstStageMask) {
             const VkBufferMemoryBarrier bufferMemoryBarrier = {
@@ -38,16 +26,18 @@ namespace merutilm::vkh {
                 .offset = offset,
                 .size = size
             };
-            vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0, 0, nullptr, 1, &bufferMemoryBarrier, 0,
-                                 nullptr);
+            vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0,
+                                 0, nullptr, 1, &bufferMemoryBarrier, 0, nullptr);
         }
 
         static void cmdSynchronizeImageWriteToRead(const VkCommandBuffer commandBuffer, const VkImage image,
-                                          const VkImageLayout currentLayout, const uint32_t mipLevel, const uint32_t mipLevelCount,
-                                          const VkPipelineStageFlags srcStageMask,
-                                          const VkPipelineStageFlags dstStageMask) {
-
-            const VkAccessFlags srcAccessMask = srcStageMask & VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                                   const VkImageLayout currentLayout,
+                                                   const uint32_t mipLevel, const uint32_t mipLevelCount,
+                                                   const VkPipelineStageFlags srcStageMask,
+                                                   const VkPipelineStageFlags dstStageMask) {
+            const bool writesColorAttachment =
+                (srcStageMask & VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT) != 0;
+            const VkAccessFlags srcAccessMask = writesColorAttachment
                                                     ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                     : VK_ACCESS_SHADER_WRITE_BIT;
             cmdImageMemoryBarrier(commandBuffer, image, srcAccessMask, VK_ACCESS_SHADER_READ_BIT,
@@ -55,12 +45,9 @@ namespace merutilm::vkh {
         }
 
         static void cmdImageMemoryBarrier(const VkCommandBuffer commandBuffer, const VkImage image,
-                                          const VkAccessFlags srcAccessMask,
-                                          const VkAccessFlags dstAccessMask,
-                                          const VkImageLayout oldLayout,
-                                          const VkImageLayout newLayout,
-                                          const uint32_t mipLevel,
-                                          const uint32_t mipLevelCount,
+                                          const VkAccessFlags srcAccessMask, const VkAccessFlags dstAccessMask,
+                                          const VkImageLayout oldLayout, const VkImageLayout newLayout,
+                                          const uint32_t mipLevel, const uint32_t mipLevelCount,
                                           const VkPipelineStageFlags srcStageMask,
                                           const VkPipelineStageFlags dstStageMask) {
             const VkImageMemoryBarrier barrier = {
@@ -81,10 +68,8 @@ namespace merutilm::vkh {
                     .layerCount = 1
                 }
             };
-            vkCmdPipelineBarrier(commandBuffer, srcStageMask,
-                                 dstStageMask, 0,
-                                 0, nullptr,
-                                 0, nullptr,
+            vkCmdPipelineBarrier(commandBuffer, srcStageMask, dstStageMask, 0,
+                                 0, nullptr, 0, nullptr,
                                  1, &barrier);
         }
     };

@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-06-09.
 // Modified by Opus 5 on 2026-08-26
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -49,8 +50,7 @@ namespace merutilm::rff2 {
         // Runs before the jthread member is joined, so a worker parked in waitUntil is released
         // rather than waited on forever: once the render loop is gone nothing is left to notify it.
         ~BackgroundThread() {
-            stopSource.request_stop();
-            notify();
+            requestStop();
         }
 
         BackgroundThread(const BackgroundThread &) = delete;
@@ -61,17 +61,12 @@ namespace merutilm::rff2 {
 
         BackgroundThread &operator=(BackgroundThread &&) = delete;
 
-        friend bool operator==(const BackgroundThread &a, const BackgroundThread &b) {
-            return &a == &b;
-        }
-
-
         // False means the wait gave up because the thread was asked to stop, not because the
         // condition came true: the caller has to leave rather than go on to the next step.
         template<typename P> requires (!std::is_same_v<P, BackgroundThread>)
-        [[nodiscard]] bool waitUntil(P &&b) {
+        [[nodiscard]] bool waitUntil(P &&predicate) {
             std::unique_lock lock(mutex);
-            return cv.wait(lock, stopSource.get_token(), std::forward<P>(b));
+            return cv.wait(lock, stopSource.get_token(), std::forward<P>(predicate));
         }
 
 
@@ -82,8 +77,13 @@ namespace merutilm::rff2 {
             cv.notify_all();
         }
 
-        [[nodiscard]] bool isStopRequested() const {
-            return stopSource.stop_requested();
+        void requestStop() {
+            stopSource.request_stop();
+            notify();
+        }
+
+        [[nodiscard]] std::stop_token stopToken() const {
+            return stopSource.get_token();
         }
 
         void tryJoin() {

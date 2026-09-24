@@ -1,8 +1,12 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
+#include <cstdint>
+#include <memory>
 
 #include "Instance.hpp"
 #include "Surface.hpp"
@@ -11,9 +15,7 @@
 
 namespace merutilm::vkh {
     class PhysicalDeviceLoaderImpl final : public Handler {
-
         InstanceRef instance;
-
         VkPhysicalDevice physicalDevice = nullptr;
         VkPhysicalDeviceProperties physicalDeviceProperties = {};
         VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties = {};
@@ -22,7 +24,6 @@ namespace merutilm::vkh {
         uint32_t maxFramesInFlight;
 
     public:
-
         explicit PhysicalDeviceLoaderImpl(InstanceRef instance);
 
         ~PhysicalDeviceLoaderImpl() override;
@@ -35,7 +36,9 @@ namespace merutilm::vkh {
 
         PhysicalDeviceLoaderImpl &operator=(PhysicalDeviceLoaderImpl &&) = delete;
 
-        [[nodiscard]] VkPhysicalDevice getPhysicalDeviceHandle() const { return physicalDevice; }
+        [[nodiscard]] VkPhysicalDevice getPhysicalDeviceHandle() const {
+            return physicalDevice;
+        }
 
         [[nodiscard]] const VkPhysicalDeviceProperties &getPhysicalDeviceProperties() const {
             return physicalDeviceProperties;
@@ -54,12 +57,15 @@ namespace merutilm::vkh {
         static HWND createDummyWindow();
 
 
-        [[nodiscard]] const QueueFamilyIndices &getQueueFamilyIndices() const { return queueFamilyIndices; }
+        [[nodiscard]] const QueueFamilyIndices &getQueueFamilyIndices() const {
+            return queueFamilyIndices;
+        }
 
-        uint32_t getMaxFramesInFlight() const {return maxFramesInFlight;}
+        uint32_t getMaxFramesInFlight() const {
+            return maxFramesInFlight;
+        }
 
     private:
-
         VkSurfaceKHR createDummySurface(HWND dummyWindow) const;
 
         void init() override;

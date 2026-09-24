@@ -1,0 +1,7 @@
+{
+  "_comment": "Modified by GPT-6 on 2026-09-24; replace paths with your local server and model.",
+  "executable": "models/llama/llama-server.exe",
+  "model": "models/your-model.gguf",
+  "port": 18080,
+  "arguments": []
+}

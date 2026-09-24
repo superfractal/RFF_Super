@@ -1,5 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-19.
+// Modified by GPT-6 on 2026-09-16
 //
 
 #pragma once
@@ -10,6 +11,10 @@ namespace merutilm::rff2 {
         CLIP = 0,
         REINHARD = 1,
         ACES = 2,
-        FILMIC = 3
+        FILMIC = 3,
+        MFR_SHOULDER = 4,
+        MFR_LOG = 5,
+        MFR_LINEAR = 6,
+        MFR_FALSE_COLOR = 7
     };
 }

@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-09-05.
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-5 on 2026-08-31, 2026-09-01
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -33,8 +34,16 @@ namespace merutilm::vkh {
             const uint32_t maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
             std::vector<BufferContext> result(maxFramesInFlight);
 
-            for (uint32_t i = 0; i < maxFramesInFlight; ++i) {
-                result[i] = createContext(core, bufferInitInfo);
+            uint32_t createdCount = 0;
+            try {
+                for (; createdCount < maxFramesInFlight; ++createdCount) {
+                    result[createdCount] = createContext(core, bufferInitInfo);
+                }
+            } catch (...) {
+                for (uint32_t i = 0; i < createdCount; ++i) {
+                    destroyContext(core, result[i]);
+                }
+                throw;
             }
 
             return result;
@@ -108,11 +117,6 @@ namespace merutilm::vkh {
             return value;
         }
 
-        static std::vector<std::byte> getRaw(const BufferContext &context, const uint32_t offset, const uint32_t size) {
-            std::vector<std::byte> value(size);
-            memcpy(value.data(), context.mappedMemory + offset, size);
-            return value;
-        }
 
         static void destroyContext(CoreRef core, const MultiframeBufferContext &bufCtx) {
             const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();

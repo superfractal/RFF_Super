@@ -1,10 +1,12 @@
 //
 // Created by Merutilm on 2025-05-08.
 // Modified by Opus 5 on 2026-08-14, 2026-08-23, 2026-08-26
-// Modified by GPT-5 on 2026-08-18,2026-08-23, 2026-09-01
+// Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #include "RFFDynamicMapBinary.h"
+#include <cmath>
 
 #include <cstring>
 #include <filesystem>
@@ -55,7 +57,8 @@ namespace merutilm::rff2 {
         uint64_t m;
         IOUtilities::readAndDecode(in, &m);
         const uint64_t count = static_cast<uint64_t>(w) * h;
-        if (count == 0 || !IOUtilities::validateReadCount(in, count, sizeof(double), MAX_MAP_PIXELS)) {
+        if (!std::isfinite(z) || count == 0 ||
+            !IOUtilities::validateReadCount(in, count, sizeof(double), MAX_MAP_PIXELS)) {
             return DEFAULT;
         }
         std::vector<double> i;
@@ -112,7 +115,7 @@ namespace merutilm::rff2 {
             IOUtilities::readAndDecode(in, &width);
             IOUtilities::readAndDecode(in, &height);
             IOUtilities::readAndDecode(in, &logZoom);
-            return static_cast<bool>(in) && width > 0 && height > 0 &&
+            return static_cast<bool>(in) && std::isfinite(logZoom) && width > 0 && height > 0 &&
                    static_cast<uint64_t>(width) * height <= MAX_MAP_PIXELS;
         }
     }
@@ -145,6 +148,17 @@ namespace merutilm::rff2 {
         // uncompressed keyframe as the one being described.
         bool readKeyframeHeaderByID(const std::filesystem::path &dir, const uint32_t id,
                                     uint16_t &width, uint16_t &height, float &logZoom) {
+            if (std::filesystem::exists(compressedKeyframePath(dir, id)) &&
+                std::filesystem::exists(plainKeyframePath(dir, id))) {
+                const auto map = RFFDynamicMapBinary::readByID(dir, id);
+                if (!map.hasData()) {
+                    return false;
+                }
+                width = map.getMatrix().getWidth();
+                height = map.getMatrix().getHeight();
+                logZoom = map.getLogZoom();
+                return true;
+            }
             if (const std::filesystem::path compressed = compressedKeyframePath(dir, id);
                 std::filesystem::exists(compressed) &&
                 readKeyframeHeader(compressed, width, height, logZoom)) {
@@ -221,7 +235,7 @@ namespace merutilm::rff2 {
         std::error_code sizeError;
         const uint64_t fileSize = std::filesystem::file_size(path, sizeError);
         const auto headerEnd = static_cast<uint64_t>(in.tellg());
-        if (!in || sizeError || count == 0 || count > MAX_MAP_PIXELS ||
+        if (!in || sizeError || !std::isfinite(z) || count == 0 || count > MAX_MAP_PIXELS ||
             rawSize != RFFMapCompression::streamSize(count) ||
             headerEnd > fileSize || compressedSize > fileSize - headerEnd) {
             return DEFAULT;

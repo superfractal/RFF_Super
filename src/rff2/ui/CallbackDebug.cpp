@@ -2,9 +2,11 @@
 // Created by Opus 5 on 2026-08-14.
 // Modified by Opus 5 on 2026-08-15, 2026-08-31
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "CallbackDebug.hpp"
+#include "NativeDialogs.hpp"
 
 #include <cstring>
 #include <string>
@@ -15,10 +17,14 @@
 namespace merutilm::rff2 {
     namespace {
         void copyToClipboard(const std::wstring &text) {
-            if (!OpenClipboard(nullptr)) {
+            const HWND owner = NativeDialogs::owner();
+            if (owner == nullptr || !OpenClipboard(owner)) {
                 return;
             }
-            EmptyClipboard();
+            if (!EmptyClipboard()) {
+                CloseClipboard();
+                return;
+            }
             const size_t bytes = (text.size() + 1) * sizeof(wchar_t);
             if (const HGLOBAL handle = GlobalAlloc(GMEM_MOVEABLE, bytes)) {
                 if (void *const target = GlobalLock(handle)) {

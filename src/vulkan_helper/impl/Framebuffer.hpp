@@ -1,8 +1,12 @@
 //
 // Created by Merutilm on 2025-07-14.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <vector>
+
 #include "RenderPass.hpp"
 #include "../handle/CoreHandler.hpp"
 
@@ -26,7 +30,9 @@ namespace merutilm::vkh {
         FramebufferImpl &operator=(FramebufferImpl &&) = delete;
 
 
-        [[nodiscard]] VkFramebuffer getFramebufferHandle(const uint32_t imageIndex) const { return framebuffer[imageIndex]; }
+        [[nodiscard]] VkFramebuffer getFramebufferHandle(uint32_t imageIndex) const {
+            return framebuffer[imageIndex];
+        }
 
         [[nodiscard]] const VkExtent2D &getExtent() const { return extent; }
 

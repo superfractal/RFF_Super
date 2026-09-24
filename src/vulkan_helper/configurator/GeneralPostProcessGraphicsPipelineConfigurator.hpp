@@ -1,8 +1,14 @@
 //
 // Created by Merutilm on 2025-08-05.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "GeneralGraphicsPipelineConfigurator.hpp"
 #include "GraphicsPipelineConfigurator.hpp"
 #include "../impl/IndexBuffer.hpp"
@@ -16,10 +22,14 @@ namespace merutilm::vkh {
         static constexpr auto VERTEX_MODULE_PATH = "vk_post_process.vert";
 
     public:
-
-        explicit GeneralPostProcessGraphicsPipelineConfigurator(EngineRef engine, const uint32_t windowContextIndex, const uint32_t renderContextIndex, const uint32_t primarySubpassIndex, const std::string &fragName) : GraphicsPipelineConfigurator(
-            engine, windowContextIndex, renderContextIndex, primarySubpassIndex, VERTEX_MODULE_PATH, fragName) {
+        explicit GeneralPostProcessGraphicsPipelineConfigurator(
+            EngineRef engine, const uint32_t windowContextIndex,
+            const uint32_t renderContextIndex, const uint32_t primarySubpassIndex,
+            const std::string &fragName)
+            : GraphicsPipelineConfigurator(engine, windowContextIndex, renderContextIndex,
+                                           primarySubpassIndex, VERTEX_MODULE_PATH, fragName) {
         }
+
         ~GeneralPostProcessGraphicsPipelineConfigurator() override = default;
 
         GeneralPostProcessGraphicsPipelineConfigurator(const GeneralPostProcessGraphicsPipelineConfigurator &) = delete;
@@ -33,7 +43,8 @@ namespace merutilm::vkh {
 
         void configure() override;
 
-        void cmdRender(VkCommandBuffer cbh, uint32_t frameIndex, DescIndexPicker &&descIndices) override;
+        void cmdRender(VkCommandBuffer commandBuffer, uint32_t frameIndex,
+                       DescIndexPicker &&descIndices) override;
 
         static void cleanup() {
             vertexBufferPP = nullptr;
@@ -42,13 +53,17 @@ namespace merutilm::vkh {
         }
 
     protected:
-        [[nodiscard]] VertexBufferRef getVertexBuffer() const override { return *vertexBufferPP; }
+        [[nodiscard]] VertexBufferRef getVertexBuffer() const override {
+            return *vertexBufferPP;
+        }
 
-        [[nodiscard]] IndexBufferRef getIndexBuffer() const override { return *indexBufferPP; }
+        [[nodiscard]] IndexBufferRef getIndexBuffer() const override {
+            return *indexBufferPP;
+        }
 
-        void configureVertexBuffer(HostDataObjectManagerRef som) override;
+        void configureVertexBuffer(HostDataObjectManagerRef vertexData) override;
 
-        void configureIndexBuffer(HostDataObjectManagerRef som) override;
+        void configureIndexBuffer(HostDataObjectManagerRef indexData) override;
 
     };
 }

@@ -2,9 +2,11 @@
 // Created by Merutilm on 2025-06-23.
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-22
 //
 
 #include "RFFStaticMapBinary.h"
+#include <cmath>
 
 #include "../../vulkan_helper/core/logger.hpp"
 #include "../ui/IOUtilities.h"
@@ -49,7 +51,7 @@ namespace merutilm::rff2 {
         IOUtilities::readAndDecode(in, &w);
         uint32_t h;
         IOUtilities::readAndDecode(in, &h);
-        if (!in || w == 0 || h == 0 || static_cast<uint64_t>(w) * h > MAX_MAP_PIXELS) {
+        if (!in || !std::isfinite(lz) || w == 0 || h == 0 || static_cast<uint64_t>(w) * h > MAX_MAP_PIXELS) {
             return DEFAULT;
         }
         return RFFStaticMapBinary(lz, w, h);

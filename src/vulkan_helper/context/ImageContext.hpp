@@ -1,7 +1,8 @@
 //
 // Created by Merutilm on 2025-07-26.
 // Modified by Opus 5 on 2026-08-15, 2026-08-26
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -37,8 +38,16 @@ namespace merutilm::vkh {
             const uint32_t maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
             std::vector<ImageContext> result(maxFramesInFlight);
 
-            for (uint32_t i = 0; i < maxFramesInFlight; ++i) {
-                result[i] = createContext(core, imageInitInfo);
+            uint32_t createdCount = 0;
+            try {
+                for (; createdCount < maxFramesInFlight; ++createdCount) {
+                    result[createdCount] = createContext(core, imageInitInfo);
+                }
+            } catch (...) {
+                for (uint32_t i = 0; i < createdCount; ++i) {
+                    destroyContext(core, result[i]);
+                }
+                throw;
             }
 
             return result;
@@ -60,7 +69,7 @@ namespace merutilm::vkh {
             }
         }
 
-        static MultiframeImageContext fromSwapchain(CoreRef core, SwapchainRef swapchain) {
+        static MultiframeImageContext fromSwapchain(SwapchainRef swapchain) {
             const auto images = swapchain.getSwapchainImages();
             const auto imageViews = swapchain.getSwapchainImageViews();
             // The size these images were created at, not the one the window is at now: a stale window size here is what puts an attachment into a framebuffer too large for it.
@@ -70,7 +79,7 @@ namespace merutilm::vkh {
 
             for (uint32_t i = 0; i < images.size(); ++i) {
                 result[i].image = images[i];
-                result[i].imageFormat = swapchain.getImageFormat(),
+                result[i].imageFormat = swapchain.getImageFormat();
                 result[i].imageMemory = VK_NULL_HANDLE;
                 result[i].imageView = imageViews[i];
                 result[i].mipmappedImageView = imageViews[i];

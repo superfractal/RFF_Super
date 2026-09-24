@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-04.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,22 +10,22 @@ namespace merutilm::rff2 {
         /**
          * Do Not Use Decimal Iterations.
          */
-        NONE,
+        NONE = 0,
         /**
          * Use triangle inequality once.
          */
-        LINEAR,
+        LINEAR = 1,
         /**
          * Calculates <b>Sqrt(Linear)</b>.
          */
-        SQUARE_ROOT,
+        SQUARE_ROOT = 2,
         /**
          * Calculates <b>Log(Linear + 1)</b>.
          */
-        LOG,
+        LOG = 3,
         /**
          * Calculates <b>Log(Log(Linear + 1) + 1)</b>.
          */
-        LOG_LOG
+        LOG_LOG = 4
     };
 }

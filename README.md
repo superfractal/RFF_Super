@@ -1,74 +1,136 @@
-# RFF Super
+<!-- Modified by GPT-6 on 2026-09-11, 2026-09-24, 2026-09-25 -->
+<!-- Modified by GPT-6 on 2026-09-25. -->
 
-> **IMPORTANT NOTE:**
-> **This is an improved and extended version of the original [RFF-2.0](https://github.com/Merutilm/RFF-2.0) by Merutilm — a modified version of it, changed from 2026-07-05 onward. Each changed source file carries its own modification notice and date.**
-> This project was developed using vibe coding. As I am not a mathematics major or a highly experienced programmer, there may be imperfections.
->
-> The precision of the Mandelbrot set calculations may be lower than that of the original version.
+<p align="center">
+  <img src="res/icon.png" alt="RFF_Super application icon" width="112" height="112">
+</p>
 
-## The Original and This Fork
+<h1 align="center">RFF_Super</h1>
 
-RFF-2.0 by Merutilm is the original. This repository is a fork of it, pulled in a different
-direction, so "better" depends on what you are doing:
+<p align="center">
+  <strong>Explore Mandelbrot detail. Shape its appearance. Create stills and zoom films.</strong><br>
+  A Windows fractal renderer with Vulkan-powered shading, layered effects, and a video timeline.
+</p>
 
-| | **RFF-2.0** (Original) | **RFF_Super** (this fork) |
-| --- | --- | --- |
-| **Priority** | Stability | Features and visual quality |
-| **Availability** | Public [Merutilm/RFF-2.0](https://github.com/Merutilm/RFF-2.0) | Public |
-| **Best for** | Reliable everyday exploration | Producing the most beautiful stills and videos |
-| **Strengths** | Simpler and easier to use; latest, faster, and stable releases; highest calculation precision | Custom formulas, extra shader types, palette settings, free rotation, presets |
-| **Trade-offs** || More settings to learn; precision may be lower than the original; more bugs |
+<p align="center">
+  <strong>Windows x64 · C++20 · Vulkan · GMP · GPLv3</strong>
+</p>
 
-## Building from Source
+<p align="center">
+  <a href="guide/user-manual.md">User manual</a> ·
+  <a href="guide/SETTINGS_GUIDE.md">Illustrated guide</a> ·
+  <a href="documentation/BUILDING.md">Build instructions</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-See **[BUILDING.md](BUILDING.md)** for the full compile guide.
+<p align="center">
+  <img src="res/readme-showcase.jpg" alt="Dark blue fractal artwork with luminous white curves and reflective surfaces" width="800">
+</p>
 
-## Features of the Improved Version
+<p align="center">
+  <a href="guide/visual-comparisons.md">Explore before-and-after renders and example settings →</a>
+</p>
 
-### Differences from Standard RFF
+**RFF_Super** extends [RFF-2.0 by Merutilm](https://github.com/Merutilm/RFF-2.0), based on version **2.1.2.3**, with additional appearance controls, custom formulas, exploration tools, and animation workflows. It brings location, surface editing, animation, and export into four dedicated workspaces, with English and Japanese interface options.
 
-Based on RFF 2.1.2.3, the following features have been added or improved:
+> **About this fork:** RFF_Super is a modified version of the original, with changes from **2026-07-05** onward. Each changed source file carries its own modification notice and date. It was developed using AI-assisted “vibe coding” by an author without a mathematics specialization or extensive programming experience. Calculation precision may be lower than in the original; see [known limitations](#known-limitations).
 
-* Added custom formulas (zoomable up to e14)
-* Added new Shader types
-* Added palette settings
-* Boundary tracing
-* Freely adjustable fractal Rotation
-* Improved User Interface (UI)
-* Settings save / load (`.rfc`): store and recall the full configuration — location, Fractal/Render/Resolution/Shader/Video — in one file
-* Shader preset save / load (`.rfsp`): store and recall the full Palette/Stripe/Slope/Color/Fog/Bloom setup
-* Supersampling
-* etc...
+## What you can create
 
-## Known Issues & Areas for Improvement
+| | Capabilities |
+| --- | --- |
+| **Explore fractals** | Mandelbrot deep zooms, minibrot finding, boundary tracing, free rotation, custom formulas, and planar or 360° projections. |
+| **Design the surface** | Palettes, lighting and relief, textures, patterns, stripes, warp, fog, bloom, color correction, and configurable shader layer order. |
+| **Animate the result** | Zoom sequences, camera and appearance tracks, interpolation, music, zoom overlays, and video export through FFmpeg. |
+| **Work visually** | Searchable settings, Basic and Detail surface views, favorites, adjustable panels, undo/redo, and reference/current appearance comparisons. |
+| **Keep reusable work** | Full settings, appearance presets, losslessly compressed iteration maps, and separate video timelines. |
+| **Try assisted exploration** | Optional Local AI appearance and zoom tools with a separately configured model server. |
 
-The following issues are currently known:
+Custom formulas have a much shallower useful zoom range than the Mandelbrot path. See [exploration and calculation](guide/exploration-and-calculation.md) for the controls and their limits.
 
-* The precision may be lower than that of the original.
-* Unintended black or white lines may appear on the screen.
-  * **Fix:** Lower `Precision Level` until the lines disappear. This is most common cause, but the lines may rarely appear for other reasons too.
-* Moving the mouse from one menu to the next can show the opening menu as an empty bordered
-  rectangle for a single frame, with the picture visible straight through it.
-  * **Cause:** Windows makes a fresh popup window for every menu, shows it, and only paints it
-    about 2 ms later — measured with message hooks. A frame composited inside that gap goes out
-    with the window on screen and nothing drawn in it. A stock Win32 program with a plain menu
-    bar reproduces this exactly, so it is not specific to RFF Super; it is only conspicuous here
-    because what sits behind the menu is a picture rather than a still, pale window. Nothing on
-    the menu API side changes it — the menu background brush, the fade and animation settings,
-    and the DWM window attributes were all measured and made no difference.
-  * **Status:** the picture now keeps rendering while a menu is open, which halves the exposure
-    from two frames to one. Removing it entirely needs menus that are drawn by this program
-    instead of by Windows.
-* A long video export at a high resolution can abort part-way with `Failed to submit queue! VK_ERROR_DEVICE_LOST`, killing the process and leaving a truncated `.mp4`. The GPU is lost after tens of minutes of sustained load; where it stops varies from run to run. Validation layers report no errors during a full run, so the cause may lie in the driver or the hardware — but a bug in this application has not been ruled out.
-  * **Workaround:** lower `Supersampling (SSAA)` before generating keyframes. Per-frame GPU load is `window client size x Clarity x SSAA`, but the video output size is only `window client size x Clarity` — so lowering SSAA cuts the load without changing the output resolution.
+## Get started
 
-## License
+### Prepare the application
 
-RFF Super is free software under the **GNU General Public License v3**; the full text is in
-[LICENSE](LICENSE), which also reproduces the licenses of the components this program links.
+Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the application's `bin/` and `shaders/` folders together as siblings, and keep the required runtime DLLs available.
 
-Third-party components, the named algorithms implemented in the source, and the license each one
-is taken under are recorded in [NOTICE](NOTICE). The libraries other than stb_image are not
-redistributed here and are installed separately; see [BUILDING.md](BUILDING.md). Their license
-terms still apply to any prebuilt binary that links them, so review NOTICE before distributing
-one.
+- **Building from source:** follow [BUILDING.md](documentation/BUILDING.md) for the MSYS2 MINGW64 toolchain, dependencies, and build commands.
+- **Exporting video or audio:** follow the [FFmpeg setup guide](guide/ffmpeg-setup.md) to install **FFmpeg separately**, make it available on PATH or beside the executable, and check the required encoders. FFmpeg is not needed for still-image rendering.
+- **Using Local AI:** follow the [Local AI guide](guide/local-ai.md) to configure a separate model server. Ordinary fractal rendering does not require it.
+
+### Make your first image
+
+1. Launch `bin/RFF_Super.exe` and use **Load Location / Settings** to open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
+2. Wait for the fractal calculation to finish. Open **Surface Effects** and start with the palette or lighting controls.
+3. Change one setting and choose **Apply & Render**. Use **Ctrl+F** to find a control, or compare appearances in the Comparison module.
+4. Press **Ctrl+S** and choose a new `.rfc` filename to keep your version. Use **Save Image** to export the rendered picture.
+5. For a zoom film, continue with [animation and export](guide/animation-and-export.md): generate source keyframes, edit the timeline, then export.
+
+The [illustrated settings guide](guide/SETTINGS_GUIDE.md) includes downloadable examples and explains what each adjustment changes. To switch the interface language, use **View → Language / 言語** and restart the application.
+
+## Find the right guide
+
+| I want to… | Read this |
+| --- | --- |
+| Learn the complete workflow | [User manual](guide/user-manual.md) |
+| See what settings do to an image | [Illustrated settings guide](guide/SETTINGS_GUIDE.md) · [Visual comparisons](guide/visual-comparisons.md) |
+| Explore materials, lighting, and effects | [Shader overview](guide/shader-overview.md) · [More shader comparisons](guide/shader-comparisons.md) |
+| Navigate, calculate, or find minibrots | [Exploration and calculation](guide/exploration-and-calculation.md) |
+| Arrange panels, compare looks, or save work | [Workspace and files](guide/workspace-and-files.md) |
+| Create animation and export a video | [Animation, timeline, and export](guide/animation-and-export.md) |
+| Configure optional AI tools | [Local AI](guide/local-ai.md) |
+| Look up a control or see its interface | [Field reference](guide/settings-reference.md) · [UI gallery](guide/ui-gallery.md) · [Feature coverage](guide/feature-coverage.md) |
+| Recover a session or troubleshoot | [Presets, recovery, and diagnostics](guide/presets-and-recovery.md) |
+
+### Choose the right save format
+
+| Format | What it stores |
+| --- | --- |
+| `.rfc` | Location and configuration, including calculation, appearance, and video settings. |
+| `.rfsp` | An appearance preset to reuse at another location. |
+| `.rfl` | Legacy location data: center, log zoom, and iteration limit. |
+| `.rfm` / `.rfmz` | Computed iteration maps; `.rfmz` uses lossless disk compression. |
+| `.rfvt` / `.json` | Video timeline, tracks, and references to audio and other assets. |
+| `.png` | Rendered pixels for viewing and sharing. |
+
+Settings and timeline files do **not** bundle external textures, keyframe maps, music, or fonts. Keep referenced assets alongside your saved work. See [file handling](guide/workspace-and-files.md) for details.
+
+## Rendering foundations
+
+RFF_Super inherits the original project's Mandelbrot calculation approach:
+
+- **Perturbation theory** calculates nearby pixels around a high-precision reference orbit.
+- **Fast-period-guessing (FPG)** detects the current view's maximal period automatically.
+- **Multilevel Periodic Approximation (MPA)** skips variable-length groups of iterations using the reference orbit's periodic structure.
+- **Reference and approximation-table compression** reduce memory requirements and table-building work.
+
+Vulkan handles the rendering and shading pipeline. Supersampling improves image sampling at the cost of additional work and memory.
+
+<a id="known-limitations"></a>
+
+## Known limitations
+
+- **Calculation precision:** results may be less precise than in the original RFF-2.0. Inspect fine boundaries when changing approximation settings.
+- **Black or white lines:** try lowering **Precision Level** to a more negative value and recalculating. This can resolve approximation artifacts, but lines can also have other causes.
+- **Long, high-resolution video exports:** a reported `VK_ERROR_DEVICE_LOST` failure can terminate export and leave a truncated `.mp4`. The cause remains unresolved; an application bug has not been ruled out. Try lowering **Supersampling (SSAA)** before generating source keyframes to reduce per-frame GPU load without changing the output dimensions at the same canvas size and Clarity.
+
+For recovery options and diagnostic information, see [presets, recovery, and diagnostics](guide/presets-and-recovery.md).
+
+## Build and project resources
+
+| Resource | Contents |
+| --- | --- |
+| [Build instructions](documentation/BUILDING.md) | Toolchain, dependencies, shaders, local builds, and distribution builds. |
+| [Distribution guide](documentation/DISTRIBUTION.md) | Binary packaging and matching dependency/source bundles. |
+| [Project layout](documentation/project-layout.md) | Source, documentation, tools, and runtime-file locations. |
+| [Changelog](CHANGELOG.md) | Changes in RFF_Super. |
+| [Third-party materials](third-party/README.md) | Dependency license texts, matching sources, and reconstruction instructions. |
+
+## Credits and license
+
+**Original RFF-2.0:** [Merutilm](https://github.com/Merutilm/RFF-2.0).<br>
+**RFF_Super modifications:** SuperFractal, from 2026-07-05 onward.
+
+RFF_Super is free software under the **GNU General Public License v3**. See [LICENSE](LICENSE) for the full text and the reproduced licenses of the primary linked components.
+
+[NOTICE](NOTICE) records third-party components, named algorithms, their sources, and applicable licenses. The source tree bundles stb_image and nlohmann/json; other build dependencies are installed separately. Review the [distribution guide](documentation/DISTRIBUTION.md) and the matching [third-party materials](third-party/README.md) when preparing a binary release.

@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-05
 // Modified by Opus 5 on 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-27
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -132,12 +133,13 @@ namespace merutilm::rff2::TextureDescriptor {
 
     // UBO field index of one pattern layer's field, where field is one of the TARGET_PATTERN_F_*.
     constexpr uint32_t patternTarget(const uint32_t layer, const uint32_t field) {
-        if (layer == 0) {
-            return field < TARGET_PATTERN_F_EDGE_ENABLED
-                       ? TARGET_PATTERN_ENABLED + field
-                       : TARGET_PATTERN_EDGE_BASE + (field - TARGET_PATTERN_F_EDGE_ENABLED);
+        if (layer > 0) {
+            return TARGET_PATTERN_LAYER_1_BASE + (layer - 1) * TARGET_PATTERN_FIELD_COUNT + field;
         }
-        return TARGET_PATTERN_LAYER_1_BASE + (layer - 1) * TARGET_PATTERN_FIELD_COUNT + field;
+        if (field < TARGET_PATTERN_F_EDGE_ENABLED) {
+            return TARGET_PATTERN_ENABLED + field;
+        }
+        return TARGET_PATTERN_EDGE_BASE + (field - TARGET_PATTERN_F_EDGE_ENABLED);
     }
 
     // Layer 0's own two blocks have to stay where they are for older files to keep loading, so the
@@ -151,9 +153,10 @@ namespace merutilm::rff2::TextureDescriptor {
             return TARGET_TEXTURE_EXT_BASE + layer * TARGET_TEXTURE_EXT_FIELD_COUNT
                    + (field - TARGET_TEXTURE_FIELD_COUNT);
         }
-        return layer == 0
-                   ? field
-                   : TARGET_TEXTURE_LAYER_1_BASE + (layer - 1) * TARGET_TEXTURE_FIELD_COUNT + field;
+        if (layer == 0) {
+            return field;
+        }
+        return TARGET_TEXTURE_LAYER_1_BASE + (layer - 1) * TARGET_TEXTURE_FIELD_COUNT + field;
     }
 
     // Builds the unique descriptor set (one combined image sampler per layer + params UBO) for one pipeline.

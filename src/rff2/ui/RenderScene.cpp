@@ -1,11 +1,16 @@
 //
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by Opus 5.5 on 2026-09-23
 //
 
+#include "NativeDialogs.hpp"
 #include "RenderScene.hpp"
+#include "../attr/NumericSettingLimits.hpp"
+#include "VideoRenderScene.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -18,6 +23,7 @@
 #include "IOUtilities.h"
 #include "../io/RFFStaticMapBinary.h"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
+#include "workspace/PreviewGeometry.hpp"
 #include "../vulkan/RCC1.hpp"
 #include "../vulkan/GPCIterationPalette.hpp"
 #include "../calc/dex_exp.h"
@@ -50,6 +56,40 @@
 
 
 namespace merutilm::rff2 {
+    namespace {
+        void prepareVideoPipelines(vkh::EngineRef engine, const Attribute &source, bool hdr = false) {
+            HWND window = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 64, 64,
+                                          nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+            if (!window) {
+                throw std::runtime_error("Failed to create video preparation window");
+            }
+            struct WindowScope {
+                vkh::EngineRef engine;
+                HWND window;
+                uint32_t index = 1;
+                bool attached = false;
+                ~WindowScope() {
+                    if (attached) {
+                        engine.detachWindowContext(index);
+                    }
+                    DestroyWindow(window);
+                }
+            } scope{engine, window, hdr ? Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX
+                                        : Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX};
+            auto attribute = source;
+            attribute.render.ssaa = 1;
+            attribute.video.data.sourceScale = 1;
+            attribute.shader.slope.studio.use = false;
+            attribute.shader.layerOrder.enabled = false;
+            auto *context = engine.attachWindowContext(window, scope.index);
+            scope.attached = true;
+            attribute.shader.hdr.use = hdr;
+            const std::function<void()> prepareNext = hdr ? std::function<void()>{}
+                                                          : [&] { prepareVideoPipelines(engine, source, true); };
+            VideoRenderScene scene(engine, *context, {32, 32}, attribute, prepareNext);
+        }
+    }
+
     RenderScene::RenderScene(vkh::EngineRef engine, vkh::WindowContextRef wc,
                              std::array<std::wstring, Constants::Status::LENGTH> *
                              statusMessageRef, std::mutex *statusMessageMutexRef) : EngineHandler(
@@ -68,7 +108,7 @@ namespace merutilm::rff2 {
         refreshCanvasExtent();
         refreshSharedImgContext();
         attachRenderContext();
-        initRenderer();
+        initRenderer(true);
         refreshRenderContext();
         refreshResizeParams();
         applyShaderAttr(attr);
@@ -80,7 +120,7 @@ namespace merutilm::rff2 {
     void RenderScene::attachRenderContext() const {
         const auto swapchainImageContextGetter = [this] {
             auto &swapchain = wc.getSwapchain();
-            return vkh::ImageContext::fromSwapchain(wc.core, swapchain);
+            return vkh::ImageContext::fromSwapchain(swapchain);
         };
         wc.attachRenderContext<RCC0>(wc.core,
                                      [this] { return getInternalImageExtent(); },
@@ -122,6 +162,10 @@ namespace merutilm::rff2 {
         if (wc.getWindow().isUnrenderable()) {
             return;
         }
+        // Pending output/quality changes rebuild attachments and framebuffers together in applyResize.
+        if (requests.resizeRequested) {
+            return;
+        }
         // Only a swapchain that no longer matches its surface is worth rebuilding. Some drivers
         // report SUBOPTIMAL for a reason a recreate cannot clear - HDR metadata, a scaling mode -
         // and rebuilding on every one of those would spin the render thread without ever settling.
@@ -133,19 +177,252 @@ namespace merutilm::rff2 {
         // The canvas size is left where it is, so the iteration buffer and the images drawn into stay the size they were built at together and the map already computed stays on screen, rescaled onto the new present images by the last pass.
         wc.core.getLogicalDevice().waitDeviceIdle();
         wc.getSwapchain().recreate();
-        refreshRenderContext();
+        wc.getRenderContext(RCCPresent::CONTEXT_INDEX).recreate();
+        renderer->rendererPresent->renderContextRefreshed();
         const auto [presentWidth, presentHeight] = getSwapchainRenderContextExtent();
         renderer->rendererPresent->setRescaledResolution({presentWidth, presentHeight});
     }
 
 
+    void RenderScene::endSmoothZoom() {
+        if (!smoothZoomActive) return;
+        waitFramesInFlight();
+        renderer->rendererPresent->heldFrame = -1;
+        renderer->rendererPresent->setZoomTransform(1.0f, 0.0f, 0.0f);
+        renderer->rendererIteration->setPreviewAnimationPaused(smoothZoomWasPaused);
+        smoothZoomActive = false;
+        smoothZoomDirty = false;
+        smoothZoomDragging = false;
+        smoothZoomGeneration = 0;
+        smoothZoomCaptureWider = false;
+        smoothZoomOriginal.reset();
+    }
+
+    void RenderScene::restoreSmoothZoomSource() {
+        if (!smoothZoomActive || smoothZoomCaptureWider || !smoothZoomOriginal) return;
+        state.cancel();
+        waitFramesInFlight();
+        attr.fractal = *smoothZoomOriginal;
+        lastMaxIteration = smoothZoomOriginalMax;
+        lastPeriod = smoothZoomOriginalPeriod;
+        lastLogZoom = smoothZoomOriginalLog;
+        const auto* source = reinterpret_cast<const double*>(renderer->iterationStagingBufferContext->getContext().mappedMemory);
+        for (uint32_t i = 0; i < iterationMatrix->getLength(); ++i) iterationMatrix->storeRelaxed(i, source[i]);
+        renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
+        previewUploadPending = false;
+        idleCompute = true;
+        ++previewRevision;
+    }
+
+    bool RenderScene::beginSmoothNavigation() {
+        if (smoothZoomActive) return true;
+        if (!smoothZoomEnabled || renderer->lastShadedFrame < 0 || computeHold || longJobBusy.load() ||
+            isVideoGenerationActive || isVideoExportActive ||
+            effectiveProjection(attr.fractal.projectionMethod) != FrtProjectionMethod::PLANAR) return false;
+        state.cancel();
+        idleCompute = true;
+        previewUploadPending = false;
+        smoothZoomOriginal = attr.fractal;
+        smoothZoomOriginalMax = lastMaxIteration;
+        smoothZoomOriginalPeriod = lastPeriod;
+        smoothZoomOriginalLog = lastLogZoom;
+        smoothZoomFrom = smoothZoomTarget = smoothZoomView = {};
+        smoothZoomActive = true;
+        smoothZoomFailed = false;
+        smoothZoomSourceExact = false;
+        smoothZoomNeedsPreview = true;
+        smoothZoomGeneration = 0;
+        smoothZoomWasPaused = isPreviewAnimationPaused();
+        renderer->rendererIteration->setPreviewAnimationPaused(true);
+        renderer->rendererIteration->previewClock.held = renderer->lastShadedTime;
+        renderer->rendererIteration->phases = renderer->lastShadedPhases;
+        renderer->rendererPresent->heldFrame = renderer->lastShadedFrame;
+        smoothZoomStarted = smoothZoomLastTick = std::chrono::steady_clock::now();
+        return true;
+    }
+
+    FractalAttribute RenderScene::smoothNavigationCamera(const SmoothZoomMotion::View view) const {
+        Attribute source = attr;
+        source.fractal = *smoothZoomOriginal;
+        auto camera = source.fractal;
+        camera.logZoom = static_cast<float>(static_cast<double>(camera.logZoom) - std::log10(view.scale));
+        const double w = getIterationBufferWidth(source), h = getIterationBufferHeight(source);
+        const double cx = 0.5 + 0.5 / w, cy = 0.5 - 0.5 / h;
+        const double dx = (view.x + view.scale * cx - cx) * w;
+        const double dy = -(view.y + view.scale * cy - cy) * h;
+        const double radians = camera.rotation * std::numbers::pi / 180.0;
+        const double resolution = static_cast<double>(source.render.clarityMultiplier) * source.render.ssaa;
+        camera.center = camera.center.addCenterDouble(
+            dex::value((dx * std::cos(radians) - dy * std::sin(radians)) / resolution) / getDivisor(source),
+            dex::value((dx * std::sin(radians) + dy * std::cos(radians)) / resolution) / getDivisor(source),
+            Perturbator::logZoomToExp10(camera.logZoom));
+        return camera;
+    }
+
+    void RenderScene::retargetSmoothNavigation() {
+        smoothZoomFrom = smoothZoomView;
+        smoothZoomStarted = smoothZoomInputAt = std::chrono::steady_clock::now();
+        smoothZoomDirty = true;
+        smoothZoomFailed = false;
+        smoothZoomSourceExact = false;
+        smoothZoomNeedsPreview = true;
+        backgroundThreads.notifyAll();
+    }
+
+    void RenderScene::settleSmoothNavigation() {
+        if (!smoothZoomActive) return;
+        if (smoothZoomView.scale != smoothZoomTarget.scale || smoothZoomView.x != smoothZoomTarget.x || smoothZoomView.y != smoothZoomTarget.y)
+            attr.fractal = smoothNavigationCamera(smoothZoomView);
+        smoothZoomTarget = smoothZoomView;
+        smoothZoomPending = 0;
+        retargetSmoothNavigation();
+    }
+
+    void RenderScene::tickSmoothZoom() {
+        const auto now = std::chrono::steady_clock::now();
+        if (!smoothZoomEnabled && !smoothZoomActive) smoothZoomPending = 0;
+        if (smoothZoomActive && now - smoothZoomLastTick > std::chrono::milliseconds(100))
+            smoothZoomStarted += now - smoothZoomLastTick - std::chrono::milliseconds(100);
+        smoothZoomLastTick = now;
+
+        if (smoothZoomCaptureWider) {
+            if (renderer->shadedRevision == smoothZoomCandidateRevision) return;
+            renderer->rendererPresent->heldFrame = renderer->lastShadedFrame;
+            smoothZoomCaptureWider = false;
+            smoothZoomFrom = SmoothZoomMotion::relative(smoothZoomFrom, smoothZoomCandidate);
+            smoothZoomTarget = SmoothZoomMotion::relative(smoothZoomTarget, smoothZoomCandidate);
+            smoothZoomView = SmoothZoomMotion::relative(smoothZoomView, smoothZoomCandidate);
+            smoothZoomOriginal = *smoothZoomCandidateFractal;
+            smoothZoomOriginalMax = lastMaxIteration;
+            smoothZoomOriginalPeriod = lastPeriod;
+            smoothZoomOriginalLog = lastLogZoom;
+            smoothZoomFrom = smoothZoomView;
+            smoothZoomStarted = now;
+            smoothZoomGeneration = 0;
+            smoothZoomSourceExact = smoothZoomExactCandidate && smoothZoomCandidateFullQuality && !smoothZoomDirty && smoothZoomPending == 0;
+            if (!smoothZoomDirty && smoothZoomPending == 0) smoothZoomNeedsPreview = false;
+        }
+
+        if (smoothZoomPending != 0 && beginSmoothNavigation()) {
+            const double steps = std::clamp(smoothZoomPending, -4.0, 4.0);
+            smoothZoomPending -= steps;
+            const float oldZoom = attr.fractal.logZoom;
+            const float newZoom = std::clamp(static_cast<float>(oldZoom + steps * Constants::Fractal::ZOOM_INTERVAL),
+                                           Constants::Fractal::ZOOM_MIN, Constants::Fractal::ZOOM_DEADLINE);
+            const double delta = static_cast<double>(newZoom) - oldZoom;
+            if (delta != 0) {
+                const auto w = getIterationBufferWidth(attr), h = getIterationBufferHeight(attr);
+                const auto x = std::min<uint16_t>(smoothZoomMouseX, w - 1), y = std::min<uint16_t>(smoothZoomMouseY, h - 1);
+                const double scale = std::pow(10.0, -delta);
+                const auto offset = offsetConversion(attr, x, y);
+                attr.fractal.logZoom = newZoom;
+                attr.fractal.center = attr.fractal.center.addCenterDouble(offset[0] * (1.0 - scale), offset[1] * (1.0 - scale),
+                    Perturbator::logZoomToExp10(newZoom));
+                smoothZoomTarget.x += smoothZoomTarget.scale * (x + 0.5) / w * (1.0 - scale);
+                smoothZoomTarget.y += smoothZoomTarget.scale * (1.0 - (y + 0.5) / h) * (1.0 - scale);
+                smoothZoomTarget.scale *= scale;
+                retargetSmoothNavigation();
+            }
+        }
+        if (!smoothZoomActive) return;
+
+        BOOL systemAnimation = TRUE;
+        SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &systemAnimation, 0);
+        const double seconds = smoothZoomEnabled && systemAnimation ?
+            std::chrono::duration<double>(now - smoothZoomStarted).count() : SmoothZoomMotion::duration;
+        const auto proposed = SmoothZoomMotion::interpolate(smoothZoomFrom, smoothZoomTarget,
+            seconds * (smoothZoomDragging ? 2.0 : 1.0));
+        if (SmoothZoomMotion::covered(proposed)) smoothZoomView = proposed;
+        if (smoothZoomSourceExact && !smoothZoomDirty && !smoothZoomDragging && seconds >= SmoothZoomMotion::duration) {
+            endSmoothZoom();
+            return;
+        }
+
+        if (smoothZoomGeneration != 0 && idleCompute.load() && !smoothZoomDirty) {
+            if (completedComputeGeneration.load() != smoothZoomGeneration) {
+                smoothZoomGeneration = 0;
+                smoothZoomFailed = true;
+                previewUploadPending = false;
+                setStatusMessage(Constants::Status::RENDER_STATUS, L"Navigation stopped; move again to retry or press Escape");
+            } else if (SmoothZoomMotion::covered(SmoothZoomMotion::relative(smoothZoomView, smoothZoomCandidate))) {
+                waitFramesInFlight();
+                if (!smoothZoomCandidateFullQuality && smoothZoomPreviewMatrix) {
+                    const auto pw = smoothZoomPreviewMatrix->getWidth(), ph = smoothZoomPreviewMatrix->getHeight();
+                    const auto fw = iterationMatrix->getWidth(), fh = iterationMatrix->getHeight();
+                    for (uint16_t y = 0; y < fh; ++y) {
+                        const auto sy = SmoothZoomMotion::previewPixel(y, ph, fh);
+                        for (uint16_t x = 0; x < fw; ++x) {
+                            const auto sx = SmoothZoomMotion::previewPixel(x, pw, fw);
+                            iterationMatrix->storeRelaxed(x, y, (*smoothZoomPreviewMatrix)(sx, sy));
+                        }
+                    }
+                }
+                snapshotComputePreview(true);
+                previewUploadPending = false;
+                ++previewRevision;
+                renderer->rendererPresent->heldFrame = -1;
+                const auto view = SmoothZoomMotion::relative(smoothZoomView, smoothZoomCandidate);
+                renderer->rendererPresent->setZoomTransform(static_cast<float>(view.scale), static_cast<float>(view.x), static_cast<float>(view.y));
+                smoothZoomCaptureWider = true;
+                smoothZoomCandidateRevision = renderer->shadedRevision;
+                return;
+            }
+        }
+
+        if (!smoothZoomDragging && !smoothZoomSourceExact && !smoothZoomFailed && smoothZoomGeneration == 0 &&
+            now - smoothZoomInputAt >= std::chrono::milliseconds(80) && seconds >= SmoothZoomMotion::duration)
+            smoothZoomDirty = true;
+        if (smoothZoomDirty &&
+            (idleCompute.load() || now - smoothZoomComputeAt >= std::chrono::milliseconds(100))) {
+            smoothZoomExactCandidate = SmoothZoomMotion::covered(smoothZoomTarget) && !smoothZoomDragging;
+            smoothZoomCandidateFullQuality = smoothZoomExactCandidate && !smoothZoomNeedsPreview &&
+                now - smoothZoomInputAt >= std::chrono::milliseconds(200);
+            smoothZoomCandidate = smoothZoomExactCandidate ? smoothZoomTarget :
+                SmoothZoomMotion::enclosing(smoothZoomView, smoothZoomTarget);
+            Attribute settings = attr;
+            settings.fractal = smoothNavigationCamera(smoothZoomCandidate);
+            if (!smoothZoomExactCandidate) {
+                const double wanted = smoothZoomCandidate.scale;
+                double actual = std::pow(10.0, static_cast<double>(smoothZoomOriginal->logZoom) - settings.fractal.logZoom);
+                if (actual < wanted) {
+                    settings.fractal.logZoom = std::nextafter(settings.fractal.logZoom, -std::numeric_limits<float>::infinity());
+                    actual = std::pow(10.0, static_cast<double>(smoothZoomOriginal->logZoom) - settings.fractal.logZoom);
+                }
+                const double cx = 0.5 + 0.5 / getIterationBufferWidth(attr), cy = 0.5 - 0.5 / getIterationBufferHeight(attr);
+                smoothZoomCandidate.x += (wanted - actual) * cx;
+                smoothZoomCandidate.y += (wanted - actual) * cy;
+                smoothZoomCandidate.scale = actual;
+            } else settings.fractal = attr.fractal;
+            smoothZoomCandidateFractal = settings.fractal;
+            smoothZoomDirty = false;
+            smoothZoomComputeAt = now;
+            idleCompute = false;
+            previewUploadPending = true;
+            ++previewRevision;
+            recomputeThreaded(&settings, !smoothZoomCandidateFullQuality);
+            smoothZoomGeneration = computeGeneration.load();
+        }
+        renderer->rendererPresent->setZoomTransform(static_cast<float>(smoothZoomView.scale),
+            static_cast<float>(smoothZoomView.x), static_cast<float>(smoothZoomView.y));
+    }
+
     void RenderScene::render(const bool present) {
+        if (requests.defaultAttrRequested || requests.shaderRequested || requests.resizeRequested || requests.recomputeRequested) {
+            if (requests.shaderRequested && !requests.defaultAttrRequested && !requests.resizeRequested && !requests.recomputeRequested)
+                restoreSmoothZoomSource();
+            endSmoothZoom();
+            smoothZoomPending = 0;
+        }
         if (requests.defaultAttrRequested) {
             applyDefaultAttr();
             requests.defaultAttrRequested.exchange(false);
             backgroundThreads.notifyAll();
         }
         if (requests.shaderRequested) {
+            ++previewRevision;
+            if (attr.shader.slope.lustreRelief && attr.shader.slope.reliefZoomReference < 0.0f)
+                attr.shader.slope.reliefZoomReference = attr.fractal.logZoom;
+            ensureShaderFormat(attr.shader.sceneLinear());
             applyShaderAttr(attr);
             // The shader is where a change lands that never recomputes, so the snapshot has to
             // follow it here as well as at a compute - throttled, because a dragged slider asks
@@ -156,6 +433,7 @@ namespace merutilm::rff2 {
         }
 
         if (requests.resizeRequested) {
+            ++previewRevision;
             state.cancel();
             applyResize();
             requests.resizeRequested.exchange(false);
@@ -163,6 +441,9 @@ namespace merutilm::rff2 {
         }
 
         if (requests.recomputeRequested && !computeHold) {
+            ++previewRevision;
+            if (attr.shader.slope.lustreRelief && attr.shader.slope.reliefZoomReference < 0.0f)
+                attr.shader.slope.reliefZoomReference = attr.fractal.logZoom;
             idleCompute = false;
             previewUploadPending = true;
             // Zeroed rather than back-dated, so the first snapshot lands on the very next frame and
@@ -175,26 +456,26 @@ namespace merutilm::rff2 {
 
         // Ahead of the image request below, which renders one offscreen frame off this buffer: the
         // exact map has to be in it before that frame is recorded, or the file keeps carried-down rows.
-        if (idleCompute.load()) {
+        if (present && !wc.getWindow().isUnrenderable()) {
+            tickSmoothZoom();
+        }
+        if (!smoothZoomActive && idleCompute.load()) {
             if (previewUploadPending.exchange(false)) {
+                ++previewRevision;
                 snapshotComputePreview(true);
             }
-        } else {
+        } else if (!smoothZoomActive) {
             snapshotComputePreview(false);
         }
 
-        if (idleCompute.load()) {
+        renderer->rendererSlope->setReliefZoom(attr.shader.slope,
+            smoothZoomCaptureWider ? smoothZoomCandidateFractal->logZoom : attr.fractal.logZoom);
+        if (idleCompute.load() && !smoothZoomActive) {
             if (auto imageRequest = requests.takeCreateImageRequest()) {
                 applyCreateImage(std::move(*imageRequest));
                 requests.completeCreateImageRequest();
                 backgroundThreads.notifyAll();
             }
-        }
-
-        if (requests.exportHighResRequested) {
-            applyExportHighRes(requests.exportTilesX, requests.exportTilesY);
-            requests.exportHighResRequested.exchange(false);
-            backgroundThreads.notifyAll();
         }
 
         if (!present) {
@@ -298,6 +579,9 @@ namespace merutilm::rff2 {
 
         switch (msg) {
             case WM_LBUTTONDOWN: {
+                if (smoothZoomActive) {
+                    settleSmoothNavigation();
+                }
                 if (isColorFreezePickActive()) {
                     const auto onPicked = std::move(colorFreezePickCallback);
                     cancelColorFreezePick();
@@ -313,7 +597,9 @@ namespace merutilm::rff2 {
                             requests.requestShader();
                         }
                     }
-                    if (onPicked) onPicked();
+                    if (onPicked) {
+                        onPicked();
+                    }
                     break;
                 }
                 if (wparam & MK_SHIFT) {
@@ -330,6 +616,9 @@ namespace merutilm::rff2 {
                 SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
                 interactedMX = getMouseXOnIterationBuffer();
                 interactedMY = getMouseYOnIterationBuffer();
+                canvasDragging = true;
+                smoothZoomDragging = smoothZoomActive;
+                SetCapture(wc.getWindow().getWindowHandle());
                 break;
             }
             case WM_LBUTTONUP: {
@@ -347,6 +636,11 @@ namespace merutilm::rff2 {
                     break;
                 }
                 SetCursor(LoadCursor(nullptr, IDC_CROSS));
+                canvasDragging = false;
+                smoothZoomDragging = false;
+                if (GetCapture() == wc.getWindow().getWindowHandle()) {
+                    ReleaseCapture();
+                }
                 interactedMX = 0;
                 interactedMY = 0;
                 break;
@@ -367,10 +661,29 @@ namespace merutilm::rff2 {
                 }
                 const uint16_t x = getMouseXOnIterationBuffer();
                 const uint16_t y = getMouseYOnIterationBuffer();
-                if (wparam == MK_LBUTTON && interactedMX > 0 && interactedMY > 0) {
+                if ((wparam & MK_LBUTTON) && canvasDragging) {
                     SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
                     const auto dx = static_cast<int16_t>(interactedMX - x);
                     const auto dy = static_cast<int16_t>(interactedMY - y);
+                    if (dx == 0 && dy == 0) {
+                        break;
+                    }
+                    if ((dx != 0 || dy != 0) && beginSmoothNavigation()) {
+                        const auto w = getIterationBufferWidth(attr), h = getIterationBufferHeight(attr);
+                        smoothZoomTarget.x += smoothZoomTarget.scale * static_cast<double>(dx) / w;
+                        smoothZoomTarget.y -= smoothZoomTarget.scale * static_cast<double>(dy) / h;
+                        const double radians = attr.fractal.rotation * std::numbers::pi / 180.0;
+                        const double resolution = static_cast<double>(attr.render.clarityMultiplier) * attr.render.ssaa;
+                        attr.fractal.center = attr.fractal.center.addCenterDouble(
+                            dex::value((dx * std::cos(radians) - dy * std::sin(radians)) / resolution) / getDivisor(attr),
+                            dex::value((dx * std::sin(radians) + dy * std::cos(radians)) / resolution) / getDivisor(attr),
+                            Perturbator::logZoomToExp10(attr.fractal.logZoom));
+                        smoothZoomDragging = true;
+                        retargetSmoothNavigation();
+                        interactedMX = x;
+                        interactedMY = y;
+                        break;
+                    }
                     // Dragging a 360 view turns the viewer rather than sliding a flat image, so it moves the heading and leaves the center alone.
                     if (auto &frt = attr.fractal;
                         effectiveProjection(frt.projectionMethod) != FrtProjectionMethod::PLANAR) {
@@ -423,7 +736,20 @@ namespace merutilm::rff2 {
                 }
                 break;
             }
+            case WM_CAPTURECHANGED: {
+                canvasDragging = false;
+                smoothZoomDragging = false;
+                break;
+            }
             case WM_MOUSEWHEEL: {
+                if (smoothZoomEnabled && !computeHold && !longJobBusy.load() && !isVideoExportActive &&
+                    effectiveProjection(attr.fractal.projectionMethod) == FrtProjectionMethod::PLANAR) {
+                    smoothZoomPending += static_cast<double>(GET_WHEEL_DELTA_WPARAM(wparam)) / WHEEL_DELTA;
+                    smoothZoomMouseX = getMouseXOnIterationBuffer();
+                    smoothZoomMouseY = getMouseYOnIterationBuffer();
+                    backgroundThreads.notifyAll();
+                    break;
+                }
                 const int value = GET_WHEEL_DELTA_WPARAM(wparam) > 0 ? 1 : -1;
                 constexpr float increment = Constants::Fractal::ZOOM_INTERVAL;
 
@@ -570,7 +896,7 @@ namespace merutilm::rff2 {
         }
     }
 
-    std::array<dex, 2> RenderScene::offsetConversion(const Attribute &settings, const int mx, const int my,
+    std::array<dex, 2> RenderScene::offsetConversion(const Attribute &settings, const double mx, const double my,
                                                      bool *sky) const {
         using namespace Constants::Fractal;
         const double w = static_cast<double>(getIterationBufferWidth(settings));
@@ -605,19 +931,14 @@ namespace merutilm::rff2 {
         };
     }
 
-    std::array<dex, 2> RenderScene::offsetConversionTiled(const Attribute &settings, const int fx, const int fy,
-                                                          const int fullW, const int fullH,
-                                                          const int scale, bool *sky) const {
-        using namespace Constants::Fractal;
-        // Full-grid pixel offset scaled by clarity*ssaa*scale, uniform on both axes.
+    std::array<dex, 2> RenderScene::offsetConversionFullGrid(const Attribute &settings, const int fx, const int fy,
+                                                             const int fullW, const int fullH,
+                                                             const int scale, bool *sky) const {
         const double ox = static_cast<double>(fx) - static_cast<double>(fullW) / 2.0;
         const double oy = static_cast<double>(fy) - static_cast<double>(fullH) / 2.0;
-
         const double radians = static_cast<double>(settings.fractal.rotation) * std::numbers::pi / 180.0;
         const double s = std::sin(radians);
         const double c = std::cos(radians);
-
-        // A 360 view spans the whole exported grid, so it is read off the full-grid pixel rather than off this tile's own.
         const bool panorama = effectiveProjection(settings.fractal.projectionMethod) != FrtProjectionMethod::PLANAR;
         const ProjectedPoint pano = panorama
                                         ? projectedOffsetPixels(settings.fractal, static_cast<double>(fx),
@@ -629,7 +950,6 @@ namespace merutilm::rff2 {
         }
         const double rox = panorama ? pano.x : ox * c - oy * s;
         const double roy = panorama ? pano.y : ox * s + oy * c;
-
         const double pixelScale = static_cast<double>(settings.render.clarityMultiplier) *
                                   static_cast<double>(settings.render.ssaa) * static_cast<double>(scale);
         const auto [nox, noy] = nudgeOffReference(rox, roy, settings.fractal);
@@ -641,7 +961,7 @@ namespace merutilm::rff2 {
 
     dex RenderScene::dcMaxOf(const Attribute &settings, const int fullW, const int fullH, const int scale) const {
         if (effectiveProjection(settings.fractal.projectionMethod) == FrtProjectionMethod::PLANAR) {
-            const auto o = offsetConversionTiled(settings, 0, 0, fullW, fullH, scale);
+            const auto o = offsetConversionFullGrid(settings, 0, 0, fullW, fullH, scale);
             dex r = dex::ZERO;
             dex_trigonometric::hypot_approx(&r, o[0], o[1]);
             return r;
@@ -674,7 +994,7 @@ namespace merutilm::rff2 {
                                       static_cast<double>(settings.render.ssaa) * static_cast<double>(scale);
             return dex::value(static_cast<double>(fullH) * 0.5) / getDivisor(settings) / pixelScale;
         }
-        const auto o = offsetConversionTiled(settings, bestX, bestY, fullW, fullH, scale);
+        const auto o = offsetConversionFullGrid(settings, bestX, bestY, fullW, fullH, scale);
         dex r = dex::ZERO;
         dex_trigonometric::hypot_approx(&r, o[0], o[1]);
         return r;
@@ -698,12 +1018,12 @@ namespace merutilm::rff2 {
         // clarity * ssaa. The ssaa factor is downsampled
         // away at export so keyframe maps / images carry true supersampled detail.
         const float multiplier = settings.render.clarityMultiplier * static_cast<float>(settings.render.ssaa);
-        return static_cast<uint16_t>(static_cast<float>(getClientWidth()) * multiplier);
+        return static_cast<uint16_t>(scaledRenderAxis(getClientWidth(), multiplier, settings.video.data.sourceScale));
     }
 
     uint16_t RenderScene::getIterationBufferHeight(const Attribute &settings) const {
         const float multiplier = settings.render.clarityMultiplier * static_cast<float>(settings.render.ssaa);
-        return static_cast<uint16_t>(static_cast<float>(getClientHeight()) * multiplier);
+        return static_cast<uint16_t>(scaledRenderAxis(getClientHeight(), multiplier, settings.video.data.sourceScale));
     }
 
     // Human-readable byte size for the memory-budget warnings.
@@ -736,26 +1056,37 @@ namespace merutilm::rff2 {
     }
 
     float RenderScene::getMaxInternalScale() const {
+        return getMaxInternalScale(canvasExtent.width,canvasExtent.height);
+    }
+
+    float RenderScene::getMaxInternalScale(uint32_t width,uint32_t height) const {
         // Internal render extent is client * clarity * ssaa; the larger client axis is what hits maxImageDimension2D first.
-        const auto [width, height] = canvasExtent;
         const uint32_t largest = std::max(width, height);
         if (largest == 0) return 0.0f;
         const auto &limits = wc.core.getPhysicalDevice().getPhysicalDeviceProperties().limits;
-        const float dimScale = static_cast<float>(limits.maxImageDimension2D) / static_cast<float>(largest);
+        const double dimScale = static_cast<double>(limits.maxImageDimension2D) / static_cast<double>(largest);
         // The iteration matrix is one storage buffer of width * height doubles, so its own limit is on area.
         const double px = static_cast<double>(width) * static_cast<double>(height) * sizeof(double);
-        if (px <= 0.0) return dimScale;
-        const auto bufferScale = static_cast<float>(
-            std::sqrt(static_cast<double>(limits.maxStorageBufferRange) / px));
-        return std::min(dimScale, bufferScale);
+        if (px <= 0.0) return static_cast<float>(dimScale);
+        const double bufferScale = std::sqrt(static_cast<double>(limits.maxStorageBufferRange) / px);
+        const double exactScale = std::min(dimScale, bufferScale);
+        float roundedScale = static_cast<float>(exactScale);
+        if (static_cast<double>(roundedScale) > exactScale) {
+            roundedScale = std::nextafter(roundedScale, 0.0f);
+        }
+        return roundedScale;
     }
 
     std::wstring RenderScene::checkRenderMemoryBudget(const Attribute &settings) const {
+        return checkRenderMemoryBudget(settings,getClientWidth(),getClientHeight());
+    }
+
+    std::wstring RenderScene::checkRenderMemoryBudget(const Attribute &settings,uint32_t width,uint32_t height) const {
         // Internal render extent = client * clarity * ssaa (matches getInternalImageExtent / iteration buffer).
         const double multiplier = static_cast<double>(settings.render.clarityMultiplier) *
                                   static_cast<double>(settings.render.ssaa);
-        const double iw = static_cast<double>(getClientWidth()) * multiplier;
-        const double ih = static_cast<double>(getClientHeight()) * multiplier;
+        const double iw = static_cast<double>(width) * multiplier * settings.video.data.sourceScale;
+        const double ih = static_cast<double>(height) * multiplier * settings.video.data.sourceScale;
         const double internalPx = iw * ih;
 
         // The downsample-for-blur images are capped to GAUSSIAN_MAX_WIDTH wide (negligible, but counted).
@@ -901,69 +1232,6 @@ namespace merutilm::rff2 {
         return out;
     }
 
-    int RenderScene::exportTileMargin(const Attribute &settings, const uint32_t tilesX,
-                                      const uint32_t tilesY) const {
-        if (tilesX <= 1 && tilesY <= 1) {
-            return 0;
-        }
-        const int tw = getIterationBufferWidth(settings);
-        const int th = getIterationBufferHeight(settings);
-        const auto &sl = settings.shader.slope;
-        const bool slopeOn = sl.depth != 0.0f && sl.opacity > 0.0f;
-        // Mirrors the macro radius the slope shader derives, whose multiplier is buffer width over 1280.
-        const float multiplier = static_cast<float>(tw) / 1280.0f;
-        const int macro = slopeOn && sl.macroRelief > 0.0f
-                              ? std::max(static_cast<int>(sl.macroRadius * multiplier + 0.5f), 1)
-                              : 0;
-        // The fog pass still runs on the tile, and its focus band blurs the tile's own pixels with a
-        // radius measured against the finished image. A tap reaching past the overlap reads this tile's
-        // own edge instead of the neighbour's pixels and prints a seam along every tile boundary, so the
-        // overlap has to cover the radius the band can ask for. The rim band is not counted: the tiles
-        // render with the haze, and with it the band, deferred to the stitched image. The image is at
-        // most tw * tilesX across - the overlap sized here only makes it smaller - so the estimate errs
-        // on the wide side.
-        const auto &fog = settings.shader.fog;
-        int focus = 0;
-        if (fog.focusAmount > 0.0f && fog.focusBlur > 0.0f) {
-            const float canvasMultiplier = static_cast<float>(tw * static_cast<int>(tilesX)) / 1280.0f;
-            const float requested = fog.focusBlur * canvasMultiplier;
-            const float radius = fog.blurQuality == ShdFogBlurQuality::APPEARANCE
-                                     ? requested
-                                     : std::min(requested, 16.0f);
-            focus = static_cast<int>(std::ceil(radius));
-        }
-        // +1 covers the 3x3 Sobel and the interpolation tent; the cap keeps a usable tile regardless.
-        return std::min(macro + focus + 1, std::min(tw, th) / 4);
-    }
-
-    std::wstring RenderScene::checkExportMemoryBudget(const Attribute &settings, const uint32_t tilesX,
-                                                      const uint32_t tilesY) const {
-        const uint32_t gx = std::max<uint32_t>(tilesX, 1);
-        const uint32_t gy = std::max<uint32_t>(tilesY, 1);
-        const int margin = exportTileMargin(settings, gx, gy);
-        const double tw = static_cast<double>(getIterationBufferWidth(settings) - 2 * margin);
-        const double th = static_cast<double>(getIterationBufferHeight(settings) - 2 * margin);
-        const double fullW = tw * static_cast<double>(gx);
-        const double fullH = th * static_cast<double>(gy);
-        const double fullPx = fullW * fullH;
-
-        // The full image is held as one CV_16UC4 buffer (8 B/px); with SSAA>1 a downsampled copy
-        // (8 B/px / ssaa^2) briefly coexists. ~20% margin for cvtColor/imwrite scratch.
-        const double ssaa = std::max<double>(1.0, static_cast<double>(settings.render.ssaa));
-        const double ramBytes = (fullPx * 8.0 + fullPx * 8.0 / (ssaa * ssaa)) * 1.2;
-
-        // Tiles render one at a time at the internal extent, so per-tile VRAM matches the live view.
-        std::wstring msg = checkRenderMemoryBudget(settings);
-
-        if (const uint64_t ramTotal = getSystemMemoryTotal();
-            ramTotal > 0 && ramBytes > 0.8 * static_cast<double>(ramTotal)) {
-            msg += std::format(L"- RAM: the {}x{} image needs about {}, but the system only has {}.\n",
-                               static_cast<uint64_t>(fullW / ssaa), static_cast<uint64_t>(fullH / ssaa),
-                               formatBytes(static_cast<uint64_t>(ramBytes)), formatBytes(ramTotal));
-        }
-        return msg;
-    }
-
     void RenderScene::applyDefaultAttr() {
         wc.core.getLogicalDevice().waitDeviceIdle();
         // Preserve color settings, render settings, and formula across Reset.
@@ -1046,7 +1314,8 @@ namespace merutilm::rff2 {
             return;
         }
         lastRecoverySnapshot = now;
-        RecoveryIO::writeSnapshot(attr, getClientWidth(), getClientHeight());
+        const auto dimensions=documentCanvasSize();
+        RecoveryIO::writeSnapshot(attr,dimensions.cx,dimensions.cy);
     }
 
 
@@ -1055,13 +1324,28 @@ namespace merutilm::rff2 {
         // cloned RGBA cv::Mat. The caller must have waited the render fence before calling.
         template<typename ImageCtx>
         cv::Mat readbackImageContextToMat(vkh::WindowContextRef wc, const ImageCtx &imgCtx) {
+            // The Mat below reads 8 bytes per texel, so any other format (a swapchain image, say) would be misread.
+            if (imgCtx.imageFormat != VK_FORMAT_R16G16B16A16_SFLOAT &&
+                imgCtx.imageFormat != VK_FORMAT_R16G16B16A16_UNORM) {
+                throw std::runtime_error("Image readback expects an R16G16B16A16 render image");
+            }
+            // Sized from the extent the copy writes and the Mat reads, not from the image's memory requirement.
+            const size_t rowBytes = static_cast<size_t>(imgCtx.extent.width) * 4 * sizeof(uint16_t);
+            const VkDeviceSize packedSize = static_cast<VkDeviceSize>(rowBytes) * imgCtx.extent.height;
+            if (packedSize == 0) {
+                throw std::runtime_error("Image readback of an empty image");
+            }
             vkh::BufferContext bufCtx = vkh::BufferContext::createContext(wc.core, {
-                .size = imgCtx.capacity,
+                .size = packedSize,
                 .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 .properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             });
-            vkh::BufferContext::mapMemory(wc.core, bufCtx); {
-                const auto executor = vkh::ScopedNewCommandBufferExecutor(wc.core, wc.getCommandPool());
+            bool mapped = false;
+            cv::Mat result;
+            try {
+                vkh::BufferContext::mapMemory(wc.core, bufCtx);
+                mapped = true;
+                auto executor = vkh::ScopedNewCommandBufferExecutor(wc.core, wc.getCommandPool());
                 vkh::BarrierUtils::cmdImageMemoryBarrier(executor.getCommandBufferHandle(), imgCtx.image,
                                                          VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1069,126 +1353,113 @@ namespace merutilm::rff2 {
                                                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                                                          VK_PIPELINE_STAGE_TRANSFER_BIT);
                 vkh::BufferImageContextUtils::cmdCopyImageToBuffer(executor.getCommandBufferHandle(), imgCtx, bufCtx);
+                vkh::BarrierUtils::cmdBufferMemoryBarrier(
+                    executor.getCommandBufferHandle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT,
+                    bufCtx.buffer, 0, bufCtx.bufferSize, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT);
+                executor.finish();
+                const bool floating = imgCtx.imageFormat == VK_FORMAT_R16G16B16A16_SFLOAT;
+                cv::Mat view(static_cast<int>(imgCtx.extent.height), static_cast<int>(imgCtx.extent.width), floating ? CV_16FC4 : CV_16UC4,
+                             bufCtx.mappedMemory, rowBytes);
+                if (floating) {
+                    view.convertTo(result, CV_16UC4, 65535.0);
+                } else {
+                    result = view.clone();
+                }
+            } catch (...) {
+                if (mapped) {
+                    vkh::BufferContext::unmapMemory(wc.core, bufCtx);
+                }
+                vkh::BufferContext::destroyContext(wc.core, bufCtx);
+                throw;
             }
-            cv::Mat view(static_cast<int>(imgCtx.extent.height), static_cast<int>(imgCtx.extent.width), CV_16UC4,
-                         bufCtx.mappedMemory);
-            cv::Mat result = view.clone();
             vkh::BufferContext::unmapMemory(wc.core, bufCtx);
             vkh::BufferContext::destroyContext(wc.core, bufCtx);
             return result;
         }
 
-        // One box blur matching vk_box_blur.comp: a row span, then a column span over its result.
-        void separableBoxBlur(cv::Mat &img, const int radius) {
-            if (radius <= 0) {
+        void reportImageSaveProgress(const std::shared_ptr<ExportProgress> &progress,
+                                     ExportCompletion &completion, const std::filesystem::path &filename,
+                                     const wchar_t *successPrefix, bool saved) {
+            if (!progress) {
                 return;
             }
-            cv::Mat mid = img.clone();
-            cv::parallel_for_(cv::Range(0, img.rows), [&](const cv::Range &rows) {
-                for (int y = rows.start; y < rows.end; ++y) {
-                    const auto *srcRow = img.ptr<cv::Vec3f>(y);
-                    auto *dstRow = mid.ptr<cv::Vec3f>(y);
-                    for (int x = 0; x < img.cols; ++x) {
-                        cv::Vec3f sum(0, 0, 0);
-                        int count = 0;
-                        for (int i = std::max(0, x - radius); i <= std::min(img.cols - 1, x + radius); ++i) {
-                            sum += srcRow[i];
-                            ++count;
-                        }
-                        dstRow[x] = sum / static_cast<float>(count);
-                    }
-                }
-            });
-            cv::parallel_for_(cv::Range(0, img.rows), [&](const cv::Range &rows) {
-                for (int y = rows.start; y < rows.end; ++y) {
-                    auto *dstRow = img.ptr<cv::Vec3f>(y);
-                    for (int x = 0; x < img.cols; ++x) {
-                        cv::Vec3f sum(0, 0, 0);
-                        int count = 0;
-                        for (int i = std::max(0, y - radius); i <= std::min(img.rows - 1, y + radius); ++i) {
-                            sum += mid.at<cv::Vec3f>(i, x);
-                            ++count;
-                        }
-                        dstRow[x] = sum / static_cast<float>(count);
-                    }
-                }
-            });
-        }
-
-        float smoothStep(const float edge0, const float edge1, const float x) {
-            const float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
-            return t * t * (3.0f - 2.0f * t);
-        }
-
-        // Full-image fog for the tiled export, mirroring vk_fog.frag. The GPU pass blurs the whole canvas
-        // and measures the falloff from the frame centre; a tile knows neither, so the tiles are rendered
-        // without fog and the haze is laid over the stitched image here instead.
-        void applyFogToStitched(cv::Mat &rgba16, const ShdFogAttribute &fog) {
-            const int fullW = rgba16.cols;
-            const int fullH = rgba16.rows;
-
-            cv::Mat rgb;
-            cv::cvtColor(rgba16, rgb, cv::COLOR_RGBA2RGB);
-            rgb.convertTo(rgb, CV_32FC3, 1.0 / 65535.0);
-
-            // The GPU blurs a copy capped to GAUSSIAN_MAX_WIDTH wide, so the same cap sets the radius here.
-            int bw = fullW;
-            int bh = fullH;
-            if (const double rat = static_cast<double>(Constants::Fractal::GAUSSIAN_MAX_WIDTH) / fullW; rat < 1.0) {
-                bw = Constants::Fractal::GAUSSIAN_MAX_WIDTH;
-                bh = std::max(1, static_cast<int>(static_cast<double>(fullH) * rat));
+            if (!saved) {
+                progress->report(ExportProgress::Phase::FAILED, L"Image save failed. Check the destination.");
+                return;
             }
-            cv::Mat small;
-            cv::resize(rgb, small, cv::Size(bw, bh), 0, 0, cv::INTER_AREA);
-            const int radius = static_cast<int>(static_cast<float>(bh) * fog.radius);
-            for (int pass = 0; pass < 3; ++pass) {
-                separableBoxBlur(small, radius);
-            }
-            cv::Mat blurred;
-            cv::resize(small, blurred, cv::Size(fullW, fullH), 0, 0, cv::INTER_LINEAR);
-
-            const float opacity = fog.opacity;
-            const float centerStart = fog.centerStart;
-            const bool invert = fog.centerInvert;
-            const auto gray = [](const cv::Vec3f &c) { return c[0] * 0.3f + c[1] * 0.59f + c[2] * 0.11f; };
-
-            cv::parallel_for_(cv::Range(0, fullH), [&](const cv::Range &rows) {
-                for (int y = rows.start; y < rows.end; ++y) {
-                    auto *dst = rgba16.ptr<cv::Vec4w>(y);
-                    const auto *srcRow = rgb.ptr<cv::Vec3f>(y);
-                    const auto *blurRow = blurred.ptr<cv::Vec3f>(y);
-                    // The shader's coord is the fragment over the canvas size, which is the full image here.
-                    const float ny = (static_cast<float>(y) + 0.5f) / static_cast<float>(fullH);
-                    for (int x = 0; x < fullW; ++x) {
-                        const float nx = (static_cast<float>(x) + 0.5f) / static_cast<float>(fullW);
-                        float amount = opacity;
-                        if (centerStart > 0.0f) {
-                            const float dist = std::min(std::hypot((nx - 0.5f) * 2.0f, (ny - 0.5f) * 2.0f), 1.0f);
-                            const float ramp = smoothStep(std::min(centerStart, 0.99f), 1.0f, dist);
-                            amount *= invert ? 1.0f - ramp : ramp;
-                        }
-                        const cv::Vec3f color = srcRow[x];
-                        const cv::Vec3f cf = color - (color - blurRow[x]) * amount;
-                        // Away from a masked band the fog stays the brighten-only haze it has always been.
-                        const cv::Vec3f lifted = gray(color) < gray(cf) ? cf : color;
-                        for (int c = 0; c < 3; ++c) {
-                            dst[x][c] = static_cast<uint16_t>(std::lround(
-                                std::clamp(lifted[c], 0.0f, 1.0f) * 65535.0f));
-                        }
-                    }
+            completion.progress.reset();
+            try {
+                progress->report(ExportProgress::Phase::COMPLETED, successPrefix + filename.wstring(), 1.0f);
+            } catch (...) {
+                try {
+                    progress->report(ExportProgress::Phase::COMPLETED, {}, 1.0f);
+                } catch (...) {
                 }
-            });
+            }
+        }
+    }
+
+    std::pair<cv::Mat, cv::Mat> RenderScene::renderComparison(const ShaderAttribute &reference, float seconds) {
+        if (smoothZoomActive || !idleCompute || previewUploadPending || requests.recomputeRequested ||
+            requests.resizeRequested || requests.shaderRequested || isLongJobBusy()) {
+            return {};
         }
 
-        // The GPU runs this after the fog pass (RCC5), so deferring the fog has to defer it too or the
-        // two swap places. Weights match vk_linear_interpolation.frag; its fetch clamps, so does this.
-        void applyLinearInterpolationTent(cv::Mat &rgba16) {
-            const cv::Mat kernel = (cv::Mat_<float>(3, 3) << 1, 3, 1, 3, 9, 3, 1, 3, 1) / 25.0f;
-            cv::filter2D(rgba16, rgba16, -1, kernel, cv::Point(-1, -1), 0, cv::BORDER_REPLICATE);
+        const auto phases = renderer->rendererIteration->phases;
+        const auto clock = renderer->rendererIteration->previewClock;
+        const bool pinned = renderer->rendererIteration->animationTimePinned;
+        const float pinnedTime = renderer->rendererIteration->pinnedTime;
+        const auto restore = [&] {
+            ensureShaderFormat(attr.shader.sceneLinear());
+            renderer->rendererIteration->animationTimePinned = true;
+            renderer->rendererIteration->pinnedTime = seconds;
+            applyShaderAttr(attr);
+            renderer->rendererIteration->phases = phases;
+            renderer->rendererIteration->previewClock = clock;
+            renderer->rendererIteration->animationTimePinned = pinned;
+            renderer->rendererIteration->pinnedTime = pinnedTime;
+        };
+        try {
+            const auto capture = [&](const ShaderAttribute &shader) {
+                auto settings = attr;
+                settings.shader = shader;
+                if (settings.shader.slope.lustreRelief && settings.shader.slope.reliefZoomReference < 0) {
+                    settings.shader.slope.reliefZoomReference = attr.fractal.logZoom;
+                }
+                ensureShaderFormat(shader.sceneLinear());
+                renderer->rendererIteration->animationTimePinned = true;
+                renderer->rendererIteration->pinnedTime = seconds;
+                applyShaderAttr(settings);
+                renderer->rendererIteration->phases.seekTo(seconds);
+                renderer->executeOffscreen();
+                const auto frame = renderer->getFrameIndex();
+                wc.getSyncObject().getFence(frame).wait();
+                const auto &image = wc.getSharedImageContext().getImageContextMF(
+                    SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY)[frame];
+                auto pixels = readbackImageContextToMat(wc, image);
+                cv::cvtColor(pixels, pixels, cv::COLOR_RGBA2BGRA);
+                cv::resize(pixels, pixels, cv::Size(getClientWidth(), getClientHeight()), 0, 0, cv::INTER_AREA);
+                pixels.convertTo(pixels, CV_8UC4, 1.0 / 257.0);
+                return pixels;
+            };
+            auto referenceImage = capture(reference);
+            auto currentImage = &reference == &attr.shader ? referenceImage : capture(attr.shader);
+            restore();
+            return {std::move(referenceImage), std::move(currentImage)};
+        } catch (...) {
+            restore();
+            throw;
         }
     }
 
     void RenderScene::applyCreateImage(RenderSceneRequests::CreateImageRequest request) {
+        ExportCompletion completion{request.progress};
+        if (request.progress) {
+            if (request.progress->cancelRequested) {
+                return;
+            }
+            request.progress->report(ExportProgress::Phase::RENDERING, L"Rendering image...");
+        }
         // The dialog runs before the fence wait so cancelling costs nothing, and returns nullptr when closed.
         if (request.filename.empty()) {
             const auto path = IOUtilities::ioFileDialog(L"Save Image", Constants::Extension::DESC_IMAGE,
@@ -1218,13 +1489,15 @@ namespace merutilm::rff2 {
         if (const uint32_t ssaa = attr.render.ssaa; ssaa > 1 && request.downsample) {
             cv::Mat resized;
             cv::resize(img, resized,
-                       cv::Size(static_cast<int>(imgCtx.extent.width) / static_cast<int>(ssaa),
-                                static_cast<int>(imgCtx.extent.height) / static_cast<int>(ssaa)),
+                       // Clamped like the same divide in CPCImageRGBA2BGR and VideoWindow: a zero size made cv::resize throw.
+                       cv::Size(std::max(1, static_cast<int>(imgCtx.extent.width) / static_cast<int>(ssaa)),
+                                std::max(1, static_cast<int>(imgCtx.extent.height) / static_cast<int>(ssaa))),
                        0, 0, cv::INTER_AREA);
             saved = IOUtilities::writeImage(request.filename, resized);
         } else {
             saved = IOUtilities::writeImage(request.filename, img);
         }
+        reportImageSaveProgress(request.progress, completion, request.filename, L"Image saved: ", saved);
         if (!saved) {
             setStatusMessage(Constants::Status::RENDER_STATUS, L"Image save failed");
         }
@@ -1306,269 +1579,80 @@ namespace merutilm::rff2 {
         }
     }
 
-    void RenderScene::applyExportHighRes(const uint32_t tilesX, const uint32_t tilesY) {
-        using namespace SharedImageContextIndices;
-        const auto path = IOUtilities::ioFileDialog(L"Save image", Constants::Extension::DESC_IMAGE,
-                                                    IOUtilities::SAVE_FILE, Constants::Extension::IMAGE);
-        if (path == nullptr) {
-            return;
-        }
-        const std::filesystem::path filename = *path;
-
-        // Stop any in-flight compute and install a fresh stop token (cancel() alone leaves the token
-        // in the requested state, which would make the export loop below look interrupted).
-        state.createThread([](const std::stop_token &) {});
-        wc.core.getLogicalDevice().waitDeviceIdle();
-
-        Attribute settings = attr;
-        beforeCompute(settings);
-
-        // Fog reads the whole canvas (a full-frame blur) and the frame centre, neither of which a single
-        // tile carries. The tiles render without it, and without the linear-interpolation tent the GPU
-        // applies after it, so both can be laid over the stitched image below in the same order.
-        const ShdFogAttribute exportFog = settings.shader.fog;
-        const bool deferFog = exportFog.opacity > 0.0f;
-        const bool deferLinearInterpolation = deferFog && settings.render.linearInterpolation;
-
-        // One frame is submitted per tile, and the palette's phases are read from the clock on every
-        // frame, so without pinning the animation each tile would be coloured a moment further along.
-        renderer->rendererIteration->pinAnimationTime(true);
-        // Puts everything the export borrows back on every exit, including the interrupted ones.
-        struct ExportStateRestore {
-            const RenderScene *scene;
-            glm::uvec2 liveExtent;
-            bool restoreShader;
-
-            ~ExportStateRestore() {
-                scene->renderer->rendererIteration->pinAnimationTime(false);
-                scene->renderer->rendererIteration->setCanvasGeometry(liveExtent, {0, 0});
-                if (restoreShader) {
-                    scene->applyShaderAttr(scene->attr);
+    void RenderScene::ensureShaderFormat(bool studio) {
+            const VkFormat desired = studio ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R16G16B16A16_UNORM;
+            if (renderer == nullptr) {
+                wc.core.getLogicalDevice().waitDeviceIdle();
+                refreshSharedImgContext(desired);
+                for (const auto &context : wc.getRenderContexts()) {
+                    context->recreate();
+                }
+                try {
+                    initRenderer();
+                    for (const auto &configurator : renderer->configurators) {
+                        configurator->renderContextRefreshed();
+                    }
+                    const auto width = getIterationBufferWidth(attr);
+                    const auto height = getIterationBufferHeight(attr);
+                    auto staging = std::make_unique<GraphicsMatrixBuffer<double>>(
+                        wc.core, width, height, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    if (iterationMatrix != nullptr && iterationMatrix->getWidth() == width &&
+                        iterationMatrix->getHeight() == height) {
+                        staging->fill(iterationMatrix->getCanvas());
+                    }
+                    renderer->iterationStagingBufferContext = std::move(staging);
+                    renderer->rendererIteration->resetIterationBuffer(width, height);
+                    renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
+                    const auto blurExtent = getBlurredImageExtent();
+                    const auto presentExtent = getSwapchainRenderContextExtent();
+                    renderer->rendererDownsampleForBlur->setRescaledResolution(0, {blurExtent.width, blurExtent.height});
+                    renderer->rendererDownsampleForBlur->setRescaledResolution(1, {blurExtent.width, blurExtent.height});
+                    renderer->rendererPresent->setRescaledResolution({presentExtent.width, presentExtent.height});
+                } catch (...) {
+                    renderer.reset();
+                    throw;
+                }
+                return;
+            }
+            if (wc.getSharedImageContext().getImageContextMF(SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY)[0].imageFormat != desired) {
+                wc.core.getLogicalDevice().waitDeviceIdle();
+                using namespace SharedDescriptorTemplate;
+                const auto &iterationInfo = renderer->rendererIteration->getDescriptor(GPCIterationPalette::SET_ITERATION)
+                    .get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO)->getHostObject();
+                const double maximum = iterationInfo.get<double>(DescIteration::TARGET_UBO_ITERATION_MAX);
+                const auto phases = renderer->rendererIteration->phases;
+                const auto previewClock = renderer->rendererIteration->previewClock;
+                const auto pinned = renderer->rendererIteration->animationTimePinned;
+                const auto pinnedTime = renderer->rendererIteration->pinnedTime;
+                auto staging = std::move(renderer->iterationStagingBufferContext);
+                renderer.reset();
+                refreshSharedImgContext(desired);
+                for (const auto &context : wc.getRenderContexts()) {
+                    context->recreate();
+                }
+                try {
+                    initRenderer();
+                    // Rebind the replacement images and blur resources before the first frame uses the new pipelines.
+                    for (const auto &configurator : renderer->configurators) {
+                        configurator->renderContextRefreshed();
+                    }
+                    renderer->iterationStagingBufferContext = std::move(staging);
+                    renderer->rendererIteration->resetIterationBuffer(getIterationBufferWidth(attr), getIterationBufferHeight(attr));
+                    renderer->rendererIteration->setMaxIteration(maximum);
+                    renderer->rendererIteration->phases = phases;
+                    renderer->rendererIteration->previewClock = previewClock;
+                    renderer->rendererIteration->animationTimePinned = pinned;
+                    renderer->rendererIteration->pinnedTime = pinnedTime;
+                    const auto blurExtent = getBlurredImageExtent();
+                    const auto presentExtent = getSwapchainRenderContextExtent();
+                    renderer->rendererDownsampleForBlur->setRescaledResolution(0, {blurExtent.width, blurExtent.height});
+                    renderer->rendererDownsampleForBlur->setRescaledResolution(1, {blurExtent.width, blurExtent.height});
+                    renderer->rendererPresent->setRescaledResolution({presentExtent.width, presentExtent.height});
+                } catch (...) {
+                    renderer.reset();
+                    throw;
                 }
             }
-        } exportRestore{
-            this,
-            {getIterationBufferWidth(settings), getIterationBufferHeight(settings)},
-            deferFog
-        };
-
-        if (deferFog) {
-            Attribute tileSettings = settings;
-            tileSettings.shader.fog.opacity = 0.0f;
-            tileSettings.render.linearInterpolation = false;
-            applyShaderAttr(tileSettings);
-        }
-
-        const uint16_t tw = getIterationBufferWidth(settings);
-        const uint16_t th = getIterationBufferHeight(settings);
-        const uint32_t gx = std::max<uint32_t>(tilesX, 1);
-        const uint32_t gy = std::max<uint32_t>(tilesY, 1);
-        const int scale = static_cast<int>(std::min(gx, gy));
-
-        const int margin = exportTileMargin(settings, gx, gy);
-        // Kept region of one tile, and therefore the tile pitch across the full grid.
-        const int ow = static_cast<int>(tw) - 2 * margin;
-        const int oh = static_cast<int>(th) - 2 * margin;
-        const int fullW = ow * static_cast<int>(gx);
-        const int fullH = oh * static_cast<int>(gy);
-
-        // Boundary trace: skip computing the interior of uniform sub-tiles (same gating/skip logic as
-        // compute()), so the export honors the optimization instead of computing every pixel.
-        const bool useBoundaryTrace = settings.render.boundaryTraceFill && !settings.fractal.absoluteIterationMode;
-        // 2-Color preview: escaped pixels collapse to a single fill value, matching the live view's white-fill.
-        const bool useWhiteFill = useBoundaryTrace && settings.render.preview2Color;
-        const double maxItValue = static_cast<double>(settings.fractal.maxIteration);
-        constexpr double whiteFillValue = 1.0;
-
-        // One reference for the whole image: dcMax from the full-grid corner (largest |dc|).
-        auto start = std::chrono::high_resolution_clock::now();
-        const dex dcMax = dcMaxOf(settings, fullW, fullH, scale);
-
-        if (!buildPerturbator(settings, dcMax, start)) {
-            requests.requestRecompute();
-            return;
-        }
-
-        cv::Mat big(fullH, fullW, CV_16UC4);
-        const uint32_t totalTiles = gx * gy;
-
-        // The export owns the UI thread until it finishes, so the pump below is the only thing that
-        // keeps the window painting and answering; longJobBusy tells the handlers it dispatches to
-        // leave the scene alone. Cleared on every exit path, including the interrupted ones.
-        longJobBusy.store(true);
-        struct LongJobScope {
-            std::atomic<bool> &flag;
-            ~LongJobScope() { flag.store(false); }
-        } longJobScope{longJobBusy};
-
-        for (uint32_t tj = 0; tj < gy; ++tj) {
-            for (uint32_t ti = 0; ti < gx; ++ti) {
-                if (state.interruptRequested()) {
-                    requests.requestRecompute();
-                    return;
-                }
-
-                // Full-grid coordinate of this tile's buffer origin, pulled back by the overlap.
-                const int x0 = static_cast<int>(ti) * ow - margin;
-                const int y0 = static_cast<int>(tj) * oh - margin;
-
-                // The screen-space animation fields and decor UVs need where the tile sits in the final
-                // image, which is flipped against the buffer (image top = buffer bottom).
-                renderer->rendererIteration->setCanvasGeometry(
-                    {static_cast<uint32_t>(fullW), static_cast<uint32_t>(fullH)},
-                    {x0, fullH - y0 - static_cast<int>(th)});
-
-                // Fill the internal-sized iteration buffer with this tile's full-grid pixels.
-                if (useBoundaryTrace) {
-                    // computePixel stores the (possibly white-filled) value but returns raw iteration for classification.
-                    const auto computeBufferPixel = [this, &settings, x0, y0, fullW, fullH, scale,
-                                                     useWhiteFill, maxItValue](
-                                                        const uint16_t x, const uint16_t y) -> double {
-                        bool sky = false;
-                        const auto dc = offsetConversionTiled(settings, x0 + static_cast<int>(x),
-                                                              y0 + static_cast<int>(y), fullW, fullH, scale, &sky);
-                        const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
-                        const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
-                        (*iterationMatrix)(x, y) = stored;
-                        renderer->iterationStagingBufferContext->set(x, y, stored);
-                        return it;
-                    };
-                    const auto fillBufferPixel = [this](const uint16_t x, const uint16_t y, const double v) {
-                        (*iterationMatrix)(x, y) = v;
-                        renderer->iterationStagingBufferContext->set(x, y, v);
-                    };
-
-                    // Sub-tile this internal buffer; trace each perimeter and flood-fill uniform interiors.
-                    const uint16_t tileSize = std::clamp<uint16_t>(
-                        static_cast<uint16_t>(std::min(tw, th) / 8), 8, 32);
-                    const uint16_t subTilesX = (tw + tileSize - 1) / tileSize;
-                    const uint16_t subTilesY = (th + tileSize - 1) / tileSize;
-                    const uint32_t numSubTiles = static_cast<uint32_t>(subTilesX) * subTilesY;
-                    std::atomic<uint32_t> subTileIndex = 0;
-
-                    auto worker = [&] {
-                        while (true) {
-                            const uint32_t st = subTileIndex.fetch_add(1);
-                            if (st >= numSubTiles) return;
-                            if (state.interruptRequested()) return;
-
-                            const uint16_t stx = static_cast<uint16_t>(st % subTilesX);
-                            const uint16_t sty = static_cast<uint16_t>(st / subTilesX);
-                            const uint16_t bx0 = stx * tileSize;
-                            const uint16_t by0 = sty * tileSize;
-                            const uint16_t bx1 = std::min<uint16_t>(bx0 + tileSize, tw);
-                            const uint16_t by1 = std::min<uint16_t>(by0 + tileSize, th);
-
-                            bool allBlack = true;
-                            bool allWhite = true;
-                            const auto classify = [&](const double it) {
-                                if (it == maxItValue) allWhite = false; else allBlack = false;
-                            };
-
-                            for (uint16_t x = bx0; x < bx1; ++x) {
-                                classify(computeBufferPixel(x, by0));
-                                if (by1 > by0 + 1) {
-                                    classify(computeBufferPixel(x, static_cast<uint16_t>(by1 - 1)));
-                                }
-                            }
-                            for (uint16_t y = static_cast<uint16_t>(by0 + 1); y + 1 < by1; ++y) {
-                                classify(computeBufferPixel(bx0, y));
-                                if (bx1 > bx0 + 1) {
-                                    classify(computeBufferPixel(static_cast<uint16_t>(bx1 - 1), y));
-                                }
-                            }
-
-                            if (state.interruptRequested()) return;
-
-                            if (allBlack) {
-                                for (uint16_t y = static_cast<uint16_t>(by0 + 1); y + 1 < by1; ++y)
-                                    for (uint16_t x = static_cast<uint16_t>(bx0 + 1); x + 1 < bx1; ++x)
-                                        fillBufferPixel(x, y, maxItValue);
-                            } else if (useWhiteFill && allWhite) {
-                                for (uint16_t y = static_cast<uint16_t>(by0 + 1); y + 1 < by1; ++y)
-                                    for (uint16_t x = static_cast<uint16_t>(bx0 + 1); x + 1 < bx1; ++x)
-                                        fillBufferPixel(x, y, whiteFillValue);
-                            } else {
-                                for (uint16_t y = static_cast<uint16_t>(by0 + 1); y + 1 < by1; ++y) {
-                                    for (uint16_t x = static_cast<uint16_t>(bx0 + 1); x + 1 < bx1; ++x)
-                                        computeBufferPixel(x, y);
-                                    if (state.interruptRequested()) return;
-                                }
-                            }
-                        }
-                    };
-
-                    const uint32_t workerCount = std::max<uint32_t>(1u, settings.render.threads);
-                    std::vector<std::jthread> pool;
-                    pool.reserve(workerCount);
-                    for (uint32_t t = 0; t < workerCount; ++t) pool.emplace_back(worker);
-                    for (auto &t : pool) if (t.joinable()) t.join();
-                } else {
-                    auto dispatcher = ParallelArrayDispatcher<double>(
-                        state, *iterationMatrix, settings.render.threads,
-                        [this, &settings, x0, y0, fullW, fullH, scale, useWhiteFill, maxItValue](
-                            const uint16_t x, const uint16_t y, uint16_t, uint16_t, float, float, uint32_t, double) {
-                            bool sky = false;
-                            const auto dc = offsetConversionTiled(settings, x0 + static_cast<int>(x),
-                                                                  y0 + static_cast<int>(y), fullW, fullH, scale, &sky);
-                            const double iteration = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
-                            const double stored = (useWhiteFill && iteration != maxItValue) ? whiteFillValue : iteration;
-                            renderer->iterationStagingBufferContext->set(x, y, stored);
-                            return stored;
-                        });
-                    dispatcher.dispatch();
-                }
-
-                // Offscreen: the tile never reaches the swapchain, so no per-tile present stalls on a
-                // vblank and a minimized window can no longer make the render silently do nothing.
-                renderer->executeOffscreen();
-
-                const uint32_t fi = renderer->getFrameIndex();
-                wc.getSyncObject().getFence(fi).wait();
-                const auto &imgCtx = wc.getSharedImageContext().getImageContextMF(
-                    MF_MAIN_RENDER_IMAGE_SECONDARY)[fi];
-                cv::Mat tile = readbackImageContextToMat(wc, imgCtx);
-                // Keep only the inner region: the margin ring exists so these pixels had real
-                // neighbours, but it duplicates the adjacent tiles and is thrown away. The image is
-                // vertically flipped against the buffer, so the kept rows count from the bottom.
-                tile(cv::Rect(margin, static_cast<int>(th) - margin - oh, ow, oh))
-                        .copyTo(big(cv::Rect(static_cast<int>(ti) * ow,
-                                             fullH - static_cast<int>(tj) * oh - oh, ow, oh)));
-
-                setStatusMessage(Constants::Status::RENDER_STATUS,
-                                 std::format(L"Export tile {} / {}", tj * gx + ti + 1, totalTiles));
-                if (longJobPump) {
-                    longJobPump();
-                }
-            }
-        }
-
-        if (deferFog) {
-            setStatusMessage(Constants::Status::RENDER_STATUS, L"Export: fog");
-            if (longJobPump) {
-                longJobPump();
-            }
-            applyFogToStitched(big, exportFog);
-            if (deferLinearInterpolation) {
-                applyLinearInterpolationTent(big);
-            }
-        }
-
-        cv::cvtColor(big, big, cv::COLOR_RGBA2BGRA);
-        bool saved = false;
-        if (const uint32_t ssaa = settings.render.ssaa; ssaa > 1) {
-            cv::Mat resized;
-            cv::resize(big, resized,
-                       cv::Size(big.cols / static_cast<int>(ssaa), big.rows / static_cast<int>(ssaa)),
-                       0, 0, cv::INTER_AREA);
-            saved = IOUtilities::writeImage(filename, resized);
-        } else {
-            saved = IOUtilities::writeImage(filename, big);
-        }
-
-        setStatusMessage(Constants::Status::RENDER_STATUS, saved ? L"Export done" : L"Export failed");
-        // Restore the live view (the export rebuilt the perturbator for the full grid).
-        requests.requestRecompute();
     }
 
     void RenderScene::applyShaderAttr(const Attribute &attr) const {
@@ -1581,14 +1665,20 @@ namespace merutilm::rff2 {
         // The stripe's own uniform holds its look; its phase rides the clock the iteration pass
         // publishes, so the speed goes there as well.
         renderer->rendererIteration->setStripeSpeed(attr.shader.stripe);
+        renderer->layerShader = attr.shader;
         renderer->rendererSlope->setSlope(attr.shader.slope);
-        renderer->rendererColor->setColor(attr.shader.color);
+        renderer->rendererLinearInterpolation->setSurface(attr.shader.slope);
+        renderer->rendererSlope->setGroove(attr.shader.palette);
+        renderer->rendererSlope->setReliefZoom(attr.shader.slope, attr.fractal.logZoom);
+        renderer->rendererColor->setColor(attr.shader.color, attr.shader.sceneLinear());
         renderer->rendererFog->setFog(attr.shader.fog);
-        renderer->rendererBloom->setBloom(attr.shader.bloom, attr.shader.hdr);
+        renderer->rendererSlope->setEffects(attr.shader.effects, attr.shader.sceneLinear());
+        renderer->rendererIteration->setEffects(attr.shader.effects);
+        renderer->rendererBloom->setBloom(attr.shader.bloom, attr.shader.hdr, attr.shader.sceneLinear());
         renderer->rendererLinearInterpolation->setLinearInterpolation(attr.render.linearInterpolation);
         renderer->rendererLinearInterpolation->setDither(attr.render.dither);
         // The canvas is not a display, so the preview always takes the tone-mapped SDR end of the transform.
-        renderer->rendererLinearInterpolation->setToneMap(attr.shader.hdr, VidHdrTransfer::SDR, 0.0f);
+        renderer->rendererLinearInterpolation->setToneMap(attr.shader.hdr, VidHdrTransfer::SDR, 0.0f, attr.shader.sceneLinear());
         renderer->rendererBoxBlur->setBlurInfo(CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG, attr.shader.fog.radius);
         renderer->rendererBoxBlur->
                 setBlurInfo(CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM, attr.shader.bloom.radius);
@@ -1609,9 +1699,11 @@ namespace merutilm::rff2 {
             wc.core, iw, ih, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
     }
 
-    void RenderScene::initRenderer() {
+    void RenderScene::initRenderer(bool prepareAll) {
         wc.core.getLogicalDevice().waitDeviceIdle();
-        renderer = std::make_unique<RenderSceneRenderer>(engine, wc.getAttachmentIndex());
+        const std::function<void()> prepare = prepareAll ? std::function<void()>{[&] { prepareVideoPipelines(engine, attr); }} : std::function<void()>{};
+        renderer = std::make_unique<RenderSceneRenderer>(engine, wc.getAttachmentIndex(), prepare);
+        wc.core.getLogicalDevice().savePipelineCache();
     }
 
 
@@ -1636,7 +1728,7 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::refreshCanvasExtent() {
-        canvasExtent = wc.getSwapchain().getCurrentExtent();
+        canvasExtent = documentCanvasExtent.value_or(wc.getSwapchain().getCurrentExtent());
     }
 
     void RenderScene::waitFramesInFlight() const {
@@ -1724,7 +1816,13 @@ namespace merutilm::rff2 {
     }
 
 
-    void RenderScene::refreshSharedImgContext() const {
+    void RenderScene::refreshSharedImgContext(VkFormat format) const {
+        if (renderer) {
+            renderer->lastShadedFrame = -1;
+        }
+        if (format == VK_FORMAT_UNDEFINED) {
+            format = attr.shader.sceneLinear() ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R16G16B16A16_UNORM;
+        }
         using namespace SharedImageContextIndices;
         auto &sharedImg = wc.getSharedImageContext();
         sharedImg.cleanupContexts();
@@ -1748,13 +1846,13 @@ namespace merutilm::rff2 {
         const auto blurredImageExtent = getBlurredImageExtent();
 
         sharedImg.appendMultiframeImageContext(MF_MAIN_RENDER_IMAGE_PRIMARY,
-                                               iiiGetter(internalImageExtent, VK_FORMAT_R16G16B16A16_UNORM,
-                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                               iiiGetter(internalImageExtent, format,
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
                                                          VK_IMAGE_USAGE_SAMPLED_BIT));
         sharedImg.appendMultiframeImageContext(MF_MAIN_RENDER_IMAGE_SECONDARY,
-                                               iiiGetter(internalImageExtent, VK_FORMAT_R16G16B16A16_UNORM,
-                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                               iiiGetter(internalImageExtent, format,
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                                          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
                                                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                          VK_IMAGE_USAGE_SAMPLED_BIT));
@@ -1780,6 +1878,8 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::cancelRunningCompute() {
+        endSmoothZoom();
+        smoothZoomPending = 0;
         // The pending request goes with the run: left standing it would start the same compute on
         // the next frame and put it right back over whatever was just loaded.
         requests.recomputeRequested.exchange(false);
@@ -1790,6 +1890,7 @@ namespace merutilm::rff2 {
     }
 
     bool RenderScene::overwriteMatrixFromMap(const RFFDynamicMapBinary &map) {
+        ++previewRevision;
         const uint32_t iw = getIterationBufferWidth(attr);
         const uint32_t ih = getIterationBufferHeight(attr);
         if (iw != map.getMatrix().getWidth() || ih != map.getMatrix().getHeight()) {
@@ -1797,6 +1898,7 @@ namespace merutilm::rff2 {
                                  map.getMatrix().getWidth(), map.getMatrix().getHeight());
             return false;
         }
+        auto loadedMatrix = std::make_unique<Matrix<double>>(map.getMatrix());
         // Both walks put something of their own on the canvas, so only one may hold it. Taken away
         // before the zoom below is written, because that is the line this would otherwise restore
         // over: the map's zoom is what belongs on the bar once the map is what is being shown.
@@ -1809,6 +1911,10 @@ namespace merutilm::rff2 {
 
         renderer->rendererIteration->setMaxIteration(static_cast<double>(map.getMaxIteration()));
         renderer->iterationStagingBufferContext->fill(map.getMatrix().getCanvas());
+        iterationMatrix = std::move(loadedMatrix);
+        lastLogZoom = map.getLogZoom();
+        lastPeriod = map.getPeriod();
+        lastMaxIteration = map.getMaxIteration();
         previewSeedGeneration = 0;
         // The canvas is now the map's view, not the one last computed, so the zoom shown follows it.
         setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(map.getLogZoom()));
@@ -2108,6 +2214,15 @@ namespace merutilm::rff2 {
     }
 
     bool RenderScene::runKeyAction(const WPARAM key) {
+        if (key == VK_ESCAPE && (smoothZoomActive || smoothZoomPending != 0)) {
+            settleSmoothNavigation();
+            smoothZoomDragging = false;
+            canvasDragging = false;
+            smoothZoomNeedsPreview = false;
+            smoothZoomInputAt = std::chrono::steady_clock::now() - std::chrono::seconds(1);
+            smoothZoomPending = 0;
+            return true;
+        }
         // The iteration buffer is being written by the job in either case; browsing would fight it.
         if (isVideoGenerationActive || isVideoExportActive || longJobBusy.load()) {
             return false;
@@ -2161,18 +2276,19 @@ namespace merutilm::rff2 {
         GetCursorPos(&cursor);
         ScreenToClient(wc.getWindow().getWindowHandle(), &cursor);
         // iteration-buffer pixel scale is clarity * ssaa.
-        const float multiplier = attr.render.clarityMultiplier * static_cast<float>(attr.render.ssaa);
-        return static_cast<uint16_t>(static_cast<float>(cursor.x) * multiplier);
+        RECT bounds;
+        GetClientRect(wc.getWindow().getWindowHandle(), &bounds);
+        return workspace::PreviewGeometry::sample(cursor.x, bounds.right, getIterationBufferWidth(attr));
     }
 
     uint16_t RenderScene::getMouseYOnIterationBuffer() const {
         POINT cursor;
         GetCursorPos(&cursor);
         ScreenToClient(wc.getWindow().getWindowHandle(), &cursor);
-        const float multiplier = attr.render.clarityMultiplier * static_cast<float>(attr.render.ssaa);
         // The -1 mirrors the shaders' row flip (height - 1 - y); without it the top row maps past the buffer end.
-        return static_cast<uint16_t>(static_cast<float>(getIterationBufferHeight(attr)) - 1.0f -
-                                     static_cast<float>(cursor.y) * multiplier);
+        RECT bounds;
+        GetClientRect(wc.getWindow().getWindowHandle(), &bounds);
+        return workspace::PreviewGeometry::sample(cursor.y, bounds.bottom, getIterationBufferHeight(attr), true);
     }
 
     namespace {
@@ -2344,6 +2460,64 @@ namespace merutilm::rff2 {
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
 
+    std::pair<Matrix<double>, uint64_t> RenderScene::sampleIterationsForAi() const {
+        if (!iterationMatrix || !idleCompute || previewUploadPending || smoothZoomActive ||
+            requests.recomputeRequested || requests.resizeRequested || isLongJobBusy()) {
+            throw std::runtime_error("Wait for completed iteration data before AI analysis.");
+        }
+
+        const auto width = iterationMatrix->getWidth();
+        const auto height = iterationMatrix->getHeight();
+        if (width < 3 || height < 3) {
+            throw std::runtime_error("Iteration image is too small for AI analysis.");
+        }
+
+        const double scale = std::min(1.0, 192.0 / std::max(width, height));
+        const auto sampleWidth = uint16_t(std::max(3, int(width * scale)));
+        const auto sampleHeight = uint16_t(std::max(3, int(height * scale)));
+        Matrix<double> sample(sampleWidth, sampleHeight);
+
+        for (uint16_t y = 0; y < sampleHeight; ++y) {
+            for (uint16_t x = 0; x < sampleWidth; ++x) {
+                const auto sourceX = uint16_t(uint32_t(x) * (width - 1) / (sampleWidth - 1));
+                const auto sourceY = uint16_t(uint32_t(y) * (height - 1) / (sampleHeight - 1));
+                sample(x, y) = iterationMatrix->loadRelaxed(iterationMatrix->getIndex(sourceX, sourceY));
+            }
+        }
+        return {std::move(sample), lastMaxIteration};
+    }
+
+    void RenderScene::zoomToImagePoint(double x, double y, double factor) {
+        if (!std::isfinite(x) || !std::isfinite(y) || x < 0 || x > 1 || y < 0 || y > 1 ||
+            !std::isfinite(factor) || factor <= 1 || factor > 100) {
+            throw std::runtime_error("Zoom requires image coordinates 0-1 and a factor greater than 1 and at most 100.");
+        }
+        if (!isIdleCompute() || isLongJobBusy() || requests.recomputeRequested ||
+            requests.resizeRequested || isImageBrowsing() || isVideoGenerationActive || isVideoExportActive) {
+            throw std::runtime_error("Wait for the current fractal render before zooming.");
+        }
+        if (effectiveProjection(attr.fractal.projectionMethod) != FrtProjectionMethod::PLANAR) {
+            throw std::runtime_error("AI zoom currently requires planar projection.");
+        }
+
+        const double pixelX = x * (getIterationBufferWidth(attr) - 1);
+        const double pixelY = y * (getIterationBufferHeight(attr) - 1);
+        const auto offset = offsetConversion(attr, pixelX, pixelY);
+        const float previousLogZoom = attr.fractal.logZoom;
+        const float nextLogZoom = previousLogZoom + std::log10(factor);
+        if (!std::isfinite(nextLogZoom) || nextLogZoom <= previousLogZoom) {
+            throw std::runtime_error("Zoom increment cannot be represented at this depth.");
+        }
+
+        auto center = attr.fractal.center.addCenterDouble(
+            offset[0], offset[1], Perturbator::logZoomToExp10(nextLogZoom));
+        attr.fractal.center = std::move(center);
+        attr.fractal.logZoom = nextLogZoom;
+        seedPreviewFromZoom(pixelX, pixelY,
+                            std::pow(10.0, double(nextLogZoom - previousLogZoom)));
+        requests.requestRecompute();
+    }
+
     void RenderScene::applyBoxZoom(const int startMX, const int startMY, const int endMX, const int endMY) {
         const int bw = std::abs(endMX - startMX);
         const int bh = std::abs(endMY - startMY);
@@ -2378,7 +2552,7 @@ namespace merutilm::rff2 {
         requests.requestRecompute();
     }
 
-    void RenderScene::recomputeThreaded() {
+    void RenderScene::recomputeThreaded(const Attribute* overrideSettings, const bool lowResolution) {
         // Written before the compute starts, not after it ends: this is the view a run that never
         // comes back from here was working on.
         writeRecoverySnapshot(true);
@@ -2396,15 +2570,29 @@ namespace merutilm::rff2 {
         // The previous run is joined here rather than inside createThread, so it is finished with
         // the period beforeCompute is about to read and with the device the uniform below is in.
         state.cancel();
+        // The joined worker may have published completion after the caller marked the next run busy.
+        idleCompute = false;
         wc.core.getLogicalDevice().waitDeviceIdle();
         // Cloned and prepared on this thread, not on the worker: beforeCompute writes the iteration
         // uniform buffer the drawing reads, and a worker writing it alongside a frame in flight is
         // rewriting what the GPU is already fetching. Here the device is idle and nothing is.
-        Attribute settings = attr; //clone the attr
+        Attribute settings = overrideSettings ? *overrideSettings : attr; //clone the attr
         beforeCompute(settings);
-        state.createThread([this, generation, settings = std::move(settings)](const std::stop_token &) {
+        Attribute geometry = settings;
+        smoothZoomPreviewMatrix.reset();
+        if (lowResolution) {
+            settings.render.ssaa = 1;
+            settings.render.clarityMultiplier = SmoothZoomMotion::previewClarity(settings.render.clarityMultiplier,
+                getClientWidth(), getClientHeight(), settings.video.data.sourceScale);
+            if (getIterationBufferWidth(settings) == 0 || getIterationBufferHeight(settings) == 0)
+                settings.render.clarityMultiplier = geometry.render.clarityMultiplier * geometry.render.ssaa;
+            settings.render.coarsePreview = false;
+            smoothZoomPreviewMatrix = std::make_unique<Matrix<double>>(getIterationBufferWidth(settings), getIterationBufferHeight(settings));
+        }
+        auto* output = lowResolution ? smoothZoomPreviewMatrix.get() : iterationMatrix.get();
+        state.createThread([this, generation, output, geometry = std::move(geometry), settings = std::move(settings)](const std::stop_token &) {
             try {
-                const bool success = compute(settings);
+                const bool success = compute(settings, output, &geometry);
                 afterCompute(success, generation);
             } catch (const std::exception &error) {
                 afterCompute(false, generation);
@@ -2423,10 +2611,8 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::beforeCompute(Attribute &attr) const {
-        uint64_t multiplier = lastPeriod == 0 ? 1 : lastPeriod;
         attr.fractal.maxIteration = attr.fractal.autoMaxIteration
-                                        ? multiplier * attr.fractal.
-                                          autoIterationMultiplier
+                                        ? NumericSettingLimits::automaticIterationLimit(lastPeriod, attr.fractal.autoIterationMultiplier)
                                         : this->attr.fractal.maxIteration;
         renderer->rendererIteration->setMaxIteration(static_cast<double>(attr.fractal.maxIteration));
     }
@@ -2545,11 +2731,19 @@ namespace merutilm::rff2 {
         return true;
     }
 
-    bool RenderScene::compute(const Attribute &attr) {
+    bool RenderScene::compute(const Attribute &requestedAttr, Matrix<double>* output, const Attribute* samplingGeometry) {
+        const Attribute& attr = requestedAttr;
+        auto& matrix = output ? *output : *iterationMatrix;
+        const auto& geometry = samplingGeometry ? *samplingGeometry : attr;
         auto start = std::chrono::high_resolution_clock::now();
         const uint16_t w = getIterationBufferWidth(attr);
         const uint16_t h = getIterationBufferHeight(attr);
         uint32_t len = uint32_t(w) * h;
+        const double fullW = getIterationBufferWidth(geometry), fullH = getIterationBufferHeight(geometry);
+        const auto coordinate = [this, &geometry, w, h, fullW, fullH](uint16_t x, uint16_t y, bool* sky) {
+            return offsetConversion(geometry, SmoothZoomMotion::sourcePixel(x, static_cast<uint32_t>(fullW), w),
+                SmoothZoomMotion::sourcePixel(y, static_cast<uint32_t>(fullH), h), sky);
+        };
 
         if (state.interruptRequested()) return false;
 
@@ -2561,7 +2755,7 @@ namespace merutilm::rff2 {
 
         setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(logZoom));
 
-        const dex dcMax = dcMaxOf(attr, w, h, 1);
+        const dex dcMax = dcMaxOf(geometry, static_cast<int>(fullW), static_cast<int>(fullH), 1);
 
         if (!buildPerturbator(attr, dcMax, start)) return false;
 
@@ -2570,8 +2764,8 @@ namespace merutilm::rff2 {
 
         // Zeroed here instead of in the staging buffer: a zero is what marks a pixel this compute
         // has not reached, and the snapshot on the render thread reads that mark.
-        for (uint32_t i = 0, matrixLength = iterationMatrix->getLength(); i < matrixLength; ++i) {
-            iterationMatrix->storeRelaxed(i, 0);
+        for (uint32_t i = 0, matrixLength = matrix.getLength(); i < matrixLength; ++i) {
+            matrix.storeRelaxed(i, 0);
         }
 
         auto statusThread = std::jthread([&renderPixelsCount, len, this, &start](const std::stop_token &stop) {
@@ -2602,19 +2796,19 @@ namespace merutilm::rff2 {
             const uint32_t numTiles = static_cast<uint32_t>(tilesX) * tilesY;
 
             std::atomic<uint32_t> tileIndex = 0;
-            const auto computePixel = [this, &attr, &renderPixelsCount, useWhiteFill, maxItValue](
+            const auto computePixel = [this, &coordinate, &matrix, &renderPixelsCount, useWhiteFill, maxItValue](
                                           const uint16_t x, const uint16_t y) {
                 bool sky = false;
-                const auto dc = offsetConversion(attr, x, y, &sky);
+                const auto dc = coordinate(x, y, &sky);
                 const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
                 const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
-                iterationMatrix->storeRelaxed(x, y, stored);
+                matrix.storeRelaxed(x, y, stored);
                 ++renderPixelsCount;
                 return it;
             };
 
-            const auto fillPixel = [this, &renderPixelsCount](const uint16_t x, const uint16_t y, const double v) {
-                iterationMatrix->storeRelaxed(x, y, v);
+            const auto fillPixel = [&matrix, &renderPixelsCount](const uint16_t x, const uint16_t y, const double v) {
+                matrix.storeRelaxed(x, y, v);
                 ++renderPixelsCount;
             };
 
@@ -2701,7 +2895,7 @@ namespace merutilm::rff2 {
                         const uint16_t sy = cy * coarseStep;
 
                         bool sky = false;
-                        const auto dc = offsetConversion(attr, sx, sy, &sky);
+                        const auto dc = coordinate(sx, sy, &sky);
                         const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
                         const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
 
@@ -2709,7 +2903,7 @@ namespace merutilm::rff2 {
                         const uint16_t by1 = std::min<uint16_t>(sy + coarseStep, h);
                         for (uint16_t y = sy; y < by1; ++y) {
                             for (uint16_t x = sx; x < bx1; ++x) {
-                                iterationMatrix->storeRelaxed(x, y, stored);
+                                matrix.storeRelaxed(x, y, stored);
                             }
                         }
                     }
@@ -2737,11 +2931,11 @@ namespace merutilm::rff2 {
             // The rows under the front are no longer painted from here: the snapshot carries the
             // front down as it uploads, which is what leaves this buffer to a single writer.
             auto previewer = ParallelArrayDispatcher<double>(
-                state, *iterationMatrix, attr.render.threads,
-                [attr, this, &renderPixelsCount](const uint16_t x, const uint16_t y, uint16_t, uint16_t, float,
+                state, matrix, attr.render.threads,
+                [attr, this, &coordinate, &renderPixelsCount](const uint16_t x, const uint16_t y, uint16_t, uint16_t, float,
                                                  float, uint32_t, double) {
                     bool sky = false;
-                    const auto dc = offsetConversion(attr, x, y, &sky);
+                    const auto dc = coordinate(x, y, &sky);
                     const double iteration = sky
                                                  ? static_cast<double>(attr.fractal.maxIteration)
                                                  : currentPerturbator->iterate(dc[0], dc[1]);
@@ -2775,6 +2969,7 @@ namespace merutilm::rff2 {
         if (success && attr.fractal.reuseReferenceMethod == FrtReuseReferenceMethod::CENTERED_REFERENCE) {
             attr.fractal.reuseReferenceMethod = FrtReuseReferenceMethod::CURRENT_REFERENCE;
         }
+        if (success) completedComputeGeneration.store(generation);
         idleCompute = true;
         backgroundThreads.notifyAll();
     }

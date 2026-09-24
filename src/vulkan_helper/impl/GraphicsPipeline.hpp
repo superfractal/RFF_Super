@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-27.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -17,12 +18,10 @@ namespace merutilm::vkh {
         IndexBufferRef indexBuffer;
 
     public:
-        explicit GraphicsPipelineImpl(WindowContextRef wc, PipelineLayoutRef pipelineLayout,
-                          VertexBufferRef vertexBuffer,
-                          IndexBufferRef indexBuffer,
-                          uint32_t renderContextIndex,
-                          uint32_t primarySubpassIndex,
-                          PipelineManager &&pipelineManager);
+        explicit GraphicsPipelineImpl(WindowContextRef windowContext, PipelineLayoutRef pipelineLayout,
+                                      VertexBufferRef vertexBuffer, IndexBufferRef indexBuffer,
+                                      uint32_t renderContextIndex, uint32_t primarySubpassIndex,
+                                      PipelineManager &&pipelineManager);
 
         ~GraphicsPipelineImpl() override;
 
@@ -34,7 +33,8 @@ namespace merutilm::vkh {
 
         GraphicsPipelineImpl &operator=(GraphicsPipelineImpl &&) = delete;
 
-        void cmdBindAll(VkCommandBuffer cbh, uint32_t frameIndex, DescIndexPicker &&descIndices) const override;
+        void cmdBindAll(VkCommandBuffer commandBuffer, uint32_t frameIndex,
+                        DescIndexPicker &&descriptorIndices) const override;
 
         [[nodiscard]] VertexBufferRef getVertexBuffer() const { return vertexBuffer; }
 
@@ -45,7 +45,5 @@ namespace merutilm::vkh {
     };
 
     using GraphicsPipeline = std::unique_ptr<GraphicsPipelineImpl>;
-    using GraphicsPipelinePtr = GraphicsPipelineImpl *;
-    using GraphicsPipelineRef = GraphicsPipelineImpl &;
 
 }

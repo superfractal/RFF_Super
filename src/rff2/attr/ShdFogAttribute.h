@@ -1,12 +1,12 @@
 //
 // Created by Merutilm on 2025-05-04.
-//
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
+// Modified by GPT-6 on 2026-09-20, 2026-09-23
 //
 
 #pragma once
-#include "ShdFogBlurQuality.h"
 
+#include "ShdFogBlurQuality.h"
 
 namespace merutilm::rff2 {
     struct ShdFogAttribute {
@@ -22,6 +22,7 @@ namespace merutilm::rff2 {
         float rimMaskBoost = 20.0f;
         // Full-resolution blur radius the masked band dissolves into, in 1280-wide-relative pixels.
         float rimBlur = 6.0f;
+
         // Focus band: depth of field cut on the iteration count rather than on the screen, so one
         // range of the fractal's own depth stays sharp and the rest melts. Measured as a fraction of
         // the frame's maximum iteration, which keeps the chosen band in the same place as the zoom
@@ -31,11 +32,22 @@ namespace merutilm::rff2 {
         float focusRange = 0.25f;    // half-width of the sharp band
         float focusFalloff = 1.0f;   // curve out of the band; >1 holds the sharp part wider
         float focusBlur = 10.0f;     // blur radius at full defocus, in 1280-wide-relative pixels
+
         // Speed holds the two full-resolution blurs above to a 16-texel ceiling, which shrinks against
         // the frame as the render resolution grows; Appearance spends the radius they ask for instead.
         // A fresh session starts on Appearance: below the ceiling the two modes render the same picture
         // for the same cost, so the extra fetches are paid only where Speed would have changed the
         // picture. Files written before the setting existed are put back on Speed as they are read.
         ShdFogBlurQuality blurQuality = ShdFogBlurQuality::APPEARANCE;
+
+        // Local iteration irregularity follows the visible structure at the current zoom.
+        float chaosAmount = 0.0f;
+        float chaosScale = 1.0f;
+        float chaosThreshold = 0.35f;
+        float chaosTransition = 0.5f;
+        float chaosFeather = 6.0f;
+        float chaosBlur = 4.0f;
+        float chaosHighlights = 0.2f;
+        float chaosShade = 0.0f;
     };
 }

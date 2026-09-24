@@ -1,4 +1,5 @@
 # Prerequisites
+# Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
 *.d
 
 # Compiled Object files
@@ -11,7 +12,6 @@
 cmake-build-debug
 cmake-build-release
 cmake-build-relwithdebinfo
-bin
 
 # Precompiled Headers
 *.gch
@@ -20,7 +20,6 @@ bin
 # Compiled Dynamic libraries
 *.so
 *.dylib
-*.dll
 
 # Fortran module files
 *.mod
@@ -33,24 +32,30 @@ bin
 *.lib
 
 # Executables
-*.exe
 *.out
 *.app
 
 # Python (debug / test scripts — this is a C++/Vulkan project, no tracked .py)
 *.py
+!/tools/release_inventory.py
+!/tools/release_sources.py
+!/tools/release_stage.py
 *.py[cod]
 __pycache__/
 
 # Others
 *.zip
 /backup/
-/bin/
+/bin/pipeline-cache.bin
+
 /build/
 /.claude/
 /.codex/
 /debug/
-/docs/
+/docs/*
+!/docs/mfr-hdr-preview.md
+!/docs/timeline-ai-exchange.md
+!/docs/numeric-input-ranges.md
 /include/
 
 # Written by the Vulkan layers that run_with_validation.bat enables
@@ -60,3 +65,34 @@ __pycache__/
 /20??-??-??-??????/
 # The running session's kept location / settings, and what a crashed one left behind
 /recovery/
+/models/
+
+/tools/diagnostics/*.log
+/tools/diagnostics/20??-??-??-??????/
+
+# Local settings and machine-specific launch configuration
+/preferences.rfp
+/timeline-layout.txt
+/workspace-favorites.txt
+/local-ai-server.json
+/.env
+/.env.*
+!/.env.example
+
+# Local diagnostics, editor files, and dependency/build products
+*.log
+*.dmp
+*.pdb
+*.ilk
+*.tmp
+*.bak
+*.user
+*.suo
+.vs/
+.DS_Store
+Thumbs.db
+/lib/
+/cmake-build-*/
+
+# Preserve upstream license paths even when they contain directories named bin
+!/third-party/licenses/**

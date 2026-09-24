@@ -1,5 +1,7 @@
 RFF Super - Third-Party Notices
 
+Notice mappings updated by GPT-6 on 2026-09-25.
+
 RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
 GNU General Public License v3; see LICENSE. This file records the third-party
 components it uses and their license terms.
@@ -7,19 +9,58 @@ components it uses and their license terms.
 Copyright (C) 2025-2026 Merutilm     - original RFF-2.0
 Copyright (C) 2025-2026 SuperFractal - RFF Super, modifications from 2026-07-05 onward
 
-The full texts of the licenses of the components this program links are
+The full texts of the licenses of the primary components this program links are
 reproduced in LICENSE: the GNU GPL v3, the Apache License 2.0 (OpenCV, and the
 Vulkan headers and loader), the GNU LGPL v3 (GMP), the BSD 3-Clause License
 (zstd), and the MIT License (GLM).
 
-Distribution status: except for stb_image, the third-party libraries listed
-below are not redistributed in this repository and are expected to be installed
-separately by the user - see BUILDING.md. Their licenses may nevertheless impose
+Source distribution: stb_image and nlohmann JSON are bundled in extern/;
+short adapted implementations and their acknowledgements are listed below.
+Other link-time dependencies are installed separately - see documentation/BUILDING.md. Their licenses may nevertheless impose
 conditions on distribution of binaries that link to or otherwise incorporate
 them. The applicable license terms should therefore be reviewed when
 distributing prebuilt binaries.
 
+FlyWire integration was removed on 2026-09-24. No connectivity data,
+converted models, Python/PyArrow setup packages or model downloader belong
+in a distribution. Old local models/ directories are not part of the product.
+Bio Explorer and its lightweight heuristic controller were removed on 2026-09-25.
+
 FFmpeg is neither linked nor distributed; see the entry at the end.
+
+================================================================================
+Windows binary dependency bundle - reviewed 2026-09-24
+================================================================================
+
+The distribution build links official MSYS2 GMP statically and zstd/OpenCV
+dynamically. A version-specific recursive import inventory selects 31 DLLs;
+the development bin/ directory is not a distribution payload. Vulkan comes
+from the installed GPU driver. See documentation/DISTRIBUTION.md for build/source obligations.
+
+Additional runtime dependencies include GCC libraries, libgfortran, MinGW
+winpthreads, OpenBLAS/LAPACK, TBB, Imath/OpenEXR, libjpeg-turbo, libpng,
+libtiff, libwebp, OpenJPEG, OpenJPH, Lerc, libdeflate, JBIG-KIT, liblzma and zlib.
+Their exact versions, installed notices and upstream LICENSE/COPYING/NOTICE/
+PATENTS files accompany the staged binaries under licenses/. Corresponding
+MSYS2 source packages include the upstream sources, build recipes and patches.
+GMP and the OpenCV top-level license are collected from those source packages,
+not assumed to exist in the installed package's license directory.
+
+JBIG-KIT 2.1 source libjbig/jbig.c permits GPL version 2 or any later version;
+GPLv3 is available for this combined distribution. The abbreviated MSYS2
+metadata GPL-2.0 must not be mistaken for a GPLv2-only grant.
+GCC's libquadmath is LGPL-2.1-or-later, separately from the GCC runtime exception
+covering libgcc/libstdc++/libgomp/libatomic and libgfortran. XZ's COPYING identifies
+the distributed liblzma library as 0BSD; the xz command-line tools are excluded.
+
+This software is based in part on the work of the Independent JPEG Group.
+libjpeg-turbo's IJG, BSD-style and SIMD zlib notices are retained with the bundle.
+All these notices supplement, rather than replace, each component's actual terms.
+
+Repository distribution materials, relocated by GPT-6 on 2026-09-24:
+The collected license texts and dependency sources are published under
+third-party/licenses/ and third-party/sources/. See third-party/README.md for
+source archive reconstruction, checksums, package versions, and build recipes.
 
 ================================================================================
 Algorithms and technical acknowledgements
@@ -48,11 +89,8 @@ Jorge Jimenez - Interleaved Gradient Noise
 The dithering noise constants follow "Next Generation Post Processing in Call
 of Duty: Advanced Warfare", presented at SIGGRAPH 2014. What is taken is the
 three published constants and the fract() form around them, in
-shdsrc/vk_linear_interpolation.frag and shdsrc/vk_2_map_iter_stripe.comp; the
-shader code they sit in is this project's own and no file of the author's is
-bundled. The presentation attaches no license statement to the technique, so
-this entry records the source of a published formula rather than a grant of
-rights under one.
+shdsrc/vk_linear_interpolation.frag and shdsrc/vk_2_map_iter_stripe.comp. The
+presentation attaches no license statement to the technique.
 https://www.advances.realtimerendering.com/s2014/index.html
 
 John Hable - Uncharted 2 filmic curve
@@ -60,10 +98,8 @@ John Hable - Uncharted 2 filmic curve
 The Filmic tone-map option follows the curve presented in "Uncharted 2: HDR
 Lighting" at GDC 2010 and restated on the author's blog. What is taken is the
 rational form of the curve and its six published constants, in
-shdsrc/vk_linear_interpolation.frag; the shader code they sit in is this
-project's own and no file of the author's is bundled. Neither the talk nor the
-blog post attaches a license statement to the curve, so this entry records the
-source of a published formula rather than a grant of rights under one.
+shdsrc/vk_linear_interpolation.frag. Neither the talk nor the blog post attaches
+a license statement to the curve.
 https://gdcvault.com/play/1012459/Uncharted-2-HDR
 https://filmicworlds.com/blog/filmic-tonemapping-operators/
 
@@ -76,15 +112,13 @@ https://doi.org/10.1145/566654.566575
 Peter Markstein - FMA division correction
 
 The correctly rounded double division built from a hoisted reciprocal, in
-shdsrc/vk_2_map_iter_stripe.comp and shdsrc/vk_iteration_palette.frag, is the
+shdsrc/vk_2_map_iter_stripe.comp and shdsrc/palette_sampling.glsl (included by
+shdsrc/vk_iteration_palette.frag), is the
 two-FMA residual-and-correction step Markstein published in "Computation of
 elementary functions on the IBM RISC System/6000 processor", IBM Journal of
 Research and Development 34(1), 1990, and restated with Alan H. Karp in
-"High-Precision Division and Square Root", ACM TOMS 23(4), 1997. What is taken
-is the three-operation identity itself; the code around it is this project's
-own and no file of the authors' is bundled. The papers attach no license
-statement to the technique, so this entry records the source of a published
-method rather than a grant of rights under one.
+"High-Precision Division and Square Root", ACM TOMS 23(4), 1997. The papers
+attach no license statement to the technique.
 https://doi.org/10.1147/rd.341.0111
 https://doi.org/10.1145/279232.279237
 
@@ -102,7 +136,8 @@ https://iquilezles.org/articles/palettes/
 
 Boost C++ Libraries - hash_combine
 
-The one-line seed-mixing expression in src/vulkan_helper/hash/BoostHasher.hpp
+The one-line seed-mixing expressions in src/vulkan_helper/hash/BoostHasher.hpp
+and extern/nlohmann/json.hpp
 follows the boost::hash_combine form and is used under the Boost Software
 License 1.0, whose text and the accompanying copyright notice are reproduced
 in the section below.
@@ -110,11 +145,9 @@ https://www.boost.org/LICENSE_1_0.txt
 
 Kalles Fraktaler format compatibility
 
-The .kfr palette reader is an independent implementation that parses the
-format's "Colors: " field; no Kalles Fraktaler source code is bundled. The
-Kalles Fraktaler and KFR names identify file-format compatibility and related
-palette functionality only and do not imply endorsement, sponsorship,
-certification, or trademark approval.
+The .kfr palette reader supports the format's "Colors: " field. The Kalles
+Fraktaler and KFR names identify file-format compatibility and related palette
+functionality only.
 
 HDR and display transfer functions - IEC, ITU-R, SMPTE, and ARIB
 
@@ -132,6 +165,12 @@ endorses, sponsors, or certifies this program.
                               shdsrc/vk_bloom.frag,
                               shdsrc/vk_static_2_image.frag, and
                               src/rff2/video/TimelineEvaluator.cpp.
+                              Linear RGB palette interpolation also uses this
+                              transfer in src/rff2/attr/ShdPaletteAttribute.h,
+                              shdsrc/vk_iteration_palette.frag and
+                              shdsrc/vk_2_map_iter_stripe.comp.
+                              shdsrc/vk_smooth_present.frag decodes display
+                              values for an sRGB swapchain attachment.
   SMPTE ST 2084 (PQ)          Inverse EOTF in vk_linear_interpolation.frag and
                               src/rff2/ui/VideoWindow.cpp. Also published as
                               ITU-R BT.2100.
@@ -160,6 +199,9 @@ one that header carries:
     Based on Peter Dimov's proposal
     http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2005/n1756.pdf
     issue 6.18.
+
+extern/nlohmann/json.hpp also identifies its hash-combining expression as
+boost::hash_combine; the same Boost license text below covers that attribution.
 
 Boost Software License - Version 1.0 - August 17th, 2003
 
@@ -226,6 +268,17 @@ Sean Barrett and contributors.  http://nothings.org/stb_image.c
 Redistributed in this repository as extern/stb_image.c and extern/stb_image.h.
 Declared public domain by its author. No warranty implied; use at your own risk.
 
+The JPEG integer inverse-DCT is identified in the source as derived from IJG's
+jidctint / DCT_ISLOW. This portion is covered by the IJG terms, retained in
+third-party/licenses/mingw-w64-x86_64-libjpeg-turbo/README.ijg and copied to
+extern/licenses/stb-image-IJG-README.txt for standalone bundled-source packaging.
+The stb adaptation expresses the one-dimensional transform as IDCT_1D, uses
+12-bit fixed-point constants, and integrates dequantization and output handling
+into idct_block. These describe the supplied stb implementation, not new edits
+to the IJG code in this notice update; its historical adaptation date is unknown.
+Include the IJG README and this description when redistributing these sources.
+This software is based in part on the work of the Independent JPEG Group.
+
 ================================================================================
 OpenCV - Apache License, Version 2.0
 ================================================================================
@@ -265,6 +318,11 @@ GMP - GNU LGPL v3 or later, or GNU GPL v2 or later, at your option
 The GNU Multiple Precision Arithmetic Library.  https://gmplib.org/
 Used for the high-precision math behind deep zooms.
 
+For the RFF_Super GPLv3 binary distribution, this project selects GNU GPL
+version 3 under GMP's GPL-2.0-or-later option. This does not remove the upstream
+license alternatives for GMP itself. Supply the exact linked GMP source,
+patches and build recipe; the selection does not establish binary provenance.
+
 ================================================================================
 Zstandard (zstd) - BSD 3-Clause or GNU GPL v2, at your option
 ================================================================================
@@ -287,7 +345,7 @@ Vulkan-Headers and Vulkan-Loader - Apache License, Version 2.0
 
 The Khronos Group.  https://www.vulkan.org/
 
-BUILDING.md builds against the MSYS2 mingw-w64-x86_64-vulkan-devel package.
+documentation/BUILDING.md builds against the MSYS2 mingw-w64-x86_64-vulkan-devel package.
 CMake's find_package(Vulkan) accepts whichever install it finds, however, so on a
 machine that has the LunarG Vulkan SDK the headers and the vulkan-1 import
 library may come from there instead. Either way the headers and loader are the
@@ -306,10 +364,9 @@ https://github.com/google/shaderc
 
 Build-time only: glslc compiles the GLSL sources in shdsrc/ to the SPIR-V modules
 in shaders/. It is not linked into the program and not distributed with it.
-compile.ps1 takes the first glslc on PATH and falls back to a Vulkan SDK
+tools/compile.ps1 takes the first glslc on PATH and falls back to a Vulkan SDK
 installation, so the binary may come from either mingw-w64-x86_64-shaderc or the
-SDK; both are Google's shaderc under the Apache License 2.0. The .spv files in
-shaders/ are compiled from this project's own GLSL and carry no shaderc code.
+SDK; both are Google's shaderc under the Apache License 2.0.
 
 ================================================================================
 FFmpeg - not linked, not distributed
@@ -323,3 +380,87 @@ The license of that binary, and of any codecs it was built with, is a matter
 between the user and its distributor. Note that the encoders this program asks
 for by name - libx264 and libx265 - implement patented video coding standards
 whose patent licensing is administered separately from their source licenses.
+
+================================================================================
+Studio GGX and clearcoat - published equation references
+================================================================================
+
+The GGX distribution follows Bruce Walter, Stephen Marschner, Hongsong Li and
+Kenneth Torrance, "Microfacet Models for Refraction through Rough Surfaces"
+(2007): https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.pdf
+
+Correlated Smith visibility follows B. G. Smith, "Geometrical Shadowing of a
+Random Rough Surface" (1967), and Eric Heitz, "Understanding the Masking-
+Shadowing Function in Microfacet-Based BRDFs" (2014):
+https://jcgt.org/published/0003/02/03/
+
+The Fresnel approximation follows Christophe Schlick, "An Inexpensive BRDF
+Model for Physically-Based Rendering" (1994).
+
+The anisotropic GGX/Smith equations and dielectric layering were cross-checked
+against Romain Guy and Mathias Agopian's Filament documentation, sections 4.4,
+4.9 and 4.10 (Apache-2.0):
+https://google.github.io/filament/main/filament.html
+https://github.com/google/filament/blob/main/LICENSE
+
+================================================================================
+Lustre surface - mathematical references
+================================================================================
+
+The supplied documentation/Lustre_II_RFF_Super_CPP_Porting_Guide_EN.md, sections 4, 5.2,
+5.7 and 18.2, identifies the biased log-height/Sobel/AO construction, numeric
+normal-filter parameters, RGB wavelength samples and four material recipes.
+The project owner confirmed on 2026-09-23 that the original HTML was AI-generated
+at their request. The guide is a record of the supplied mathematical specification.
+
+Sobel refers to the discrete gradient operator associated with Irwin Sobel and
+Gary Feldman (1968). Historical account by Irwin Sobel (2014/2015):
+https://www.researchgate.net/publication/281104656_An_Isotropic_3x3_Image_Gradient_Operator
+
+Geometric specular antialiasing references Yusuke Tokuyoshi and Anton S.
+Kaplanyan, "Improved Geometric Specular Antialiasing" (I3D 2019):
+https://yusuketokuyoshi.com/papers/2019/ImprovedGeometricSpecularAA.pdf
+
+Thin-film tint references Snell's law and optical path difference as described
+by Samuel J. Ling, Jeff Sanny and William Moebs, OpenStax, University Physics
+Volume 3, section 3.4 (textbook content CC BY-NC-SA 4.0):
+https://openstax.org/books/university-physics-volume-3/pages/3-4-interference-in-thin-films
+This is a scientific reference, not a bundled textbook or a code license:
+the shaders independently evaluate refraction and optical path difference.
+No OpenStax prose, figures or sample code are included in those implementations.
+The three artistic wavelength samples come from the supplied Lustre guide.
+
+The 2026-09-24 base-material correction initializes the existing cycle and gradient
+inputs for ordered lighting; it adds no third-party formulas or constants.
+
+================================================================================
+JSON for Modern C++ - MIT License
+================================================================================
+
+extern/nlohmann/json.hpp is the unmodified v3.12.0 single header by Niels Lohmann
+and contributors, licensed MIT. Original source:
+https://github.com/nlohmann/json/tree/v3.12.0
+The license is retained in extern/licenses/nlohmann-json-MIT.txt and the header.
+
+Embedded components retained in that header include:
+- UTF-8 decoder: Copyright (c) 2008-2009 Björn Hoehrmann, MIT.
+- Grisu2: Copyright (c) 2009 Florian Loitsch, MIT.
+  Both copyright notices accompany the MIT text in extern/licenses/ and
+  third-party/licenses/bundled/ so binary-only packages retain them too.
+- C++11 integer_sequence fallback: Copyright 2018 The Abseil Authors,
+  Apache-2.0; the full license is reproduced in the root LICENSE.
+  https://github.com/abseil/abseil-cpp/blob/10cb35e459f5ecca5b2ff107635da0bfa41011b4/absl/utility/utility.h
+- boost::hash_combine: see the Boost attribution and license above.
+- Hedley by Evan Nemerson: upstream CC0-1.0; original copyright markers
+  are retained in the bundled header.
+Version-specific upstream component license record:
+https://github.com/nlohmann/json/blob/v3.12.0/docs/mkdocs/docs/home/license.md
+
+================================================================================
+Bonsai 2 vision runtime - Apache License 2.0
+================================================================================
+
+Optional local inference data, not linked into or included with RFF_Super source:
+PrismML Ternary-Bonsai-2-27B-mmproj-BF16.gguf, Apache-2.0, from
+https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/tree/6ed5e12
+The projector is downloaded into gitignored debug/local_ai/models/.

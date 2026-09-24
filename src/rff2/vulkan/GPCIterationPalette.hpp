@@ -2,13 +2,16 @@
 // Created by Merutilm on 2025-07-29.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-23
 //
 
 #pragma once
+#include "ShaderLayerControl.hpp"
 #include <array>
 #include <string>
 
 #include "ShaderAnimationPhases.hpp"
+#include "PreviewAnimationClock.hpp"
 #include "ShaderModeSpecialization.hpp"
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 #include "../attr/ShdPaletteAttribute.h"
@@ -19,20 +22,22 @@
 
 namespace merutilm::rff2 {
     struct GPCIterationPalette final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
+        vkh::PushConstant layerPush;
         static constexpr uint32_t SET_ITERATION = 0;
         static constexpr uint32_t SET_PALETTE = 1;
         static constexpr uint32_t SET_TIME = 2;
         static constexpr uint32_t SET_TEXTURE = 3;
 
-        uint32_t iterWidth = 0;
-        uint32_t iterHeight = 0;
         // Path currently resident in each layer's sampler; guards against reloading on every shader edit.
         std::array<std::string, TEXTURE_LAYER_COUNT> loadedTexturePaths = {};
+        uint32_t pendingTextureBindings = 0;
         // Every animation phase this pass draws with, carried across speed changes. Each setter
         // brings them up to the moment before adopting the speeds it was given, so dragging a speed
         // slider no longer jumps the animation by (elapsed * speed delta). The stripe's phase is
         // held here too: the time uniform is shared with the stripe pass, and this is what writes it.
         ShaderAnimationPhases phases = {};
+        PreviewAnimationClock previewClock;
+        float submittedAnimationTime = 0.0f;
         // While set, updateQueue holds this instant instead of reading the clock. A tiled export
         // submits one frame per tile, so without it every tile lands on a different animation phase.
         bool animationTimePinned = false;
@@ -69,6 +74,8 @@ namespace merutilm::rff2 {
 
         // Freezes (or releases) the animation clock so a multi-frame job renders one instant.
         void pinAnimationTime(bool pin);
+        void setPreviewAnimationPaused(bool paused);
+        void swapAnimationLayers(AnimatedLayerFamily family, uint32_t from, uint32_t to);
 
         // Geometry of the whole canvas this buffer is a piece of, for the screen-space animation
         // fields and decor UVs. A normal frame is the whole canvas, so extent with a zero offset.
@@ -87,6 +94,8 @@ namespace merutilm::rff2 {
 
         // Reads the paths setTextures loaded, so call it after that: a warp pointed at a layer
         // holding no image is switched off rather than left reading the placeholder.
+        void setEffects(const ShdEffectsAttribute &effects);
+
         void setWarp(const ShdWarpAttribute &warp);
 
         void pipelineInitialized() override;

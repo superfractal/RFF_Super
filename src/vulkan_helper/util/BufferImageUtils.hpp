@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-10.
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -28,21 +29,52 @@ namespace merutilm::vkh {
                               const ImageInitInfo &iii, VkImage *image,
                               VkDeviceMemory *imageMemory,
                               VkImageView *imageView, VkImageView *mipmappedImageView, VkDeviceSize *capacity) {
+            *image = VK_NULL_HANDLE;
+            *imageMemory = VK_NULL_HANDLE;
+            *imageView = VK_NULL_HANDLE;
+            *mipmappedImageView = VK_NULL_HANDLE;
+            *capacity = 0;
             const uint32_t mipLevels = genMipLevels(iii);
-            createImage(device, iii, mipLevels, image);
-            allocateImageMemory(device, memProperties, iii, *image,
-                                imageMemory, capacity);
-            // Every other step here refuses to go on when it fails; an image left with no memory
-            // behind it is the one that goes on to be rendered into.
-            if (allocator::invoke(vkBindImageMemory, device, *image, *imageMemory, 0) != VK_SUCCESS) {
-                throw exception_init("Failed to bind image memory!");
+            VkImage createdImage = VK_NULL_HANDLE;
+            VkDeviceMemory allocatedMemory = VK_NULL_HANDLE;
+            VkImageView createdView = VK_NULL_HANDLE;
+            VkImageView createdMipmappedView = VK_NULL_HANDLE;
+            VkDeviceSize allocatedCapacity = 0;
+            createImage(device, iii, mipLevels, &createdImage);
+            bool memoryAllocated = false;
+            bool viewCreated = false;
+            try {
+                allocateImageMemory(device, memProperties, iii, createdImage,
+                                    &allocatedMemory, &allocatedCapacity);
+                memoryAllocated = true;
+                // Every other step here refuses to go on when it fails; an image left with no memory
+                // behind it is the one that goes on to be rendered into.
+                if (allocator::invoke(vkBindImageMemory, device, createdImage, allocatedMemory, 0) != VK_SUCCESS) {
+                    throw exception_init("Failed to bind image memory!");
+                }
+                createImageView(device, createdImage, iii.imageViewType, iii.imageFormat, &createdView);
+                viewCreated = true;
+                if (mipLevels == 1) {
+                    createdMipmappedView = createdView;
+                } else {
+                    createMipmappedImageView(device, createdImage, iii.imageViewType, iii.imageFormat, mipLevels,
+                                            &createdMipmappedView);
+                }
+            } catch (...) {
+                if (viewCreated) {
+                    allocator::invoke(vkDestroyImageView, device, createdView, nullptr);
+                }
+                allocator::invoke(vkDestroyImage, device, createdImage, nullptr);
+                if (memoryAllocated) {
+                    allocator::invoke(vkFreeMemory, device, allocatedMemory, nullptr);
+                }
+                throw;
             }
-            createImageView(device, *image, iii.imageViewType, iii.imageFormat, imageView);
-            if (mipLevels == 1) {
-                *mipmappedImageView = *imageView;
-            }else {
-                createMipmappedImageView(device, *image, iii.imageViewType, iii.imageFormat, mipLevels, mipmappedImageView);
-            }
+            *image = createdImage;
+            *imageMemory = allocatedMemory;
+            *imageView = createdView;
+            *mipmappedImageView = createdMipmappedView;
+            *capacity = allocatedCapacity;
         }
 
 
@@ -164,12 +196,28 @@ namespace merutilm::vkh {
 
         static void initBuffer(const VkDevice device, const VkPhysicalDeviceMemoryProperties &memProperties,
                                const BufferInitInfo &bii, VkBuffer *buffer, VkDeviceMemory *bufferMemory) {
-            createBuffer(device, bii.size, bii.usage, buffer);
-            allocateBufferMemory(device, memProperties, bii.properties, *buffer,
-                                 bufferMemory);
-            if (allocator::invoke(vkBindBufferMemory, device, *buffer, *bufferMemory, 0) != VK_SUCCESS) {
-                throw exception_init("Failed to bind buffer memory!");
+            *buffer = VK_NULL_HANDLE;
+            *bufferMemory = VK_NULL_HANDLE;
+            VkBuffer createdBuffer = VK_NULL_HANDLE;
+            VkDeviceMemory allocatedMemory = VK_NULL_HANDLE;
+            createBuffer(device, bii.size, bii.usage, &createdBuffer);
+            bool memoryAllocated = false;
+            try {
+                allocateBufferMemory(device, memProperties, bii.properties, createdBuffer,
+                                     &allocatedMemory);
+                memoryAllocated = true;
+                if (allocator::invoke(vkBindBufferMemory, device, createdBuffer, allocatedMemory, 0) != VK_SUCCESS) {
+                    throw exception_init("Failed to bind buffer memory!");
+                }
+            } catch (...) {
+                allocator::invoke(vkDestroyBuffer, device, createdBuffer, nullptr);
+                if (memoryAllocated) {
+                    allocator::invoke(vkFreeMemory, device, allocatedMemory, nullptr);
+                }
+                throw;
             }
+            *buffer = createdBuffer;
+            *bufferMemory = allocatedMemory;
         }
 
         static void createBuffer(const VkDevice device, const VkDeviceSize size, const VkBufferUsageFlags usage,

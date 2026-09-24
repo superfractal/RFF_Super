@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-04.
+// Modified by GPT-6 on 2026-09-18
 //
 
 #pragma once
@@ -16,5 +17,7 @@ namespace merutilm::rff2 {
         float epsilonPower;
         FrtMPASelectionMethod mpaSelectionMethod;
         FrtMPACompressionMethod mpaCompressionMethod;
+
+        bool operator==(const FrtMPAAttribute&) const = default;
     };
 }

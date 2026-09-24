@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-08.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -9,16 +10,11 @@
 
 namespace merutilm::vkh {
     class InstanceImpl final : public Handler {
-        VkInstance instance = nullptr;
+        VkInstance instance = VK_NULL_HANDLE;
         ValidationLayer validationLayer;
 
-        std::vector<const char *> extensions = {
-            VK_KHR_SURFACE_EXTENSION_NAME,
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-        };
-
     public:
-        explicit InstanceImpl();
+        InstanceImpl();
 
         ~InstanceImpl() override;
 
@@ -31,7 +27,6 @@ namespace merutilm::vkh {
         InstanceImpl &operator=(InstanceImpl &&) = delete;
 
         [[nodiscard]] VkInstance getInstanceHandle() const { return instance; }
-
 
     private:
         void init() override;

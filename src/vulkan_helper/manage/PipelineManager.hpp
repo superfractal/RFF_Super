@@ -1,9 +1,16 @@
 //
 // Created by Merutilm on 2025-07-11.
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
+#include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "../core/vkh_base.hpp"
 #include "../impl/Descriptor.hpp"
 #include "../impl/PipelineLayout.hpp"
@@ -12,23 +19,24 @@
 namespace merutilm::vkh {
     struct PipelineManagerImpl {
         PipelineLayoutRef layout;
-        std::vector<DescriptorPtr> descriptors = {};
-        std::vector<ShaderModulePtr> shaderModules = {};
+        std::vector<DescriptorPtr> descriptors;
+        std::vector<ShaderModulePtr> shaderModules;
         // Specialization constants, one 32-bit word per constant_id starting at 0. Empty means none.
-        std::vector<uint32_t> specialization = {};
+        std::vector<uint32_t> specialization;
 
-        explicit PipelineManagerImpl(PipelineLayoutRef layout) : layout(layout) {
-        }
-
+        explicit PipelineManagerImpl(PipelineLayoutRef layout) : layout(layout) {}
 
         void attachShader(ShaderModulePtr shaderStage) {
             shaderModules.emplace_back(shaderStage);
         }
 
-        void attachDescriptor(std::vector<DescriptorPtr> &&descriptor) { descriptors = std::move(descriptor); }
+        void attachDescriptor(std::vector<DescriptorPtr> &&descriptor) {
+            descriptors = std::move(descriptor);
+        }
 
-        void attachSpecialization(std::vector<uint32_t> &&data) { specialization = std::move(data); }
-
+        void attachSpecialization(std::vector<uint32_t> &&data) {
+            specialization = std::move(data);
+        }
     };
 
     using PipelineManager = std::unique_ptr<PipelineManagerImpl>;

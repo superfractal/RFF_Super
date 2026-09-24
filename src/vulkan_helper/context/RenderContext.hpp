@@ -1,8 +1,13 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
+#include <functional>
+#include <memory>
+#include <utility>
 
 #include "../configurator/RenderContextConfigurator.hpp"
 #include "../impl/Framebuffer.hpp"
@@ -18,10 +23,10 @@ namespace merutilm::vkh {
 
     public:
         explicit RenderContextImpl(CoreRef core, std::function<VkExtent2D()> &&extentGetter,
-                                   RenderContextConfigurator &&renderPassConfigurator) : core(core),
-            extentGetter(std::move(extentGetter)) {
+                                   RenderContextConfigurator &&configurator)
+            : core(core), extentGetter(std::move(extentGetter)) {
             auto renderPassManager = factory::create<RenderPassManager>();
-            renderContextConfigurator = std::move(renderPassConfigurator);
+            renderContextConfigurator = std::move(configurator);
             const VkExtent2D extent = this->extentGetter();
             renderContextConfigurator->configure(*renderPassManager);
             renderPass = factory::create<RenderPass>(core, std::move(renderPassManager));

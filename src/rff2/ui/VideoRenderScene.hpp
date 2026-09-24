@@ -1,12 +1,13 @@
 //
 // Created by Merutilm on 2025-09-06.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21.
+// Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
+// Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #pragma once
-#include <atomic>
+#include <functional>
 #include <queue>
 
 #include "VideoBufferCache.hpp"
@@ -15,11 +16,13 @@
 #include "../attr/Attribute.h"
 #include "../io/RFFDynamicMapBinary.h"
 #include "../video/TimelineEvaluator.hpp"
+#include "../video/TimelineAnimationPhases.hpp"
 
 namespace merutilm::rff2 {
     class VideoRenderScene final : vkh::EngineHandler {
 
         vkh::WindowContextRef wc;
+        std::function<void()> preparationHook;
         RFFBinary *normal = nullptr;
         RFFBinary *zoomed = nullptr;
         const VkExtent2D videoExtent;
@@ -28,22 +31,20 @@ namespace merutilm::rff2 {
         ShaderAttribute staticShader;
         ShaderAttribute liveShader;
         TimelineEvaluator timelineEvaluator;
+        std::unique_ptr<TimelineAnimationPhases> animationIntegrator;
+        std::array<float, 3> animationScheduleKey{};
+        bool animationInputsChanged = true;
         std::unique_ptr<VideoRenderSceneRenderer> renderer = nullptr;
 
         std::mutex bufferCachedMutex;
         std::queue<std::unique_ptr<VideoBufferCache>> queuedVbc = {};
         std::condition_variable bufferCachedCondition;
 
+        // Historical description of the removed, unread CPU timing counters:
         // Export timing, reported next to the video. Backpressure > 0 means the consumer, not the GPU, is the limit.
-        std::atomic<uint64_t> gpuWaitNanos{0};
-        std::atomic<uint64_t> stagingNanos{0};
-        std::atomic<uint64_t> copyNanos{0};
-        std::atomic<uint64_t> backpressureNanos{0};
-        std::atomic<uint64_t> timelineEvalNanos{0};
-        std::atomic<uint64_t> shaderApplyNanos{0};
 
     public:
-        explicit VideoRenderScene(vkh::EngineRef engine, vkh::WindowContextRef wc, const VkExtent2D &videoExtent, const Attribute &targetAttribute);
+        explicit VideoRenderScene(vkh::EngineRef engine, vkh::WindowContextRef wc, const VkExtent2D &videoExtent, const Attribute &targetAttribute, std::function<void()> beforeWait = {});
 
         ~VideoRenderScene() override;
 
@@ -69,13 +70,14 @@ namespace merutilm::rff2 {
         // False whenever HDR is off, since without the float chain there is nothing above white to carry.
         [[nodiscard]] bool isHdrOutput(VidHdrTransfer transfer) const;
 
-        void applyShaderPalette(const ShdPaletteAttribute &palette) const;
 
         void applyShaderDynamic(const ShaderAttribute &shader, TimelineDirtyMask dirty) const;
 
         void applyTimelineShader(float depth, float sec);
 
         void updateBase(const ShaderAttribute &shader, const VidTimelineAttribute &timeline);
+
+        void setTimelineSchedule(const TimelineSchedule &schedule);
 
         void setTime(float currentSec) const;
 
@@ -111,7 +113,7 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] float calculateZoom(float defaultZoomIncrement, float currentFrame) const;
 
-        void queueImage(int subsampleCount = 1);
+        void queueImage(int subsampleCount = 1, const std::function<bool()> &stopRequested = {});
 
 
         [[nodiscard]] std::mutex &getBufferCachedMutex() {
@@ -130,33 +132,12 @@ namespace merutilm::rff2 {
             return renderer->passTimer.report();
         }
 
-        [[nodiscard]] uint64_t getGpuWaitNanos() const {
-            return gpuWaitNanos.load();
-        }
-
-        [[nodiscard]] uint64_t getStagingNanos() const {
-            return stagingNanos.load();
-        }
-
-        [[nodiscard]] uint64_t getCopyNanos() const {
-            return copyNanos.load();
-        }
-
-        [[nodiscard]] uint64_t getBackpressureNanos() const {
-            return backpressureNanos.load();
-        }
-
-        [[nodiscard]] uint64_t getTimelineEvalNanos() const {
-            return timelineEvalNanos.load();
-        }
-
-        [[nodiscard]] uint64_t getShaderApplyNanos() const {
-            return shaderApplyNanos.load();
-        }
-
 
         void init() override;
 
         void destroy() override;
+
+    private:
+        void updateReliefZoomForFrame() const;
     };
 }

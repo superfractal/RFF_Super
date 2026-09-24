@@ -1,13 +1,15 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
-
 
 #include "DescriptorSetLayout.hpp"
 #include "../core/exception.hpp"
 
 namespace merutilm::vkh {
-    DescriptorSetLayoutImpl::DescriptorSetLayoutImpl(const CoreRef core, const DescriptorSetLayoutBuilder &layoutBuilder) : CoreHandler(core), layoutBuilder(layoutBuilder) {
+    DescriptorSetLayoutImpl::DescriptorSetLayoutImpl(CoreRef core,
+                                                     const DescriptorSetLayoutBuilder &layoutBuilder)
+        : CoreHandler(core), layoutBuilder(layoutBuilder) {
         DescriptorSetLayoutImpl::init();
     }
 
@@ -22,15 +24,15 @@ namespace merutilm::vkh {
 
         std::vector<VkDescriptorSetLayoutBinding> bindings(layoutBuilder.size());
         for (uint32_t i = 0; i < layoutBuilder.size(); ++i) {
+            const auto &descriptor = layoutBuilder[i];
             bindings[i] = {
                 .binding = i,
-                .descriptorType = layoutBuilder[i].type,
+                .descriptorType = descriptor.type,
                 .descriptorCount = 1,
-                .stageFlags = layoutBuilder[i].stage,
+                .stageFlags = descriptor.stage,
                 .pImmutableSamplers = nullptr
             };
         }
-
 
         const VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -39,17 +41,17 @@ namespace merutilm::vkh {
             .bindingCount = static_cast<uint32_t>(bindings.size()),
             .pBindings = bindings.empty() ? nullptr : bindings.data(),
         };
-        if (allocator::invoke(vkCreateDescriptorSetLayout, core.getLogicalDevice().getLogicalDeviceHandle(), &descriptorSetLayoutInfo, nullptr, &layout) !=
-            VK_SUCCESS) {
+        const auto device = core.getLogicalDevice().getLogicalDeviceHandle();
+        if (allocator::invoke(vkCreateDescriptorSetLayout, device, &descriptorSetLayoutInfo,
+                              nullptr, &layout) != VK_SUCCESS) {
             throw exception_init("Failed to create descriptor set layout");
-            }
+        }
     }
-
-
 
     void DescriptorSetLayoutImpl::destroy() {
         if (layout != nullptr) {
-            allocator::invoke(vkDestroyDescriptorSetLayout, core.getLogicalDevice().getLogicalDeviceHandle(), layout, nullptr);
+            const auto device = core.getLogicalDevice().getLogicalDeviceHandle();
+            allocator::invoke(vkDestroyDescriptorSetLayout, device, layout, nullptr);
         }
     }
 }

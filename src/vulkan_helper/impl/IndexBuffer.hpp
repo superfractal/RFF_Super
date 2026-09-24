@@ -1,17 +1,18 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+
 #include "BufferObject.hpp"
 
 namespace merutilm::vkh {
     class IndexBufferImpl final : public BufferObjectAbstract {
-
     public:
-        explicit IndexBufferImpl(CoreRef core, HostDataObjectManager &&manager, BufferLock bufferLock, bool multiframeEnabled);
-
-        ~IndexBufferImpl() override;
+        explicit IndexBufferImpl(CoreRef core, HostDataObjectManager &&manager, BufferLock bufferLock,
+                                 bool multiframeEnabled);
 
         IndexBufferImpl(const IndexBufferImpl &) = delete;
 
@@ -20,15 +21,9 @@ namespace merutilm::vkh {
         IndexBufferImpl(IndexBufferImpl &&) = delete;
 
         IndexBufferImpl &operator=(IndexBufferImpl &&) = delete;
-
-    private:
-
-        void init() override;
-
-        void destroy() override;
     };
 
     using IndexBuffer = std::unique_ptr<IndexBufferImpl>;
     using IndexBufferPtr = IndexBufferImpl *;
     using IndexBufferRef = IndexBufferImpl &;
-};
+}

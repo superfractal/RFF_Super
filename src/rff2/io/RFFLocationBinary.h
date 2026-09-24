@@ -1,20 +1,23 @@
 //
 // Created by Merutilm on 2025-06-25.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 
+#include <cstdint>
+#include <filesystem>
 #include <string>
 
 #include "RFFBinary.h"
 
 namespace merutilm::rff2 {
-    class RFFLocationBinary final : public RFFBinary{
+    class RFFLocationBinary final : public RFFBinary {
         std::string real;
         std::string imag;
         uint64_t maxIteration;
 
-        public:
+    public:
         static const RFFLocationBinary DEFAULT;
 
         explicit RFFLocationBinary(float logZoom, std::string real, std::string imag, uint64_t maxIteration);

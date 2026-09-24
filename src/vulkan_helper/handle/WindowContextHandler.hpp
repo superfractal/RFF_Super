@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -11,7 +12,7 @@ namespace merutilm::vkh {
     struct WindowContextHandler : public Handler {
         WindowContextRef wc;
 
-        explicit WindowContextHandler(WindowContextRef wc) : wc(wc) {};
+        explicit WindowContextHandler(WindowContextRef wc) : wc(wc) {}
 
         ~WindowContextHandler() override = default;
 

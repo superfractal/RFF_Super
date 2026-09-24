@@ -1,0 +1,429 @@
+{
+  "date": "2026-09-24",
+  "method": "Production controls rendered into DIBs in an offscreen fixture; no desktop capture or input automation. Local AI connection requests disabled. Retired explorer entries removed on 2026-09-25; remaining captures retain their original date.",
+  "formDefinitions": 14,
+  "capturedFormGroups": 57,
+  "fieldRows": 474,
+  "images": {
+    "animation-0.png": {
+      "size": [
+        820,
+        960
+      ],
+      "sha256": "b033a9106385e670e4180e9225319f4cf68235e1c3574e61750aa1ab3d3489e1"
+    },
+    "animation-1.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "e95cd267cb0b8fdf0d8338e3fbbbd993cc6c52d199dabb3817939683c8b643d0"
+    },
+    "animation-2.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "9e1903a4f2a9fbedb462ec1f68483ec24718c738d2414fd2f3c99596027574e4"
+    },
+    "animation-3.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "c037ff5167288793413a8af569adf3965ac2c52f8721adb1eae7b11090d6ec52"
+    },
+    "animation-4.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "ba2a19bea6cec72163d78c5eb4c298dcc6f0db1a763f4de60caec2ef07e54bab"
+    },
+    "animation-5.png": {
+      "size": [
+        820,
+        1160
+      ],
+      "sha256": "cb5166961368e09fcf08c29bb8198e9c09d3245c34e1c85a0ea8bef1c6e620f3"
+    },
+    "comparison-0.png": {
+      "size": [
+        820,
+        695
+      ],
+      "sha256": "06d5867c261460c058fb24c968b2280de78f7d579578989b1192488188dda215"
+    },
+    "effects-0.png": {
+      "size": [
+        820,
+        2395
+      ],
+      "sha256": "04c2b7f1854895434ccd849a381d7c2d130481f82665651860beef17f97ffb6f"
+    },
+    "effects-1.png": {
+      "size": [
+        820,
+        2440
+      ],
+      "sha256": "fc8926379f45ac0368a689dcf30fdef2f6a1b08a2eee805784da7ef1c3c91df2"
+    },
+    "effects-2.png": {
+      "size": [
+        820,
+        2440
+      ],
+      "sha256": "49123c15273a33a4b74ec1bdc22a90a87730872d2a6a2f39b14a6315f3364fea"
+    },
+    "effects-3.png": {
+      "size": [
+        820,
+        2350
+      ],
+      "sha256": "65082e6e3b18a36880727e53e5027c0e971ee1310386de095af37ede294ed581"
+    },
+    "explore-0.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "42ef0009cb85ba3e7aabfcf84730e2ea15c6ca61e49649e34e20120360536839"
+    },
+    "explore-1.png": {
+      "size": [
+        820,
+        760
+      ],
+      "sha256": "f22a7d0a8437021082ceeec3a3ffa5952be44e4f7b184a1497dd2a49fe1c07b0"
+    },
+    "explore-2.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "3757c09a659186fca7c7c51d9383ae825fa8e04225d71a3b7ac18396ae7c2cf9"
+    },
+    "explore-3.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "47f55345615d142112aea3b9bed2d432a2add84ac11c54f4faa417bafc8e2d86"
+    },
+    "explore-4.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "f7c89ef74686a2ba1cc8ccbbdcdf5be9d46fbde7b1c5b2ab38b1734ce7cd6d96"
+    },
+    "explore-5.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "34cfde6e5e55bcc4d614c5ee616c494f5c56831c2dd06e7e1aa96934dc34ed40"
+    },
+    "export-0.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "04a3ba785ddb77cb11b34fb0d482f059471cef1f1e0aa18c080430ce1b1d71db"
+    },
+    "export-1.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "b9d733a9f0c17a19944ad94cfb2b5e11e7030dd25230d0c50ab24c26fc2acd10"
+    },
+    "export-2.png": {
+      "size": [
+        820,
+        760
+      ],
+      "sha256": "1e33675ab89318bbd1f33b446e59a564c8d0e50722d23e56a602fd06fd48716b"
+    },
+    "export-3.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "96b17c461109f4ea72f622b2bae7b8ff8415b77e31ceec049c7828b623fa4208"
+    },
+    "export-4.png": {
+      "size": [
+        820,
+        860
+      ],
+      "sha256": "6c814e0fc35009201abaabe24f25f2eddd9f040b6a122a77f9cfd8a1b48a80d3"
+    },
+    "export-5.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "6947f40e82bfd1d27d68d9a7814e868ae2e7328979159f19545914b267edbb02"
+    },
+    "finishing-0.png": {
+      "size": [
+        820,
+        760
+      ],
+      "sha256": "27cc6bd49e0df290f1713321a3721a21617c010ef2e79addb46465af8a8cce1e"
+    },
+    "finishing-1.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "602a72ca28d34bfb11bcce4635c65ce328edbdab17ffde8cce4bb0b635ed4763"
+    },
+    "finishing-2.png": {
+      "size": [
+        820,
+        960
+      ],
+      "sha256": "5069e0f67f3fa210049647f66b4c171bb6eed31b6132686788eda1d5cd998881"
+    },
+    "finishing-3.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "6de058e0a0968931bcd78decb2b66daa7ddb3a72907d0338a0e763362c510aaf"
+    },
+    "finishing-4.png": {
+      "size": [
+        820,
+        960
+      ],
+      "sha256": "f76d423bedd58641238aee549ca2093f037099f1f5998961a852a61ce82eda68"
+    },
+    "layers-0.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "8be6b025669bfff2e16ff7fe74b0626d343c745f5ec075ecd08df40ba4338032"
+    },
+    "lighting-0.png": {
+      "size": [
+        820,
+        960
+      ],
+      "sha256": "b3c3694cd205bdccdd956f1aeb09128ba093692a5213681a50a770b4f25e1d7a"
+    },
+    "lighting-1.png": {
+      "size": [
+        820,
+        660
+      ],
+      "sha256": "65ee3866f892ec5be012d86d06985078283f02bc12ec1139aeead3d2c38086db"
+    },
+    "lighting-2.png": {
+      "size": [
+        820,
+        1060
+      ],
+      "sha256": "6b88e535a30b02dc7c3aa31ae5ffed38fa43bfcd8ba69bbe4cfcc1e7c24a0d2b"
+    },
+    "lighting-3.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "bccd769d15da284b77723fc3202e28e1d0940812a781e45fdc894ef58cb0fd27"
+    },
+    "lighting-4.png": {
+      "size": [
+        820,
+        760
+      ],
+      "sha256": "d260f8e22278bf2bc5910268e5985567058b69b978b6ac5c7ebb15c994881de6"
+    },
+    "lighting-5.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "bb6ac8fb99e3e836c5c3d3025dcd85bce0da7da1bca1b7b62961f91cc201b835"
+    },
+    "lighting-6.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "449d653197ca5315487382fdcae969ddc8d543d2204d99682916177cfa3324de"
+    },
+    "lighting-7.png": {
+      "size": [
+        820,
+        860
+      ],
+      "sha256": "13d584be89af8c39067516fc1e8e3b0ef5328dc7e9319175c06619b552c82b60"
+    },
+    "lighting-8.png": {
+      "size": [
+        820,
+        1205
+      ],
+      "sha256": "e97261dc53e332ce3c5fd832def7591ce0fc883465d7009cd5c456fef62d7bc8"
+    },
+    "local-ai-appearance.png": {
+      "size": [
+        900,
+        920
+      ],
+      "sha256": "2bfcbad83d967faea4b0c4dfd2ed4e9b376d0e883c41aa21cf4e81cf6d9d95c0"
+    },
+    "local-ai-zoom.png": {
+      "size": [
+        900,
+        920
+      ],
+      "sha256": "9ee10da7f990958c6a44c1311540c634d00b81e8475af9a6decec74051c94efe"
+    },
+    "overlay-2.png": {
+      "size": [
+        820,
+        2160
+      ],
+      "sha256": "fae548edc52a273b45fa514a05ba9847c414ba774b9479e86df8630fefdb4ac5"
+    },
+    "palette-0.png": {
+      "size": [
+        820,
+        1460
+      ],
+      "sha256": "cb164ac969ea0bbfe05af6513a4b1f9848746275aca1d88f5a1211d0553cc0d3"
+    },
+    "palette-1.png": {
+      "size": [
+        820,
+        2260
+      ],
+      "sha256": "c2625ac5073b537faa6ebb60c7490d1b18baf4fbd367430d31373c9e418f2377"
+    },
+    "palette-2.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "e55dd3423937ce130768d317673fb57371ed081a9cf4c7d161ba4276b1f9de7b"
+    },
+    "palette-3.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "237d29e57f728554f8b01c513d0906c9cbf77333395ed74eabc295fd9b4988e8"
+    },
+    "palette-4.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "e24d78745dae53f96e8be0a36d124fec26d36b293d3cb2696f7f05e87e679639"
+    },
+    "palette-5.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "ab3eb98b93158dc08377ea567cc8d651c006c24d5a939b4280d155acadb7c7d8"
+    },
+    "pattern-0.png": {
+      "size": [
+        820,
+        2295
+      ],
+      "sha256": "45d5a035680933f68fb33c6e1bbd54055f72ba2bd7d255fe0dcde5c184cf2bf1"
+    },
+    "pattern-1.png": {
+      "size": [
+        820,
+        2340
+      ],
+      "sha256": "37cf1a8e59de7c28c31e252b614b7ca0c2270db025d3c8017639e51758a1a09c"
+    },
+    "pattern-2.png": {
+      "size": [
+        820,
+        2340
+      ],
+      "sha256": "c538234f1e0b71e98e46b5592da607c746c58ed09596286da9b13c3c5c00a684"
+    },
+    "pattern-3.png": {
+      "size": [
+        820,
+        2250
+      ],
+      "sha256": "6b1be1c68c503fd95030de4b7d626b75a02ea29029b1083a11770e1dcba01fb4"
+    },
+    "performance-0.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "390bc803e66ca5b23a135d7fba541996101a45f4750095b9e3d2d23b12080c8a"
+    },
+    "performance-1.png": {
+      "size": [
+        820,
+        650
+      ],
+      "sha256": "a733a8dca4b17882958dade00d522b053c72c71b442d253a19bc4778d1da6054"
+    },
+    "texture-0.png": {
+      "size": [
+        820,
+        1595
+      ],
+      "sha256": "715c5a1ba2baebd57d7902b3c698820ac27fc15eaa5b8b1826905e4c54f884dd"
+    },
+    "texture-1.png": {
+      "size": [
+        820,
+        1640
+      ],
+      "sha256": "b35b1526e31b1aafa476e0bdfabbdbfb9c841e914a0a41b884c5f09bbb7c3bae"
+    },
+    "texture-2.png": {
+      "size": [
+        820,
+        1640
+      ],
+      "sha256": "a77ad6bb0ad08dbacd86fa71d2fbea8d284f337c804db4b5553626f9c55fb27c"
+    },
+    "texture-3.png": {
+      "size": [
+        820,
+        1550
+      ],
+      "sha256": "d7aa857aabfca2dd17f8999ceb0f74a4c29296799784a4b52762a41a2c403ba3"
+    },
+    "timeline.png": {
+      "size": [
+        1280,
+        850
+      ],
+      "sha256": "d1076f45375707dcd07399325b8ccb4d50478dbed8c2c437f8bcee5abf790b37"
+    },
+    "warp-0.png": {
+      "size": [
+        820,
+        1260
+      ],
+      "sha256": "6dee9490d91000537fa0d0d83c0d973d92e08ea351fcb118a6909c13e67ad41d"
+    },
+    "warp-1.png": {
+      "size": [
+        820,
+        760
+      ],
+      "sha256": "837880d60b7b6a3de580948889d9e918c7d238bd28216b9b56cb58c093dfd41e"
+    }
+  }
+}

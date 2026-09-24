@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-15, 2026-08-26
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "Swapchain.hpp"
@@ -102,6 +103,7 @@ namespace merutilm::vkh {
         const uint32_t maxFramesInFlight = core.getPhysicalDevice().getMaxFramesInFlight();
         const auto &[graphicsFamily, presentFamily] = core.getPhysicalDevice().getQueueFamilyIndices();
         std::array queueFamilyIndices = {graphicsFamily.value(), presentFamily.value()};
+        const bool separateQueueFamilies = graphicsFamily != presentFamily;
 
         const VkSurfaceCapabilitiesKHR capabilities = core.getPhysicalDevice().populateSurfaceCapabilities(surface.getSurfaceHandle());
 
@@ -111,7 +113,7 @@ namespace merutilm::vkh {
             minImageCount = capabilities.maxImageCount;
         }
 
-        if (const VkSwapchainCreateInfoKHR createInfo = {
+        const VkSwapchainCreateInfoKHR createInfo = {
             .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .pNext = nullptr,
             .flags = 0,
@@ -122,20 +124,17 @@ namespace merutilm::vkh {
             .imageExtent = extent,
             .imageArrayLayers = 1,
             .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            .imageSharingMode = graphicsFamily == presentFamily
-                                    ? VK_SHARING_MODE_EXCLUSIVE
-                                    : VK_SHARING_MODE_CONCURRENT,
-            .queueFamilyIndexCount = graphicsFamily == presentFamily
-                                         ? 0
-                                         : static_cast<uint32_t>(queueFamilyIndices.size()),
-            .pQueueFamilyIndices = graphicsFamily == presentFamily ? nullptr : queueFamilyIndices.data(),
+            .imageSharingMode = separateQueueFamilies ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = separateQueueFamilies ? static_cast<uint32_t>(queueFamilyIndices.size()) : 0,
+            .pQueueFamilyIndices = separateQueueFamilies ? queueFamilyIndices.data() : nullptr,
             .preTransform = capabilities.currentTransform,
             .compositeAlpha = compositeAlpha,
             .presentMode = presentMode,
             .clipped = VK_TRUE,
             .oldSwapchain = old
-        }; allocator::invoke(vkCreateSwapchainKHR, core.getLogicalDevice().getLogicalDeviceHandle(), &createInfo, nullptr, target) !=
-           VK_SUCCESS) {
+        };
+        if (allocator::invoke(vkCreateSwapchainKHR, core.getLogicalDevice().getLogicalDeviceHandle(), &createInfo,
+                              nullptr, target) != VK_SUCCESS) {
             throw exception_init("Failed to create swapchain!");
         }
     }

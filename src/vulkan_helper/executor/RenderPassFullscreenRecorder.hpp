@@ -1,8 +1,15 @@
 //
 // Created by Merutilm on 2025-07-15.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
+#include <span>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "../configurator/PipelineConfigurator.hpp"
 
 
@@ -25,8 +32,12 @@ namespace merutilm::vkh {
 
         RenderPassFullscreenRecorder &operator=(RenderPassFullscreenRecorder &&) = delete;
 
-        template<typename Configurator> requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
-        static void cmdFullscreenRenderPass(WindowContextRef wc, const uint32_t frameIndex, const uint32_t swapchainImageIndex, const std::vector<PipelineConfiguratorAbstract *> shaderPrograms, std::vector<DescIndexPicker> && descIndices) {
+        template <typename Configurator>
+            requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
+        static void cmdFullscreenRenderPass(WindowContextRef wc, const uint32_t frameIndex,
+                                            const uint32_t swapchainImageIndex,
+                                            const std::vector<PipelineConfiguratorAbstract *> shaderPrograms,
+                                            std::vector<DescIndexPicker> &&descIndices) {
             const auto renderPassRecorder = RenderPassFullscreenRecorder(
                 wc, Configurator::CONTEXT_INDEX, frameIndex, swapchainImageIndex);
             renderPassRecorder.cmdMatchViewportAndScissor();
@@ -34,20 +45,30 @@ namespace merutilm::vkh {
         }
 
     public:
-        template<typename Configurator> requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
-        static void cmdFullscreenPresentOnlyRenderPass(WindowContextRef wc, const uint32_t frameIndex, const uint32_t swapchainImageIndex, const std::vector<PipelineConfiguratorAbstract *> shaderPrograms, std::vector<DescIndexPicker> && descIndices) {
-            cmdFullscreenRenderPass<Configurator>(wc, frameIndex, swapchainImageIndex, shaderPrograms, std::move(descIndices));
+        template <typename Configurator>
+            requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
+        static void cmdFullscreenPresentOnlyRenderPass(WindowContextRef wc, const uint32_t frameIndex,
+                                                        const uint32_t swapchainImageIndex,
+                                                        const std::vector<PipelineConfiguratorAbstract *> shaderPrograms,
+                                                        std::vector<DescIndexPicker> &&descIndices) {
+            cmdFullscreenRenderPass<Configurator>(wc, frameIndex, swapchainImageIndex,
+                                                  shaderPrograms, std::move(descIndices));
         }
 
-        template<typename Configurator> requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
-        static void cmdFullscreenInternalRenderPass(WindowContextRef wc, const uint32_t frameIndex, const std::vector<PipelineConfiguratorAbstract *> shaderPrograms, std::vector<DescIndexPicker> && descIndices) {
-            cmdFullscreenRenderPass<Configurator>(wc, frameIndex, UINT32_MAX,  shaderPrograms, std::move(descIndices));
+        template <typename Configurator>
+            requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
+        static void cmdFullscreenInternalRenderPass(WindowContextRef wc, const uint32_t frameIndex,
+                                                     const std::vector<PipelineConfiguratorAbstract *> shaderPrograms,
+                                                     std::vector<DescIndexPicker> &&descIndices) {
+            cmdFullscreenRenderPass<Configurator>(wc, frameIndex, UINT32_MAX,
+                                                  shaderPrograms, std::move(descIndices));
         }
 
 
         void cmdMatchViewportAndScissor() const;
 
-        void execute(uint32_t frameIndex, std::span<PipelineConfiguratorAbstract * const> shaderPrograms, std::vector<DescIndexPicker> &&descIndices) const;
+        void execute(uint32_t frameIndex, std::span<PipelineConfiguratorAbstract * const> shaderPrograms,
+                     std::vector<DescIndexPicker> &&descIndices) const;
 
     private:
         void init() override;

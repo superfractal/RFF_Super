@@ -1,7 +1,9 @@
 //
 // Created and modified by AI; earlier exact dates unavailable.
-// Modified by GPT-5 on 2026-08-21.
+
+//
 // Modified by Opus 5 on 2026-08-16
+// Modified by GPT-5 on 2026-08-21
 //
 
 #include "ExpressionParser.h"

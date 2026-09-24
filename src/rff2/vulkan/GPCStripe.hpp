@@ -1,13 +1,17 @@
 //
 // Created by Merutilm on 2025-08-15.
+// Modified by GPT-6 on 2026-09-16, 2026-09-23
 //
 
 #pragma once
+
+#include "ShaderLayerControl.hpp"
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
 #include "../attr/ShdStripeAttribute.h"
 
 namespace merutilm::rff2 {
     struct GPCStripe final : public vkh::GeneralPostProcessGraphicsPipelineConfigurator {
+        vkh::PushConstant layerPush;
 
         static constexpr uint32_t SET_PREV_RESULT = 0;
         static constexpr uint32_t BINDING_PREV_RESULT_SAMPLER = 0;
@@ -16,10 +20,12 @@ namespace merutilm::rff2 {
         static constexpr uint32_t SET_STRIPE = 2;
         static constexpr uint32_t SET_TIME = 3;
 
-        explicit GPCStripe(vkh::EngineRef engine, const uint32_t windowContextIndex,
-                                   const uint32_t renderContextIndex,
-                                   const uint32_t primarySubpassIndex) : GeneralPostProcessGraphicsPipelineConfigurator(
-            engine, windowContextIndex, renderContextIndex, primarySubpassIndex, "vk_stripe.frag") {
+        explicit GPCStripe(vkh::EngineRef engine,
+                           const uint32_t windowContextIndex,
+                           const uint32_t renderContextIndex,
+                           const uint32_t primarySubpassIndex)
+            : GeneralPostProcessGraphicsPipelineConfigurator(
+                  engine, windowContextIndex, renderContextIndex, primarySubpassIndex, "vk_stripe.frag") {
         }
 
         ~GPCStripe() override = default;
@@ -31,7 +37,6 @@ namespace merutilm::rff2 {
         GPCStripe(GPCStripe &&) = delete;
 
         GPCStripe &operator=(GPCStripe &&) = delete;
-
 
         void updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) override;
 

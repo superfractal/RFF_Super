@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-18.
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -16,10 +17,6 @@ namespace merutilm::vkh {
         std::unordered_map<Key, Type, KeyHasher, KeyPredicate> repository = {};
 
         explicit Repository(CoreRef core) : core(core) {}
-
-        void remove(Key key) {
-            repository.erase(key);
-        }
 
         virtual Return pick(KeyInput keyInput, Args... args) = 0;
 

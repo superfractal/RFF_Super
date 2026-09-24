@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 2025-05-05.
-// Modified by GPT-5 on 2026-08-31.
+// Modified by GPT-5 on 2026-08-31
 //
 
 #pragma once

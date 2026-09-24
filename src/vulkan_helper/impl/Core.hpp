@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -28,12 +29,17 @@ namespace merutilm::vkh {
 
         CoreImpl &operator=(CoreImpl &&) = delete;
 
-        [[nodiscard]] InstanceRef getInstance() const { return *instance; }
+        [[nodiscard]] InstanceRef getInstance() const {
+            return *instance;
+        }
 
-        [[nodiscard]] PhysicalDeviceLoaderRef getPhysicalDevice() const { return *physicalDevice; }
+        [[nodiscard]] PhysicalDeviceLoaderRef getPhysicalDevice() const {
+            return *physicalDevice;
+        }
 
-        [[nodiscard]] LogicalDeviceRef getLogicalDevice() const { return *logicalDevice; }
-
+        [[nodiscard]] LogicalDeviceRef getLogicalDevice() const {
+            return *logicalDevice;
+        }
 
         [[nodiscard]] float getTime() const;
 

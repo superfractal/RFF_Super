@@ -1,14 +1,15 @@
 //
 // Created by Merutilm on 2025-05-04.
 // Modified by Opus 5 on 2026-08-18
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
 #include "VidAnimationAttribute.h"
 #include "VidDataAttribute.h"
 #include "VidExportAttribute.h"
 #include "VidTimelineAttribute.h"
-
 
 namespace merutilm::rff2 {
     struct VideoAttribute {

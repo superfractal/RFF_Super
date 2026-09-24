@@ -1,8 +1,13 @@
 //
 // Created by Merutilm on 2025-07-23.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+
+#include <cstddef>
+#include <vulkan/vulkan.h>
+
 #include "BoostHasher.hpp"
 #include "../struct/DescriptorSetLayoutBuildType.hpp"
 

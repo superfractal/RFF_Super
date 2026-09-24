@@ -1,8 +1,11 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+
 #include "../core/vkh_base.hpp"
 #include "Instance.hpp"
 #include "GraphicsContextWindow.hpp"
@@ -14,7 +17,7 @@ namespace merutilm::vkh {
         InstanceRef instance;
         GraphicsContextWindowRef window;
 
-        VkSurfaceKHR surface = nullptr;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
 
     public:
         explicit SurfaceImpl(InstanceRef instance, GraphicsContextWindowRef window);

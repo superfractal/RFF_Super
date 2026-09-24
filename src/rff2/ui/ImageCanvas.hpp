@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-09-03.
 // Modified by Opus 5 on 2026-09-04
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -69,6 +70,5 @@ namespace merutilm::rff2 {
         // Takes the picture away, which is what puts the fractal back on screen.
         void hide();
 
-        [[nodiscard]] bool visible() const;
     };
 }

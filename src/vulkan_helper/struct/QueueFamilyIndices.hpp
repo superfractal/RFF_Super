@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-09.
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -12,6 +13,5 @@ namespace merutilm::vkh {
 
         [[nodiscard]] bool isComplete() const { return graphicsAndComputeFamily.has_value() && presentFamily.has_value(); }
 
-        [[nodiscard]] bool requiredConcurrent() const { return graphicsAndComputeFamily != presentFamily; }
     };
 }

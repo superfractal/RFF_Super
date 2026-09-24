@@ -1,8 +1,9 @@
 //
 // Created by Merutilm on 2025-05-27.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
 // Modified by Opus 5 on 2026-08-20, 2026-08-31
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -10,15 +11,14 @@
 #include "../../Presets.h"
 #include "../../../attr/ShdPaletteAttribute.h"
 
-
 namespace merutilm::rff2::ShdPalettePresets {
-
 
     struct LongRandom64 final : public Presets::ShaderPresets::PalettePreset {
         std::vector<glm::vec4> baseColors;
 
         LongRandom64() = default;
-        explicit LongRandom64(std::vector<glm::vec4> colors) : baseColors(std::move(colors)) {}
+        explicit LongRandom64(std::vector<glm::vec4> colors) : baseColors(std::move(colors)) {
+        }
 
         [[nodiscard]] std::string getName() const override;
 
@@ -26,20 +26,25 @@ namespace merutilm::rff2::ShdPalettePresets {
 
         // Recipe-eligible only when the base colors are random (empty); a caller-supplied base
         // cannot be reproduced from a seed, so those must fall back to raw storage.
-        [[nodiscard]] int32_t getPaletteRecipeId() const override { return baseColors.empty() ? 1 : -1; }
+        [[nodiscard]] int32_t getPaletteRecipeId() const override {
+            return baseColors.empty() ? 1 : -1;
+        }
     };
 
     struct LongRandom64_2 final : public Presets::ShaderPresets::PalettePreset {
         std::vector<glm::vec4> baseColors;
 
         LongRandom64_2() = default;
-        explicit LongRandom64_2(std::vector<glm::vec4> colors) : baseColors(std::move(colors)) {}
+        explicit LongRandom64_2(std::vector<glm::vec4> colors) : baseColors(std::move(colors)) {
+        }
 
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdPaletteAttribute genPalette() const override;
 
-        [[nodiscard]] int32_t getPaletteRecipeId() const override { return baseColors.empty() ? 2 : -1; }
+        [[nodiscard]] int32_t getPaletteRecipeId() const override {
+            return baseColors.empty() ? 2 : -1;
+        }
     };
 
     struct RandomSmooth final : public Presets::ShaderPresets::PalettePreset {
@@ -162,7 +167,9 @@ namespace merutilm::rff2::ShdPalettePresets {
 
         [[nodiscard]] ShdPaletteAttribute genPalette() const override;
 
-        [[nodiscard]] int32_t getPaletteRecipeId() const override { return 3; }
+        [[nodiscard]] int32_t getPaletteRecipeId() const override {
+            return 3;
+        }
     };
 
     struct MidnightNeon final : public Presets::ShaderPresets::PalettePreset {
@@ -198,7 +205,8 @@ namespace merutilm::rff2::ShdPalettePresets {
     // Not registered in the Settings menu; used programmatically (e.g. random startup palette).
     struct FromColors final : public Presets::ShaderPresets::PalettePreset {
         std::vector<glm::vec4> colors;
-        explicit FromColors(std::vector<glm::vec4> c) : colors(std::move(c)) {}
+        explicit FromColors(std::vector<glm::vec4> c) : colors(std::move(c)) {
+        }
 
         [[nodiscard]] std::string getName() const override;
         [[nodiscard]] ShdPaletteAttribute genPalette() const override;

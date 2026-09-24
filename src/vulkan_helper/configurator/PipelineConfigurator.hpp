@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-28.
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-22
 //
 
 #pragma once
@@ -57,12 +58,6 @@ namespace merutilm::vkh {
         }
 
 
-        template<typename F> requires std::is_invocable_r_v<void, F, DescriptorUpdateQueue &>
-        void writeDescriptor(F &&func) const {
-            auto queue = DescriptorUpdater::createQueue();
-            func(queue);
-            DescriptorUpdater::write(wc.core.getLogicalDevice().getLogicalDeviceHandle(), queue);
-        }
 
         template<typename F> requires std::is_invocable_r_v<void, F, DescriptorUpdateQueue &, uint32_t>
         void writeDescriptorMF(F &&func) const {

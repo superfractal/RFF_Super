@@ -1,8 +1,10 @@
 //
 // Created by Merutilm on 2025-06-23.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
 #include <filesystem>
 
 #include "RFFBinary.h"
@@ -12,8 +14,8 @@ namespace merutilm::rff2 {
     class RFFStaticMapBinary final : public RFFBinary {
         uint32_t width;
         uint32_t height;
-    public:
 
+    public:
         static const RFFStaticMapBinary DEFAULT;
 
         explicit RFFStaticMapBinary(float logZoom, uint32_t width, uint32_t height);
@@ -33,8 +35,5 @@ namespace merutilm::rff2 {
         void exportAsKeyframe(const std::filesystem::path &dir) const override;
 
         void exportFile(const std::filesystem::path &path) const override;
-
     };
-
-
 }

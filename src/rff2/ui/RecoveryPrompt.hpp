@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-14.
-// Modified by Opus 5 on 2026-08-15.
+// Modified by Opus 5 on 2026-08-15
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -18,7 +19,9 @@ namespace merutilm::rff2 {
     struct RecoveryPrompt {
         RecoveryPrompt() = delete;
 
-        static void offer(SettingsMenu &settingsMenu, RenderScene &scene,
-                          const std::filesystem::path &snapshot, RecoveryReason reason);
+        static void offer(SettingsMenu &settingsMenu,
+                          RenderScene &scene,
+                          const std::filesystem::path &snapshot,
+                          RecoveryReason reason);
     };
 }

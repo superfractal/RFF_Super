@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-31.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "CalculationPresets.h"
@@ -11,11 +12,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::UltraFast::genMPA() const {
-        return FrtMPAAttribute{4, 2, -3, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::NO_COMPRESSION};
+        return FrtMPAAttribute{
+            .minSkipReference = 4,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -3,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::NO_COMPRESSION
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::UltraFast::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{0, 0, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 0,
+            .compressionThresholdPower = 0,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::Fast::getName() const {
@@ -23,11 +34,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::Fast::genMPA() const {
-        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::NO_COMPRESSION};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -4,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::NO_COMPRESSION
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::Fast::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{1000000, 7, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 1000000,
+            .compressionThresholdPower = 7,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::Normal::getName() const {
@@ -35,11 +56,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::Normal::genMPA() const {
-        return FrtMPAAttribute{8, 2, -5, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -5,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::LITTLE_COMPRESSION
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::Normal::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{1000000, 11, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 1000000,
+            .compressionThresholdPower = 11,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::Best::getName() const {
@@ -47,11 +78,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::Best::genMPA() const {
-        return FrtMPAAttribute{8, 2, -6, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -6,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::LITTLE_COMPRESSION
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::Best::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{1000000, 15, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 1000000,
+            .compressionThresholdPower = 15,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::UltraBest::getName() const {
@@ -59,11 +100,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::UltraBest::genMPA() const {
-        return FrtMPAAttribute{8, 2, -7, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::LITTLE_COMPRESSION};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -7,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::LITTLE_COMPRESSION
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::UltraBest::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{1000000, 19, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 1000000,
+            .compressionThresholdPower = 19,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::Stable::getName() const {
@@ -71,11 +122,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::Stable::genMPA() const {
-        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -4,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::STRONGEST
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::Stable::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{1000000, 6, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 1000000,
+            .compressionThresholdPower = 6,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::MoreStable::getName() const {
@@ -83,11 +144,21 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::MoreStable::genMPA() const {
-        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -4,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::STRONGEST
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::MoreStable::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{100000, 6, false};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 100000,
+            .compressionThresholdPower = 6,
+            .noCompressorNormalization = false
+        };
     }
 
     std::string CalculationPresets::UltraStable::getName() const {
@@ -95,10 +166,20 @@ namespace merutilm::rff2 {
     }
 
     FrtMPAAttribute CalculationPresets::UltraStable::genMPA() const {
-        return FrtMPAAttribute{8, 2, -4, FrtMPASelectionMethod::HIGHEST, FrtMPACompressionMethod::STRONGEST};
+        return FrtMPAAttribute{
+            .minSkipReference = 8,
+            .maxMultiplierBetweenLevel = 2,
+            .epsilonPower = -4,
+            .mpaSelectionMethod = FrtMPASelectionMethod::HIGHEST,
+            .mpaCompressionMethod = FrtMPACompressionMethod::STRONGEST
+        };
     }
 
     FrtReferenceCompAttribute CalculationPresets::UltraStable::genReferenceCompression() const {
-        return FrtReferenceCompAttribute{10000, 6, true};
+        return FrtReferenceCompAttribute{
+            .compressCriteria = 10000,
+            .compressionThresholdPower = 6,
+            .noCompressorNormalization = true
+        };
     }
 }

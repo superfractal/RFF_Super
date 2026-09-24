@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-06-25.
 // Modified by GPT-5 on 2026-08-23, 2026-08-31, 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "RFFLocationBinary.h"
@@ -36,19 +37,20 @@ namespace merutilm::rff2 {
         IOUtilities::readAndDecode(in, &logZoom);
         uint64_t maxIteration;
         IOUtilities::readAndDecode(in, &maxIteration);
-        uint64_t len;
-        IOUtilities::readAndDecode(in, &len);
-        if (!IOUtilities::validateReadCount(in, len, sizeof(char), MAX_COORDINATE_BYTES)) {
+        uint64_t realLength;
+        IOUtilities::readAndDecode(in, &realLength);
+        if (!IOUtilities::validateReadCount(in, realLength, sizeof(char), MAX_COORDINATE_BYTES)) {
             return DEFAULT;
         }
-        std::string real(static_cast<size_t>(len), '\0');
-        IOUtilities::readAndDecode(in, len, real.data());
-        IOUtilities::readAndDecode(in, &len);
-        if (!IOUtilities::validateReadCount(in, len, sizeof(char), MAX_COORDINATE_BYTES)) {
+        std::string real(static_cast<size_t>(realLength), '\0');
+        IOUtilities::readAndDecode(in, realLength, real.data());
+        uint64_t imagLength;
+        IOUtilities::readAndDecode(in, &imagLength);
+        if (!IOUtilities::validateReadCount(in, imagLength, sizeof(char), MAX_COORDINATE_BYTES)) {
             return DEFAULT;
         }
-        std::string imag(static_cast<size_t>(len), '\0');
-        IOUtilities::readAndDecode(in, len, imag.data());
+        std::string imag(static_cast<size_t>(imagLength), '\0');
+        IOUtilities::readAndDecode(in, imagLength, imag.data());
         if (!in || !std::isfinite(logZoom) || logZoom < 0.0f ||
             logZoom > static_cast<float>(MAX_COORDINATE_BYTES) ||
             !fp_decimal_calculator::isValidString(real) || !fp_decimal_calculator::isValidString(imag)) {
@@ -72,15 +74,14 @@ namespace merutilm::rff2 {
     void RFFLocationBinary::exportFile(const std::filesystem::path &path) const {
         const std::filesystem::path temporary = IOUtilities::temporaryFilePath(path);
         if (std::ofstream out(temporary, std::ios::out | std::ios::binary | std::ios::trunc); out.is_open()) {
-            uint64_t len = 0;
             IOUtilities::encodeAndWrite(out, getLogZoom());
             IOUtilities::encodeAndWrite(out, maxIteration);
-            len = real.length();
-            IOUtilities::encodeAndWrite(out, len);
-            IOUtilities::encodeAndWrite(out, real.data(), real.length());
-            len = imag.length();
-            IOUtilities::encodeAndWrite(out, len);
-            IOUtilities::encodeAndWrite(out, imag.data(), imag.length());
+            const uint64_t realLength = real.length();
+            IOUtilities::encodeAndWrite(out, realLength);
+            IOUtilities::encodeAndWrite(out, real.data(), realLength);
+            const uint64_t imagLength = imag.length();
+            IOUtilities::encodeAndWrite(out, imagLength);
+            IOUtilities::encodeAndWrite(out, imag.data(), imagLength);
             out.close();
             if (out.fail() || !IOUtilities::commitTemporaryFile(temporary, path)) {
                 IOUtilities::discardTemporaryFile(temporary);

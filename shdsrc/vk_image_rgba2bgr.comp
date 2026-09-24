@@ -1,6 +1,7 @@
 //
-// Modified by Opus 5 on 2026-08-10, 2026-08-12, 2026-08-19.
-// Modified by GPT-5 on 2026-08-31.
+// Modified by Opus 5 on 2026-08-10, 2026-08-12, 2026-08-19
+// Modified by GPT-5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-23
 //
 
 #version 450
@@ -95,14 +96,12 @@ void main() {
 
     // Rounded up: flooring dropped the final partial word, leaving the last pixel's bytes never written.
     int arr_len = (size * 3 + 3) / 4;
-
-
-    int i1 = index * 4 / 3;
-    int i2 = i1 + 1;
-
     if (arr_len <= index) {
         return;
     }
+
+    int i1 = index * 4 / 3;
+    int i2 = i1 + 1;
 
     ivec4 c1 = get_color255(i1, dstExtent, srcExtent, ratio);
     // i2 is a pixel index, so it has to be bounded by the pixel count: comparing it against the word count blacked out a real pixel at 3/4 of the image.

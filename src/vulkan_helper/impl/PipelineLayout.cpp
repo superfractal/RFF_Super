@@ -1,13 +1,21 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "PipelineLayout.hpp"
 
+#include <utility>
+
+#include "../core/allocator.hpp"
+#include "../core/exception.hpp"
+
 namespace merutilm::vkh {
     PipelineLayoutImpl::PipelineLayoutImpl(CoreRef core,
-                                   PipelineLayoutManager &&pipelineLayoutManager) : CoreHandler(
-        core), builders(std::move(pipelineLayoutManager->builders)), descriptorSetLayoutCount(std::move(pipelineLayoutManager->descriptorSetLayoutCount)) {
+                                           PipelineLayoutManager &&pipelineLayoutManager)
+        : CoreHandler(core),
+          builders(std::move(pipelineLayoutManager->builders)),
+          descriptorSetLayoutCount(pipelineLayoutManager->descriptorSetLayoutCount) {
         PipelineLayoutImpl::init();
     }
 
@@ -16,51 +24,57 @@ namespace merutilm::vkh {
     }
 
     void PipelineLayoutImpl::cmdPush(const VkCommandBuffer commandBuffer) const {
-        uint32_t sizeSum = 0;
-        for (auto &pushConstant : getPushConstants()) {
-            const uint32_t size = pushConstant->getHostObject().getTotalSizeByte();
+        uint32_t offsetBytes = 0;
+        for (const auto *pushConstant : getPushConstants()) {
+            const uint32_t sizeBytes = pushConstant->getHostObject().getTotalSizeByte();
             vkCmdPushConstants(commandBuffer, layout, pushConstant->getUseStage(),
-                             sizeSum, size,
+                             offsetBytes, sizeBytes,
                              pushConstant->getHostObject().getData().data());
-            sizeSum += size;
+            offsetBytes += sizeBytes;
         }
     }
 
-
     void PipelineLayoutImpl::init() {
-        uint32_t sizeSum = 0;
-        std::vector<VkPushConstantRange> pushConstantRanges = {};
-        for (const auto &pushConstantManager: getPushConstants()) {
-            const uint32_t size = pushConstantManager->getHostObject().getTotalSizeByte();
-            pushConstantRanges.emplace_back(pushConstantManager->getUseStage(), sizeSum, size);
-            sizeSum += size;
+        if (layout != VK_NULL_HANDLE) {
+            throw exception_invalid_state("Pipeline layout is already initialized");
+        }
+        uint32_t offsetBytes = 0;
+        std::vector<VkPushConstantRange> pushConstantRanges;
+        for (const auto *pushConstant : getPushConstants()) {
+            const uint32_t sizeBytes = pushConstant->getHostObject().getTotalSizeByte();
+            pushConstantRanges.emplace_back(pushConstant->getUseStage(), offsetBytes, sizeBytes);
+            offsetBytes += sizeBytes;
         }
 
-        std::vector<VkDescriptorSetLayout> layouts = {};
-        for (const auto &layout: getDescriptorSetLayouts()){
-            layouts.push_back(layout->getLayoutHandle());
+        std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+        for (const auto *descriptorSetLayout : getDescriptorSetLayouts()) {
+            descriptorSetLayouts.push_back(descriptorSetLayout->getLayoutHandle());
         }
 
         const VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
-            .setLayoutCount = static_cast<uint32_t>(layouts.size()),
-            .pSetLayouts = layouts.empty() ? nullptr : layouts.data(),
+            .setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+            .pSetLayouts = descriptorSetLayouts.empty() ? nullptr : descriptorSetLayouts.data(),
             .pushConstantRangeCount = static_cast<uint32_t>(pushConstantRanges.size()),
             .pPushConstantRanges = pushConstantRanges.empty() ? nullptr : pushConstantRanges.data(),
         };
 
 
-        if (allocator::invoke(vkCreatePipelineLayout, core.getLogicalDevice().getLogicalDeviceHandle(), &pipelineLayoutInfo, nullptr,
-                                   &layout) !=
-            VK_SUCCESS) {
+        VkPipelineLayout createdLayout = VK_NULL_HANDLE;
+        if (allocator::invoke(vkCreatePipelineLayout, core.getLogicalDevice().getLogicalDeviceHandle(),
+                              &pipelineLayoutInfo, nullptr, &createdLayout) != VK_SUCCESS) {
             throw exception_init("Failed to create pipeline layout!");
         }
+        layout = createdLayout;
     }
 
-
     void PipelineLayoutImpl::destroy() {
+        if (layout == VK_NULL_HANDLE) {
+            return;
+        }
         allocator::invoke(vkDestroyPipelineLayout, core.getLogicalDevice().getLogicalDeviceHandle(), layout, nullptr);
+        layout = VK_NULL_HANDLE;
     }
 }

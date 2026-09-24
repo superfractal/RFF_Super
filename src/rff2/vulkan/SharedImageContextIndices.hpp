@@ -1,8 +1,10 @@
 //
 // Created by Merutilm on 2025-09-03.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
 
 namespace merutilm::rff2::SharedImageContextIndices {
     static constexpr uint32_t MF_MAIN_RENDER_IMAGE_PRIMARY = 0;

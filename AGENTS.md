@@ -75,6 +75,25 @@ called RFF_Super. Read [docs/changelog-style.md](docs/changelog-style.md) before
 
 ## Debug / Test Programs
 
+### Known native Win32 menu flash
+
+User-provided investigation, recorded 2026-09-13: moving the pointer between menu-bar items can show
+the newly opening popup as an empty bordered rectangle for one frame, with the image visible through it.
+Message hooks measured Windows creating and showing a fresh popup window before its first paint,
+with approximately 2 ms between showing and painting. A compositor frame inside this interval can
+capture the unpainted popup. A stock Win32 application with a plain menu bar reproduces the behavior;
+an image behind the menu makes it especially noticeable in RFF_Super.
+
+- Treat this specific show-before-first-paint flash as a known native-menu behavior, not automatically
+  as a regression in RFF_Super's canvas, Vulkan renderer, or custom workspace panels.
+- The investigation found no improvement from changing the menu background brush, menu fade or
+  animation settings, or DWM window attributes. Do not repeat these as speculative fixes without new
+  evidence that identifies a different cause or mechanism.
+- Keep this case separate from application-controlled flicker, prolonged blank menus, missing menu
+  contents, and rendering corruption. Continue to investigate those independently.
+- When reporting flicker tests, distinguish this known native-menu interval from the behavior actually
+  measured in the application. Do not claim all flicker is fixed or dismiss other failures on this basis.
+
 Any throwaway debugging or test program (CPU verification scripts, scratch tools, one-off
 experiments, etc.) MUST be created inside the `debug/` folder, which is gitignored
 

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-28.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "ShdColorPresets.h"
@@ -10,7 +11,14 @@ namespace merutilm::rff2 {
     }
 
     ShdColorAttribute ShdColorPresets::Disabled::genColor() const {
-        return ShdColorAttribute{1, 0, 0, 0, 0, 0};
+        return ShdColorAttribute{
+            .gamma = 1,
+            .exposure = 0,
+            .hue = 0,
+            .saturation = 0,
+            .brightness = 0,
+            .contrast = 0,
+        };
     }
 
     std::string ShdColorPresets::WeakContrast::getName() const {
@@ -18,7 +26,14 @@ namespace merutilm::rff2 {
     }
 
     ShdColorAttribute ShdColorPresets::WeakContrast::genColor() const {
-        return ShdColorAttribute{1, 0.1f, 0, 0, 0, 0.1f};
+        return ShdColorAttribute{
+            .gamma = 1,
+            .exposure = 0.1f,
+            .hue = 0,
+            .saturation = 0,
+            .brightness = 0,
+            .contrast = 0.1f,
+        };
     }
 
     std::string ShdColorPresets::HighContrast::getName() const {
@@ -26,7 +41,14 @@ namespace merutilm::rff2 {
     }
 
     ShdColorAttribute ShdColorPresets::HighContrast::genColor() const {
-        return ShdColorAttribute{1, 0.1f, 0, 0.2f, 0, 0.25f};
+        return ShdColorAttribute{
+            .gamma = 1,
+            .exposure = 0.1f,
+            .hue = 0,
+            .saturation = 0.2f,
+            .brightness = 0,
+            .contrast = 0.25f,
+        };
     }
 
     std::string ShdColorPresets::Dull::getName() const {
@@ -34,7 +56,14 @@ namespace merutilm::rff2 {
     }
 
     ShdColorAttribute ShdColorPresets::Dull::genColor() const {
-        return ShdColorAttribute{1, 0.05f, 0, -0.3f, 0, 0.05f};
+        return ShdColorAttribute{
+            .gamma = 1,
+            .exposure = 0.05f,
+            .hue = 0,
+            .saturation = -0.3f,
+            .brightness = 0,
+            .contrast = 0.05f,
+        };
     }
 
     std::string ShdColorPresets::Vivid::getName() const {
@@ -42,6 +71,13 @@ namespace merutilm::rff2 {
     }
 
     ShdColorAttribute ShdColorPresets::Vivid::genColor() const {
-        return ShdColorAttribute{1, 0.2f, 0, 0.5f, 0, 0.05f};
+        return ShdColorAttribute{
+            .gamma = 1,
+            .exposure = 0.2f,
+            .hue = 0,
+            .saturation = 0.5f,
+            .brightness = 0,
+            .contrast = 0.05f,
+        };
     }
 }

@@ -1,8 +1,15 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-17, 2026-09-23
 //
 
 #pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <variant>
+#include <vector>
 
 #include "../handle/CoreHandler.hpp"
 #include "../manage/PipelineLayoutManager.hpp"
@@ -10,7 +17,7 @@
 namespace merutilm::vkh {
     class PipelineLayoutImpl final : public CoreHandler {
 
-        VkPipelineLayout layout = nullptr;
+        VkPipelineLayout layout = VK_NULL_HANDLE;
         PipelineLayoutBuilder builders;
         uint32_t descriptorSetLayoutCount;
 
@@ -32,23 +39,25 @@ namespace merutilm::vkh {
         [[nodiscard]] VkPipelineLayout getLayoutHandle() const { return layout; }
 
         [[nodiscard]] std::vector<DescriptorSetLayoutPtr> getDescriptorSetLayouts() const {
-            std::vector<DescriptorSetLayoutPtr> v(descriptorSetLayoutCount, nullptr);
-            std::transform(builders.begin(), builders.begin() + descriptorSetLayoutCount, v.begin(), [] (const PipelineLayoutBuildType &type){
-                return std::get<DescriptorSetLayoutPtr>(type);
-            });
-            return v;
+            std::vector<DescriptorSetLayoutPtr> layouts;
+            layouts.reserve(descriptorSetLayoutCount);
+            for (uint32_t index = 0; index < descriptorSetLayoutCount; ++index) {
+                layouts.push_back(std::get<DescriptorSetLayoutPtr>(builders[index]));
+            }
+            return layouts;
         }
 
         [[nodiscard]] std::vector<PushConstantPtr> getPushConstants() const {
-            std::vector<PushConstantPtr> v(builders.size() - descriptorSetLayoutCount, nullptr);
-            std::transform(builders.begin() + descriptorSetLayoutCount, builders.end(), v.begin(), [] (const PipelineLayoutBuildType &type){
-                return std::get<PushConstantPtr>(type);
-            });
-            return v;
+            std::vector<PushConstantPtr> pushConstants;
+            pushConstants.reserve(builders.size() - descriptorSetLayoutCount);
+            for (std::size_t index = descriptorSetLayoutCount; index < builders.size(); ++index) {
+                pushConstants.push_back(std::get<PushConstantPtr>(builders[index]));
+            }
+            return pushConstants;
         }
 
         [[nodiscard]] PushConstantPtr getPushConstant(const uint32_t pushIndex) const {
-            return std::get<PushConstantPtr>(builders[pushIndex - descriptorSetLayoutCount]);
+            return std::get<PushConstantPtr>(builders.at(descriptorSetLayoutCount + pushIndex));
         }
 
     private:

@@ -1,8 +1,9 @@
 //
 // Created by Merutilm on 2025-07-16.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21.
 // Modified by Opus 5 on 2026-08-20
+// Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "KFRColorLoader.hpp"
@@ -21,22 +22,27 @@ namespace merutilm::rff2 {
             line = line.substr(token.length());
         }
         
-        auto split = Utilities::split(line, ',');
-        if (split.empty()) {
+        auto channels = Utilities::split(line, ',');
+        if (channels.empty()) {
             return {};
         }
         
-        auto result = std::vector<float>(split.size());
-        std::ranges::transform(split, result.begin(), [](std::wstring str) {
-            std::erase(str, ' ');
-            return std::stof(str) / 255.0f;
-        });
-        
-        auto out = std::vector<glm::vec4>();
-        for (uint32_t i = 0; i + 2 < result.size(); i += 3) {
-            out.emplace_back(result[i + 2], result[i + 1], result[i + 0], 1);
+        std::vector<float> channelValues;
+        channelValues.reserve(channels.size());
+        for (std::wstring &channel : channels) {
+            std::erase(channel, ' ');
+            channelValues.push_back(std::stof(channel) / 255.0f);
         }
-        return out;
+        
+        std::vector<glm::vec4> colors;
+        colors.reserve(channelValues.size() / 3);
+        for (size_t offset = 0; offset + 2 < channelValues.size(); offset += 3) {
+            const float blue = channelValues[offset];
+            const float green = channelValues[offset + 1];
+            const float red = channelValues[offset + 2];
+            colors.emplace_back(red, green, blue, 1.0f);
+        }
+        return colors;
     }
 
     std::vector<glm::vec4> KFRColorLoader::generateRandomPalette(uint32_t colorCount) {
@@ -44,13 +50,15 @@ namespace merutilm::rff2 {
         std::mt19937 gen(rd());
         std::uniform_int_distribution<int> dist(0, 255);
         
-        std::wstring colorStr;
-        for (uint32_t i = 0; i < colorCount * 3; ++i) {
-            if (i > 0) colorStr += L",";
-            colorStr += std::to_wstring(dist(gen));
+        std::vector<glm::vec4> colors;
+        colors.reserve(colorCount);
+        for (uint32_t i = 0; i < colorCount; ++i) {
+            const float blue = static_cast<float>(dist(gen)) / 255.0f;
+            const float green = static_cast<float>(dist(gen)) / 255.0f;
+            const float red = static_cast<float>(dist(gen)) / 255.0f;
+            colors.emplace_back(red, green, blue, 1.0f);
         }
-        
-        return parseColorString(colorStr);
+        return colors;
     }
     std::vector<glm::vec4> KFRColorLoader::loadPaletteSettings() {
         const auto pFile = IOUtilities::ioFileDialog(L"Open KFR Palette", Constants::Extension::DESC_KFR,

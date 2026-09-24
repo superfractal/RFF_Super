@@ -1,10 +1,13 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23.
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-21, 2026-08-24, 2026-08-31
+// Modified by GPT-5 on 2026-08-21, 2026-08-23
+// Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "shader_layer.glsl"
 
 layout(set = 0, binding = 0) uniform sampler2D canvas;
 layout(set = 1, binding = 0) uniform LinearInterpolationUBO{
@@ -16,10 +19,41 @@ layout(set = 1, binding = 0) uniform LinearInterpolationUBO{
     uint tone_map;
     uint transfer;
     float peak_nits;
+    float scene_linear;
+    float dark_style;
+    float dark_strength;
+    float dark_vhs;
+    float dark_chroma;
+    float dark_pixel_mix;
+    float dark_pixel_size;
+    float dark_grain;
+    float dark_scale;
+    float dark_monochrome;
+    float dark_damage;
+    float ukiyo_colors;
+    float ukiyo_flatness;
+    float print_ink_r;
+    float print_ink_g;
+    float print_ink_b;
+    float print_indigo_r;
+    float print_indigo_g;
+    float print_indigo_b;
+    float print_asagi_r;
+    float print_asagi_g;
+    float print_asagi_b;
+    float print_blue_r;
+    float print_blue_g;
+    float print_blue_b;
+    float print_foam_r;
+    float print_foam_g;
+    float print_foam_b;
+    float print_paper_r;
+    float print_paper_g;
+    float print_paper_b;
+    float layer_quantize;
+    float layer_vhs;
+    float layer_mono;
 } linear_interpolation_attr;
-
-layout(location = 0) in vec3 fragColor;
-layout(location = 1) in vec2 fragTexcoord;
 
 layout(location = 0) out vec4 color;
 
@@ -114,6 +148,24 @@ vec3 hlg_encode(vec3 e) {
 
 // The one place the graded picture becomes something a display or an encoder can carry.
 vec3 output_transform(vec3 c) {
+    if (linear_interpolation_attr.scene_linear > 0.5) {
+        c = max(c, 0.0) * exp2(clamp(linear_interpolation_attr.exposure, -32.0, 32.0));
+        float w = max(linear_interpolation_attr.headroom, 1e-3);
+        if (linear_interpolation_attr.transfer == 1u) {
+            return pq_encode(BT709_TO_BT2020 * c / w * linear_interpolation_attr.peak_nits);
+        }
+        if (linear_interpolation_attr.transfer == 2u) {
+            return hlg_encode(BT709_TO_BT2020 * c / w);
+        }
+        if (linear_interpolation_attr.hdr) return linear_to_srgb(tone_map(c, w));
+        // A single peak shoulder for Studio SDR preserves chromatic ratios and leaves shadows unchanged.
+        float peak = max(c.r, max(c.g, c.b));
+        if (peak > 0.75) {
+            float excess = peak - 0.75;
+            c *= (0.75 + 0.25 * excess / (0.25 + excess)) / peak;
+        }
+        return linear_to_srgb(c);
+    }
     if (!linear_interpolation_attr.hdr) {
         return clamp(c, vec3(0.0), vec3(1.0));
     }
@@ -130,13 +182,17 @@ vec3 output_transform(vec3 c) {
     return linear_to_srgb(tone_map(c, w));
 }
 
+#include "mfr_display.glsl"
+#include "dark_finish.glsl"
+#include "print_finish.glsl"
+
 void main() {
 
     ivec2 coord = ivec2(gl_FragCoord.xy);
     ivec2 texSize = textureSize(canvas, 0);
 
     vec4 c;
-    if (linear_interpolation_attr.use) {
+    if (linear_interpolation_attr.use && (!ordered_layers() || layer_is(101))) {
         vec4 c1 = safeTexelFetch(canvas, coord + ivec2(1, 0), texSize);
         vec4 c2 = safeTexelFetch(canvas, coord + ivec2(0, 1), texSize);
         vec4 c3 = safeTexelFetch(canvas, coord + ivec2(-1, 0), texSize);
@@ -153,5 +209,47 @@ void main() {
         c = texelFetch(canvas, coord, 0);
     }
 
-    color = clamp(apply_dither(vec4(output_transform(c.rgb), c.a), coord), 0.0, 1.0);
+    if (ordered_layers()) {
+        if (layer_is(26)) {
+            if (linear_interpolation_attr.transfer != 0u) {
+                c.rgb *= exp2(clamp(linear_interpolation_attr.exposure, -32.0, 32.0));
+            } else if (linear_interpolation_attr.hdr && linear_interpolation_attr.tone_map >= 4u && linear_interpolation_attr.tone_map <= 7u) {
+                c.rgb = srgb_to_linear(mfr_display(c.rgb, linear_interpolation_attr.tone_map, linear_interpolation_attr.exposure, linear_interpolation_attr.peak_nits));
+            } else if (linear_interpolation_attr.hdr || shader_layer.control.y != 0) {
+                c.rgb = srgb_to_linear(output_transform(c.rgb));
+            }
+        } else if (layer_is(27)) {
+            c.rgb = srgb_to_linear(print_finish(linear_to_srgb(c.rgb)));
+        } else if (layer_is(28)) {
+            c.rgb = dark_sample(c.rgb, coord, texSize);
+            c.rgb = srgb_to_linear(dark_finish_layer(linear_to_srgb(c.rgb), coord, 3.0, linear_interpolation_attr.layer_vhs * linear_interpolation_attr.dark_strength));
+        } else if (layer_is(29)) {
+            c.rgb = srgb_to_linear(dark_finish_layer(linear_to_srgb(c.rgb), coord, 4.0, linear_interpolation_attr.layer_mono * linear_interpolation_attr.dark_strength));
+        } else if (layer_is(101)) {
+            if (linear_interpolation_attr.transfer == 1u) {
+                c.rgb = pq_encode(BT709_TO_BT2020 * max(c.rgb, 0.0) / max(linear_interpolation_attr.headroom, 1e-3) * linear_interpolation_attr.peak_nits);
+            } else if (linear_interpolation_attr.transfer == 2u) {
+                c.rgb = hlg_encode(BT709_TO_BT2020 * max(c.rgb, 0.0) / max(linear_interpolation_attr.headroom, 1e-3));
+            } else {
+                c.rgb = linear_to_srgb(c.rgb);
+            }
+            color = linear_interpolation_attr.hdr && linear_interpolation_attr.tone_map == 7u && linear_interpolation_attr.transfer == 0u
+                ? clamp(c, 0.0, 1.0)
+                : clamp(apply_dither(c, coord), 0.0, 1.0);
+            return;
+        }
+        color = vec4(clamp(c.rgb, 0.0, 60000.0), c.a);
+        return;
+    }
+    if (linear_interpolation_attr.hdr && linear_interpolation_attr.transfer == 0u && linear_interpolation_attr.tone_map >= 4u && linear_interpolation_attr.tone_map <= 7u) {
+        vec3 display = mfr_display(c.rgb, linear_interpolation_attr.tone_map, linear_interpolation_attr.exposure, linear_interpolation_attr.peak_nits);
+        color = linear_interpolation_attr.tone_map == 7u
+            ? vec4(display, c.a)
+            : clamp(apply_dither(vec4(display, c.a), coord), 0.0, 1.0);
+        return;
+    }
+    c.rgb = dark_sample(c.rgb, coord, texSize);
+    vec3 finished = dark_finish(output_transform(c.rgb), coord);
+    color = clamp(apply_dither(vec4(finished, c.a), coord), 0.0, 1.0);
+    color.rgb = print_finish(color.rgb);
 }

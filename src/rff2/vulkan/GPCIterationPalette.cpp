@@ -1,10 +1,11 @@
 //
 // Created by Merutilm on 2025-07-29.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21.
+// Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-22, 2026-08-26, 2026-08-31
-// Modified by ox-alpha on 2026-08-22.
+// Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23
 //
 
 #include "../vulkan/GPCIterationPalette.hpp"
@@ -20,7 +21,7 @@
 
 namespace merutilm::rff2 {
     float GPCIterationPalette::animationNow() const {
-        return animationTimePinned ? pinnedTime : Utilities::getCurrentTime();
+        return animationTimePinned ? pinnedTime : previewClock.now(Utilities::getCurrentTime());
     }
 
     void GPCIterationPalette::updateQueue(vkh::DescriptorUpdateQueue &queue,
@@ -32,12 +33,17 @@ namespace merutilm::rff2 {
         // The descriptor is shared with the stripe pass, so what is published here is what every
         // pass in this window draws its animation from.
         const float now = animationNow();
+        submittedAnimationTime = now;
         phases.advanceTo(now);
         phases.writeTimeUniform(timeBinding, frameIndex, now);
     }
 
     void GPCIterationPalette::cmdRefreshIterations(const VkCommandBuffer cbh, const vkh::BufferContext &src) const {
-        vkh::BufferImageContextUtils::cmdCopyBuffer(cbh, src, getResultIterationBuffer());
+        const auto& result = getResultIterationBuffer();
+        vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_TRANSFER_WRITE_BIT, result.buffer, 0, result.bufferSize,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        vkh::BufferImageContextUtils::cmdCopyBuffer(cbh, src, result);
     }
 
     const vkh::BufferContext &GPCIterationPalette::getResultIterationBuffer() const {
@@ -57,8 +63,6 @@ namespace merutilm::rff2 {
         auto &iterSSBO = *iterDesc.get<vkh::ShaderStorage>(0, DescIteration::BINDING_SSBO_ITERATION_MATRIX);
         auto &iterSSBOHost = iterSSBO.getHostObject();
 
-        this->iterWidth = width;
-        this->iterHeight = height;
         iterUBOHost.set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_EXTENT, {width, height});
         // The buffer is the whole canvas unless a tiled export says otherwise, so reset it to that here.
         iterUBOHost.set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_CANVAS_EXTENT, {width, height});
@@ -90,8 +94,19 @@ namespace merutilm::rff2 {
 
     void GPCIterationPalette::pinAnimationTime(const bool pin) {
         // Captured on the way in, so the pinned frame matches what the preview was showing.
-        pinnedTime = Utilities::getCurrentTime();
+        pinnedTime = previewClock.now(Utilities::getCurrentTime());
         animationTimePinned = pin;
+    }
+
+    void GPCIterationPalette::setPreviewAnimationPaused(const bool paused) {
+        const float wallTime=Utilities::getCurrentTime();
+        phases.advanceTo(animationTimePinned?pinnedTime:previewClock.now(wallTime));
+        previewClock.setPaused(paused,wallTime);
+    }
+
+    void GPCIterationPalette::swapAnimationLayers(AnimatedLayerFamily family, uint32_t from, uint32_t to) {
+        phases.advanceTo(animationNow());
+        phases.swapLayers(family, from, to);
     }
 
     void GPCIterationPalette::setCanvasGeometry(const glm::uvec2 &canvasExtent,
@@ -144,9 +159,9 @@ namespace merutilm::rff2 {
             finalColors = baseColors;
         }
 
-        finalColors = applyBandLines(std::move(finalColors), palette);
-
-        const auto finalSize = static_cast<uint32_t>(finalColors.size());
+        auto bandPalette = prepareBandLinePalette(std::move(finalColors), palette);
+        const auto finalSize = bandPalette.cycleSize;
+        finalColors = std::move(bandPalette.colors);
 
         paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_SIZE, finalSize);
 
@@ -194,7 +209,6 @@ namespace merutilm::rff2 {
                                           const int warpSourceLayer) {
         phases.advanceTo(animationNow());
         auto &textureDesc = getDescriptor(SET_TEXTURE);
-        std::vector<uint32_t> changedBindings;
         for (uint32_t layer = 0; layer < TEXTURE_LAYER_COUNT; ++layer) {
             const auto &texture = textures[layer];
             phases.setTextureSpeed(layer, texture);
@@ -202,20 +216,27 @@ namespace merutilm::rff2 {
             if (TextureDescriptor::uploadImage(wc.core, wc.getCommandPool(), textureDesc, layer,
                                                wanted ? texture.path : std::string{},
                                                loadedTexturePaths[layer])) {
-                changedBindings.push_back(TextureDescriptor::samplerBinding(layer));
+                pendingTextureBindings |= 1u << layer;
             }
             TextureDescriptor::updateParams(textureDesc, layer, texture, !loadedTexturePaths[layer].empty());
         }
         specModes.setTextures(textures);
         respecialize();
-        if (changedBindings.empty()) {
+        if (pendingTextureBindings == 0) {
             return;
+        }
+        std::vector<uint32_t> changedBindings;
+        for (uint32_t layer = 0; layer < TEXTURE_LAYER_COUNT; ++layer) {
+            if ((pendingTextureBindings & (1u << layer)) != 0) {
+                changedBindings.push_back(TextureDescriptor::samplerBinding(layer));
+            }
         }
         writeDescriptorMF(
             [&textureDesc, changedBindings = std::move(changedBindings)](vkh::DescriptorUpdateQueue &queue,
                                                                         const uint32_t frameIndex) {
                 textureDesc.queue(queue, frameIndex, {}, std::vector(changedBindings));
             });
+        pendingTextureBindings = 0;
     }
 
     void GPCIterationPalette::setPattern(const std::array<ShdPatternAttribute, PATTERN_LAYER_COUNT> &patterns) {
@@ -227,6 +248,11 @@ namespace merutilm::rff2 {
         }
         specModes.setPattern(patterns);
         respecialize();
+    }
+
+    void GPCIterationPalette::setEffects(const ShdEffectsAttribute &effects) {
+        phases.advanceTo(animationNow());
+        phases.setEffectsSpeed(effects);
     }
 
     void GPCIterationPalette::setWarp(const ShdWarpAttribute &warp) {
@@ -281,6 +307,7 @@ namespace merutilm::rff2 {
 
     void GPCIterationPalette::configurePushConstant(
         vkh::PipelineLayoutManagerRef pipelineLayoutManager) {
+        ShaderLayerControl::configure(layerPush, pipelineLayoutManager);
         //noop
     }
 
@@ -313,6 +340,6 @@ namespace merutilm::rff2 {
                 .unnormalizedCoordinates = VK_FALSE,
             });
         appendUniqueDescriptor(SET_TEXTURE, descriptors,
-                               TextureDescriptor::createManager(wc.core, sampler, VK_SHADER_STAGE_FRAGMENT_BIT));
+                               TextureDescriptor::createManager(wc.core, sampler, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT));
     }
 }

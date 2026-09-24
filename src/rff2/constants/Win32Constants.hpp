@@ -1,12 +1,14 @@
 //
 // Created by Merutilm on 2025-08-09.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-27.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02, 2026-09-03
-// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06,
+// Modified by GPT-5 on 2026-08-21, 2026-08-27
+// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06, 2026-09-24
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-23
 //
 
 #pragma once
+#include "../ui/UiLanguage.hpp"
 #include <algorithm>
 #include <cwchar>
 #include <windows.h>
@@ -20,7 +22,6 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int BASELINE_DISPLAY_HEIGHT = 1080;
         constexpr int MIN_WINDOW_WIDTH = 300;
         constexpr int MIN_WINDOW_HEIGHT = 300;
-        constexpr float INIT_RENDER_SCENE_FPS = 60;
         constexpr int INIT_SETTINGS_WINDOW_WIDTH = 760;
         constexpr int PROGRESS_BAR_HEIGHT = 40;
         constexpr int SETTINGS_INPUT_HEIGHT = 34;
@@ -31,14 +32,13 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v2.2.1";
+        constexpr auto APPLICATION_VERSION = "v3.0.0 beta1";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";
         constexpr auto CLASS_VIDEO_RENDER_WINDOW = L"RFF2VRW";
         constexpr auto CLASS_VK_RENDER_SCENE = L"RFF2VRS";
         constexpr auto CLASS_BOX_ZOOM_OVERLAY = L"RFF2BZO";
-        constexpr auto CLASS_IMAGE_VIEWER_WINDOW = L"RFF2IVW";
         // Windows 11's own UI face, hinted for the 12-16px band these windows draw at. Windows 10
         // and earlier do not have it, and the GDI font mapper answers a face name it cannot resolve
         // with a silent substitution (a gothic face, on a Japanese system) instead of an error - so
@@ -78,9 +78,10 @@ namespace merutilm::rff2::Constants::Win32 {
                                          CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL;
         constexpr int ID_MENUS = 0x2000;
         constexpr int ID_OPTIONS = 0x1000;
-        constexpr int ID_OPTIONS_RADIO = 0x0100;
-        constexpr int ID_OPTIONS_CHECKBOX_FLAG = 0x0080;
-        constexpr int ID_SECTION_TOGGLE = 0x4000;
+        constexpr int ID_OPTIONS_INDEX_MASK = 0x01ff;
+        constexpr int ID_OPTIONS_RADIO = 0x0400;
+        constexpr int ID_OPTIONS_CHECKBOX_FLAG = 0x0200;
+        constexpr int ID_SECTION_TOGGLE = 0xf000;
         // Posted to the master window when the dark-mode flag has been flipped, so the frame, the
         // menu bar and the status bar are redressed after the flip rather than before it.
         constexpr UINT WM_MAIN_THEME_CHANGED = WM_APP + 1;
@@ -92,22 +93,7 @@ namespace merutilm::rff2::Constants::Win32 {
         // this is a ceiling on how fresh the canvas is kept, not a promise of a rate.
         constexpr UINT TIMER_MENU_LOOP_RENDER_INTERVAL = 16;
         // Selected UI colors use Tailwind CSS v3's MIT-licensed palette; see NOTICE.
-        constexpr COLORREF COLOR_PROGRESS_BACKGROUND_PROG = RGB(37, 99, 235);
-        constexpr COLORREF COLOR_PROGRESS_BACKGROUND_BACK = RGB(15, 23, 42);
-        constexpr COLORREF COLOR_PROGRESS_TEXT_PROG = RGB(255, 255, 255);
-        constexpr COLORREF COLOR_PROGRESS_TEXT_BACK = RGB(255, 255, 255);
-        constexpr COLORREF COLOR_TEXT_ERROR = RGB(255, 0, 0);
-        constexpr COLORREF COLOR_TEXT_EDITED = RGB(146, 64, 14);
-        constexpr COLORREF COLOR_TEXT_MODIFIED = RGB(3, 105, 161);
-        constexpr COLORREF COLOR_TEXT_DEFAULT = RGB(30, 41, 59);
-        constexpr COLORREF COLOR_TEXT_DISABLED = RGB(148, 163, 184);
         constexpr COLORREF COLOR_LABEL_BACKGROUND = RGB(248, 250, 252);
-        constexpr COLORREF COLOR_WINDOW_BACKGROUND = RGB(248, 250, 252);
-        constexpr COLORREF COLOR_TOOLTIP_BACKGROUND = RGB(248, 250, 252);
-        constexpr COLORREF COLOR_TOOLTIP_TEXT = RGB(15, 23, 42);
-        constexpr COLORREF COLOR_CHECKBOX_CHECKED_BACKGROUND = RGB(37, 99, 235);
-        constexpr COLORREF COLOR_CHECKBOX_BORDER = RGB(148, 163, 184);
-        constexpr COLORREF COLOR_CHECKBOX_MARK = RGB(255, 255, 255);
         // A disabled tick used to be drawn in the disabled text grey on the near-white disabled face,
         // which left it at about 1.5:1 - not readable as a mark at all. Filling the box instead and
         // keeping the tick white mirrors the enabled state and lands near its own contrast (~2.5:1).
@@ -135,19 +121,8 @@ namespace merutilm::rff2::Constants::Win32 {
         // GDI draws no antialiased curves, so the bar is rendered at this multiple of its size and
         // shrunk with a halftone blit; the thumb's outline is visibly stepped drawn at 1:1.
         constexpr int SLIDER_SUPERSAMPLE = 4;
-        constexpr COLORREF COLOR_SLIDER_TRACK = RGB(226, 232, 240);
-        constexpr COLORREF COLOR_SLIDER_FILL = RGB(37, 99, 235);
-        constexpr COLORREF COLOR_SLIDER_THUMB_FACE = RGB(255, 255, 255);
-        constexpr COLORREF COLOR_SLIDER_THUMB_BORDER = RGB(203, 213, 225);
-        constexpr COLORREF COLOR_SLIDER_TRACK_DISABLED = RGB(241, 245, 249);
-        constexpr COLORREF COLOR_SLIDER_DISABLED = RGB(203, 213, 225);
 
         constexpr int FONT_SIZE_RANGE_LABEL = 16;
-        constexpr COLORREF COLOR_RANGE_LABEL = RGB(100, 116, 139);
-        constexpr COLORREF COLOR_PREVIEW_BORDER = RGB(148, 163, 184);
-        constexpr COLORREF COLOR_PREVIEW_BORDER_SELECTED = RGB(37, 99, 235);
-        constexpr COLORREF COLOR_RADIO_SELECTED_BG = RGB(239, 246, 255);
-        constexpr COLORREF COLOR_RADIO_SELECTED_BORDER = RGB(147, 197, 253);
 
         // Soft, near-white owner-drawn push / color buttons with rounded corners.
         constexpr int BUTTON_CORNER_RADIUS = 12;
@@ -170,10 +145,6 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr COLORREF COLOR_TEXT_FIELD_BACKGROUND = RGB(255, 255, 255);
         // Soft border drawn around the rounded text fields so they read clearly against white.
         constexpr COLORREF COLOR_TEXT_FIELD_BORDER = RGB(203, 213, 225);
-        constexpr COLORREF COLOR_BUTTON_FACE = RGB(255, 255, 255);
-        constexpr COLORREF COLOR_BUTTON_FACE_PRESSED = RGB(226, 232, 240);
-        constexpr COLORREF COLOR_CONTROL_DISABLED_FACE = RGB(241, 245, 249);
-        constexpr COLORREF COLOR_BUTTON_BORDER = RGB(203, 213, 225);
 
         // ---- Settings-window UI scaling ------------
         constexpr double SETTINGS_UI_BASE_SCALE = 0.81;
@@ -191,7 +162,28 @@ namespace merutilm::rff2::Constants::Win32 {
             return scale;
         }
 
+        inline thread_local UINT settingsDpiOverride = 0;
+        class SettingsDpiScope {
+            UINT previous;
+
+        public:
+            explicit SettingsDpiScope(UINT dpi) : previous(settingsDpiOverride) {
+                settingsDpiOverride = dpi;
+            }
+
+            ~SettingsDpiScope() {
+                settingsDpiOverride = previous;
+            }
+
+            SettingsDpiScope(const SettingsDpiScope&) = delete;
+            SettingsDpiScope& operator=(const SettingsDpiScope&) = delete;
+        };
+
         inline double settingsUiScale() {
+            if (settingsDpiOverride != 0) {
+                return SETTINGS_UI_BASE_SCALE * settingsDpiOverride / 96.0;
+            }
+
             static const double scale = [] {
                 const HDC hdc = GetDC(nullptr);
                 const int dpi = hdc ? GetDeviceCaps(hdc, LOGPIXELSX) : 96;
@@ -226,6 +218,10 @@ namespace merutilm::rff2::Constants::Win32 {
         // requested one, so a system without it falls back to Segoe UI rather than to whatever
         // the mapper picked on its own.
         inline const wchar_t *uiFontFace() {
+            if (UiLanguage::current() == Language::Japanese) {
+                return UiLanguage::fontFace();
+            }
+
             static const wchar_t *face = []() -> const wchar_t * {
                 const HDC hdc = GetDC(nullptr);
                 if (!hdc) {

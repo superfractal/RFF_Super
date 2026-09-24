@@ -1,16 +1,22 @@
 //
 // Created by Merutilm on 2025-07-19.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
+#include <functional>
+#include <utility>
+
 #include "GlobalDescriptorSetLayoutRepo.hpp"
 #include "Repository.hpp"
 #include "../impl/Descriptor.hpp"
 #include "../struct/DescriptorTemplateInfo.hpp"
 
 namespace merutilm::vkh {
-    struct WindowLocalDescriptorRepo final : Repository<uint32_t, const DescriptorTemplateInfo &, Descriptor, DescriptorRef,
-                std::hash<uint32_t>, std::equal_to<>, GlobalDescriptorSetLayoutRepo &> {
+    struct WindowLocalDescriptorRepo final
+        : Repository<uint32_t, const DescriptorTemplateInfo &, Descriptor, DescriptorRef,
+                     std::hash<uint32_t>, std::equal_to<>, GlobalDescriptorSetLayoutRepo &> {
         using Repository::Repository;
 
         DescriptorRef pick(const DescriptorTemplateInfo &descTemplateInfo,
@@ -20,9 +26,9 @@ namespace merutilm::vkh {
                 auto descManager = descTemplateInfo.descriptorGenerator(core);
                 auto &layout = layoutRepo.pick(descManager[0]->layoutBuilder);
 
-                auto [newIt, _] = repository.try_emplace(descTemplateInfo.id,
-                                                     factory::create<Descriptor>(core, layout, std::move(descManager)));
-                it = newIt;
+                it = repository.try_emplace(
+                    descTemplateInfo.id,
+                    factory::create<Descriptor>(core, layout, std::move(descManager))).first;
             }
             return *it->second;
         }

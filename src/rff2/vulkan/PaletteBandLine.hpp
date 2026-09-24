@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-20.
-// Modified by Opus 5 on 2026-08-22.
+// Modified by Opus 5 on 2026-08-22
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-23
 //
 
 #pragma once
@@ -21,17 +22,22 @@ namespace merutilm::rff2 {
     // Lays the band lines over the copy that is uploaded, so the palette keeps the colors as they
     // were edited and the lines can be moved or lifted without regenerating them. Shared by both
     // palette uploads, so the preview and a video export draw the same lines.
-    inline std::vector<glm::vec4> applyBandLines(std::vector<glm::vec4> colors, const ShdPaletteAttribute &palette) {
+    inline std::vector<glm::vec4> applyBandLines(
+        std::vector<glm::vec4> colors,
+        const ShdPaletteAttribute &palette,
+        std::vector<glm::vec4> *unlined = nullptr) {
         const auto count = static_cast<uint64_t>(palette.bandLineCount);
-        if (!palette.bandLineEnabled || colors.empty() || count == 0 || palette.bandLineWidth <= 0.0f) {
+        if (!palette.bandLineEnabled || palette.bandLineGroove || colors.empty() || count == 0 ||
+            palette.bandLineWidth <= 0.0f) {
             return colors;
         }
 
         // A hard line only has to land on an entry; a feathered one is a ramp, and a ramp drawn
         // over a handful of entries comes out as steps, so softness asks for far more of them.
         const float span = palette.bandLineSoftness > 0.0f ? 64.0f : 4.0f;
-        const auto perBand = std::clamp(static_cast<uint64_t>(std::ceil(span / palette.bandLineWidth)),
-                                        BAND_LINE_MIN_ENTRIES, BAND_LINE_MAX_ENTRIES);
+        const auto perBand = std::clamp(
+            static_cast<uint64_t>(std::ceil(span / palette.bandLineWidth)),
+            BAND_LINE_MIN_ENTRIES, BAND_LINE_MAX_ENTRIES);
         const uint64_t target = std::min(count * perBand, BAND_LINE_MAX_TOTAL);
 
         // A palette too coarse to hold the line is interpolated up first, in the space the shader
@@ -44,13 +50,16 @@ namespace merutilm::rff2 {
                 const double pos = static_cast<double>(i) * src / static_cast<double>(target);
                 const auto i0 = static_cast<size_t>(pos) % colors.size();
                 const size_t i1 = (i0 + 1) % colors.size();
-                fine.push_back(blendPaletteColors(colors[i0], colors[i1],
-                                                  static_cast<float>(pos - std::floor(pos)),
-                                                  palette.colorInterpolation));
+                fine.push_back(blendPaletteColors(
+                    colors[i0], colors[i1],
+                    static_cast<float>(pos - std::floor(pos)),
+                    palette.colorInterpolation));
             }
             colors = std::move(fine);
         }
 
+        if (unlined)
+            *unlined = colors;
         const auto size = static_cast<float>(colors.size());
         for (size_t i = 0; i < colors.size(); ++i) {
             const float coverage = palette.bandLineCoverage(static_cast<float>(i) / size);
@@ -59,5 +68,27 @@ namespace merutilm::rff2 {
             }
         }
         return colors;
+    }
+
+    struct BandLinePaletteUpload {
+        std::vector<glm::vec4> colors;
+        uint32_t cycleSize;
+    };
+
+    // Keep the unlined palette after the visible cycle for material brightness transfer; see NOTICE.
+    inline BandLinePaletteUpload prepareBandLinePalette(
+        std::vector<glm::vec4> colors,
+        const ShdPaletteAttribute &palette) {
+        if (!palette.bandLineEnabled || palette.bandLineGroove || colors.empty() ||
+            palette.bandLineCount == 0 || palette.bandLineWidth <= 0.0f ||
+            palette.bandLineOpacity <= 0.0f) {
+            const auto size = static_cast<uint32_t>(colors.size());
+            return {std::move(colors), size};
+        }
+        std::vector<glm::vec4> unlined = colors;
+        auto lined = applyBandLines(std::move(colors), palette);
+        const auto cycleSize = static_cast<uint32_t>(lined.size());
+        lined.insert(lined.end(), unlined.begin(), unlined.end());
+        return {std::move(lined), cycleSize};
     }
 }

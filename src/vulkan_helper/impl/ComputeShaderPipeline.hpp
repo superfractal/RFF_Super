@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-27.
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -27,12 +28,11 @@ namespace merutilm::vkh {
 
         ComputeShaderPipelineImpl &operator=(ComputeShaderPipelineImpl &&) = delete;
 
-        void cmdBindAll(VkCommandBuffer cbh, uint32_t frameIndex, DescIndexPicker &&descIndices) const override;
+        void cmdBindAll(VkCommandBuffer commandBuffer, uint32_t frameIndex,
+                        DescIndexPicker &&descriptorIndices) const override;
 
         void init() override;
     };
 
     using ComputeShaderPipeline = std::unique_ptr<ComputeShaderPipelineImpl>;
-    using ComputeShaderPipelinePtr = ComputeShaderPipelineImpl *;
-    using ComputeShaderPipelineRef = ComputeShaderPipelineImpl &;
 }

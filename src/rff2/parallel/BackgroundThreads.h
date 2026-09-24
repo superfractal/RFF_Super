@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-06-09.
 // Modified by Opus 5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -26,16 +27,33 @@ namespace merutilm::rff2 {
                     break;
                 }
             }
-            if (index == threads.size()) {
+            const bool appendedSlot = index == threads.size();
+            if (appendedSlot) {
                 threads.emplace_back(nullptr);
             }
-            threads[index] = std::make_unique<BackgroundThread>(std::forward<T>(func));
+            try {
+                threads[index] = std::make_unique<BackgroundThread>(std::forward<T>(func));
+            } catch (...) {
+                if (appendedSlot) {
+                    threads.pop_back();
+                }
+                throw;
+            }
         }
 
         void notifyAll() {
             std::scoped_lock lock(mutex);
             for (const auto &thread : threads) {
                 thread->notify();
+            }
+        }
+
+        void requestStopAll() {
+            std::scoped_lock lock(mutex);
+            for (const auto &thread : threads) {
+                if (thread != nullptr) {
+                    thread->requestStop();
+                }
             }
         }
 

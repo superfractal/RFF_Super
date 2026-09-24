@@ -1,11 +1,15 @@
 //
 // Created by Merutilm on 2025-07-15.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <memory>
+#include <type_traits>
+#include <vector>
+
 #include "../core/vkh_base.hpp"
 #include "BufferObject.hpp"
-#include "../handle/CoreHandler.hpp"
 
 namespace merutilm::vkh {
     class VertexBufferImpl final : public BufferObjectAbstract {
@@ -13,9 +17,8 @@ namespace merutilm::vkh {
         std::vector<VkVertexInputAttributeDescription> vertexInputAttributeDescriptions = {};
 
     public:
-        explicit VertexBufferImpl(CoreRef core, HostDataObjectManager &&manager, BufferLock bufferLock, bool multiframeEnabled);
-
-        ~VertexBufferImpl() override;
+        explicit VertexBufferImpl(CoreRef core, HostDataObjectManager &&manager, BufferLock bufferLock,
+                                  bool multiframeEnabled);
 
         VertexBufferImpl(const VertexBufferImpl &) = delete;
 
@@ -36,8 +39,6 @@ namespace merutilm::vkh {
     private:
 
         void init() override;
-
-        void destroy() override;
 
         template<typename T>
         static VkFormat getFormat();

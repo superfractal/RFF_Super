@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-05-18.
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
+// Modified by GPT-6 on 2026-09-18
 //
 
 #include "DeepMandelbrotPerturbator.h"
@@ -215,6 +216,8 @@ namespace merutilm::rff2 {
         }
 
 
+        // Rebuild approximation radii when switching between normal and relaxed CPU settings.
+        if (table && table->mpaSettings != calc.mpaAttribute) table.reset();
         return std::make_unique<DeepMandelbrotPerturbator>(state, calc, dcMax, exp10, longestPeriod,
                                                            tableRef,
                                                            [](uint64_t) {

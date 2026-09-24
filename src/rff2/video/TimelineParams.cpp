@@ -1,8 +1,12 @@
+//
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
-// Modified by ox-alpha on 2026-08-22.
+// Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
+// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
+//
 
 #include "TimelineParams.hpp"
+#include "../attr/NumericSettingLimits.hpp"
 
 #include <array>
 #include <cmath>
@@ -142,14 +146,14 @@ namespace merutilm::rff2 {
 
 #define NESTED_VALUE(ID, GROUP, LABEL, KIND, DIRTY, MIN, MAX, PARENT, MEMBER) \
         {vidTimelineTargetId(VidTimelineTarget::ID), GROUP, LABEL, TimelineParamKind::KIND, \
-         TimelineApplyCost::CHEAP, TimelineDirtyMask::DIRTY, MIN, MAX, \
+         TimelineDirtyMask::DIRTY, MIN, MAX, \
          &getNestedValue<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>, \
          &setNestedValue<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>, nullptr, nullptr, \
          &getNestedAddress<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>}
 
 #define NESTED_COLOR(ID, GROUP, LABEL, DIRTY, PARENT, MEMBER) \
         {vidTimelineTargetId(VidTimelineTarget::ID), GROUP, LABEL, TimelineParamKind::COLOR, \
-         TimelineApplyCost::CHEAP, TimelineDirtyMask::DIRTY, 0.0f, 1.0f, nullptr, nullptr, \
+         TimelineDirtyMask::DIRTY, 0.0f, 1.0f, nullptr, nullptr, \
          &getNestedColor<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>, \
          &setNestedColor<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>, \
          &getNestedAddress<&ShaderAttribute::PARENT, &decltype(ShaderAttribute::PARENT)::MEMBER>}
@@ -159,21 +163,21 @@ namespace merutilm::rff2 {
 
 #define TEXTURE_VALUE(ID, LAYER, LABEL, KIND, MIN, MAX, MEMBER) \
         {vidTimelineTargetId(VidTimelineTarget::ID), L"Texture " WIDEN(#LAYER), LABEL, TimelineParamKind::KIND, \
-         TimelineApplyCost::CHEAP, TimelineDirtyMask::TEXTURE, MIN, MAX, \
+         TimelineDirtyMask::TEXTURE, MIN, MAX, \
          &getTextureValue<LAYER - 1, &ShdTextureAttribute::MEMBER>, \
          &setTextureValue<LAYER - 1, &ShdTextureAttribute::MEMBER>, nullptr, nullptr, \
          &getTextureAddress<LAYER - 1, &ShdTextureAttribute::MEMBER>}
 
 #define PATTERN_VALUE(ID, LAYER, LABEL, KIND, MIN, MAX, MEMBER) \
         {vidTimelineTargetId(VidTimelineTarget::ID), L"Pattern " WIDEN(#LAYER), LABEL, TimelineParamKind::KIND, \
-         TimelineApplyCost::CHEAP, TimelineDirtyMask::PATTERN, MIN, MAX, \
+         TimelineDirtyMask::PATTERN, MIN, MAX, \
          &getPatternValue<LAYER - 1, &ShdPatternAttribute::MEMBER>, \
          &setPatternValue<LAYER - 1, &ShdPatternAttribute::MEMBER>, nullptr, nullptr, \
          &getPatternAddress<LAYER - 1, &ShdPatternAttribute::MEMBER>}
 
 #define PATTERN_COLOR(ID, LAYER, LABEL, MEMBER) \
         {vidTimelineTargetId(VidTimelineTarget::ID), L"Pattern " WIDEN(#LAYER), LABEL, TimelineParamKind::COLOR, \
-         TimelineApplyCost::CHEAP, TimelineDirtyMask::PATTERN, 0.0f, 1.0f, nullptr, nullptr, \
+         TimelineDirtyMask::PATTERN, 0.0f, 1.0f, nullptr, nullptr, \
          &getPatternColor<LAYER - 1, &ShdPatternAttribute::MEMBER>, \
          &setPatternColor<LAYER - 1, &ShdPatternAttribute::MEMBER>, \
          &getPatternAddress<LAYER - 1, &ShdPatternAttribute::MEMBER>}
@@ -215,10 +219,18 @@ namespace merutilm::rff2 {
         PATTERN_VALUE(PATTERN_##N##_EDGE_RELATIVE, N, L"Edge Relative", BOOL, 0.0f, 1.0f, edgeRelative)
 
         const auto PARAMS = std::to_array<TimelineParamDesc>({
-            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_R), L"Palette", L"Iteration Interval R", TimelineParamKind::FLOAT, TimelineApplyCost::CHEAP, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<0>, &setPaletteInterval<0>, nullptr, nullptr, &getPaletteIntervalAddress<0>},
-            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_G), L"Palette", L"Iteration Interval G", TimelineParamKind::FLOAT, TimelineApplyCost::CHEAP, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<1>, &setPaletteInterval<1>, nullptr, nullptr, &getPaletteIntervalAddress<1>},
-            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_B), L"Palette", L"Iteration Interval B", TimelineParamKind::FLOAT, TimelineApplyCost::CHEAP, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<2>, &setPaletteInterval<2>, nullptr, nullptr, &getPaletteIntervalAddress<2>},
-            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_A), L"Palette", L"Iteration Interval A", TimelineParamKind::FLOAT, TimelineApplyCost::CHEAP, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<3>, &setPaletteInterval<3>, nullptr, nullptr, &getPaletteIntervalAddress<3>},
+
+            NESTED_VALUE(CAMERA_ROTATION, L"Camera", L"Rotation", FLOAT, CAMERA, -360000.0f, 360000.0f, camera, rotation),
+            NESTED_VALUE(CAMERA_PROJECTION, L"Camera", L"Projection (0 Planar, 1 Equirectangular, 2 Camera)", ENUM, CAMERA, 0.0f, 2.0f, camera, projection),
+            NESTED_VALUE(CAMERA_PITCH, L"Camera", L"Pitch", FLOAT, CAMERA, -90.0f, 90.0f, camera, pitch),
+            NESTED_VALUE(CAMERA_FOV, L"Camera", L"Field of View", FLOAT, CAMERA, 1.0f, 179.0f, camera, fov),
+            NESTED_VALUE(CAMERA_RANGE, L"Camera", L"Panorama Range (log10, limited by padding)", FLOAT, CAMERA, 0.0f, 6.0f, camera, range),
+            NESTED_VALUE(CAMERA_LAYOUT, L"Camera", L"Layout (0 Ground, 1 Full Sphere)", ENUM, CAMERA, 0.0f, 1.0f, camera, layout),
+
+            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_R), L"Palette", L"Iteration Interval R", TimelineParamKind::FLOAT, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<0>, &setPaletteInterval<0>, nullptr, nullptr, &getPaletteIntervalAddress<0>},
+            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_G), L"Palette", L"Iteration Interval G", TimelineParamKind::FLOAT, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<1>, &setPaletteInterval<1>, nullptr, nullptr, &getPaletteIntervalAddress<1>},
+            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_B), L"Palette", L"Iteration Interval B", TimelineParamKind::FLOAT, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<2>, &setPaletteInterval<2>, nullptr, nullptr, &getPaletteIntervalAddress<2>},
+            {vidTimelineTargetId(VidTimelineTarget::PALETTE_INTERVAL_A), L"Palette", L"Iteration Interval A", TimelineParamKind::FLOAT, TimelineDirtyMask::PALETTE, 1.0f, 1.0e18f, &getPaletteInterval<3>, &setPaletteInterval<3>, nullptr, nullptr, &getPaletteIntervalAddress<3>},
             NESTED_VALUE(PALETTE_OFFSET_RATIO, L"Palette", L"Offset Ratio", FLOAT, PALETTE, 0.0f, 1.0f, palette, offsetRatio),
             NESTED_VALUE(PALETTE_CYCLE_BIAS, L"Palette", L"Cycle Bias", FLOAT, PALETTE, 0.10f, 4.00f, palette, cycleBias),
             NESTED_VALUE(PALETTE_CYCLE_CURVE, L"Palette", L"Cycle Curve", ENUM, PALETTE, 0.0f, 1.0f, palette, cycleCurve),
@@ -247,8 +259,8 @@ namespace merutilm::rff2 {
             NESTED_VALUE(SLOPE_SPECULAR_POWER, L"Slope", L"Specular Power", FLOAT, SLOPE, 1.0f, 100000.0f, slope, specularPower),
             NESTED_VALUE(SLOPE_RIM_INTENSITY, L"Slope", L"Rim Intensity", FLOAT, SLOPE, 0.0f, 1.0f, slope, rimIntensity),
             NESTED_VALUE(SLOPE_RIM_POWER, L"Slope", L"Rim Power", FLOAT, SLOPE, 1.0f, 64.0f, slope, rimPower),
-            NESTED_VALUE(SLOPE_BRIGHTNESS, L"Slope", L"Brightness", FLOAT, SLOPE, 0.0001f, 1000000.0f, slope, brightness),
-            NESTED_VALUE(SLOPE_GAMMA, L"Slope", L"Gamma", FLOAT, SLOPE, 0.0001f, 1000000.0f, slope, gamma),
+            NESTED_VALUE(SLOPE_BRIGHTNESS, L"Slope", L"Brightness", FLOAT, SLOPE, NumericSettingLimits::slopeBrightness.minimum, NumericSettingLimits::slopeBrightness.maximum, slope, brightness),
+            NESTED_VALUE(SLOPE_GAMMA, L"Slope", L"Gamma", FLOAT, SLOPE, NumericSettingLimits::gamma.minimum, NumericSettingLimits::gamma.maximum, slope, gamma),
             NESTED_COLOR(SLOPE_RIM_COLOR, L"Slope", L"Rim Color", SLOPE, slope, rimColor),
             NESTED_COLOR(SLOPE_SPECULAR_COLOR, L"Slope", L"Specular Color", SLOPE, slope, specularColor),
             NESTED_VALUE(SLOPE_AO_INTENSITY, L"Slope", L"AO Intensity", FLOAT, SLOPE, 0.0f, 1.0f, slope, aoIntensity),
@@ -272,30 +284,39 @@ namespace merutilm::rff2 {
             NESTED_VALUE(SLOPE_FILL_ZENITH, L"Slope", L"Fill Zenith", FLOAT, SLOPE, -360000.0f, 360000.0f, slope, fillZenith),
             NESTED_VALUE(SLOPE_FILL_AZIMUTH, L"Slope", L"Fill Direction", FLOAT, SLOPE, -360000.0f, 360000.0f, slope, fillAzimuth),
 
-            NESTED_VALUE(COLOR_GAMMA, L"Color", L"Gamma", FLOAT, COLOR, 0.0001f, 1000000.0f, color, gamma),
-            NESTED_VALUE(COLOR_EXPOSURE, L"Color", L"Exposure", FLOAT, COLOR, -1000000.0f, 1000000.0f, color, exposure),
-            NESTED_VALUE(COLOR_HUE, L"Color", L"Hue", FLOAT, COLOR, -360000.0f, 360000.0f, color, hue),
-            NESTED_VALUE(COLOR_SATURATION, L"Color", L"Saturation", FLOAT, COLOR, -1000000.0f, 1000000.0f, color, saturation),
-            NESTED_VALUE(COLOR_BRIGHTNESS, L"Color", L"Brightness", FLOAT, COLOR, -1000000.0f, 1000000.0f, color, brightness),
-            NESTED_VALUE(COLOR_CONTRAST, L"Color", L"Contrast", FLOAT, COLOR, -1.0f, 1.0f, color, contrast),
+            NESTED_VALUE(COLOR_GAMMA, L"Color", L"Gamma", FLOAT, COLOR, NumericSettingLimits::gamma.minimum, NumericSettingLimits::gamma.maximum, color, gamma),
+            NESTED_VALUE(COLOR_EXPOSURE, L"Color", L"Exposure", FLOAT, COLOR, NumericSettingLimits::colorExposure.minimum, NumericSettingLimits::colorExposure.maximum, color, exposure),
+            NESTED_VALUE(COLOR_HUE, L"Color", L"Hue", FLOAT, COLOR, NumericSettingLimits::timelineHue.minimum, NumericSettingLimits::timelineHue.maximum, color, hue),
+            NESTED_VALUE(COLOR_SATURATION, L"Color", L"Saturation", FLOAT, COLOR, NumericSettingLimits::saturation.minimum, NumericSettingLimits::saturation.maximum, color, saturation),
+            NESTED_VALUE(COLOR_BRIGHTNESS, L"Color", L"Brightness", FLOAT, COLOR, NumericSettingLimits::colorBrightness.minimum, NumericSettingLimits::colorBrightness.maximum, color, brightness),
+            NESTED_VALUE(COLOR_CONTRAST, L"Color", L"Contrast", FLOAT, COLOR, NumericSettingLimits::contrast.minimum, NumericSettingLimits::contrast.maximum, color, contrast),
 
             NESTED_VALUE(FOG_RADIUS, L"Fog", L"Radius", FLOAT, FOG, 0.0f, 1.0f, fog, radius),
             NESTED_VALUE(FOG_OPACITY, L"Fog", L"Opacity", FLOAT, FOG, 0.0f, 1.0f, fog, opacity),
             NESTED_VALUE(FOG_CENTER_START, L"Fog", L"Center Start", FLOAT, FOG, 0.0f, 1.0f, fog, centerStart),
             NESTED_VALUE(FOG_CENTER_INVERT, L"Fog", L"Center Invert", BOOL, FOG, 0.0f, 1.0f, fog, centerInvert),
             NESTED_VALUE(FOG_RIM_MASK, L"Fog", L"Rim Mask", FLOAT, FOG, 0.0f, 1.0f, fog, rimMask),
-            NESTED_VALUE(FOG_RIM_MASK_BOOST, L"Fog", L"Rim Mask Boost", FLOAT, FOG, 0.0001f, 1000000.0f, fog, rimMaskBoost),
-            NESTED_VALUE(FOG_RIM_BLUR, L"Fog", L"Rim Blur", FLOAT, FOG, 0.0f, 1000000.0f, fog, rimBlur),
+            NESTED_VALUE(FOG_RIM_MASK_BOOST, L"Fog", L"Rim Mask Boost", FLOAT, FOG, NumericSettingLimits::rimMaskBoost.minimum, NumericSettingLimits::rimMaskBoost.maximum, fog, rimMaskBoost),
+            NESTED_VALUE(FOG_RIM_BLUR, L"Fog", L"Rim Blur", FLOAT, FOG, NumericSettingLimits::blur.minimum, NumericSettingLimits::blur.maximum, fog, rimBlur),
             NESTED_VALUE(FOG_FOCUS_AMOUNT, L"Fog", L"Focus Amount", FLOAT, FOG, 0.0f, 1.0f, fog, focusAmount),
             NESTED_VALUE(FOG_FOCUS_RATIO, L"Fog", L"Focus Ratio", FLOAT, FOG, 0.0f, 1.0f, fog, focusRatio),
             NESTED_VALUE(FOG_FOCUS_RANGE, L"Fog", L"Focus Range", FLOAT, FOG, 0.01f, 1.0f, fog, focusRange),
             NESTED_VALUE(FOG_FOCUS_FALLOFF, L"Fog", L"Focus Falloff", FLOAT, FOG, 0.10f, 4.00f, fog, focusFalloff),
-            NESTED_VALUE(FOG_FOCUS_BLUR, L"Fog", L"Focus Blur", FLOAT, FOG, 0.0f, 1000000.0f, fog, focusBlur),
+            NESTED_VALUE(FOG_FOCUS_BLUR, L"Fog", L"Focus Blur", FLOAT, FOG, NumericSettingLimits::blur.minimum, NumericSettingLimits::blur.maximum, fog, focusBlur),
+            NESTED_VALUE(FOG_CHAOS_AMOUNT, L"Chaos Blur", L"Chaos Amount", FLOAT, FOG, 0.0f, 1.0f, fog, chaosAmount),
+            NESTED_VALUE(FOG_CHAOS_SCALE, L"Chaos Blur", L"Chaos Detail Scale", FLOAT, FOG, 0.5f, 4.0f, fog, chaosScale),
+            NESTED_VALUE(FOG_CHAOS_THRESHOLD, L"Chaos Blur", L"Chaos Threshold", FLOAT, FOG, 0.0f, 1.0f, fog, chaosThreshold),
+            NESTED_VALUE(FOG_CHAOS_TRANSITION, L"Chaos Blur", L"Chaos Transition", FLOAT, FOG, 0.01f, 1.0f, fog, chaosTransition),
+            NESTED_VALUE(FOG_CHAOS_FEATHER, L"Chaos Blur", L"Chaos Feather", FLOAT, FOG, 0.0f, 32.0f, fog, chaosFeather),
+            NESTED_VALUE(FOG_CHAOS_BLUR, L"Chaos Blur", L"Chaos Blur Radius", FLOAT, FOG, 0.0f, 32.0f, fog, chaosBlur),
+            NESTED_VALUE(FOG_CHAOS_HIGHLIGHTS, L"Chaos Blur", L"Chaos Highlight Detail", FLOAT, FOG, 0.0f, 1.0f, fog, chaosHighlights),
+            NESTED_VALUE(FOG_CHAOS_SHADE, L"Chaos Blur", L"Chaos Shade", FLOAT, FOG, 0.0f, 0.5f, fog, chaosShade),
+
 
             NESTED_VALUE(BLOOM_THRESHOLD, L"Bloom", L"Threshold", FLOAT, BLOOM, 0.0f, 1.0f, bloom, threshold),
             NESTED_VALUE(BLOOM_RADIUS, L"Bloom", L"Radius", FLOAT, BLOOM, 0.0f, 1.0f, bloom, radius),
             NESTED_VALUE(BLOOM_SOFTNESS, L"Bloom", L"Softness", FLOAT, BLOOM, 0.0f, 1.0f, bloom, softness),
-            NESTED_VALUE(BLOOM_INTENSITY, L"Bloom", L"Intensity", FLOAT, BLOOM, 0.0f, 1000000.0f, bloom, intensity),
+            NESTED_VALUE(BLOOM_INTENSITY, L"Bloom", L"Intensity", FLOAT, BLOOM, NumericSettingLimits::bloomIntensity.minimum, NumericSettingLimits::bloomIntensity.maximum, bloom, intensity),
 
             TEXTURE_LAYER(1),
             TEXTURE_LAYER(2),
@@ -317,6 +338,8 @@ namespace merutilm::rff2 {
             NESTED_VALUE(WARP_SCROLL_V, L"Warp", L"Scroll V", FLOAT, WARP, -2.0f, 2.0f, warp, scrollV),
             NESTED_VALUE(WARP_PALETTE_FOLLOW, L"Warp", L"Palette Follow", FLOAT, WARP, -2.0f, 2.0f, warp, paletteFollow),
             NESTED_VALUE(WARP_PERIOD, L"Warp", L"Period Iterations", FLOAT, WARP, 0.0f, 1000000000.0f, warp, periodIterations),
+            NESTED_VALUE(STUDIO_ENVIRONMENT_ROTATION, L"Studio GGX", L"Environment Rotation", FLOAT, SLOPE, -360000.0f, 360000.0f, slope, studioEnvironmentRotation),
+            NESTED_VALUE(STUDIO_ENVIRONMENT_FOLLOW, L"Studio GGX", L"Follow Light Direction", FLOAT, SLOPE, 0.0f, 1.0f, slope, studioEnvironmentFollow),
         });
 
 #undef PATTERN_LAYER
@@ -375,6 +398,14 @@ namespace merutilm::rff2 {
             case FOG_FOCUS_RANGE:
             case FOG_FOCUS_FALLOFF:
             case FOG_FOCUS_BLUR:
+            case FOG_CHAOS_AMOUNT:
+            case FOG_CHAOS_SCALE:
+            case FOG_CHAOS_THRESHOLD:
+            case FOG_CHAOS_TRANSITION:
+            case FOG_CHAOS_FEATHER:
+            case FOG_CHAOS_BLUR:
+            case FOG_CHAOS_HIGHLIGHTS:
+            case FOG_CHAOS_SHADE:
                 return false;
             default:
                 return true;

@@ -1,10 +1,12 @@
 //
 // Created by Merutilm on 2025-09-06.
-// Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31.
-// Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31.
+// Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31
+// Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23
 //
 
 #pragma once
+#include "../vulkan/OrderedShaderLayers.hpp"
 #include "GpuPassTimer.hpp"
 #include "../../vulkan_helper/configurator/PipelineConfigurator.hpp"
 #include "../../vulkan_helper/core/vkh.hpp"
@@ -22,6 +24,7 @@
 #include "../vulkan/GPCLinearInterpolation.hpp"
 #include "../vulkan/GPCPresent.hpp"
 #include "../vulkan/GPCSlope.hpp"
+#include "../vulkan/GPCStripe.hpp"
 #include "../vulkan/GPCStaticImage2Map.hpp"
 #include "../vulkan/RCC1Vid.hpp"
 #include "../vulkan/RCC2Vid.hpp"
@@ -36,7 +39,9 @@ namespace merutilm::rff2 {
     struct VideoRenderSceneRenderer final : public vkh::RendererAbstract {
         GPCStaticImage2Map *rendererStaticImage = nullptr;
         CPC2MapIterationStripe *renderer2MapIterationStripe = nullptr;
+        GPCStripe *rendererStripe = nullptr;
         GPCSlope *rendererSlope = nullptr;
+        ShaderAttribute layerShader{};
         GPCColor *rendererColor = nullptr;
         GPCDownsampleForBlur *rendererDownsampleForBlur = nullptr;
         CPCBoxBlur *rendererBoxBlur = nullptr;
@@ -54,9 +59,10 @@ namespace merutilm::rff2 {
         GpuPassTimer passTimer;
 
         explicit VideoRenderSceneRenderer(vkh::EngineRef engine, const uint32_t windowContextIndex,
-                                          const bool hdrChain) : RendererAbstract(
+                                          const bool hdrChain, const std::function<void()>& beforeWait = {},
+                                          const ShaderAttribute* shader = nullptr, const bool dither = false) : RendererAbstract(
             engine, windowContextIndex), hdrChain(hdrChain), passTimer(engine.getCore()) {
-            VideoRenderSceneRenderer::init();
+            initialize(beforeWait, shader, dither);
         }
 
         ~VideoRenderSceneRenderer() override {
@@ -72,7 +78,126 @@ namespace merutilm::rff2 {
         VideoRenderSceneRenderer &operator=(VideoRenderSceneRenderer &&) = delete;
 
     private:
-        void init() override {
+
+        void setLayerStage(int stage) {
+            for (auto* pipeline : std::array<vkh::PipelineConfiguratorAbstract*, 7>{renderer2MapIterationStripe, rendererStripe, rendererSlope, rendererColor, rendererFog, rendererBloom, rendererLinearInterpolation})
+                ShaderLayerControl::set(*pipeline, stage, layerShader);
+        }
+
+        void cmdOrderedLayers() {
+            const auto cbh = wc.getCommandBuffer().getCommandBufferHandle(frameIndex);
+            const auto mfg = [this](uint32_t index) {
+                return wc.getSharedImageContext().getImageContextMF(index)[frameIndex].image;
+            };
+            const auto &primary = wc.getSharedImageContext().getImageContextMF(
+                SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY)[frameIndex];
+            const auto &secondary = wc.getSharedImageContext().getImageContextMF(
+                SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY)[frameIndex];
+            const auto surfacePass = [&] {
+                vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC1Vid>(
+                    wc, frameIndex, {rendererSlope, rendererColor}, {{}, {}});
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, primary.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            };
+            const auto fogBloomPass = [&] {
+                vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCCDownsampleForBlurVid>(
+                    wc, frameIndex, {rendererDownsampleForBlur},
+                    {{GPCDownsampleForBlur::DESC_INDEX_RESAMPLE_IMAGE_FOG}});
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
+                    VK_IMAGE_LAYOUT_GENERAL, 0, 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+                rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG);
+                passTimer.cmdMark(cbh, "downsample+blur fog");
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                vkh::BarrierUtils::cmdImageMemoryBarrier(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_SECONDARY),
+                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+                vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC2Vid>(
+                    wc, frameIndex, {rendererFog, rendererBloomThreshold}, {{}, {}});
+                passTimer.cmdMark(cbh, "fog+bloomThreshold");
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+                vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCCDownsampleForBlurVid>(
+                    wc, frameIndex, {rendererDownsampleForBlur},
+                    {{GPCDownsampleForBlur::DESC_INDEX_RESAMPLE_IMAGE_BLOOM}});
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_PRIMARY),
+                    VK_IMAGE_LAYOUT_GENERAL, 0, 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+
+                rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM);
+                passTimer.cmdMark(cbh, "downsample+blur bloom");
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY),
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                vkh::BarrierUtils::cmdImageMemoryBarrier(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_DOWNSAMPLED_IMAGE_SECONDARY),
+                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+                vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC3Vid>(
+                    wc, frameIndex, {rendererBloom}, {{}});
+                passTimer.cmdMark(cbh, "bloom");
+
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            };
+            setLayerStage(ShaderLayerControl::INITIALIZE);
+            surfacePass();
+            for (const auto layer : layerShader.layerOrder.layers) {
+                if (!shaderLayerActive(layerShader, layer)) {
+                    continue;
+                }
+                if (isStaticImages && uint32_t(layer) <= 22) {
+                    continue;
+                }
+                setLayerStage(int(layer));
+                if (layer == ShdLayer::STRIPE) {
+                    copyShaderLayerImage(cbh, primary, secondary);
+                    vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC3Vid>(
+                        wc, frameIndex, {rendererStripe}, {{}});
+                } else if (layer == ShdLayer::FOG || layer == ShdLayer::BLOOM) {
+                    fogBloomPass();
+                } else if (uint32_t(layer) >= 26) {
+                    vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC4Vid>(
+                        wc, frameIndex, {rendererLinearInterpolation}, {{}});
+                    copyShaderLayerImage(cbh, secondary, primary);
+                } else {
+                    surfacePass();
+                }
+                vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
+                    cbh, primary.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            }
+            setLayerStage(ShaderLayerControl::FINALIZE);
+        }
+
+        void init() override { initialize({}, nullptr, false); }
+
+        void initialize(const std::function<void()>& beforeWait, const ShaderAttribute* shader, bool dither) {
+            vkh::PipelinePreparation::Batch preparation;
             rendererStaticImage = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCStaticImage2Map>(
                 configurators, engine, wc.getAttachmentIndex(),
                 RCCStatic2Image::CONTEXT_INDEX,
@@ -80,12 +205,12 @@ namespace merutilm::rff2 {
 
             renderer2MapIterationStripe = vkh::PipelineConfiguratorAbstract::createShaderProgram<
                 CPC2MapIterationStripe>(
-                configurators, engine, wc.getAttachmentIndex(), hdrChain);
+                configurators, engine, wc.getAttachmentIndex(), hdrChain, shader, dither);
 
             rendererSlope = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCSlope>(
                 configurators, engine, wc.getAttachmentIndex(),
                 RCC1Vid::CONTEXT_INDEX,
-                RCC1Vid::SUBPASS_SLOPE_INDEX);
+                RCC1Vid::SUBPASS_SLOPE_INDEX, renderer2MapIterationStripe->getDescriptor(CPC2MapIterationStripe::SET_TEXTURE));
 
             rendererColor = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCColor>(
                 configurators, engine, wc.getAttachmentIndex(),
@@ -134,11 +259,15 @@ namespace merutilm::rff2 {
                 RCCPresentVid::CONTEXT_INDEX,
                 RCCPresentVid::SUBPASS_PRESENT_INDEX
             );
+            rendererStripe = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCStripe>(configurators, engine, wc.getAttachmentIndex(), RCC3Vid::CONTEXT_INDEX, RCC3Vid::SUBPASS_BLOOM_INDEX);
+            if (beforeWait) beforeWait();
+            preparation.finish();
             finishPipelineInitialization();
         }
 
 
         void beforeCmdRender() override {
+            setLayerStage(layerShader.layerOrder.enabled ? ShaderLayerControl::INITIALIZE : 0);
             renderer2MapIterationStripe->setTime(currentSec, frameIndex);
             renderer2MapIterationStripe->setCurrentFrame(currentFrame, frameIndex);
         }
@@ -150,6 +279,7 @@ namespace merutilm::rff2 {
         // cannot carry is the iteration data the stripe and the relief are read from, and those
         // are held off in the attribute rather than here (VideoRenderScene::staticGradeBase).
         void cmdGradeChain() {
+            if (layerShader.layerOrder.enabled) { cmdOrderedLayers(); return; }
             const auto cbh = wc.getCommandBuffer().getCommandBufferHandle(frameIndex);
             const auto mfg = [this](const uint32_t index) {
                 return wc.getSharedImageContext().getImageContextMF(index)[frameIndex].image;
@@ -374,7 +504,7 @@ namespace merutilm::rff2 {
                                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                           0, 1,
                                                           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
 
 

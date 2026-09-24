@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "Core.hpp"
@@ -26,7 +27,7 @@ namespace merutilm::vkh {
     void CoreImpl::init() {
         instance = factory::create<Instance>();
         physicalDevice = factory::create<PhysicalDeviceLoader>(*instance);
-        logicalDevice = factory::create<LogicalDevice>(*instance, *physicalDevice);
+        logicalDevice = factory::create<LogicalDevice>(*physicalDevice);
         startTime = std::chrono::high_resolution_clock::now();
     }
 

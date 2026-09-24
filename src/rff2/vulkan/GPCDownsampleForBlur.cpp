@@ -1,9 +1,12 @@
 //
 // Created by Merutilm on 2025-08-27.
-// Modified by GPT-5 on 2026-08-23.
+// Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-20, 2026-09-23
 //
 
 #include "GPCDownsampleForBlur.hpp"
+
+#include <optional>
 
 #include "SharedDescriptorTemplate.hpp"
 #include "SharedImageContextIndices.hpp"
@@ -33,29 +36,27 @@ namespace merutilm::rff2 {
     void GPCDownsampleForBlur::renderContextRefreshed() {
         auto &sic = wc.getSharedImageContext();
         auto &resampleDesc = getDescriptor(SET_RESAMPLE);
+        std::optional<uint32_t> sourceIndex;
         switch (wc.getAttachmentIndex()) {
             case Constants::VulkanWindow::MAIN_WINDOW_ATTACHMENT_INDEX: {
-                resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_FOG,
-                                                                      BINDING_RESAMPLE_SAMPLER)->
-                        setImageContextMF(sic.getImageContextMF(SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY));
-                resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_BLOOM,
-                                                                      BINDING_RESAMPLE_SAMPLER)->
-                        setImageContextMF(sic.getImageContextMF(SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY));
-
+                sourceIndex = SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_PRIMARY;
                 break;
             }
+            case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
-                resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_FOG,
-                                                                      BINDING_RESAMPLE_SAMPLER)->
-                        setImageContextMF(sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY));
-                resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_BLOOM,
-                                                                      BINDING_RESAMPLE_SAMPLER)->
-                        setImageContextMF(sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY));
+                sourceIndex = SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY;
                 break;
             }
             default: {
                 //noop
             }
+        }
+        if (sourceIndex) {
+            const auto &images = sic.getImageContextMF(*sourceIndex);
+            resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_FOG,
+                                                        BINDING_RESAMPLE_SAMPLER)->setImageContextMF(images);
+            resampleDesc.get<vkh::CombinedImageSampler>(DESC_INDEX_RESAMPLE_IMAGE_BLOOM,
+                                                        BINDING_RESAMPLE_SAMPLER)->setImageContextMF(images);
         }
 
         writeDescriptorMF([&resampleDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {

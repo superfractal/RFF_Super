@@ -1,0 +1,526 @@
+{
+  "date": "2026-09-24",
+  "comparisons": [
+    {
+      "after": "Palette Start Offset: original + 0.25 cycle",
+      "before": "Palette Start Offset: original",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 90.4754675925926,
+      "name": "palette-offset"
+    },
+    {
+      "after": "Color intervals: half the saved values",
+      "before": "Color intervals: saved values",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 74.20133888888888,
+      "name": "palette-interval"
+    },
+    {
+      "after": "Cycle Bias: 2",
+      "before": "Cycle Bias: 1",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 49.70131851851852,
+      "name": "cycle-bias"
+    },
+    {
+      "after": "Band Line: On; Count 8; Width 0.09",
+      "before": "Band Line: Off",
+      "maxDifference": 216.0,
+      "meanAbsoluteDifference": 6.96942037037037,
+      "name": "band-lines"
+    },
+    {
+      "after": "Slope Opacity: 1; Depth 0.02",
+      "before": "Slope Opacity: 0",
+      "maxDifference": 127.0,
+      "meanAbsoluteDifference": 37.512883333333335,
+      "name": "slope"
+    },
+    {
+      "after": "Light Direction: 225 degrees",
+      "before": "Light Direction: 45 degrees",
+      "maxDifference": 127.0,
+      "meanAbsoluteDifference": 54.34337407407408,
+      "name": "light-direction"
+    },
+    {
+      "after": "Specular Intensity: 0.8",
+      "before": "Specular Intensity: 0",
+      "maxDifference": 199.0,
+      "meanAbsoluteDifference": 63.258373148148145,
+      "name": "specular"
+    },
+    {
+      "after": "Rim Intensity: 0.8; blue-white Rim Color",
+      "before": "Rim Intensity: 0",
+      "maxDifference": 145.0,
+      "meanAbsoluteDifference": 3.9246305555555554,
+      "name": "rim"
+    },
+    {
+      "after": "Gamma: 1.7",
+      "before": "Gamma: 1",
+      "maxDifference": 49.0,
+      "meanAbsoluteDifference": 34.81403148148148,
+      "name": "gamma"
+    },
+    {
+      "after": "Exposure: 0.6",
+      "before": "Exposure: 0",
+      "maxDifference": 191.0,
+      "meanAbsoluteDifference": 100.62939351851851,
+      "name": "exposure"
+    },
+    {
+      "after": "Hue: 0.25 turn",
+      "before": "Hue: 0",
+      "maxDifference": 214.0,
+      "meanAbsoluteDifference": 50.16887777777778,
+      "name": "hue"
+    },
+    {
+      "after": "Saturation: -1 (grayscale)",
+      "before": "Saturation: 0",
+      "maxDifference": 166.0,
+      "meanAbsoluteDifference": 40.02468888888889,
+      "name": "saturation"
+    },
+    {
+      "after": "Contrast: 0.5",
+      "before": "Contrast: 0",
+      "maxDifference": 85.0,
+      "meanAbsoluteDifference": 40.242046296296294,
+      "name": "contrast"
+    },
+    {
+      "after": "Intensity: 1.2; Threshold: 0.3; Radius: 0.2; Softness: 1",
+      "before": "Bloom Intensity: 0",
+      "maxDifference": 108.0,
+      "meanAbsoluteDifference": 42.817737962962966,
+      "name": "bloom"
+    },
+    {
+      "after": "Fog Opacity: 0.8; Radius: 0.12",
+      "before": "Fog Opacity: 0",
+      "maxDifference": 110.0,
+      "meanAbsoluteDifference": 9.751883333333334,
+      "name": "fog"
+    },
+    {
+      "after": "Amount: 1; Depth: 0.3; Range: 0.05; Blur: 16",
+      "before": "Focus Amount: 0",
+      "maxDifference": 171.0,
+      "meanAbsoluteDifference": 7.5686685185185185,
+      "name": "focus"
+    },
+    {
+      "after": "Amount: 1; Threshold: 0.15; Blur Radius: 12",
+      "before": "Chaos Amount: 0",
+      "maxDifference": 169.0,
+      "meanAbsoluteDifference": 5.316050925925926,
+      "name": "chaos"
+    },
+    {
+      "after": "Opacity: 0.65; Intervals: 10 and 20",
+      "before": "Stripe Opacity: 0",
+      "maxDifference": 198.0,
+      "meanAbsoluteDifference": 6.216679629629629,
+      "name": "stripe"
+    },
+    {
+      "after": "Checker; Screen UV; Repeat U/V: 12/8; Opacity: 0.6",
+      "before": "Pattern Layer 1: Off",
+      "maxDifference": 211.0,
+      "meanAbsoluteDifference": 24.167106481481483,
+      "name": "pattern"
+    },
+    {
+      "after": "Warp: On; Amount: 0.4 (checker enabled)",
+      "before": "Warp: Off (checker enabled)",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 31.04181388888889,
+      "name": "warp"
+    },
+    {
+      "after": "Base Style: Y2K Chrome / Liquid Metal",
+      "before": "Original surface",
+      "maxDifference": 254.0,
+      "meanAbsoluteDifference": 82.05203425925926,
+      "name": "style-1"
+    },
+    {
+      "after": "Base Style: Cyber Sigilism",
+      "before": "Original surface",
+      "maxDifference": 255.0,
+      "meanAbsoluteDifference": 82.29806203703704,
+      "name": "style-2"
+    },
+    {
+      "after": "Base Style: PHONK / Drift Phonk",
+      "before": "Original surface",
+      "maxDifference": 255.0,
+      "meanAbsoluteDifference": 72.54436296296296,
+      "name": "style-3"
+    },
+    {
+      "after": "Base Style: Black Metal Album Art",
+      "before": "Original surface",
+      "maxDifference": 255.0,
+      "meanAbsoluteDifference": 75.99171296296296,
+      "name": "style-4"
+    },
+    {
+      "after": "Base Style: Deep Sea Bioluminescence",
+      "before": "Original surface",
+      "maxDifference": 250.0,
+      "meanAbsoluteDifference": 71.68866203703703,
+      "name": "style-5"
+    },
+    {
+      "after": "Base Style: Ukiyo-e Fractal",
+      "before": "Original surface",
+      "maxDifference": 242.0,
+      "meanAbsoluteDifference": 81.09458981481481,
+      "name": "style-6"
+    },
+    {
+      "after": "Studio On; Specular Intensity 0.8; Roughness: 0.8",
+      "before": "Studio On; Specular Intensity 0.8; Roughness: 0.1",
+      "maxDifference": 155.0,
+      "meanAbsoluteDifference": 17.76342777777778,
+      "name": "roughness"
+    },
+    {
+      "after": "Rain Layer 1: On; Opacity: 1; Drop Size: 3; Surface Depth: 2; Glow: 1",
+      "before": "Rain Layer 1: Off",
+      "maxDifference": 21.0,
+      "meanAbsoluteDifference": 0.29675,
+      "name": "rain"
+    },
+    {
+      "after": "Flame Layer 1: On; Opacity 0.85; Glow 1; t = 2 s",
+      "before": "Flame Layer 1: Off",
+      "maxDifference": 216.0,
+      "meanAbsoluteDifference": 30.847312962962963,
+      "name": "flame"
+    },
+    {
+      "after": "Linear animation: t = 1 s, Speed = 16",
+      "before": "Linear animation: t = 0 s, Speed = 16",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 53.273162962962964,
+      "name": "animation"
+    },
+    {
+      "after": "Recessed Grooves: On; Auto Groove: Off; Depth: 3; Width: 0.12",
+      "before": "Recessed Grooves: Off; band lines enabled",
+      "maxDifference": 213.0,
+      "meanAbsoluteDifference": 3.21610462962963,
+      "name": "grooves"
+    },
+    {
+      "after": "Spine Amount: 1; Spine Length: 1.5",
+      "before": "Spine Amount: 0; band lines enabled",
+      "maxDifference": 218.0,
+      "meanAbsoluteDifference": 7.2286,
+      "name": "spines"
+    },
+    {
+      "after": "Ornament Amount: 1; Ornament Size: 1.5",
+      "before": "Ornament Amount: 0; band lines enabled",
+      "maxDifference": 218.0,
+      "meanAbsoluteDifference": 0.6400472222222222,
+      "name": "ornaments"
+    },
+    {
+      "after": "Palette Gloss: On; white Gloss Color",
+      "before": "Palette Gloss: Off",
+      "maxDifference": 189.0,
+      "meanAbsoluteDifference": 23.3754,
+      "name": "palette-gloss"
+    },
+    {
+      "after": "Fill Intensity: 0.8; Direction: 315 degrees; Zenith: 60 degrees",
+      "before": "Fill Intensity: 0",
+      "maxDifference": 49.0,
+      "meanAbsoluteDifference": 8.238216666666666,
+      "name": "fill-light"
+    },
+    {
+      "after": "Tint Intensity: 0.8; same tint colors",
+      "before": "Tint Intensity: 0; warm/cool tint colors set",
+      "maxDifference": 146.0,
+      "meanAbsoluteDifference": 27.87281574074074,
+      "name": "light-tint"
+    },
+    {
+      "after": "Gloss Intensity: 0.8; Bands: 4; Sharpness: 12",
+      "before": "Gloss Intensity: 0",
+      "maxDifference": 198.0,
+      "meanAbsoluteDifference": 16.809697222222223,
+      "name": "relief-gloss"
+    },
+    {
+      "after": "Specular Anisotropy: 0.9; Anisotropy Angle: 45 degrees",
+      "before": "Specular Anisotropy: 0; Specular Intensity: 1; Power: 32",
+      "maxDifference": 30.0,
+      "meanAbsoluteDifference": 4.1441787037037034,
+      "name": "anisotropy"
+    },
+    {
+      "after": "Studio On; Metalness: 1",
+      "before": "Studio On; Metalness: 0",
+      "maxDifference": 189.0,
+      "meanAbsoluteDifference": 37.60984907407408,
+      "name": "metalness"
+    },
+    {
+      "after": "Studio On; Clearcoat: 1; Coat Roughness: 0.15",
+      "before": "Studio On; Clearcoat: 0; Coat Roughness: 0.15",
+      "maxDifference": 19.0,
+      "meanAbsoluteDifference": 4.45992037037037,
+      "name": "clearcoat"
+    },
+    {
+      "after": "Environment Rotation: 120 degrees; other light controls unchanged",
+      "before": "Studio On; Follow Light Direction: 0; Environment Rotation: 0 degrees",
+      "maxDifference": 15.0,
+      "meanAbsoluteDifference": 2.3103574074074076,
+      "name": "environment"
+    },
+    {
+      "after": "Advanced Iridescence: 1; Film Thickness: 800 nm",
+      "before": "Advanced Iridescence: 1; Film Thickness: 200 nm",
+      "maxDifference": 70.0,
+      "meanAbsoluteDifference": 6.669046296296297,
+      "name": "film-thickness"
+    },
+    {
+      "after": "Liquid Metal; Prism Spread: 1",
+      "before": "Liquid Metal; Prism Spread: 0",
+      "maxDifference": 21.0,
+      "meanAbsoluteDifference": 0.8724305555555556,
+      "name": "prism-spread"
+    },
+    {
+      "after": "Black Metal; Frost Strength: 2",
+      "before": "Black Metal; Frost Strength: 0",
+      "maxDifference": 255.0,
+      "meanAbsoluteDifference": 23.53921111111111,
+      "name": "frost"
+    },
+    {
+      "after": "Deep Sea; Emission: 3",
+      "before": "Deep Sea; Emission: 0",
+      "maxDifference": 252.0,
+      "meanAbsoluteDifference": 26.552717592592593,
+      "name": "emission"
+    },
+    {
+      "after": "Deep Sea; Particle Amount: 1; Particle Size: 2",
+      "before": "Deep Sea; Particle Amount: 0",
+      "maxDifference": 250.0,
+      "meanAbsoluteDifference": 3.3972379629629628,
+      "name": "sea-particles"
+    },
+    {
+      "after": "Ukiyo-e; Color Count: 6",
+      "before": "Ukiyo-e; Color Count: 3",
+      "maxDifference": 153.0,
+      "meanAbsoluteDifference": 46.56371296296296,
+      "name": "print-colors"
+    },
+    {
+      "after": "Nearest Mix: 1; Pixel Size: 12; noise and channel shift remain 0",
+      "before": "VHS / Nearest Effects: 1; VHS Noise: 0; Chromatic Shift: 0; Nearest Mix: 0",
+      "maxDifference": 223.0,
+      "meanAbsoluteDifference": 2.830137037037037,
+      "name": "pixelation"
+    },
+    {
+      "after": "Chromatic Shift: 6; noise and pixelation remain 0",
+      "before": "VHS / Nearest Effects: 1; VHS Noise: 0; Nearest Mix: 0; Chromatic Shift: 0",
+      "maxDifference": 224.0,
+      "meanAbsoluteDifference": 7.1828157407407405,
+      "name": "chromatic-shift"
+    },
+    {
+      "after": "Edge Enabled: On; red Edge Color; Edge Width: 0.25; Edge Opacity: 1",
+      "before": "Dots; Screen UV; Repeat 12/8; Opacity 0.8; Edge Enabled: Off",
+      "maxDifference": 219.0,
+      "meanAbsoluteDifference": 54.22211296296296,
+      "name": "pattern-outline"
+    },
+    {
+      "after": "Pattern 1 moved to front, above Color Correction; same settings",
+      "before": "Custom Layer Order: On; Pattern 1 below Color Correction; Saturation: -1",
+      "maxDifference": 153.0,
+      "meanAbsoluteDifference": 22.50425925925926,
+      "name": "layer-order"
+    },
+    {
+      "after": "HDR On; Exposure: +2 stops; Tone Mapping: MFR Shoulder",
+      "before": "HDR On; Exposure: +2 stops; Tone Mapping: Clip",
+      "maxDifference": 116.0,
+      "meanAbsoluteDifference": 22.05662037037037,
+      "name": "hdr-shoulder"
+    },
+    {
+      "after": "HDR On; Exposure: 0 stops; Tone Mapping: MFR False Color",
+      "before": "HDR On; Exposure: 0 stops; Tone Mapping: MFR Shoulder",
+      "maxDifference": 245.0,
+      "meanAbsoluteDifference": 70.60411666666667,
+      "name": "hdr-false-color"
+    },
+    {
+      "after": "Mist Layer 1: On; Opacity: 1; Density: 0.8; pale blue Primary Color; t = 2 s",
+      "before": "Mist Layer 1: Off; t = 2 s",
+      "maxDifference": 19.0,
+      "meanAbsoluteDifference": 1.7454768518518518,
+      "name": "mist"
+    }
+  ],
+  "repeatability": {
+    "height": 450,
+    "maxIterations": 2400,
+    "period": 16,
+    "repeatMaxDifference": 0.0,
+    "ssaa": 2,
+    "width": 800
+  },
+  "sourceHashes": {
+    "1": "4f8707420c67e615f8c98febe2cae08d6271b0386f00fe7ec39245645a276099",
+    "2": "087bdbc3b8333b5113403b41c18707b7a4f5e2905bad7cda4dc6353fc2cf7fb3"
+  },
+  "files": {
+    "images/animation-after.png": "225c46a381678762c3bcf69130bc12eec83e6ef2e88d8bb028b4109d33664113",
+    "images/animation-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/band-lines-after.png": "5b2c6910d249c74e1d88748e44f159995f5404f55b8636c0059c5a9b9b8f293a",
+    "images/band-lines-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/bloom-after.png": "139e3cd63ce626a4e1ff8c3c46b97a360933a0cdfff0483c87f882a7cc6bcdec",
+    "images/bloom-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/chaos-after.png": "35ffc78979071a0e50bfad90aaae72802773069c58ff5e1d8a9b6a29fa9ce6f5",
+    "images/chaos-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/contrast-after.png": "ded5e39b31ceda0e6ad78ad4fb96d6463b6a6c00873c319eca03969e83686649",
+    "images/contrast-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/cycle-bias-after.png": "3a6623b6c008d7f77aa07f51d5d88ba5050fd9d847aabcadfe1824d59a64f69c",
+    "images/cycle-bias-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/exposure-after.png": "d309055140cd8c85b0752d2ed7f7fea82be21955d1f02b1eb7cad0d1a17ab819",
+    "images/exposure-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/flame-after.png": "f187e39d22fa5a20649160d5bdcdefccdde20512db70cec2c5fb4bc39f3b1190",
+    "images/flame-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/focus-after.png": "b5645b970e097db4f20b3331005a47522c5de788b343e9ee5c59bde2e5835d63",
+    "images/focus-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/fog-after.png": "50426125005345f3772b2dc26d109dd1a8d07c66d136dc7c77895f2704e37637",
+    "images/fog-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/gamma-after.png": "8e062d92c6dad48fd4a6f3e238798a609aafcdb92d7f0b984bc41947f3743f45",
+    "images/gamma-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/hue-after.png": "d2908c4eecfec4f92fa7f2da2e3e6f55533b68b710c0d255081745e3630092a0",
+    "images/hue-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/light-direction-after.png": "60584af68690d377e2e1918c2e2229d8cb24aead07850415e7ee83b808388675",
+    "images/light-direction-before.png": "5dd992e94e2406ab23af836e6ac06d71ed9adde33b3328ebdbb0d822d3c6a104",
+    "images/location-1.png": "a317239444cbdcda143b6b7389332671e03ab38b82f89d402f2e7a1591e50d61",
+    "images/location-2.png": "84faae8c23392361e484c3d5616fea8d04c58985e5fbff96bb2d702b72921f63",
+    "images/palette-interval-after.png": "dbd2af7592a3e63ab0a7c92c95099a8171d5935273717e21feac7b55c3a575ee",
+    "images/palette-interval-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/palette-offset-after.png": "1881671c98b80a0a6872f36f2f28a9f16ee2d73f557108b0e55e874e3fff913d",
+    "images/palette-offset-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/pattern-after.png": "5e7eb0b0df918dc5051987ce36094a97f5265c5e5c0da434029fa42a0659b037",
+    "images/pattern-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/rain-after.png": "40870954900f8c0d4ef5923236d83660f43620beaba315aeebc2415be30cb437",
+    "images/rain-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/rim-after.png": "30258d96641b039b0a06af18e8254bb98ede01490ddab49e14b4b5af2bfa1445",
+    "images/rim-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/roughness-after.png": "24c942a4f8a2b87287a93f9d620cbee65a2d6e13d48f567b80e96fb2fb9aa217",
+    "images/roughness-before.png": "87b98277680fc726945cd3ac236ba102dd926748de903f444d7560fdc0147b1f",
+    "images/saturation-after.png": "6ed203b8ca02a81394cfdbefb31a6f0af3c5ca7ce6bc390f0544a88d9e62fb7f",
+    "images/saturation-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/slope-after.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/slope-before.png": "84faae8c23392361e484c3d5616fea8d04c58985e5fbff96bb2d702b72921f63",
+    "images/specular-after.png": "53413cc16a5b9072cd2bed26acb34b113954d02e1d8d0a9e96b220ef39d76fb9",
+    "images/specular-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/stripe-after.png": "79ef753ad8f6c4c8a4de2ac7a9d83bf85c109d4a5a131c6376a3f88a6d390828",
+    "images/stripe-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-1-after.png": "1b6e2a4016156cc05eada02f340a3145ac93161dc589c0b1f81ea42aa36a995a",
+    "images/style-1-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-2-after.png": "9fc82191d48940bd9d846922719a47abb5b38914e643f4f2e210e15494387a77",
+    "images/style-2-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-3-after.png": "0c3285cec2aec1421dcb67bca449230a048659753014affa03af3814f01c50ee",
+    "images/style-3-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-4-after.png": "fefd5ed09adf163d77145d1a123c3ac857518fb1b9cda0b8a338facbcfc77846",
+    "images/style-4-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-5-after.png": "00cdbce5fa370eff568dfffd9648f6e51889f8be01560406359894b6a813ebeb",
+    "images/style-5-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/style-6-after.png": "4d9ebb1322d00386909b553fea36ab016c2743e5304eef71b2f09b7a375f8b36",
+    "images/style-6-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/warp-after.png": "867e83a0ca844b414b1cb8a89c2d312df9f4e39752734df148b6841d343cceb5",
+    "images/warp-before.png": "5e7eb0b0df918dc5051987ce36094a97f5265c5e5c0da434029fa42a0659b037",
+    "images/grooves-before.png": "8b3918622a06be78e1049bf70bf096bebbe5f41c6e9e03c0a4b71be4acc09ec0",
+    "images/grooves-after.png": "75c8e86a44974cab2019b2345e8b76a66da2d5b60f24924748e504325617084d",
+    "images/spines-before.png": "8b3918622a06be78e1049bf70bf096bebbe5f41c6e9e03c0a4b71be4acc09ec0",
+    "images/spines-after.png": "74278cacbf4f64d5a3ff9001b83555e933e89b1a5d44e475024132350f631266",
+    "images/ornaments-before.png": "8b3918622a06be78e1049bf70bf096bebbe5f41c6e9e03c0a4b71be4acc09ec0",
+    "images/ornaments-after.png": "6c294079034dc04d1cfa1936d2a9fbb228c04b20f47e329c17116c1ab639d89a",
+    "images/palette-gloss-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/palette-gloss-after.png": "57897e9b0172f6bf213406ac5ad19b72e1e1ff1e767741b34c6f5970b080f93b",
+    "images/fill-light-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/fill-light-after.png": "75cf98bc8859dcea2ec91a4b61f342ac4c7efd265544a69e1e11dc40dec0444f",
+    "images/light-tint-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/light-tint-after.png": "3a0696a8a21257c69677a034ccfffcdfb9df33020747324645a0be3543db52d4",
+    "images/relief-gloss-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/relief-gloss-after.png": "59305ad48e05a950f4e45f55d4da80e7a7177e13fc647d02f4d9984884583065",
+    "images/anisotropy-before.png": "15ecadb0bfaf12416e38be5990761298cbbec97fdfd10c540ddc65c536ac1f87",
+    "images/anisotropy-after.png": "11c4f41c1018f020eeb56abc0501c6109d4a26ebdcdc95c383f8240d3d1e8e34",
+    "images/metalness-before.png": "ad1de1a40e249ed8148a9842e210ff8916d8910d4e13301df8af056063902c9a",
+    "images/metalness-after.png": "8da5eaeb36271ebe600beaf8545924cdf2484c87118b9da2f92133084caffb38",
+    "images/clearcoat-before.png": "303a1e9c8e23b35992d66180564173c09ec99f6dc4530036bdf5403bfb3c924d",
+    "images/clearcoat-after.png": "e143680f3f466e5d2a307a641dc19611c09edfbf985b97009b2d4f7a772d97ad",
+    "images/environment-before.png": "fff00529aabe7d39b448f9353cdd4f0481ddd4244e0f261756f2cc88b8f68ac3",
+    "images/environment-after.png": "e194b157deb58b6f84c1ed6b9ba14dc19d2ee6a7f9faa500522e1cb2a8dbb46b",
+    "images/film-thickness-before.png": "970f7ba718037aa8e9de8f6ae3e084ff2b1229fb6aec2c8280baa2935d78a3c3",
+    "images/film-thickness-after.png": "e82b0e5df7e5545ae33b36b65a5ae3149dd38a63f7dadc34a093c488b0ff5686",
+    "images/prism-spread-before.png": "92bbf28ee088975ccfe03201094af8d0db7033c2ea21c7bbb38c330d28c32a01",
+    "images/prism-spread-after.png": "1b6e2a4016156cc05eada02f340a3145ac93161dc589c0b1f81ea42aa36a995a",
+    "images/frost-before.png": "9108247b7037039c1b44e28d118cc45ffbe93b353c8242fe90b1a0ab13228bc7",
+    "images/frost-after.png": "c0ad05f4d4fbe44f796d51950f2674dcc2ae18dfae921800ffcd2f8706448333",
+    "images/emission-before.png": "f17b13faa78903ed59bf59e256f287d1469ac2ded531450735e421b604a4429d",
+    "images/emission-after.png": "1c0e8785109360bec2670656c18a110ba1cff90c80aa4178cdedd9b95f3f6aff",
+    "images/sea-particles-before.png": "f0f6b12d91c46d76bdafe230752fb7044fd6f6c7b24affc0ab99612f913e82d9",
+    "images/sea-particles-after.png": "08326b9f37db3f8cbadf4fa93706e7b18ce261a6f1d5d31ca56b9741b2f4a9a7",
+    "images/print-colors-before.png": "5804e4ddde045f93f5b14abc0aa6c0a130e706d721b555bc73c342d27e5aab79",
+    "images/print-colors-after.png": "47374e33a874505a5bc4bc6639f59f85d981fad9e3c7c153ab9dbb7562030608",
+    "images/pixelation-before.png": "c8e66fb8d155d029b002e35f5cf9c8f6fbd5a47ed3f1b47568ec7eed727cb803",
+    "images/pixelation-after.png": "65bbeea07125266984e8725f02e95e80532595eea30d7d8b60623f2a68cb3270",
+    "images/chromatic-shift-before.png": "c8e66fb8d155d029b002e35f5cf9c8f6fbd5a47ed3f1b47568ec7eed727cb803",
+    "images/chromatic-shift-after.png": "4d1275ea84f6956139f80b3933a30733dcf61fc4f50785693600e796491b5f63",
+    "images/pattern-outline-before.png": "5e8de0d33cebba5dae2a1a7913e494822d7e16916a258e1b4b749680e6df1de4",
+    "images/pattern-outline-after.png": "49348616e6558cf773bebdbc35632c1c865cb88ed258165efe80f51a6bb83d1b",
+    "images/layer-order-before.png": "2dcfb60c642db662b276634f6fef7edf10155c1fbd6473d1499eb1f3c67af096",
+    "images/layer-order-after.png": "5f24e6eac0cb612f894babeae553657fe679c79b302c19989f79c8d1e05f0e57",
+    "images/hdr-shoulder-before.png": "dded039bf155674e87f0a61d51b14a20512c235c6a72b354d9ef8f52be97345d",
+    "images/hdr-shoulder-after.png": "63756c3d95fae29126864c0cba5fb044bb98efc4889b0458ff673c68bfcbbfe1",
+    "images/hdr-false-color-before.png": "c3dfb846b7f9f1dd7d410c785636cfead2b6842edb15410ab758d8441f3bf19f",
+    "images/hdr-false-color-after.png": "ff55e224318cc9310d0bb06d67f08cfca66d10a55db0bfe003a4e91d90af3fe6",
+    "images/mist-before.png": "403fd2cff9bf1df85c4b945a94839d2f4544830fefe549b83e3460b005a969f4",
+    "images/mist-after.png": "96710bd8ccd2affd54017ce9c4b055e6998188cdf2ac4a0c590e34eafad264da"
+  },
+  "packaging": "Lossless PNG compression; decoded pixels are unchanged.",
+  "additionalShaderBatch": {
+    "count": 24,
+    "repeatability": {
+      "height": 450,
+      "maxIterations": 2400,
+      "period": 16,
+      "repeatMaxDifference": 0.0,
+      "ssaa": 2,
+      "width": 800
+    },
+    "baselineMatchesOriginalPixels": true,
+    "imageSize": [
+      800,
+      450
+    ],
+    "timestampSecondsForMist": 2,
+    "review": "All 24 pairs reviewed in three contact sheets; right edge separately inspected. Ornament and prism examples also inspected at full size. No zero-difference pairs."
+  }
+}

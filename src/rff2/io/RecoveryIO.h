@@ -1,10 +1,12 @@
 //
 // Created by Opus 5 on 2026-08-14.
-// Modified by Opus 5 on 2026-08-15.
+// Modified by Opus 5 on 2026-08-15
 // Modified by GPT-5 on 2026-09-01
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 

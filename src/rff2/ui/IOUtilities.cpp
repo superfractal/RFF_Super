@@ -1,11 +1,13 @@
 //
 // Created by Merutilm on 2025-06-08.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-14
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #include "IOUtilities.h"
+#include "NativeDialogs.hpp"
 
 #include <atomic>
 #include <filesystem>
@@ -20,21 +22,14 @@ namespace merutilm::rff2 {
     namespace {
         // How many of the dialogs below are on screen. A count, not a flag: the video callbacks run
         // on a worker and can have a dialog up while the main thread opens one of its own.
-        std::atomic<int> openModalDialogs{0};
+        using ModalDialogScope = NativeDialogs::Session;
         std::atomic<uint64_t> temporaryFileCounter{0};
-
-        struct ModalDialogScope {
-            ModalDialogScope() { ++openModalDialogs; }
-            ~ModalDialogScope() { --openModalDialogs; }
-            ModalDialogScope(const ModalDialogScope &) = delete;
-            ModalDialogScope &operator=(const ModalDialogScope &) = delete;
-        };
 
         // The app's main window, handed to every dialog as its owner. Windows disables an owner for
         // the dialog's lifetime, so the app can no longer be closed while the user is still picking a
         // file - which used to tear the scene down underneath the callback waiting on the dialog.
         HWND dialogOwner() {
-            return FindWindowW(Constants::Win32::CLASS_MASTER_WINDOW, nullptr);
+            return NativeDialogs::mainWindow();
         }
 
         // The close may have arrived anyway (a disabled window still receives WM_CLOSE from the
@@ -43,10 +38,44 @@ namespace merutilm::rff2 {
         bool ownerLost(const HWND owner) {
             return owner != nullptr && !IsWindow(owner);
         }
+
+        BOOL showFileDialog(OPENFILENAMEW &dialog, const char type) {
+            switch (type) {
+            case IOUtilities::OPEN_FILE:
+                dialog.Flags |= OFN_FILEMUSTEXIST;
+                return GetOpenFileNameW(&dialog);
+            case IOUtilities::SAVE_FILE:
+                dialog.Flags |= OFN_OVERWRITEPROMPT;
+                return GetSaveFileNameW(&dialog);
+            default:
+                return FALSE;
+            }
+        }
+
+        bool endsWithExtension(const std::wstring_view name, const std::wstring_view extension) {
+            return name.size() >= extension.size() &&
+                   CompareStringOrdinal(name.data() + name.size() - extension.size(),
+                                        static_cast<int>(extension.size()), extension.data(),
+                                        static_cast<int>(extension.size()), TRUE) == CSTR_EQUAL;
+        }
+
+        bool confirmCompletedSavePath(const HWND owner, const std::wstring &path, const char type) {
+            if (type != IOUtilities::SAVE_FILE) {
+                return true;
+            }
+            std::error_code error;
+            if (!std::filesystem::exists(path, error)) {
+                return !error;
+            }
+            const auto message = std::format(L"{} already exists. Replace it?", path);
+            return NativeDialogs::message(owner, message.c_str(), L"Confirm replacement",
+                                          MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) == IDYES &&
+                   !ownerLost(owner);
+        }
     }
 
     bool IOUtilities::isModalDialogOpen() {
-        return openModalDialogs.load(std::memory_order_relaxed) > 0;
+        return NativeDialogs::isOpen();
     }
     std::unique_ptr<std::filesystem::path> IOUtilities::ioFileDialog(const std::wstring_view title,
                                                                      const std::wstring_view desc,
@@ -74,36 +103,22 @@ namespace merutilm::rff2 {
         fn.nMaxFile = MAX_PATH;
         fn.lpstrFile[0] = '\0';
         fn.lpstrTitle = title.data();
-        fn.Flags = OFN_PATHMUSTEXIST;
+        fn.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
         const std::wstring end = std::format(L".{}", extension.data());
         const ModalDialogScope modal;
 
-        switch (type) {
-            case OPEN_FILE: {
-                fn.Flags |= OFN_FILEMUSTEXIST;
-                if (GetOpenFileNameW(&fn) && !ownerLost(owner)) {
-                    std::wstring result = fn.lpstrFile;
-                    if (!Utilities::endsWith(result, end)) {
-                        result.append(end);
-                    }
-                    return std::make_unique<std::filesystem::path>(result);
-                }
-                break;
-            }
-            case SAVE_FILE: {
-                fn.Flags |= OFN_OVERWRITEPROMPT;
-                if (GetSaveFileNameW(&fn) && !ownerLost(owner)) {
-                    std::wstring result = fn.lpstrFile;
-                    if (!Utilities::endsWith(result, end)) {
-                        result.append(end);
-                    }
-                    return std::make_unique<std::filesystem::path>(result);
-                }
-                break;
-            }
-            default: break;
+        const BOOL accepted = showFileDialog(fn, type);
+        if (!accepted || ownerLost(owner)) {
+            return nullptr;
         }
-        return nullptr;
+        std::wstring result = fn.lpstrFile;
+        if (!endsWithExtension(result, end)) {
+            result.append(end);
+            if (!confirmCompletedSavePath(owner, result, type)) {
+                return nullptr;
+            }
+        }
+        return std::make_unique<std::filesystem::path>(result);
     }
 
     std::unique_ptr<std::filesystem::path> IOUtilities::ioFileDialogMulti(const std::wstring_view title,
@@ -145,35 +160,27 @@ namespace merutilm::rff2 {
         fn.lpstrFilter = pattern.data();
         fn.nMaxFile = MAX_PATH;
         fn.lpstrTitle = title.data();
-        fn.Flags = OFN_PATHMUSTEXIST;
+        fn.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
         const ModalDialogScope modal;
 
-        switch (type) {
-            case OPEN_FILE: {
-                fn.Flags |= OFN_FILEMUSTEXIST;
-                if (GetOpenFileNameW(&fn) && !ownerLost(owner)) {
-                    return std::make_unique<std::filesystem::path>(std::wstring(fn.lpstrFile));
-                }
-                break;
-            }
-            case SAVE_FILE: {
-                fn.Flags |= OFN_OVERWRITEPROMPT;
-                if (GetSaveFileNameW(&fn) && !ownerLost(owner)) {
-                    std::wstring result = fn.lpstrFile;
-                    const size_t idx = fn.nFilterIndex >= 1 && fn.nFilterIndex <= extByIndex.size()
-                                           ? fn.nFilterIndex - 1 : 0;
-                    if (const std::wstring &ext = extByIndex[idx]; !ext.empty()) {
-                        if (const std::wstring end = std::format(L".{}", ext); !Utilities::endsWith(result, end)) {
-                            result.append(end);
-                        }
-                    }
-                    return std::make_unique<std::filesystem::path>(result);
-                }
-                break;
-            }
-            default: break;
+        if (!showFileDialog(fn, type) || ownerLost(owner)) {
+            return nullptr;
         }
-        return nullptr;
+        if (type == OPEN_FILE) {
+            return std::make_unique<std::filesystem::path>(std::wstring(fn.lpstrFile));
+        }
+        std::wstring result = fn.lpstrFile;
+        const size_t idx = fn.nFilterIndex >= 1 && fn.nFilterIndex <= extByIndex.size()
+                               ? fn.nFilterIndex - 1 : 0;
+        if (const std::wstring &ext = extByIndex[idx]; !ext.empty()) {
+            if (const std::wstring end = std::format(L".{}", ext); !endsWithExtension(result, end)) {
+                result.append(end);
+                if (!confirmCompletedSavePath(owner, result, type)) {
+                    return nullptr;
+                }
+            }
+        }
+        return std::make_unique<std::filesystem::path>(result);
     }
 
     std::unique_ptr<std::filesystem::path> IOUtilities::ioDirectoryDialog(const std::wstring_view title) {
@@ -201,13 +208,8 @@ namespace merutilm::rff2 {
     }
 
     std::filesystem::path IOUtilities::generateFileName(const std::filesystem::path &dir, const std::wstring_view extension) {
-        unsigned int n = 0;
-        std::filesystem::path p = dir;
-        do {
-            ++n;
-            p = dir / fileNameFormat(n, extension);
-        } while (std::filesystem::exists(p));
-        return p;
+        const auto nextIndex = fileNameCount(dir, extension) + 1;
+        return dir / fileNameFormat(nextIndex, extension);
     }
 
     uint32_t IOUtilities::fileNameCount(const std::filesystem::path &dir, const std::wstring_view extension) {
@@ -267,11 +269,17 @@ namespace merutilm::rff2 {
     }
 
     std::filesystem::path IOUtilities::temporaryFilePath(const std::filesystem::path &target) {
-        std::filesystem::path name = target.stem();
-        name += std::format(L".tmp-{}-{}-{}", GetCurrentProcessId(), GetTickCount64(),
-                            temporaryFileCounter.fetch_add(1, std::memory_order_relaxed));
+        std::filesystem::path name = std::format(L".rff-{:x}-{:x}-{:x}", GetCurrentProcessId(),
+            GetTickCount64(), temporaryFileCounter.fetch_add(1, std::memory_order_relaxed));
         name += target.extension();
-        return target.parent_path() / name;
+        std::filesystem::path directory = target.parent_path();
+        std::filesystem::path temporary = directory / name;
+        while (temporary.native().size() >= MAX_PATH && directory.has_parent_path() &&
+               directory != directory.parent_path()) {
+            directory = directory.parent_path();
+            temporary = directory / name;
+        }
+        return temporary;
     }
 
     bool IOUtilities::commitTemporaryFile(const std::filesystem::path &temporary,

@@ -1,8 +1,12 @@
 //
 // Created by Merutilm on 2025-07-12.
+// Modified by GPT-6 on 2026-09-22, 2026-09-23
 //
 
 #pragma once
+
+#include <memory>
+
 #include "Core.hpp"
 #include "../handle/CoreHandler.hpp"
 #include "../manage/DescriptorManager.hpp"
@@ -14,7 +18,7 @@ namespace merutilm::vkh {
         VkDescriptorSetLayout layout = nullptr;
 
     public:
-        explicit DescriptorSetLayoutImpl(const CoreRef core, const DescriptorSetLayoutBuilder &layoutBuilder);
+        explicit DescriptorSetLayoutImpl(CoreRef core, const DescriptorSetLayoutBuilder &layoutBuilder);
 
         ~DescriptorSetLayoutImpl() override;
 
@@ -26,9 +30,8 @@ namespace merutilm::vkh {
 
         DescriptorSetLayoutImpl &operator=(DescriptorSetLayoutImpl &&) = delete;
 
-        [[nodiscard]] VkDescriptorSetLayout getLayoutHandle() const {return layout;}
+        [[nodiscard]] VkDescriptorSetLayout getLayoutHandle() const { return layout; }
 
-        [[nodiscard]] const DescriptorSetLayoutBuilder &getBuilder() const {return layoutBuilder;}
 
     private:
         void init() override;

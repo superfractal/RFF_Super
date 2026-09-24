@@ -1,9 +1,11 @@
 //
 // Created by Merutilm on 2025-09-09.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
 #include <mutex>
+#include <utility>
 
 namespace merutilm::vkh {
     struct allocator {
@@ -11,10 +13,11 @@ namespace merutilm::vkh {
 
         explicit allocator() = delete;
 
-        template<typename VkAlloc, typename... Args>
-        static auto invoke(VkAlloc func, Args&&... args) -> decltype(func(std::forward<Args>(args)...)) {
+        template<typename Function, typename... Args>
+        static auto invoke(Function function, Args &&... args)
+            -> decltype(function(std::forward<Args>(args)...)) {
             std::scoped_lock lock(mutex);
-            return func(std::forward<Args>(args)...);
+            return function(std::forward<Args>(args)...);
         }
     };
 }

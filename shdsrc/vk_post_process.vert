@@ -1,3 +1,7 @@
+//
+// Modified by GPT-6 on 2026-09-23
+//
+
 #version 450
 
 layout (location = 0) in vec3 inPosition;
@@ -7,7 +11,7 @@ layout (location = 2) in vec2 inTexcoord;
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexcoord;
 
-void main(){
+void main() {
     gl_Position = vec4(inPosition, 1.0);
     fragColor = inColor;
     fragTexcoord = inTexcoord;

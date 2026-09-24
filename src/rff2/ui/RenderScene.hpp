@@ -1,19 +1,24 @@
 //
 // Created by Merutilm on 2025-08-08.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01.
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
+// Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
+// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by Opus 5.5 on 2026-09-23
 //
 
 #pragma once
+#include <algorithm>
 #include <vector>
 #include <windows.h>
 #include <atomic>
 #include <chrono>
 #include <functional>
 #include <mutex>
+#include <optional>
 
 #include "ImageCanvas.hpp"
+#include "SmoothZoomMotion.hpp"
 #include "RenderSceneRequests.hpp"
 #include "RenderSceneRenderer.hpp"
 #include "../../vulkan_helper/handle/EngineHandler.hpp"
@@ -31,9 +36,16 @@ namespace merutilm::rff2 {
         vkh::WindowContextRef wc;
         ParallelRenderState state;
         Attribute attr;
+        uint64_t previewRevision=0;
+        void ensureShaderFormat(bool studio);
+        std::function<void(const std::filesystem::path&,bool,uint16_t,uint16_t)> configFileObserver;
+        std::function<bool()> configSaveGuard,configReplaceGuard;
+        std::function<void()> configReplaceCommit;
+        std::filesystem::path configDocumentPath;
 
         uint16_t interactedMX = 0;
         uint16_t interactedMY = 0;
+        bool canvasDragging = false;
 
         // Eyedropper: when active, the next canvas left-click freezes the picked color's animation.
         bool colorFreezePickActive = false;
@@ -89,7 +101,6 @@ namespace merutilm::rff2 {
         std::atomic<bool> isVideoGenerationActive{false};
         std::atomic<bool> isVideoExportActive{false};
         std::atomic<bool> longJobBusy{false};
-        std::function<void()> longJobPump;
 
 
         ApproxTableCache approxTableCache = ApproxTableCache();
@@ -108,9 +119,42 @@ namespace merutilm::rff2 {
         std::atomic<bool> previewFillDown = true;
         // The compute the picture already on the staging buffer was laid down for, so the pixels it has not reached yet keep showing that picture instead of the interior color, and a run started after that one does not inherit it.
         uint64_t previewSeedGeneration = 0;
+        bool smoothZoomEnabled = true;
+        bool smoothZoomActive = false;
+        bool smoothZoomCaptureWider = false;
+        bool smoothZoomWasPaused = false;
+        bool smoothZoomDirty = false;
+        bool smoothZoomExactCandidate = false;
+        bool smoothZoomSourceExact = false;
+        bool smoothZoomNeedsPreview = true;
+        bool smoothZoomCandidateFullQuality = false;
+        bool smoothZoomDragging = false;
+        bool smoothZoomFailed = false;
+        double smoothZoomPending = 0.0;
+        SmoothZoomMotion::View smoothZoomFrom, smoothZoomTarget, smoothZoomView, smoothZoomCandidate;
+        uint16_t smoothZoomMouseX = 0, smoothZoomMouseY = 0;
+        uint64_t smoothZoomGeneration = 0;
+        uint64_t smoothZoomCandidateRevision = 0;
+        std::chrono::steady_clock::time_point smoothZoomStarted{};
+        std::chrono::steady_clock::time_point smoothZoomLastTick{};
+        std::chrono::steady_clock::time_point smoothZoomInputAt{}, smoothZoomComputeAt{};
+        std::optional<FractalAttribute> smoothZoomOriginal;
+        std::optional<FractalAttribute> smoothZoomCandidateFractal;
+        std::unique_ptr<Matrix<double>> smoothZoomPreviewMatrix;
+        uint64_t smoothZoomOriginalMax = 0, smoothZoomOriginalPeriod = 0;
+        float smoothZoomOriginalLog = 0;
+        std::atomic<uint64_t> completedComputeGeneration{0};
+        void tickSmoothZoom();
+        bool beginSmoothNavigation();
+        void retargetSmoothNavigation();
+        void settleSmoothNavigation();
+        FractalAttribute smoothNavigationCamera(SmoothZoomMotion::View view) const;
+        void endSmoothZoom();
+        void restoreSmoothZoomSource();
 
         // The one size the internal images, the render contexts over them and the iteration buffer the shader indexes with its own extent are all built for, taken from the swapchain the images were really created at and moved only by applyResize.
         VkExtent2D canvasExtent = {};
+        std::optional<VkExtent2D> documentCanvasExtent;
 
         std::unique_ptr<MandelbrotPerturbator> currentPerturbator = nullptr;
 
@@ -142,6 +186,23 @@ namespace merutilm::rff2 {
         BackgroundThreads backgroundThreads = BackgroundThreads();
 
     public:
+        SIZE documentCanvasSize() const {
+            if (wndCWRequest && wndCHRequest) {
+                return {wndCWRequest, wndCHRequest};
+            }
+            const auto extent = documentCanvasExtent.value_or(canvasExtent);
+            return {LONG(extent.width), LONG(extent.height)};
+        }
+        void configureCanvasSize(uint16_t width, uint16_t height) {
+            if (!width || !height) {
+                return;
+            }
+            documentCanvasExtent = VkExtent2D{width, height};
+            if (canvasExtent.width != width || canvasExtent.height != height) {
+                requests.requestResize();
+                requests.requestRecompute();
+            }
+        }
         explicit RenderScene(vkh::EngineRef engine, vkh::WindowContextRef wc,
                              std::array<std::wstring, Constants::Status::LENGTH> *statusMessageRef,
                              std::mutex *statusMessageMutexRef);
@@ -170,14 +231,22 @@ namespace merutilm::rff2 {
         // requests, so its preview can only be held this way - not by skipping the call.
         void render(bool present = true);
 
+        // canvas * multiplier * sourceScale, clamped in wide types before narrowing to the uint16_t iteration-buffer range.
+        [[nodiscard]] static uint32_t scaledRenderAxis(const uint32_t canvas, const float multiplier,
+                                                       const uint32_t sourceScale) {
+            const double scaled = static_cast<double>(static_cast<float>(canvas) * multiplier);
+            const uint64_t base = scaled >= 1.0 ? static_cast<uint64_t>(std::min(scaled, 65535.0)) : 1;
+            return static_cast<uint32_t>(std::min<uint64_t>(base * sourceScale, 65535));
+        }
+
         [[nodiscard]] VkExtent2D getInternalImageExtent() const {
             const auto [width, height] = canvasExtent;
             // render internally at clarity * ssaa; the ssaa
             // factor is resolved away by the export downsample (still + video).
             const float multiplier = attr.render.clarityMultiplier * static_cast<float>(attr.render.ssaa);
             return {
-                static_cast<uint32_t>(static_cast<float>(width) * multiplier),
-                static_cast<uint32_t>(static_cast<float>(height) * multiplier)
+                scaledRenderAxis(width, multiplier, attr.video.data.sourceScale),
+                scaledRenderAxis(height, multiplier, attr.video.data.sourceScale)
             };
         }
 
@@ -187,7 +256,7 @@ namespace merutilm::rff2 {
                 rat < 1) {
                 return {
                     Constants::Fractal::GAUSSIAN_MAX_WIDTH,
-                    static_cast<uint32_t>(static_cast<float>(blurredExtent.height) * rat)
+                    std::max(1u, static_cast<uint32_t>(static_cast<float>(blurredExtent.height) * rat))
                 };
             }
             return blurredExtent;
@@ -209,14 +278,12 @@ namespace merutilm::rff2 {
 
         // sky, when given, comes back set for a pixel a 360 layout points away from the plane: it sees no
         // fractal at all, so it is filled rather than iterated, and the offset handed back is meaningless.
-        [[nodiscard]] std::array<dex, 2> offsetConversion(const Attribute &settings, int mx, int my,
+        [[nodiscard]] std::array<dex, 2> offsetConversion(const Attribute &settings, double mx, double my,
                                                           bool *sky = nullptr) const;
 
-        // Full-grid variant of offsetConversion for tiled high-res export: maps a pixel of the
-        // (fullW x fullH) full image to its fractal offset from center.
-        [[nodiscard]] std::array<dex, 2> offsetConversionTiled(const Attribute &settings, int fx, int fy,
-                                                               int fullW, int fullH, int scale,
-                                                               bool *sky = nullptr) const;
+        [[nodiscard]] std::array<dex, 2> offsetConversionFullGrid(const Attribute &settings, int fx, int fy,
+                                                                  int fullW, int fullH, int scale,
+                                                                  bool *sky = nullptr) const;
 
         // Largest |dc| over the whole (fullW x fullH) grid, which is the radius the reference has to
         // stay valid out to. Where that pixel sits depends on the projection, so every caller asks here.
@@ -240,17 +307,11 @@ namespace merutilm::rff2 {
 
         // Largest clarity*ssaa product whose internal render extent still fits the GPU's maxImageDimension2D (0 = unknown).
         [[nodiscard]] float getMaxInternalScale() const;
+        [[nodiscard]] float getMaxInternalScale(uint32_t width,uint32_t height) const;
 
         // Warning text if the given clarity/SSAA settings risk exhausting VRAM or RAM (empty = within budget).
         [[nodiscard]] std::wstring checkRenderMemoryBudget(const Attribute &settings) const;
-
-        // Pixels a tiled export renders past each edge of the region it keeps, so every kept pixel has
-        // the real neighbourhood the slope Sobel, its macro ring and the interpolation tent read.
-        [[nodiscard]] int exportTileMargin(const Attribute &settings, uint32_t tilesX, uint32_t tilesY) const;
-
-        // Warning text if a tilesX*tilesY high-res export risks exhausting RAM or VRAM (empty = within budget).
-        [[nodiscard]] std::wstring checkExportMemoryBudget(const Attribute &settings, uint32_t tilesX,
-                                                           uint32_t tilesY) const;
+        [[nodiscard]] std::wstring checkRenderMemoryBudget(const Attribute &settings,uint32_t width,uint32_t height) const;
 
         void applyDefaultAttr();
 
@@ -259,8 +320,6 @@ namespace merutilm::rff2 {
         // Lifts what the compute has produced so far into the staging buffer. complete asks for the
         // finished map exactly, with no carried-down rows, and ignores the throttle.
         void snapshotComputePreview(bool complete);
-
-        void applyExportHighRes(uint32_t tilesX, uint32_t tilesY);
 
         void applyShaderAttr(const Attribute &attr) const;
 
@@ -278,13 +337,17 @@ namespace merutilm::rff2 {
         // Waits every frame in flight out, which is what makes rewriting the one staging buffer they all copy from safe.
         void waitFramesInFlight() const;
 
-        void initRenderer();
+        void initRenderer(bool prepareAll = false);
 
         void refreshRenderContext() const;
 
         void applyResize();
 
-        void refreshSharedImgContext() const;
+        void refreshSharedImgContext(VkFormat format=VK_FORMAT_UNDEFINED) const;
+        uint64_t getPreviewRevision() const { return previewRevision; }
+        std::pair<cv::Mat,cv::Mat> renderComparison(const ShaderAttribute& reference,float seconds);
+        void zoomToImagePoint(double x,double y,double factor);
+        std::pair<Matrix<double>,uint64_t> sampleIterationsForAi() const;
 
         // False when the map does not fit the current iteration buffer, which leaves the canvas as it was.
         bool overwriteMatrixFromMap(const RFFDynamicMapBinary &map);
@@ -336,11 +399,11 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] uint16_t getMouseYOnIterationBuffer() const;
 
-        void recomputeThreaded();
+        void recomputeThreaded(const Attribute* overrideSettings = nullptr, bool lowResolution = false);
 
         void beforeCompute(Attribute &attr) const;
 
-        bool compute(const Attribute &attr);
+        bool compute(const Attribute &attr, Matrix<double>* output = nullptr, const Attribute* samplingGeometry = nullptr);
 
         // Builds currentPerturbator for the given settings/dcMax honoring reuseReferenceMethod.
         // Extracted from compute() so the tiled export can share the exact same reference setup.
@@ -354,17 +417,10 @@ namespace merutilm::rff2 {
             (*statusMessageRef)[index] = std::wstring(L"  ").append(message);
         }
 
-        // Installed by Application. A job that owns the UI thread for minutes calls this between
-        // work units so the status bar still paints, the window keeps answering, and a cancel
-        // gesture can reach state.interrupt() -- none of which happen while render() has not returned.
-        void setLongJobPump(std::function<void()> pump) {
-            longJobPump = std::move(pump);
-        }
-
         // True while such a job is running. Message handlers that mutate the scene or the swapchain
         // must do nothing while it is set, because the pump dispatches them from inside the job.
         [[nodiscard]] bool isLongJobBusy() const {
-            return longJobBusy.load();
+            return longJobBusy.load() || vkh::GraphicsContextWindowImpl::isPipelineCompilationPending();
         }
 
         void requestLongJobCancel() {
@@ -400,6 +456,49 @@ namespace merutilm::rff2 {
         }
 
         void applyLoadedConfig();
+        void setPreviewAnimationPaused(bool paused) { renderer->rendererIteration->setPreviewAnimationPaused(paused); }
+
+        void swapAnimationLayers(AnimatedLayerFamily family, uint32_t from, uint32_t to) {
+            if (renderer) {
+                renderer->rendererIteration->swapAnimationLayers(family, from, to);
+                renderer->lastShadedPhases.swapLayers(family, from, to);
+            }
+        }
+        bool isPreviewAnimationPaused() const { return renderer->rendererIteration->previewClock.paused; }
+        bool* smoothZoomOption() { return &smoothZoomEnabled; }
+        void setConfigFileObserver(
+            std::function<void(const std::filesystem::path&, bool, uint16_t, uint16_t)> observer) {
+            configFileObserver = std::move(observer);
+        }
+        void setConfigGuards(std::function<bool()> save, std::function<bool()> replace,
+                             std::function<void()> commit = {}) {
+            configSaveGuard = std::move(save);
+            configReplaceGuard = std::move(replace);
+            configReplaceCommit = std::move(commit);
+        }
+        bool prepareConfigSave() {
+            return !configSaveGuard || configSaveGuard();
+        }
+        bool prepareConfigReplace() {
+            return !configReplaceGuard || configReplaceGuard();
+        }
+        void commitConfigReplace() {
+            if (configReplaceCommit) {
+                configReplaceCommit();
+            }
+        }
+        const std::filesystem::path& getConfigDocumentPath() const {
+            return configDocumentPath;
+        }
+        void notifyConfigFile(const std::filesystem::path& path, bool loaded,
+                              uint16_t width = 0, uint16_t height = 0) {
+            configDocumentPath = path;
+            const auto dimensions = documentCanvasSize();
+            if (configFileObserver) {
+                configFileObserver(path, loaded, width ? width : dimensions.cx,
+                                   height ? height : dimensions.cy);
+            }
+        }
 
         // Puts the view a settings file holds - the fields a location file carries - and its formula
         // onto otherwise default settings. What recovery generates from when the settings themselves
@@ -408,10 +507,6 @@ namespace merutilm::rff2 {
 
         // Holds every compute back, or lets them run again. See computeHold.
         void setComputeHold(bool hold);
-
-        [[nodiscard]] bool isComputeHold() const {
-            return computeHold;
-        }
 
         // Puts the settings this session is working on where the next start can pick them up from.
         // force writes at once (the view is about to be computed, so this is the location a crash
@@ -424,10 +519,6 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] MandelbrotPerturbator *getCurrentPerturbator() const {
             return currentPerturbator.get();
-        }
-
-        void setCurrentPerturbator(std::unique_ptr<MandelbrotPerturbator> perturbator) {
-            currentPerturbator = std::move(perturbator);
         }
 
         [[nodiscard]] ApproxTableCache &getApproxTableCache() {
@@ -466,7 +557,7 @@ namespace merutilm::rff2 {
         }
 
         [[nodiscard]] bool isIdleCompute() const {
-            return idleCompute;
+            return idleCompute && !smoothZoomActive;
         }
 
         // True when the shutdown now under way leaves a view that was asked for and never arrived.

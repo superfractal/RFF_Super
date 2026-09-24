@@ -1,22 +1,22 @@
 //
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-09-02.
 // Modified by Opus 4.8 on 2026-07-05
 // Modified by Opus 5 on 2026-08-07, 2026-08-08, 2026-08-11, 2026-08-12, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-29
-// Modified by ox-alpha on 2026-08-22.
+// Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-09-02
+// Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
+// Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
 //
-// Modified by GPT-6 on 2026-09-05
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_control_flow_attributes : require
+#include "shader_layer.glsl"
+#include "studio_ggx.glsl"
 #define PI 3.141592653589793238
-#define SHADING_BLEND_OVERLAY 0
 #define SHADING_BLEND_OKLAB_LIGHTNESS 2
-#define LIGHT_BLEND_DIRECT 0
 #define LIGHT_BLEND_LINEAR 1
-#define TINT_BLEND_MULTIPLY 0
 #define TINT_BLEND_OKLAB 1
-#define GLOSS_SOURCE_SHADING 0
 #define GLOSS_SOURCE_RELIEF 1
 #define GLOSS_SOURCE_ASPECT 2
 #define GLOSS_SOURCE_SHADING_FINE 3
@@ -26,6 +26,10 @@ layout (set = 0, binding = 0) uniform sampler2D canvas;
 layout (set = 1, binding = 0) uniform IterUBO {
     uvec2 extent;
     double max_value;
+    double max_value_normal;
+    double max_value_zoomed;
+    uvec2 canvas_extent;
+    ivec2 canvas_offset;
 } iteration_info_attr;
 
 layout (set = 1, binding = 1) buffer IterSSBO {
@@ -94,10 +98,121 @@ layout (set = 2, binding = 0) uniform SlopeUBO {
     float gloss_color_b;
     // Appended at the tail like the block above it.
     float gloss_relief;          // log2 gain on the gloss's own normal; GLOSS_SOURCE_SHADING_FINE only
-} slope_attr;
+    float studio_use;
+    float studio_roughness;
+    float studio_metalness;
+    float studio_ior;
+    float studio_direct_intensity;
+    float studio_environment_intensity;
+    float studio_clearcoat;
+    float studio_clearcoat_roughness;
+    float surface_iridescence;
+    float surface_film_thickness;
+    float surface_specular_aa;
+    float surface_lustre_relief;
+    float surface_relief_depth;
+    float surface_normal_smooth;
+    float surface_ao_radius;
+    float surface_relief_waves;
+    float surface_wave_frequency;
+    float surface_invert_relief;
+    float surface_boundary_guard;
+    float surface_zoom_log2;
+    float groove_enabled;
+    float groove_depth;
+    float groove_width;
+    float groove_auto;
+    float groove_count;
+    float surface_style;
+    float chrome_strength;
+    float film_strength;
+    float reflection_detail;
+    float reflection_contrast;
+    float reflection_brightness;
+    float reflection_curve;
+    float surface_phase;
+    float prism_width;
+    float prism_spread;
+    float film_hue;
+    float sparkle_strength;
+    float background_brightness;
+    float shadow_crush;
+    float flame_strength;
+    float phonk_red;
+    float frost_strength;
+    float frost_threshold;
+    float grunge_scale;
+    float palette_color_mix;
+    float style_color_mix;
+    float style_highlight_mix;
+    float style_background_mix;
+    float style_ink_preserve;
+    float style_glint_size;
+    float style_detail_light;
+    float style_detail_suppress;
+    float style_detail_threshold;
+    float style_damage;
+    float surface_blend;
+    float style_color_r;
+    float style_color_g;
+    float style_color_b;
+    float style_highlight_color_r;
+    float style_highlight_color_g;
+    float style_highlight_color_b;
+    float style_background_color_r;
+    float style_background_color_g;
+    float style_background_color_b;
+    float sea_glow;
+    float sea_threshold;
+    float sea_body;
+    float sea_particles;
+    float sea_particle_size;
+    float sea_balance;
+    float ukiyo_colors;
+    float ukiyo_foam;
+    float ukiyo_grain;
+    float ukiyo_flatness;
+    float ukiyo_balance;
+    float sea_body_color_r;
+    float sea_body_color_g;
+    float sea_body_color_b;
+    float sea_glow_color_r;
+    float sea_glow_color_g;
+    float sea_glow_color_b;
+    float sea_accent_color_r;
+    float sea_accent_color_g;
+    float sea_accent_color_b;
+    float print_ink_r;
+    float print_ink_g;
+    float print_ink_b;
+    float print_indigo_r;
+    float print_indigo_g;
+    float print_indigo_b;
+    float print_asagi_r;
+    float print_asagi_g;
+    float print_asagi_b;
+    float print_blue_r;
+    float print_blue_g;
+    float print_blue_b;
+    float print_foam_r;
+    float print_foam_g;
+    float print_foam_b;
+    float print_paper_r;
+    float print_paper_g;
+    float print_paper_b;
+    float layer_metal;
+    float layer_sigil;
+    float layer_phonk;
+    float layer_frost;
+    float layer_sea;
+    float layer_print;
+    float layer_common;
+    float studio_environment_rotation;
+    float studio_environment_follow;
+    float replace_surface_style;
 
-layout (location = 0) in vec3 fragColor;
-layout (location = 1) in vec2 fragTexcoord;
+
+} slope_attr;
 
 layout (location = 0) out vec4 color;
 
@@ -250,11 +365,14 @@ vec2 macro_gradient(uvec2 iter_coord, float multiplier, double center) {
     // near a border lands on a neighbour - so a ring already taken is reused instead of resampled.
     // The four terms and their order are unchanged, and a reused term is the same value the second
     // call would have returned, so the sum is bit for bit what it was.
-    vec2 s0 = macro_sobel(iter_coord, r0, center);
-    vec2 s1 = (r1 == r0) ? s0 : macro_sobel(iter_coord, r1, center);
-    vec2 s2 = (r2 == r1) ? s1 : ((r2 == r0) ? s0 : macro_sobel(iter_coord, r2, center));
-    vec2 s3 = (r3 == r2) ? s2 : ((r3 == r1) ? s1 : ((r3 == r0) ? s0 : macro_sobel(iter_coord, r3, center)));
-    vec2 g = s0 + s1 + s2 + s3;
+    int radii[4] = int[4](r0, r1, r2, r3);
+    vec2 samples[4];
+    [[dont_unroll]] for (int i = 0; i < 4; ++i) {
+        int reused = -1;
+        for (int j = 0; j < i; ++j) if (radii[j] == radii[i]) reused = j;
+        samples[i] = reused >= 0 ? samples[reused] : macro_sobel(iter_coord, radii[i], center);
+    }
+    vec2 g = samples[0] + samples[1] + samples[2] + samples[3];
     return g * 0.25;
 }
 
@@ -335,18 +453,75 @@ vec3 shade_composite(vec3 base, float shade) {
     );
 }
 
-void main() {
+#include "studio_surface.glsl"
+#include "lustre_relief.glsl"
+#include "effects.glsl"
+#define PALETTE_EXTERNAL_ITERATION
+#define PALETTE_LIBRARY
+#define PALETTE_DATA_SET 5
+#define PALETTE_TEXTURE_SET 6
+#define PALETTE_TIME_SET 7
+#define srgb_to_linear palette_srgb_to_linear
+#define linear_to_srgb palette_linear_to_srgb
+#define linear_to_oklab palette_linear_to_oklab
+#define oklab_to_linear palette_oklab_to_linear
+#include "palette_sampling.glsl"
+#undef srgb_to_linear
+#undef linear_to_srgb
+#undef linear_to_oklab
+#undef oklab_to_linear
+#include "band_groove.glsl"
+vec3 surface_canvas_color(ivec2 coord) {
+    vec3 c = texelFetch(canvas, coord, 0).rgb;
+    return ordered_layers() ? linear_to_srgb(c) : c;
+}
+bool replace_surface_style() {
+    return slope_attr.replace_surface_style > 0.5 && slope_attr.surface_style > 0.5;
+}
+vec3 material_canvas_color(ivec2 coord) {
+    return replace_surface_style() ? vec3(0.5) : surface_canvas_color(coord);
+}
+#include "dark_surface.glsl"
+#include "sea_print_surface.glsl"
+#include "chrome_surface.glsl"
 
+vec2 groove_base_slope = vec2(0);
+
+// Share material evaluation after either composition prepares its inputs; original project code, see NOTICE.
+struct PendingSurface {
+    bool enabled;
+    bool ordered;
+    bool material;
+    double iteration;
+    vec3 normal;
+    vec3 view;
+    vec2 terrain;
+    float ao;
+    vec3 base;
+    vec3 radiance;
+    vec3 highlights;
+    SurfaceEffects effects;
+    vec2 materialCycles;
+    vec2 movingCycleGradient;
+    vec2 heldCycleGradient;
+};
+PendingSurface pendingSurface;
+
+void shade_surface() {
+
+    pendingSurface.enabled = false;
     uvec2 iter_coord = uvec2(gl_FragCoord.xy);
 
 
     // depth and opacity are the layer's off switches; reflection_ratio only raises the ambient floor.
-    if(slope_attr.depth == 0 || slope_attr.opacity <= 0.0){
+    if((slope_attr.depth == 0 || slope_attr.opacity <= 0.0) && !(replace_surface_style() && slope_attr.studio_use > 0.5) && !effects_enabled()){
         color = texelFetch(canvas, ivec2(iter_coord), 0);
+        if (slope_attr.studio_use > 0.5 && !ordered_layers()) color.rgb = srgb_to_linear(color.rgb);
         return;
     }
 
     float multiplier = float(iteration_info_attr.extent.x) / 1280;
+    if (slope_attr.studio_use > 0.5) multiplier = float(max(iteration_info_attr.canvas_extent.x, 1u)) / 1280;
 
     float aRad = radians(slope_attr.azimuth);
     float zRad = radians(slope_attr.zenith);
@@ -422,6 +597,57 @@ void main() {
     }
 
     // atan()+cos/sin round trip folded to one inversesqrt: expanding cos(aRad + aspect) cancels the gradient length exactly.
+    if(slope_attr.surface_lustre_relief>0.5) {
+        vec3 detail=lustre_relief(relief_coord,centerIt);
+        dzDx=detail.x; dzDy=detail.y; aoFactor=detail.z;
+    }
+    SurfaceEffects surfaceEffects = surface_effects(centerIt, vec2(dx, dy), vec2(dzDx, dzDy));
+    vec3 beforeEffectNormal = normalize(vec3(-dzDx, -dzDy, 1));
+    vec2 effectSlope = vec2(dFdx(surfaceEffects.height), dFdy(surfaceEffects.height));
+    if (centerIt <= 0.0 || centerIt >= iteration_info_attr.max_value) effectSlope = vec2(0.0);
+    effectSlope *= float(max(iteration_info_attr.canvas_extent.y, 1u)) * 0.025;
+    effectSlope *= 0.4 * inversesqrt(0.16 + dot(effectSlope, effectSlope));
+    dzDx += effectSlope.x;
+    dzDy += effectSlope.y;
+    groove_base_slope = vec2(dzDx, dzDy);
+    vec3 materialNormal=normalize(vec3(-dzDx,-dzDy,1));
+    // The base-material layer consumes the same initialized cycle and gradients as the added materials.
+    if ((ordered_layers() && shader_layer.control.x >= 11 && shader_layer.control.x <= 18) ||
+        (!ordered_layers() && slope_attr.studio_use > 0.5 &&
+         (slope_attr.surface_style > 0.5 || surface_layers_enabled()))) {
+        double materialIteration = ordered_layers() ? centerIt : get_iteration_raw(ivec2(iter_coord));
+        materialIteration = materialIteration > 0.0 && materialIteration < iteration_info_attr.max_value ? materialIteration : 1.0;
+        g_interval = dvec4(palette_attr.interval);
+        g_inv_interval = 1.0 / g_interval;
+        pendingSurface.materialCycles = vec2(float(groove_cycle(ivec2(iter_coord), materialIteration, true)),
+                                             float(groove_cycle(ivec2(iter_coord), materialIteration, false)));
+        pendingSurface.movingCycleGradient = vec2(dFdx(pendingSurface.materialCycles.x), dFdy(pendingSurface.materialCycles.x));
+        pendingSurface.heldCycleGradient = vec2(dFdx(pendingSurface.materialCycles.y), dFdy(pendingSurface.materialCycles.y));
+    }
+    if (ordered_layers() && !layer_is(11)) {
+        color = texelFetch(canvas, ivec2(iter_coord), 0);
+        if (shader_layer.control.x >= 12 && shader_layer.control.x <= 18 && centerIt > 0.0 && centerIt < iteration_info_attr.max_value) {
+            vec2 uv = (gl_FragCoord.xy + vec2(iteration_info_attr.canvas_offset)) / max(vec2(iteration_info_attr.canvas_extent), vec2(1));
+            vec3 v = normalize(vec3((uv - 0.5) * vec2(-0.1, -0.06), 1));
+            pendingSurface.enabled = true;
+            pendingSurface.ordered = true;
+            pendingSurface.material = true;
+            pendingSurface.iteration = centerIt;
+            pendingSurface.normal = materialNormal;
+            pendingSurface.view = v;
+            pendingSurface.terrain = -vec2(dx, dy);
+            pendingSurface.ao = aoFactor;
+            pendingSurface.base = color.rgb;
+            pendingSurface.radiance = color.rgb;
+        }
+        if (shader_layer.control.x >= 19 && shader_layer.control.x <= 22) {
+            color.rgb = surface_effect_relief(color.rgb, beforeEffectNormal, materialNormal);
+            color.rgb = surface_effect_finish(color.rgb, surfaceEffects, materialNormal, true);
+        }
+        return;
+    }
+    vec3 normalDx=dFdx(materialNormal), normalDy=dFdy(materialNormal);
+    float normalVariance=min(0.12,0.19*(dot(normalDx,normalDx)+dot(normalDy,normalDy)))*slope_attr.surface_specular_aa;
     float invSlopeLen = inversesqrt(1.0 + dzDx * dzDx + dzDy * dzDy);
 
     // Diffuse shading. This expands to dot(N, L) for N = normalize(vec3(-dzDx, -dzDy, 1)), so the
@@ -467,7 +693,7 @@ void main() {
     shade = mix(1.0, shade, clamp(slope_attr.luma_amount, 0.0, 1.0));
 
     // Shading composite: shade=1.0 → neutral, shade<1.0 → darken
-    vec3 base = texelFetch(canvas, ivec2(iter_coord), 0).rgb;
+    vec3 base = surface_canvas_color(ivec2(iter_coord));
     // Opacity is held back to the end of main(), where it blends the finished slope result against this base.
     vec3 baseColor = shade_composite(base, shade);
 
@@ -475,7 +701,7 @@ void main() {
 
     // Brightness scales the shaded color; folded into the blend factor above it clamped at 1.0, where overlay maps every channel >= 0.5 to pure white and both the relief and the palette color stopped responding.
     baseColor *= slope_attr.brightness;
-    if (!linearLight) {
+    if (!linearLight && slope_attr.studio_use < 0.5) {
         // The same shoulder LIGHT_BLEND_LINEAR ends on, taken here over the lifted base alone.
         // Dividing by the peak channel held the hue but cancelled the shading outright: the composite
         // is a scalar multiple of the base, so once brightness pushed the peak past 1 the divisor
@@ -492,7 +718,7 @@ void main() {
         vec3 viewDir = vec3(0.0, 0.0, 1.0);
 
         // Specular calculation
-        if (slope_attr.specular_intensity > 0.0) {
+        if (slope_attr.specular_intensity > 0.0 && slope_attr.studio_use < 0.5) {
             // Only the specular lobe still needs the gradient direction, so the atan stays inside this branch.
             float aspect = atan(dzDy, -dzDx);
             bool specUnlinked = slope_attr.specular_link < 0.5;
@@ -630,6 +856,8 @@ void main() {
             // everywhere, so the bands had only the terminator to sit on; this one keeps the
             // mid-range wide, so they ring every form from its crest outward.
             vec2 gz = vec2(dx, dy) * exp2(clamp(slope_attr.gloss_relief, 0.0, 16.0)) * multiplier;
+            // Fine Shading gloss uses the same reference-space Lustre gradient as the material.
+            // That experiment is reverted after visual regressions; the legacy gloss gradient above is retained.
             float inv = inversesqrt(1.0 + dot(gz, gz));
             g = clamp((cos(zRad) - sin(zRad) * (cos(aRad) * gz.x + sin(aRad) * gz.y)) * inv, 0.0, 1.0);
             // Fine Shading keeps both its flat-patch fade and shadow mask independent of Shading Depth.
@@ -657,6 +885,35 @@ void main() {
     vec3 shaded = baseColor * aoFactor;
 
     vec3 slopeColor;
+    if (slope_attr.studio_use > 0.5) {
+        vec3 baseLinear = srgb_to_linear(base);
+        double pixelIteration = get_iteration_raw(ivec2(iter_coord));
+        if (pixelIteration <= 0.0 || pixelIteration >= iteration_info_attr.max_value) {
+            color = vec4(baseLinear, 1);
+            if (slope_attr.surface_style > 2.5 || replace_surface_style()) color.rgb = mix(baseLinear, vec3(0), (replace_surface_style() ? 1.0 : slope_attr.chrome_strength * slope_attr.opacity));
+            return;
+        }
+        vec3 n = normalize(vec3(-dzDx, -dzDy, 1));
+        vec2 uv = (gl_FragCoord.xy + vec2(iteration_info_attr.canvas_offset)) / max(vec2(iteration_info_attr.canvas_extent), vec2(1));
+        // Lustre uses the orthographic view of the fractal plane, independent of a point's screen position.
+        // That experiment is reverted after visual regressions; the established studio view below is retained.
+        vec3 v = normalize(vec3((uv - 0.5) * vec2(-0.1, -0.06), 1));
+        float boundaryMask=boundary_reflection_mask(iter_coord);
+        vec3 radiance = studio_surface(baseLinear, srgb_to_linear(max(baseColor, 0.0)), n, v, aoFactor, normalVariance, boundaryMask, surfaceEffects.wetness);
+        pendingSurface.enabled = true;
+        pendingSurface.ordered = false;
+        pendingSurface.material = slope_attr.surface_style > 0.5 || surface_layers_enabled();
+        pendingSurface.iteration = pixelIteration;
+        pendingSurface.normal = n;
+        pendingSurface.view = v;
+        pendingSurface.terrain = -vec2(dx, dy);
+        pendingSurface.ao = aoFactor;
+        pendingSurface.base = baseLinear;
+        pendingSurface.radiance = radiance;
+        pendingSurface.highlights = (srgb_to_linear(rimColor) * rim + srgb_to_linear(glossColor) * gloss) * boundaryMask;
+        pendingSurface.effects = surfaceEffects;
+        return;
+    }
     if (linearLight) {
         // Add the light in proportion to light rather than on the encoded values. Summing on the
         // encoded values overstates it by roughly the encoding curve, which is why a highlight
@@ -680,4 +937,133 @@ void main() {
         slopeColor = clamp(shaded + specColor * specular + rimColor * rim + glossColor * gloss, 0.0, 1.0);
     }
     color = vec4(clamp(mix(base, slopeColor, slope_attr.opacity), 0.0, 1.0), 1.0);
+    color.rgb = clamp(surface_effect_finish(color.rgb, surfaceEffects, materialNormal, false), 0.0, 1.0);
+}
+
+// Ordered compositing reuses the palette phase and the original line profile; see NOTICE.
+float ordered_band_coverage(double cycle) {
+    float width = shader_layer.line_params.y;
+    if (shader_layer.control.z == 0 || width <= 0.0 || shader_layer.line_params.x <= 0.0) return 0.0;
+    double f = mod(cycle * double(shader_layer.line_params.x), 1.0LF);
+    float x = float(min(f, 1.0LF - f)) * 2.0 / width;
+    float opacity = clamp(shader_layer.line_params.z, 0.0, 1.0);
+    float softness = clamp(shader_layer.line_params.w, 0.0, 1.0);
+    if (softness <= 0.0) return x < 1.0 ? opacity : 0.0;
+    float t = clamp((1.0 + softness - x) / (2.0 * softness), 0.0, 1.0);
+    float shoulder = t * t * (3.0 - 2.0 * t);
+    return opacity * shoulder * shoulder * shoulder * shoulder;
+}
+
+float ordered_band_channel(double iteration, double interval, double inverse, double anim, double warp, float frozen) {
+    double ratio = biased_ratio(mod(coloring_curve(div_r(smooth_iteration(iteration), interval, inverse)), 1.0LF));
+    double held = ratio + palette_attr.offset + div_r(warp, interval, inverse);
+    return mix(ordered_band_coverage(held - div_r(anim, interval, inverse)), ordered_band_coverage(held), frozen);
+}
+
+#include "band_decoration.glsl"
+
+void ordered_palette_layer(uvec2 coord) {
+    color = texelFetch(canvas, ivec2(coord), 0);
+    double iteration = get_palette_iteration(coord);
+    if (iteration <= 0.0 || iteration >= iteration_info_attr.max_value) return;
+    g_interval = dvec4(palette_attr.interval);
+    g_inv_interval = 1.0 / g_interval;
+    vec2 pixel = vec2(coord) + 0.5;
+    double anim = animation_offset_iterations(pixel);
+    vec2 gradient = iteration_gradient(ivec2(coord), iteration);
+    double warp = warp_offset(iteration, pixel, gradient, anim);
+    vec4 encoded = vec4(linear_to_srgb(color.rgb), color.a);
+    if (layer_is(1)) {
+        float frozen = freeze_weight(iteration);
+        vec3 coverage = vec3(ordered_band_channel(iteration, g_interval.r, g_inv_interval.r, anim, warp, frozen),
+                             ordered_band_channel(iteration, g_interval.g, g_inv_interval.g, anim, warp, frozen),
+                             ordered_band_channel(iteration, g_interval.b, g_inv_interval.b, anim, warp, frozen));
+        encoded.rgb = mix(encoded.rgb, shader_layer.line_color.rgb, coverage);
+    } else if (shader_layer.control.x <= 5) {
+        encoded = apply_texture(encoded, iteration, pixel, gradient, anim, warp);
+    } else {
+        encoded = apply_pattern(encoded, iteration, pixel, gradient, anim, warp);
+    }
+    color = vec4(srgb_to_linear(encoded.rgb), color.a);
+}
+
+void shade_layers() {
+    if (ordered_layers()) {
+        uvec2 coord = uvec2(gl_FragCoord.xy);
+        if (layer_is(100)) {
+            color = texelFetch(canvas, ivec2(coord), 0);
+            color.rgb = srgb_to_linear(color.rgb);
+            return;
+        }
+        if (shader_layer.control.x >= 1 && shader_layer.control.x <= 9 &&
+            !(layer_is(1) && shader_layer.control.w != 0)) {
+            ordered_palette_layer(coord);
+            return;
+        }
+        if (!(layer_is(1) || (shader_layer.control.x >= 11 && shader_layer.control.x <= 22))) {
+            color = texelFetch(canvas, ivec2(coord), 0);
+            return;
+        }
+    }
+    // Share one surface call so the driver compiles the material graph only once; see NOTICE.
+    shade_surface();
+    if (pendingSurface.enabled) {
+        vec3 radiance = pendingSurface.radiance;
+        if (pendingSurface.material) {
+            radiance = chrome_surface(uvec2(gl_FragCoord.xy), pendingSurface.iteration,
+                                      pendingSurface.normal, pendingSurface.view,
+                                      pendingSurface.terrain, radiance, pendingSurface.ao,
+                                      pendingSurface.materialCycles, pendingSurface.movingCycleGradient,
+                                      pendingSurface.heldCycleGradient);
+        }
+        bool fullReplacement = replace_surface_style() && (!ordered_layers() || layer_is(11));
+        float materialOpacity = clamp(slope_attr.opacity, 0.0, 1.0);
+        if (pendingSurface.ordered) {
+            color.rgb = fullReplacement ? radiance : mix(pendingSurface.base, radiance, materialOpacity);
+        } else {
+            radiance += pendingSurface.highlights;
+            color = vec4(clamp(fullReplacement ? radiance : mix(pendingSurface.base, radiance, materialOpacity), 0.0, 60000.0), 1);
+            color.rgb = surface_effect_finish(color.rgb, pendingSurface.effects, pendingSurface.normal, true);
+        }
+    }
+    // Both compositions use one groove evaluation with the same inputs and transfer functions; see NOTICE.
+    float grooveLight = 1.0;
+    if (ordered_layers() ? layer_is(1) : groove_enabled()) {
+        g_interval = dvec4(palette_attr.interval);
+        g_inv_interval = 1.0 / g_interval;
+        grooveLight = groove_light(uvec2(gl_FragCoord.xy), groove_base_slope);
+    }
+    if (ordered_layers()) {
+        if (layer_is(1)) {
+            g_interval = dvec4(palette_attr.interval);
+            g_inv_interval = 1.0 / g_interval;
+            color.rgb *= grooveLight;
+        } else if (layer_is(11) && slope_attr.studio_use < 0.5) {
+            color.rgb = srgb_to_linear(color.rgb);
+        }
+        color.rgb = clamp(color.rgb, 0.0, 60000.0);
+        return;
+    }
+    if (groove_enabled()) {
+        g_interval = dvec4(palette_attr.interval);
+        g_inv_interval = 1.0 / g_interval;
+        float light = grooveLight;
+        if (slope_attr.studio_use > 0.5) {
+            color.rgb = clamp(color.rgb * light, 0.0, 60000.0);
+        } else {
+            color.rgb = clamp(linear_to_srgb(srgb_to_linear(color.rgb) * light), 0.0, 1.0);
+        }
+    }
+    if (effects_attr.context.x > 0.5 && slope_attr.studio_use < 0.5) {
+        color.rgb = srgb_to_linear(color.rgb);
+    }
+}
+
+void main() {
+    shade_layers();
+    if (!ordered_layers() || layer_is(1)) {
+        color.rgb = apply_band_decoration(uvec2(gl_FragCoord.xy), color.rgb,
+                                          ordered_layers() || slope_attr.studio_use > 0.5 ||
+                                          effects_attr.context.x > 0.5);
+    }
 }

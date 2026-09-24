@@ -1,13 +1,15 @@
 //
 // Created by Merutilm on 2025-09-06.
 // Modified by AI; earlier exact modification date unavailable.
-// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27.
+// Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-25, 2026-08-26, 2026-08-31
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #include "VideoRenderScene.hpp"
 
 #include "../../vulkan_helper/util/BufferImageContextUtils.hpp"
+#include "../../vulkan_helper/util/BarrierUtils.hpp"
 #include "../vulkan/RCCPresentVid.hpp"
 #include "opencv2/imgproc.hpp"
 #include "../constants/FractalConstants.hpp"
@@ -22,6 +24,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <exception>
+#include <stdexcept>
 
 namespace merutilm::rff2 {
     namespace {
@@ -32,12 +36,6 @@ namespace merutilm::rff2 {
                 return v == nullptr || (v[0] != '0' || v[1] != '\0');
             }();
             return enabled;
-        }
-
-        uint64_t elapsedNanos(const std::chrono::steady_clock::time_point start) {
-            return static_cast<uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now() - start).count());
         }
 
         // Texture layers the timeline can still call for: one a track turns on, and one a track can
@@ -105,10 +103,31 @@ namespace merutilm::rff2 {
             out.bloom = BloomPresets::Disabled().genBloom();
             return out;
         }
+
+        bool sameAnimationTimeline(const VidTimelineAttribute &a, const VidTimelineAttribute &b) {
+            if (a.enabled != b.enabled || a.tracks.size() != b.tracks.size() || a.holds.size() != b.holds.size()) return false;
+            for (size_t i = 0; i < a.tracks.size(); ++i) {
+                const auto &left = a.tracks[i];
+                const auto &right = b.tracks[i];
+                if (left.targetId != right.targetId || left.enabled != right.enabled ||
+                    left.keys.size() != right.keys.size()) return false;
+                for (size_t k = 0; k < left.keys.size(); ++k) {
+                    const auto &x = left.keys[k];
+                    const auto &y = right.keys[k];
+                    if (x.depth != y.depth || x.value != y.value || x.out != y.out ||
+                        x.color.r != y.color.r || x.color.g != y.color.g ||
+                        x.color.b != y.color.b || x.color.a != y.color.a) return false;
+                }
+            }
+            for (size_t i = 0; i < a.holds.size(); ++i) {
+                if (a.holds[i].depth != b.holds[i].depth || a.holds[i].seconds != b.holds[i].seconds) return false;
+            }
+            return true;
+        }
     }
 
     VideoRenderScene::VideoRenderScene(vkh::EngineRef engine, vkh::WindowContextRef wc, const VkExtent2D &videoExtent,
-                                       const Attribute &targetAttribute) : EngineHandler(engine), wc(wc),
+                                       const Attribute &targetAttribute, std::function<void()> beforeWait) : EngineHandler(engine), wc(wc), preparationHook(std::move(beforeWait)),
                                                                            videoExtent(videoExtent),
                                                                            baseAttribute(targetAttribute),
                                                                            staticShader(staticGradeBase(targetAttribute.shader)),
@@ -159,7 +178,10 @@ namespace merutilm::rff2 {
                                                            warpSourceLayer(baseAttribute.shader.warp),
                                                            timelineResidentTextures(baseAttribute.video.timeline,
                                                                baseAttribute.shader.warp));
-        renderer->rendererBloom->setBloom(gradeBase().bloom, baseAttribute.shader.hdr);
+        renderer->rendererBloom->setBloom(gradeBase().bloom, baseAttribute.shader.hdr, gradeBase().sceneLinear());
+        renderer->layerShader = gradeBase();
+        renderer->rendererSlope->setEffects(gradeBase().effects, gradeBase().sceneLinear(), !renderer->isStaticImages);
+        renderer->renderer2MapIterationStripe->setEffects(gradeBase().effects);
         applyShaderDynamic(gradeBase(), TimelineDirtyMask::ALL);
         renderer->rendererLinearInterpolation->setLinearInterpolation(baseAttribute.render.linearInterpolation);
         renderer->renderer2MapIterationStripe->setDither(baseAttribute.render.dither);
@@ -171,7 +193,7 @@ namespace merutilm::rff2 {
     }
 
     void VideoRenderScene::setHdrOutput(const VidHdrTransfer transfer, const float peakNits) const {
-        renderer->rendererLinearInterpolation->setToneMap(baseAttribute.shader.hdr, transfer, peakNits);
+        renderer->rendererLinearInterpolation->setToneMap(baseAttribute.shader.hdr, transfer, peakNits, gradeBase().sceneLinear());
         renderer->rendererImageRGBA2BGR->setHdr(isHdrOutput(transfer));
     }
 
@@ -179,14 +201,14 @@ namespace merutilm::rff2 {
         return baseAttribute.shader.hdr.use && transfer != VidHdrTransfer::SDR;
     }
 
-    void VideoRenderScene::applyShaderPalette(const ShdPaletteAttribute &palette) const {
-        engine.getCore().getLogicalDevice().waitDeviceIdle();
-        renderer->renderer2MapIterationStripe->setPalette(palette);
-    }
-
     void VideoRenderScene::applyShaderDynamic(const ShaderAttribute &shader, const TimelineDirtyMask dirty) const {
+        renderer->layerShader = shader;
+        if (hasTimelineDirty(dirty, TimelineDirtyMask::CAMERA)) {
+            renderer->renderer2MapIterationStripe->setCamera(shader.camera, baseAttribute.video.data.sourceScale);
+        }
         if (hasTimelineDirty(dirty, TimelineDirtyMask::PALETTE)) {
             renderer->renderer2MapIterationStripe->setPaletteDynamic(shader.palette);
+            renderer->rendererSlope->setGroove(shader.palette);
         }
         if (hasTimelineDirty(dirty, TimelineDirtyMask::STRIPE)) {
             renderer->renderer2MapIterationStripe->setStripe(shader.stripe);
@@ -210,9 +232,10 @@ namespace merutilm::rff2 {
                 slope.opacity = 0.0f;
             }
             renderer->rendererSlope->setSlope(slope);
+            renderer->rendererLinearInterpolation->setSurface(slope);
         }
         if (hasTimelineDirty(dirty, TimelineDirtyMask::COLOR)) {
-            renderer->rendererColor->setColor(shader.color);
+            renderer->rendererColor->setColor(shader.color, gradeBase().sceneLinear());
         }
         if (hasTimelineDirty(dirty, TimelineDirtyMask::FOG)) {
             ShdFogAttribute fog = shader.fog;
@@ -221,34 +244,31 @@ namespace merutilm::rff2 {
             if (renderer->isStaticImages) {
                 fog.rimMask = 0.0f;
                 fog.focusAmount = 0.0f;
+                fog.chaosAmount = 0.0f;
             }
             renderer->rendererFog->setFog(fog);
             renderer->rendererBoxBlur->setBlurInfo(CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG, fog.radius);
         }
         if (hasTimelineDirty(dirty, TimelineDirtyMask::BLOOM)) {
-            renderer->rendererBloom->setBloomDynamic(shader.bloom, shader.hdr);
+            renderer->rendererBloom->setBloomDynamic(shader.bloom, shader.hdr, gradeBase().sceneLinear());
             renderer->rendererBoxBlur->setBlurInfo(CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM, shader.bloom.radius);
         }
     }
 
     void VideoRenderScene::applyTimelineShader(const float depth, const float sec) {
-        // Every speed the timeline may replace below is a rate: the phase reached under the ones in
-        // effect until now is brought up to this instant first, or the new speed is charged for the
-        // whole run and the animation jumps.
-        renderer->renderer2MapIterationStripe->advanceAnimationTo(sec);
-        if (!timelineEvaluator.hasActiveShaderTracks()) {
-            return;
+        if (timelineEvaluator.hasActiveShaderTracks()) {
+            ShaderAttribute evaluated = {};
+            timelineEvaluator.evaluate(depth, sec, gradeBase(), evaluated);
+            const TimelineDirtyMask dirty = timelineEvaluator.diff(liveShader, evaluated);
+            if (dirty != TimelineDirtyMask::NONE) {
+                applyShaderDynamic(evaluated, dirty);
+                liveShader = std::move(evaluated);
+            }
         }
-        const auto evalStart = std::chrono::steady_clock::now();
-        ShaderAttribute evaluated = {};
-        timelineEvaluator.evaluate(depth, sec, gradeBase(), evaluated);
-        const TimelineDirtyMask dirty = timelineEvaluator.diff(liveShader, evaluated);
-        timelineEvalNanos.fetch_add(elapsedNanos(evalStart));
-        if (dirty != TimelineDirtyMask::NONE) {
-            const auto applyStart = std::chrono::steady_clock::now();
-            applyShaderDynamic(evaluated, dirty);
-            shaderApplyNanos.fetch_add(elapsedNanos(applyStart));
-            liveShader = std::move(evaluated);
+        if (animationIntegrator) {
+            renderer->renderer2MapIterationStripe->setTimelinePhases(animationIntegrator->at(sec), sec);
+        } else {
+            renderer->renderer2MapIterationStripe->advanceAnimationTo(sec);
         }
     }
 
@@ -257,8 +277,12 @@ namespace merutilm::rff2 {
         // changed while the editor is open reaches its next preview. The 2map size and the sample
         // jitter are left out: they belong to the render, not to the shader, and resizing the
         // iteration buffer here would throw away the keyframe already uploaded into it.
+        animationInputsChanged |= !sameAnimationTimeline(baseAttribute.video.timeline, timeline) ||
+                                  TimelineAnimationPhases::ratesOf(baseAttribute.shader) !=
+                                  TimelineAnimationPhases::ratesOf(shader);
         engine.getCore().getLogicalDevice().waitDeviceIdle();
-        const bool rebuildHdrChain = baseAttribute.shader.hdr.use != shader.hdr.use;
+        const bool rebuildHdrChain = renderer == nullptr || baseAttribute.shader.hdr.use != shader.hdr.use ||
+                                     baseAttribute.shader.sceneLinear() != shader.sceneLinear();
         baseAttribute.shader = shader;
         staticShader = staticGradeBase(shader);
         baseAttribute.video.timeline = timeline;
@@ -277,9 +301,23 @@ namespace merutilm::rff2 {
         renderer->renderer2MapIterationStripe->setTextures(shader.textures, warpSourceLayer(shader.warp),
                                                            timelineResidentTextures(baseAttribute.video.timeline,
                                                                shader.warp));
-        renderer->rendererBloom->setBloom(gradeBase().bloom, shader.hdr);
+        renderer->rendererBloom->setBloom(gradeBase().bloom, shader.hdr, gradeBase().sceneLinear());
+        renderer->layerShader = gradeBase();
+        renderer->rendererSlope->setEffects(gradeBase().effects, gradeBase().sceneLinear(), !renderer->isStaticImages);
+        renderer->renderer2MapIterationStripe->setEffects(gradeBase().effects);
         applyShaderDynamic(liveShader, TimelineDirtyMask::ALL);
         setHdrOutput(VidHdrTransfer::SDR, baseAttribute.video.exportation.hdrPeakNits);
+    }
+
+    void VideoRenderScene::setTimelineSchedule(const TimelineSchedule &schedule) {
+        const std::array<float, 3> key{schedule.getStartDepth(), schedule.getEndDepth(),
+                                       schedule.getTotalSeconds()};
+        if (!animationIntegrator || animationInputsChanged || animationScheduleKey != key) {
+            animationIntegrator = std::make_unique<TimelineAnimationPhases>(schedule,
+                baseAttribute.video.timeline, gradeBase());
+            animationScheduleKey = key;
+            animationInputsChanged = false;
+        }
     }
 
     void VideoRenderScene::setTime(const float currentSec) const {
@@ -299,6 +337,7 @@ namespace merutilm::rff2 {
         // into the pipelines are the other source's and are put right here. Reported once per
         // change and not once per frame, which is what makes the device wait below affordable.
         renderer->isStaticImages = isStatic;
+        animationInputsChanged = true;
         applyShaderStatic();
     }
 
@@ -315,7 +354,7 @@ namespace merutilm::rff2 {
     void VideoRenderScene::initRenderContext() const {
         const auto swapchainImageContextGetter = [this] {
             auto &swapchain = wc.getSwapchain();
-            return vkh::ImageContext::fromSwapchain(wc.core, swapchain);
+            return vkh::ImageContext::fromSwapchain(swapchain);
         };
         wc.attachRenderContext<RCC1Vid>(wc.core,
                                         [this] { return videoExtent; },
@@ -342,7 +381,9 @@ namespace merutilm::rff2 {
 
     void VideoRenderScene::initRenderer() {
         renderer = std::make_unique<VideoRenderSceneRenderer>(engine, wc.getAttachmentIndex(),
-                                                             baseAttribute.shader.hdr.use);
+                                                             baseAttribute.shader.hdr.use || baseAttribute.shader.sceneLinear(), preparationHook,
+                                                             &baseAttribute.shader, baseAttribute.render.dither);
+        preparationHook = {};
         applySize();
         applyShaderStatic();
     }
@@ -364,7 +405,7 @@ namespace merutilm::rff2 {
         if (const float rat = Constants::Fractal::GAUSSIAN_MAX_WIDTH / static_cast<float>(videoExtent.width); rat < 1) {
             return {
                 Constants::Fractal::GAUSSIAN_MAX_WIDTH,
-                static_cast<uint32_t>(static_cast<float>(videoExtent.height) * rat)
+                std::max(1u, static_cast<uint32_t>(static_cast<float>(videoExtent.height) * rat))
             };
         }
         return videoExtent;
@@ -395,19 +436,19 @@ namespace merutilm::rff2 {
         const auto blurredImageExtent = getBlurredImageExtent();
         // An SDR export grades in the 8-bit images it always has, down to the bit. HDR cannot be packed
         // into them, so only that path widens - and the merged-image shader is chosen to match.
-        const VkFormat gradingFormat = baseAttribute.shader.hdr.use
+        const VkFormat gradingFormat = (baseAttribute.shader.hdr.use || baseAttribute.shader.sceneLinear())
                                            ? VK_FORMAT_R16G16B16A16_SFLOAT
                                            : VK_FORMAT_R8G8B8A8_UNORM;
 
         sharedImg.appendMultiframeImageContext(MF_VIDEO_RENDER_IMAGE_PRIMARY,
                                                iiiGetter(videoExtent, gradingFormat,
-                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
                                                          VK_IMAGE_USAGE_SAMPLED_BIT |
                                                          VK_IMAGE_USAGE_STORAGE_BIT));
         sharedImg.appendMultiframeImageContext(MF_VIDEO_RENDER_IMAGE_SECONDARY,
                                                iiiGetter(videoExtent, gradingFormat,
-                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                                          VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
                                                          VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                          VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -425,11 +466,36 @@ namespace merutilm::rff2 {
     }
 
 
+    void VideoRenderScene::updateReliefZoomForFrame() const {
+        if (!renderer->isStaticImages && normal && zoomed) {
+            auto slope = liveShader.slope;
+            if (slope.reliefZoomReference < 0.0f) slope.reliefZoomReference = baseAttribute.fractal.logZoom;
+            renderer->rendererSlope->setReliefZoom(slope, calculateZoom(baseAttribute.video.data.defaultZoomIncrement, renderer->currentFrame));
+        }
+    }
+
     void VideoRenderScene::renderOnce() const {
-        renderer->execute();
+        updateReliefZoomForFrame();
+        bool submitted = false;
+        const bool recreate = renderer->execute(&submitted);
+        if (!submitted) {
+            renderer->executeOffscreen();
+        }
+        if (recreate && !wc.getWindow().isUnrenderable()) {
+            const auto [surfaceWidth, surfaceHeight] = wc.getSwapchain().populateSwapchainExtent();
+            const auto [swapchainWidth, swapchainHeight] = wc.getSwapchain().getCurrentExtent();
+            if (!submitted || surfaceWidth != swapchainWidth || surfaceHeight != swapchainHeight) {
+                wc.core.getLogicalDevice().waitDeviceIdle();
+                wc.getSwapchain().recreate();
+                wc.getRenderContext(RCCPresentVid::CONTEXT_INDEX).recreate();
+                renderer->rendererPresent->renderContextRefreshed();
+                renderer->rendererPresent->setRescaledResolution({surfaceWidth, surfaceHeight});
+            }
+        }
     }
 
     void VideoRenderScene::renderOffscreenOnce() const {
+        updateReliefZoomForFrame();
         renderer->executeOffscreen();
     }
 
@@ -459,15 +525,13 @@ namespace merutilm::rff2 {
     }
 
 
-    void VideoRenderScene::queueImage(const int subsampleCount) {
+    void VideoRenderScene::queueImage(const int subsampleCount, const std::function<bool()> &stopRequested) {
         // renderOnce() only records and submits, so the whole shader chain is paid for in this fence wait.
-        const auto gpuWaitStart = std::chrono::steady_clock::now();
+
         const uint32_t frameIndex = renderer->getFrameIndex();
-        wc.getSyncObject().getFence(frameIndex).waitAndReset();
-        gpuWaitNanos.fetch_add(elapsedNanos(gpuWaitStart));
+        wc.getSyncObject().getFence(frameIndex).wait();
         renderer->passTimer.collect();
 
-        const auto stagingStart = std::chrono::steady_clock::now();
         const vkh::BufferContext &srcBuffer = renderer->rendererImageRGBA2BGR->getBufferContext(frameIndex);
         vkh::BufferContext dstBuffer = vkh::BufferContext::createContext(wc.core, {
                                                                              .size = srcBuffer.bufferSize,
@@ -478,38 +542,60 @@ namespace merutilm::rff2 {
                                                                              VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                                                          });
 
-        vkh::BufferContext::mapMemory(wc.core, dstBuffer);
-        stagingNanos.fetch_add(elapsedNanos(stagingStart));
+        bool copySubmitted = false;
+        bool bufferTransferred = false;
+        try {
+            vkh::BufferContext::mapMemory(wc.core, dstBuffer);
 
-        const auto copyStart = std::chrono::steady_clock::now(); {
-            vkh::ScopedCommandBufferExecutor executor(wc, frameIndex,
-                                                      wc.getSyncObject().getFence(frameIndex).getFenceHandle(),
-                                                      VK_NULL_HANDLE, VK_NULL_HANDLE);
-            vkh::BufferImageContextUtils::cmdCopyBuffer(wc.getCommandBuffer().getCommandBufferHandle(frameIndex),
-                                                        srcBuffer, dstBuffer);
+            {
+                vkh::ScopedCommandBufferExecutor executor(wc, frameIndex, VK_NULL_HANDLE, VK_NULL_HANDLE);
+                vkh::BufferImageContextUtils::cmdCopyBuffer(wc.getCommandBuffer().getCommandBufferHandle(frameIndex),
+                                                            srcBuffer, dstBuffer);
+                vkh::BarrierUtils::cmdBufferMemoryBarrier(
+                    wc.getCommandBuffer().getCommandBufferHandle(frameIndex), VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_HOST_READ_BIT, dstBuffer.buffer, 0, dstBuffer.bufferSize,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT);
+                executor.finish();
+                copySubmitted = true;
+            }
+
+            // Not unmapped here: VideoBufferCache wraps dstBuffer.mappedMemory in the cv::Mat the resolve thread reads, and vkFreeMemory in destroyContext unmaps it once that Mat is gone.
+            wc.getSyncObject().getFence(frameIndex).wait();
+            copySubmitted = false;
+
+            std::unique_lock queueLock(bufferCachedMutex);
+            while (queuedVbc.size() >= Constants::VideoConfig::MAX_VIDEO_QUEUE_SIZE &&
+                   !(stopRequested && stopRequested())) {
+                bufferCachedCondition.wait_for(queueLock, std::chrono::milliseconds(100));
+            }
+            if (stopRequested && stopRequested()) {
+                throw std::runtime_error("Video export stopped while waiting for the encoder.");
+            }
+
+            // Already SSAA-downsampled by the RGBA2BGR pass, so the cached image is output-sized.
+            const auto &[outWidth, outHeight] = renderer->rendererImageRGBA2BGR->getOutputExtent();
+            auto cachedBuffer = std::make_unique<VideoBufferCache>(wc.core, std::move(dstBuffer),
+                                                                   static_cast<int>(outWidth),
+                                                                   static_cast<int>(outHeight),
+                                                                   renderer->rendererImageRGBA2BGR->isHdr(),
+                                                                   calculateZoom(
+                                                                       baseAttribute.video.data.defaultZoomIncrement,
+                                                                       renderer->currentFrame),
+                                                                   subsampleCount);
+            bufferTransferred = true;
+            queuedVbc.push(std::move(cachedBuffer));
+        } catch (...) {
+            if (copySubmitted) {
+                const VkResult result = wc.core.getLogicalDevice().waitDeviceIdle();
+                if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST) {
+                    std::terminate();
+                }
+            }
+            if (!bufferTransferred) {
+                vkh::BufferContext::destroyContext(wc.core, dstBuffer);
+            }
+            throw;
         }
-
-        // Not unmapped here: VideoBufferCache wraps dstBuffer.mappedMemory in the cv::Mat the resolve thread reads, and vkFreeMemory in destroyContext unmaps it once that Mat is gone.
-        wc.getSyncObject().getFence(frameIndex).wait();
-        copyNanos.fetch_add(elapsedNanos(copyStart));
-
-        const auto backpressureStart = std::chrono::steady_clock::now();
-        std::unique_lock queueLock(bufferCachedMutex);
-        bufferCachedCondition.wait(queueLock, [this] {
-            return queuedVbc.size() < Constants::VideoConfig::MAX_VIDEO_QUEUE_SIZE;
-        });
-        backpressureNanos.fetch_add(elapsedNanos(backpressureStart));
-
-        // Already SSAA-downsampled by the RGBA2BGR pass, so the cached image is output-sized.
-        const auto &[outWidth, outHeight] = renderer->rendererImageRGBA2BGR->getOutputExtent();
-        queuedVbc.push(std::make_unique<VideoBufferCache>(wc.core, std::move(dstBuffer),
-                                                          static_cast<int>(outWidth),
-                                                          static_cast<int>(outHeight),
-                                                          renderer->rendererImageRGBA2BGR->isHdr(),
-                                                          calculateZoom(
-                                                              baseAttribute.video.data.defaultZoomIncrement,
-                                                              renderer->currentFrame),
-                                                          subsampleCount));
     }
 
     void VideoRenderScene::init() {

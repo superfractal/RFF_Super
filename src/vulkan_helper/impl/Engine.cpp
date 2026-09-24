@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-19.
 // Modified by Opus 5 on 2026-08-26
+// Modified by GPT-6 on 2026-09-23
 //
 
 #include "Engine.hpp"
@@ -23,7 +24,7 @@ namespace merutilm::vkh {
         return windowContexts.size() > windowAttachmentIndex && windowContexts[windowAttachmentIndex] != nullptr;
     }
 
-    WindowContextPtr EngineImpl::attachWindowContext(HWND hwnd, uint32_t windowAttachmentIndexExpected) {
+    WindowContextPtr EngineImpl::attachWindowContext(const HWND hwnd, const uint32_t windowAttachmentIndexExpected) {
         std::scoped_lock lock(windowContextsMutex);
         if (windowAttachmentIndexExpected >= windowContexts.size()) {
             windowContexts.resize(windowAttachmentIndexExpected + 1);
@@ -33,9 +34,19 @@ namespace merutilm::vkh {
         }
 
         auto window = factory::create<GraphicsContextWindow>(hwnd);
+        auto context = factory::create<WindowContext>(*core, windowAttachmentIndexExpected, std::move(window));
+        auto *contextPointer = context.get();
+        windowContexts[windowAttachmentIndexExpected] = std::move(context);
+        return contextPointer;
+    }
 
-        windowContexts[windowAttachmentIndexExpected] = factory::create<WindowContext>(*core, windowAttachmentIndexExpected, std::move(window));
-        return windowContexts[windowAttachmentIndexExpected].get();
+    WindowContextRef EngineImpl::getWindowContext(const uint32_t windowContextIndex) const {
+        std::scoped_lock lock(windowContextsMutex);
+        const auto &context = windowContexts.at(windowContextIndex);
+        if (context == nullptr) {
+            throw exception_invalid_state(std::format("window context {} is detached", windowContextIndex));
+        }
+        return *context;
     }
 
     void EngineImpl::detachWindowContext(const uint32_t windowAttachmentIndex) {

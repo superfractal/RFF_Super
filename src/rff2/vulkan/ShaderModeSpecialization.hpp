@@ -1,5 +1,6 @@
 //
 // Created by Fable 5.1 on 2026-09-06
+// Modified by GPT-6 on 2026-09-10, 2026-09-23
 //
 
 #pragma once
@@ -37,8 +38,10 @@ namespace merutilm::rff2 {
         // space, bit 9 = cycle curve, bits 10-13 = iteration coloring. The one place it is packed,
         // so the uniform and the constant cannot disagree.
         static uint32_t smoothingWord(const ShdPaletteAttribute &palette) {
+            // Linear RGB uses the unused bit 14; all legacy words retain their exact values.
             return (static_cast<uint32_t>(palette.colorSmoothing) & 0xFFu) |
-                   (static_cast<uint32_t>(palette.colorInterpolation) << 8) |
+                   (palette.colorInterpolation == ShdPalColorInterpolationMethod::OKLAB ? 1u << 8 : 0u) |
+                   (palette.colorInterpolation == ShdPalColorInterpolationMethod::LINEAR_RGB ? 1u << 14 : 0u) |
                    (static_cast<uint32_t>(palette.cycleCurve) << 9) |
                    ((static_cast<uint32_t>(palette.iterationColoring) & 0xFu) << 10);
         }
@@ -61,29 +64,33 @@ namespace merutilm::rff2 {
         template<size_t N>
         void setTextures(const std::array<ShdTextureAttribute, N> &textures) {
             anyTexture = false;
-            for (const auto &t: textures) {
-                anyTexture = anyTexture || (t.enabled && t.opacity > 0.0f);
+            for (const auto &texture: textures) {
+                anyTexture = anyTexture || (texture.enabled && texture.opacity > 0.0f);
             }
-            decor = anyTexture || anyPattern || warpOn;
+            refreshDecor();
         }
 
         template<size_t N>
         void setPattern(const std::array<ShdPatternAttribute, N> &patterns) {
             anyPattern = false;
-            for (const auto &p: patterns) {
-                anyPattern = anyPattern || (p.enabled && p.opacity > 0.0f);
+            for (const auto &pattern: patterns) {
+                anyPattern = anyPattern || (pattern.enabled && pattern.opacity > 0.0f);
             }
-            decor = anyTexture || anyPattern || warpOn;
+            refreshDecor();
         }
 
         void setWarp(const ShdWarpAttribute &warp) {
             warpOn = warp.enabled && warp.amount != 0.0f;
-            decor = anyTexture || anyPattern || warpOn;
+            refreshDecor();
         }
 
     private:
         bool anyTexture = false;
         bool anyPattern = false;
         bool warpOn = false;
+
+        void refreshDecor() {
+            decor = anyTexture || anyPattern || warpOn;
+        }
     };
 }

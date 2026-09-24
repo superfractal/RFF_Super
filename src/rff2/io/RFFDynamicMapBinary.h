@@ -2,9 +2,11 @@
 // Created by Merutilm on 2025-05-08.
 // Modified by Opus 5 on 2026-08-14, 2026-08-23
 // Modified by GPT-5 on 2026-08-18
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstdint>
 #include <filesystem>
 
 #include "RFFBinary.h"
@@ -13,7 +15,7 @@
 #include "opencv2/core/mat.hpp"
 
 namespace merutilm::rff2 {
-    class RFFDynamicMapBinary final : public RFFBinary{
+    class RFFDynamicMapBinary final : public RFFBinary {
         uint64_t period;
         uint64_t maxIteration;
         Matrix<double> iterations;
@@ -72,5 +74,4 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] const Matrix<double> &getMatrix() const;
     };
-
 }

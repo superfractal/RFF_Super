@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-10.
 // Modified by Opus 5 on 2026-08-26, 2026-08-31
+// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23
 //
 
 #pragma once
@@ -64,18 +65,20 @@ namespace merutilm::rff2 {
 
         GpuPassTimer &operator=(GpuPassTimer &&) = delete;
 
-        [[nodiscard]] bool isSupported() const { return supported; }
-
         // Must be the first command recorded in the frame.
         void cmdReset(const VkCommandBuffer cbh, const uint32_t slot = 0) {
-            if (!supported || slot >= slots) return;
+            if (!supported || slot >= slots) {
+                return;
+            }
             vkCmdResetQueryPool(cbh, pool, slot * MAX_MARKS, MAX_MARKS);
             pending[slot] = 0;
         }
 
         // Records "everything up to here is done". Call once after each pass, in a fixed order.
         void cmdMark(const VkCommandBuffer cbh, const std::string &label, const uint32_t slot = 0) {
-            if (!supported || slot >= slots || pending[slot] >= MAX_MARKS) return;
+            if (!supported || slot >= slots || pending[slot] >= MAX_MARKS) {
+                return;
+            }
             if (labels.size() < static_cast<size_t>(pending[slot]) + 1) {
                 labels.emplace_back(label);
                 totals.emplace_back(0.0);
@@ -87,7 +90,9 @@ namespace merutilm::rff2 {
 
         // Call after the fence of the frame that wrote this slot has been waited on.
         void collect(const uint32_t slot = 0) {
-            if (!supported || slot >= slots || pending[slot] < 2) return;
+            if (!supported || slot >= slots || pending[slot] < 2) {
+                return;
+            }
             const uint32_t count = pending[slot];
             std::array<uint64_t, MAX_MARKS> stamps{};
             if (vkGetQueryPoolResults(core.getLogicalDevice().getLogicalDeviceHandle(), pool,
@@ -109,6 +114,7 @@ namespace merutilm::rff2 {
         // rather than from an average of everything the window has ever drawn.
         void clear() {
             std::ranges::fill(totals, 0.0);
+            std::ranges::fill(pending, 0);
             frames = 0;
         }
 
@@ -121,7 +127,9 @@ namespace merutilm::rff2 {
             }
             std::wstring out;
             double sum = 0.0;
-            for (uint32_t i = 1; i < labels.size(); ++i) sum += totals[i];
+            for (uint32_t i = 1; i < labels.size(); ++i) {
+                sum += totals[i];
+            }
             for (uint32_t i = 1; i < labels.size(); ++i) {
                 const double perFrame = totals[i] / static_cast<double>(frames);
                 const std::wstring name(labels[i].begin(), labels[i].end());

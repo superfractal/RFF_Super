@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-07-13.
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
@@ -14,9 +15,9 @@ namespace merutilm::vkh {
         VkShaderStageFlags useStage;
 
     public:
-        explicit PushConstantImpl(const VkShaderStageFlags useStage,
-                              HostDataObjectManager &&manager) : hostDataObject(factory::create<HostDataObject>(std::move(manager))),
-                                                                          useStage(useStage) {
+        explicit PushConstantImpl(const VkShaderStageFlags useStage, HostDataObjectManager &&manager)
+            : hostDataObject(factory::create<HostDataObject>(std::move(manager))),
+              useStage(useStage) {
         }
 
         ~PushConstantImpl() = default;
@@ -29,7 +30,9 @@ namespace merutilm::vkh {
 
         PushConstantImpl &operator=(PushConstantImpl &&) = delete;
 
-        [[nodiscard]] VkShaderStageFlags getUseStage() const {return useStage;}
+        [[nodiscard]] VkShaderStageFlags getUseStage() const {
+            return useStage;
+        }
 
         [[nodiscard]] HostDataObjectRef getHostObject() const {
             return *hostDataObject;

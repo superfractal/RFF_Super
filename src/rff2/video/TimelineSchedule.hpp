@@ -1,9 +1,12 @@
 //
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
+// Modified by GPT-6 on 2026-09-23
 //
 
 #pragma once
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "../attr/VidTimelineAttribute.h"
@@ -25,7 +28,7 @@ namespace merutilm::rff2 {
         // Samples of the integral per keyframe of depth. Finer than any speed curve a person edits.
         static constexpr float SAMPLES_PER_KEYFRAME = 256.0f;
         // Ceiling on the sample table, so a folder of a hundred thousand keyframes still builds one.
-        static constexpr size_t MAX_SAMPLES = 1u << 20;
+        static constexpr std::size_t MAX_SAMPLES = 1u << 20;
 
         // startDepth is the keyframe count the video begins at, endDepth the (negative) depth it
         // ends at, and fallbackSpeed the Zoom Speed used wherever the timeline says nothing.
@@ -42,7 +45,7 @@ namespace merutilm::rff2 {
         [[nodiscard]] float getTotalSeconds() const { return totalSeconds; }
 
         // Output frames the export will write at this frame rate.
-        [[nodiscard]] uint64_t totalFrames(float fps) const;
+        [[nodiscard]] std::uint64_t totalFrames(float fps) const;
 
         // Keyframes per second at this depth, never below VidTimelineAttribute::MIN_SPEED.
         [[nodiscard]] float speedAt(float depth) const;
@@ -60,7 +63,7 @@ namespace merutilm::rff2 {
                                    float minValue, float maxValue);
 
         // The track driving this target, or nullptr when the timeline has none.
-        static const VidTimelineTrack *findTrack(const VidTimelineAttribute &timeline, uint16_t targetId);
+        static const VidTimelineTrack *findTrack(const VidTimelineAttribute &timeline, std::uint16_t targetId);
 
     private:
         struct HoldPoint {
@@ -79,6 +82,8 @@ namespace merutilm::rff2 {
         // The speed track, copied so the schedule stays valid however the attribute is later edited.
         VidTimelineTrack speedTrack = {};
         bool hasSpeedTrack = false;
+        float speedMinimum = 0.0f;
+        float speedMaximum = 0.0f;
         // Cumulative time of the speed integral alone, sampled at even depth steps from startDepth.
         std::vector<float> times = {};
         // Held in playback order, holds of no length dropped.

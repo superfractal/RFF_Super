@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-08-15.
+// Modified by GPT-6 on 2026-09-16, 2026-09-20, 2026-09-23
 //
 
 #include "GPCStripe.hpp"
@@ -38,7 +39,7 @@ namespace merutilm::rff2 {
     void GPCStripe::pipelineInitialized() {
         using namespace SharedDescriptorTemplate;
         writeDescriptorMF([this](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-            getDescriptor(SET_STRIPE).queue(queue, frameIndex, {}, {DescStripe::TARGET_STRIPE_TYPE});
+            getDescriptor(SET_STRIPE).queue(queue, frameIndex, {}, {DescStripe::BINDING_UBO_STRIPE});
         });
     }
 
@@ -52,6 +53,7 @@ namespace merutilm::rff2 {
                 samplerDesc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_RESULT_SAMPLER)->setImageContextMF(sampler);
                 break;
             }
+            case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 const auto &sampler = sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY);
                 samplerDesc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_RESULT_SAMPLER)->setImageContextMF(sampler);
@@ -67,6 +69,7 @@ namespace merutilm::rff2 {
     }
 
     void GPCStripe::configurePushConstant(vkh::PipelineLayoutManagerRef  &pipelineLayoutManager) {
+        ShaderLayerControl::configure(layerPush, pipelineLayoutManager);
         //noop
     }
 
