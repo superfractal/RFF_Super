@@ -1,7 +1,7 @@
 <!-- Modified by GPT-6 on 2026-09-25. -->
 # Update History
 
-## 2026/09/26
+## 2026/09/25
 
 * **3.0.0 - New Generation**
   * RFF_Super accepts 1–1000 FPS for preview and video, 0–8 extra final zoom-in, and consistent color, shading and blur input ranges across settings panels and timeline tracks. Legacy integer inputs reject negative and overflowing values; out-of-range numeric timeline files require adjustment before loading.
