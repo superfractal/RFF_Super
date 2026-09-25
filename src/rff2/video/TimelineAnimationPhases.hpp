@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -59,7 +59,7 @@ namespace merutilm::rff2 {
             return rates;
         }
 
-        [[nodiscard]] const Values &at(const float seconds) {
+        [[nodiscard]] const Values &at(const double seconds) {
             if (!std::isfinite(seconds)) return phases;
             if (seconds < position || position < 0.0) {
                 phases.fill(0.0);
@@ -87,8 +87,8 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] Values rateAt(const double seconds) const {
             ShaderAttribute shader;
-            evaluator.evaluate(schedule.depthAt(static_cast<float>(seconds)),
-                               static_cast<float>(seconds), base, shader);
+            evaluator.evaluate(schedule.depthAt(seconds),
+                               seconds, base, shader);
             return ratesOf(shader);
         }
 

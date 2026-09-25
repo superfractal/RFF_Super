@@ -542,7 +542,7 @@ namespace merutilm::rff2 {
 
         // Everything the scene is holding right now in one block: the view, what the canvas costs,
         // what the last compute came to, the reference and its tables, and what is still running.
-        [[nodiscard]] std::wstring dumpState() const;
+        [[nodiscard]] std::wstring dumpState();
 
         [[nodiscard]] RFFDynamicMapBinary generateMap() const {
             return RFFDynamicMapBinary(lastLogZoom, lastPeriod, lastMaxIteration, *iterationMatrix);

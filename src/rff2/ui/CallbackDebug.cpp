@@ -2,7 +2,7 @@
 // Created by Opus 5 on 2026-08-14.
 // Modified by Opus 5 on 2026-08-15, 2026-08-31
 // Modified by GPT-5 on 2026-09-01
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #include "CallbackDebug.hpp"
@@ -53,7 +53,7 @@ namespace merutilm::rff2 {
     }
 
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackDebug::DUMP_SCENE_STATE = [
-            ](const SettingsMenu &, const RenderScene &scene) {
+            ](const SettingsMenu &, RenderScene &scene) {
         present(L"Scene State", scene.dumpState());
     };
 

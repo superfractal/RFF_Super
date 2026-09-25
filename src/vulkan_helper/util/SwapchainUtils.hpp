@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-07-26.
 // Modified by GPT-5 on 2026-08-23
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #pragma once
@@ -40,7 +40,7 @@ namespace merutilm::vkh {
                 wc.getSyncObject().getFence(*frameIndex).markAcquiredImageWithoutSubmission();
                 throw;
             }
-            return end(wc, *frameIndex, acquired->index) || acquired->recreate;
+            return end(wc, acquired->index) || acquired->recreate;
         }
 
         static void changeFrameIndex(CoreRef core, uint32_t *frameIndex) {
@@ -51,7 +51,7 @@ namespace merutilm::vkh {
             const SwapchainRef swapchain = wc.getSwapchain();
             const VkDevice device = wc.core.getLogicalDevice().getLogicalDeviceHandle();
             const VkSemaphore imageAvailableSemaphore = wc.getSyncObject().
-                    getSemaphore(frameIndex).getImageAvailable();
+                    getSemaphore(frameIndex).getHandle();
             const VkSwapchainKHR swapchainHandle = swapchain.getSwapchainHandle();
 
 
@@ -70,9 +70,9 @@ namespace merutilm::vkh {
             return AcquiredImage{swapchainImageIndex, result == VK_SUBOPTIMAL_KHR};
         }
 
-        static bool end(WindowContextRef wc, const uint32_t frameIndex, uint32_t swapchainImageIndex) {
+        static bool end(WindowContextRef wc, uint32_t swapchainImageIndex) {
             VkSwapchainKHR swapchainHandle = wc.getSwapchain().getSwapchainHandle();
-            VkSemaphore renderFinishedSemaphore = wc.getSyncObject().getSemaphore(frameIndex).getRenderFinished();
+            VkSemaphore renderFinishedSemaphore = wc.getSwapchain().getRenderFinished(swapchainImageIndex);
             const VkPresentInfoKHR presentInfo = {
                 .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                 .pNext = nullptr,

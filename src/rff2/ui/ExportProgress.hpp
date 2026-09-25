@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-22
+// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-25
 //
 
 #pragma once
@@ -23,8 +23,17 @@ namespace merutilm::rff2 {
       private:
         mutable std::mutex mutex;
         Snapshot value;
+        std::wstring diagnosticLog;
 
       public:
+        void setDiagnosticLog(std::wstring path) {
+            std::scoped_lock lock(mutex);
+            diagnosticLog = std::move(path);
+        }
+        std::wstring getDiagnosticLog() const {
+            std::scoped_lock lock(mutex);
+            return diagnosticLog;
+        }
         Snapshot snapshot() const {
             std::scoped_lock lock(mutex);
             return value;

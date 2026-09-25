@@ -5,7 +5,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-20, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-31
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
-// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23, 2026-09-26
 // Modified by Opus 5.5 on 2026-09-23
 //
 
@@ -415,7 +415,7 @@ namespace merutilm::rff2 {
         iterOutUBO.update();
     }
 
-    void CPC2MapIterationStripe::advanceAnimationTo(const float sec) {
+    void CPC2MapIterationStripe::advanceAnimationTo(const double sec) {
         // A preview scrubbed to an instant has run nothing up to it, and neither has the first
         // frame of an export; both are re-derived rather than integrated from wherever the phases
         // happened to stand. A frame step is far below the seek threshold and integrates.
@@ -426,7 +426,7 @@ namespace merutilm::rff2 {
         }
     }
 
-    void CPC2MapIterationStripe::setTime(const float currentSec, const uint32_t frameIndex) {
+    void CPC2MapIterationStripe::setTime(const double currentSec, const uint32_t frameIndex) {
         using namespace SharedDescriptorTemplate;
         advanceAnimationTo(currentSec);
         // Effects have fixed video rates, so every frame and seek evaluates the same absolute phase.

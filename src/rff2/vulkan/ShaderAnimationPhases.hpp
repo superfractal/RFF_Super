@@ -1,6 +1,6 @@
 //
 // Created by Opus 5 on 2026-08-26.
-// Modified by GPT-6 on 2026-09-11, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-11, 2026-09-21, 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -49,13 +49,13 @@ namespace merutilm::rff2 {
         // speeds in effect at the instant landed on. A frame step never reaches this.
         static constexpr float SEEK_SECONDS = 1.0f;
 
-        [[nodiscard]] bool isSeek(const float now) const {
+        [[nodiscard]] bool isSeek(const double now) const {
             return !started || now < lastUpdateTime || now - lastUpdateTime >= SEEK_SECONDS;
         }
 
         // Brings every phase up to `now` under the speeds in effect until then. Call it before any
         // speed is replaced, and once per frame before the phases are read.
-        void advanceTo(const float now) {
+        void advanceTo(const double now) {
             if (!started) {
                 started = true;
                 lastUpdateTime = now;
@@ -68,13 +68,13 @@ namespace merutilm::rff2 {
 
         // Where an instant is landed on rather than reached: the phase is what a constant run at
         // the current speeds would have reached by then.
-        void seekTo(const float now) {
+        void seekTo(const double now) {
             started = true;
             lastUpdateTime = now;
             forEachAxis([now](Axis &axis) { axis.phase = static_cast<double>(axis.speed) * now; });
         }
 
-        void setTimelinePhases(const std::array<double, TIMELINE_AXIS_COUNT> &values, const float now) {
+        void setTimelinePhases(const std::array<double, TIMELINE_AXIS_COUNT> &values, const double now) {
             size_t index = 0;
             palette.phase = values[index++];
             flow.phase = values[index++];
@@ -122,7 +122,7 @@ namespace merutilm::rff2 {
             }
         }
 
-        void setEffectsVideoPhase(float seconds) {
+        void setEffectsVideoPhase(double seconds) {
             for (uint32_t i = 0; i < EFFECT_LAYER_COUNT; ++i) {
                 const auto &effect = effectSettings[i];
                 const double phase = effect.syncColorAnimation ? palette.phase : double(seconds);
@@ -165,7 +165,7 @@ namespace merutilm::rff2 {
         // window context does this once a frame: the descriptor is shared, so the stripe pass reads
         // what the pass that owns these wrote.
         void writeTimeUniform(const vkh::UniformImpl &timeUBO, const uint32_t frameIndex,
-                              const float now) const {
+                              const double now) const {
             using namespace SharedDescriptorTemplate;
             auto &host = timeUBO.getHostObject();
             host.set<float>(DescTime::TARGET_TIME_CURRENT, now);
@@ -198,7 +198,7 @@ namespace merutilm::rff2 {
       private:
         ShdEffectsAttribute effectSettings = {};
         bool started = false;
-        float lastUpdateTime = 0.0f;
+        double lastUpdateTime = 0.0f;
 
         template <typename F>
             requires std::is_invocable_r_v<void, F, Axis &>

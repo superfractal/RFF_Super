@@ -3,12 +3,13 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-08, 2026-08-10, 2026-08-14, 2026-08-24, 2026-08-26, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
-// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-25
 // Modified by Opus 5.5 on 2026-09-23
 //
 
 #include "NativeDialogs.hpp"
 #include "CallbackFile.hpp"
+#include "../io/MapLimits.hpp"
 
 #include <cwctype>
 
@@ -29,7 +30,7 @@ namespace merutilm::rff2 {
         return ext;
     }
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::SAVE_MAP =
-        [](const SettingsMenu &, const RenderScene &scene) {
+        [](const SettingsMenu &, RenderScene &scene) {
             // The map is copied straight out of the buffer the compute threads are filling, so a save
             // taken mid-render writes rows from before the front and rows from after it. Asked for
             // before the dialog, so the answer does not arrive after a file name has been chosen.
@@ -38,6 +39,12 @@ namespace merutilm::rff2 {
                                        L"The map is still being calculated.\n\n"
                                        L"Wait for the render to finish, then save it again.",
                                        L"Map not ready", MB_OK | MB_ICONINFORMATION);
+                return;
+            }
+            if (!MapLimits::valid(scene.getIterationBufferWidth(scene.getAttribute()),
+                                  scene.getIterationBufferHeight(scene.getAttribute()))) {
+                NativeDialogs::message(nullptr, L"Map files support at most 100,000,000 pixels. Reduce resolution or internal scale.",
+                                       L"Map too large", MB_OK | MB_ICONERROR);
                 return;
             }
             // Compressed first, so it is what the dialog offers by default: it holds the same map to the

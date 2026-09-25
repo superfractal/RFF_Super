@@ -2,7 +2,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-21, 2026-08-24, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
-// Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23
+// Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23, 2026-09-25
 //
 
 #version 450
@@ -241,15 +241,16 @@ void main() {
         color = vec4(clamp(c.rgb, 0.0, 60000.0), c.a);
         return;
     }
-    if (linear_interpolation_attr.hdr && linear_interpolation_attr.transfer == 0u && linear_interpolation_attr.tone_map >= 4u && linear_interpolation_attr.tone_map <= 7u) {
-        vec3 display = mfr_display(c.rgb, linear_interpolation_attr.tone_map, linear_interpolation_attr.exposure, linear_interpolation_attr.peak_nits);
-        color = linear_interpolation_attr.tone_map == 7u
-            ? vec4(display, c.a)
-            : clamp(apply_dither(vec4(display, c.a), coord), 0.0, 1.0);
+    if (linear_interpolation_attr.hdr && linear_interpolation_attr.transfer == 0u && linear_interpolation_attr.tone_map == 7u) {
+        color = vec4(mfr_display(c.rgb, linear_interpolation_attr.tone_map, linear_interpolation_attr.exposure, linear_interpolation_attr.peak_nits), c.a);
         return;
     }
     c.rgb = dark_sample(c.rgb, coord, texSize);
-    vec3 finished = dark_finish(output_transform(c.rgb), coord);
+    // Original finish routing for MFR SDR, GPL-3.0-only; see NOTICE.
+    vec3 display = linear_interpolation_attr.hdr && linear_interpolation_attr.transfer == 0u && linear_interpolation_attr.tone_map >= 4u && linear_interpolation_attr.tone_map <= 6u
+        ? mfr_display(c.rgb, linear_interpolation_attr.tone_map, linear_interpolation_attr.exposure, linear_interpolation_attr.peak_nits)
+        : output_transform(c.rgb);
+    vec3 finished = dark_finish(display, coord);
     color = clamp(apply_dither(vec4(finished, c.a), coord), 0.0, 1.0);
     color.rgb = print_finish(color.rgb);
 }

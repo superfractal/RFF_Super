@@ -133,7 +133,7 @@ This checklist maps current menu actions and workspace-only features to the manu
 | Color motion, freeze picking, preview transport | [Color animation](animation-and-export.md#color-motion-and-frozen-colors) |
 | Source generation, compression, padding, PNG compatibility | [Keyframes](animation-and-export.md#generate-source-keyframes) |
 | Timeline tracks, keys, interpolation, speed, holds, camera | [Timeline editing](animation-and-export.md#add-and-edit-parameter-tracks) |
-| Audio enable/gain; JSON clip trim, placement, fades, mute | [Audio](animation-and-export.md#audio) |
+| Audio enable/gain; clip add/remove, source selection, trim, placement, fades, mute | [Audio](animation-and-export.md#audio) |
 | Zoom text, font, colors, outline, shadow, position, Shorts guides | [Overlay](animation-and-export.md#zoom-overlay-and-preview-guides) |
 | Timeline RAM preload, layout, keyboard navigation, JSON/RFVT save/load | [Timeline](animation-and-export.md) |
 | AI Edit bundle, 2x2/3x3 sheets, cancellation, JSON import | [Timeline AI Edit](animation-and-export.md#timeline-ai-edit) |

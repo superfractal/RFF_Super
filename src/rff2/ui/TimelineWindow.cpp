@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
 //
 
 #include "UiLanguage.hpp"
@@ -39,6 +39,8 @@
 #include "../io/TimelineIO.h"
 #include "../io/TimelineJsonIO.hpp"
 #include "../io/AudioTimelineIO.hpp"
+#include "../video/AudioClipEdit.hpp"
+#include "../video/TimelineTime.hpp"
 #include "Callback.hpp"
 #include "CallbackShader.hpp"
 #include "RenderScene.hpp"
@@ -239,10 +241,8 @@ namespace merutilm::rff2 {
             SelectObject(hdc, previous);
         }
 
-        std::wstring durationText(const float value) {
-            const float seconds = std::max(0.0f, value);
-            const int minutes = static_cast<int>(seconds / 60.0f);
-            return std::format(L"{:02}:{:04.1f}", minutes, seconds - static_cast<float>(minutes) * 60.0f);
+        std::wstring durationText(const double value) {
+            return TimelineTime::display(value);
         }
 
         // Dragging a handle snaps to whole keyframes.
@@ -298,8 +298,10 @@ namespace merutilm::rff2 {
             return std::format(L"Track 0x{:04X}", targetId);
         }
 
+        constexpr uint16_t AUDIO_ROW_TARGET = UINT16_MAX - 1;
         // The R row stands for all three channels while they are linked.
         std::wstring rowName(const uint16_t targetId, const bool linkedRgb) {
+            if (targetId == AUDIO_ROW_TARGET) return L"Audio";
             if (linkedRgb && targetId == CYCLE_R_TARGET) {
                 return L"Cycle Length RGB";
             }
@@ -1367,7 +1369,7 @@ namespace merutilm::rff2 {
         // mouse move. One step for the whole gesture is what Undo is asked to take back, so a change
         // arriving on the heels of the last one extends that step rather than opening another.
         if (timelineBytes(undoBaseline) == timelineBytes(attribute.video.timeline) &&
-            undoBaselineStatic == attribute.video.data.isStatic) {
+            undoBaselineStatic == attribute.video.data.isStatic && undoBaselineAudioRow == audioRowIndex) {
             return;
         }
         if (const bool extend = !undoSteps.empty() && historyOrder.latest(undoSteps.back().serial) &&
@@ -1376,7 +1378,7 @@ namespace merutilm::rff2 {
                                 (draggingTrackKey ? dragHasUndoStep : now - lastUndoStep < UNDO_COALESCE_MS);
             !extend) {
             undoSteps.push_back({undoBaseline, attribute.video.timeline, historyOrder.commit(),
-                                 undoBaselineStatic, attribute.video.data.isStatic});
+                                 undoBaselineStatic, attribute.video.data.isStatic, undoBaselineAudioRow, audioRowIndex});
             if (undoSteps.size() > MAX_UNDO_STEPS) {
                 undoSteps.erase(undoSteps.begin());
             }
@@ -1385,6 +1387,8 @@ namespace merutilm::rff2 {
         }
         undoSteps.back().after = attribute.video.timeline;
         undoSteps.back().afterStatic = attribute.video.data.isStatic;
+        undoSteps.back().afterAudioRow = audioRowIndex;
+        undoBaselineAudioRow = audioRowIndex;
         undoBaselineStatic = attribute.video.data.isStatic;
         if (draggingTrackKey) {
             dragHasUndoStep = true;
@@ -1406,6 +1410,7 @@ namespace merutilm::rff2 {
             return false;
         }
         historyOrder.prepareUndo(redoSteps);
+        audioRowIndex = undoSteps.back().beforeAudioRow;
         attribute.video.data.isStatic = undoSteps.back().beforeStatic;
         if (sourceAttribute) {
             sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
@@ -1429,6 +1434,7 @@ namespace merutilm::rff2 {
             redoSteps.clear();
             return false;
         }
+        audioRowIndex = redoSteps.back().afterAudioRow;
         attribute.video.data.isStatic = redoSteps.back().afterStatic;
         if (sourceAttribute) {
             sourceAttribute->video.data.isStatic = attribute.video.data.isStatic;
@@ -1441,6 +1447,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::applyRestoredTimeline(VidTimelineAttribute &&restored) {
+        undoBaselineAudioRow = audioRowIndex;
         attribute.video.timeline = std::move(restored);
         attribute.video.animation.showText = attribute.video.timeline.zoomOverlay.visible;
         linkColorCycle = colorCycleTracksLinked(attribute.video.timeline, linkColorCycle);
@@ -1556,6 +1563,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::selectTrackRow(const uint16_t targetId, const bool extend, const bool range) {
+        if (targetId == AUDIO_ROW_TARGET) inspectorSectionRequest = 1;
         selectedTrackKey = -1;
         if (std::ranges::find(selectedTrackTargets, selectedTrackTarget) == selectedTrackTargets.end()) {
             selectedTrackTargets.assign(1, selectedTrackTarget);
@@ -1618,6 +1626,9 @@ namespace merutilm::rff2 {
         if (order == reorderRowTargets) {
             return;
         }
+        audioRowIndex = int(std::ranges::find(order, AUDIO_ROW_TARGET) - order.begin());
+        if (audioRowIndex == int(order.size()) - 1) audioRowIndex = -1;
+        lastUndoStep = 0;
         auto &tracks = attribute.video.timeline.tracks;
         std::vector<VidTimelineTrack> stacked;
         stacked.reserve(tracks.size());
@@ -2198,7 +2209,7 @@ namespace merutilm::rff2 {
         uint32_t imagePage = 0;
         std::shared_ptr<const AiBundleRequest> imageBundle;
         float depth = 0.0f;
-        float sec = 0.0f;
+        double sec = 0.0;
         VidTimelineAttribute timeline = {};
         ShaderAttribute shader = {};
         std::shared_ptr<const TimelineSchedule> timelineSchedule;
@@ -2282,7 +2293,7 @@ namespace merutilm::rff2 {
         cachePreloading.store(false);
     }
 
-    float TimelineWindow::previewSeconds() const {
+    double TimelineWindow::previewSeconds() const {
         if (playSeconds >= 0.0f && playSeconds <= schedule.getTotalSeconds() &&
             schedule.depthAt(playSeconds) == previewDepth) {
             return playSeconds;
@@ -2290,7 +2301,7 @@ namespace merutilm::rff2 {
         return schedule.timeAt(previewDepth);
     }
 
-    void TimelineWindow::requestFramePreview(const float seconds) {
+    void TimelineWindow::requestFramePreview(const double seconds) {
         // Read here rather than held from when the editor opened: the Shader menu stays usable while
         // it is, and a fog or color changed there belongs in the next preview. Read before the
         // return below as well, since the track rows are drawn against it whether a keyframe folder
@@ -2321,7 +2332,7 @@ namespace merutilm::rff2 {
         InvalidateRect(window, nullptr, FALSE);
     }
 
-    bool TimelineWindow::renderFramePreview(const float depth, const float sec,
+    bool TimelineWindow::renderFramePreview(const float depth, const double sec,
                                             const VidTimelineAttribute &timeline,
                                             const ShaderAttribute &shader, const TimelineSchedule &timelineSchedule,
                                             const uint64_t generation, cv::Mat *capture) {
@@ -2451,7 +2462,7 @@ namespace merutilm::rff2 {
     // The same interpolation the exporter uses, so this number is the zoom the frame is rendered at.
     float TimelineWindow::zoomExponentAt(const float depth) {
         const float increment = std::log10(std::max(attribute.video.data.defaultZoomIncrement, 1.000001f));
-        float sampled = std::max(depth, 0.0f);
+        float sampled = depth;
         if (sampled < 1.0f) {
             // Nothing is stored below the first keyframe, so its zoom is carried one increment deeper.
             const float first = keyframeLogZoom(1);
@@ -2482,7 +2493,7 @@ namespace merutilm::rff2 {
         if (fieldDrag == FieldDrag::DEPTH) {
             depth -= travel * viewSpan() / axisWidth;
         } else {
-            const float shownSeconds = schedule.timeAt(viewEndDepth) - schedule.timeAt(viewStartDepth);
+            const double shownSeconds = schedule.timeAt(viewEndDepth) - schedule.timeAt(viewStartDepth);
             depth = schedule.depthAt(schedule.timeAt(fieldDragDepth) + travel * shownSeconds / axisWidth);
         }
         previewDepth = std::clamp(snapDepth(depth), schedule.getEndDepth(), schedule.getStartDepth());
@@ -2526,7 +2537,7 @@ namespace merutilm::rff2 {
         const std::wstring value =
             field == FieldEdit::DISTANCE
                 ? Unparser::floatTrim(4)(displayDistance(previewDepth))
-                : Unparser::floatTrim(4)(field == FieldEdit::TIME ? previewSeconds() : previewDepth);
+                : (field == FieldEdit::TIME ? std::format(L"{:.6f}", previewSeconds()) : Unparser::floatTrim(4)(previewDepth));
         const RECT editRect = {box.left + sc(8), box.top + sc(9), box.right - sc(8), box.bottom - sc(4)};
         activeFieldEdit = field;
         fieldEdit = CreateWindowExW(
@@ -2567,7 +2578,7 @@ namespace merutilm::rff2 {
             return false;
         }
         if (activeFieldEdit == FieldEdit::TIME &&
-            text == Unparser::floatTrim(4)(previewSeconds())) {
+            text == std::format(L"{:.6f}", previewSeconds())) {
             closeFieldEdit();
             return true;
         }
@@ -2580,7 +2591,8 @@ namespace merutilm::rff2 {
             std::clamp(static_cast<float>(depth), schedule.getEndDepth(), schedule.getStartDepth());
         syncPlaybackClock();
         if (activeFieldEdit == FieldEdit::TIME) {
-            playSeconds = std::clamp(static_cast<float>(*value), 0.0f, schedule.getTotalSeconds());
+            playSeconds = std::clamp(*value, 0.0, schedule.getTotalSeconds());
+            restartAudioPreview();
         }
         closeFieldEdit();
         requestFramePreview();
@@ -2657,10 +2669,12 @@ namespace merutilm::rff2 {
         playSeconds = schedule.timeAt(previewDepth);
         if (playing) {
             playTick = GetTickCount64();
+            restartAudioPreview();
         }
     }
 
     TimelineWindow::~TimelineWindow() {
+        audioPreview.stop();
         exportStopSource.request_stop();
         inspector.reset();
         inspectorSplitter.reset();
@@ -3264,7 +3278,18 @@ namespace merutilm::rff2 {
         return true;
     }
 
+    void TimelineWindow::restartAudioPreview() {
+        if (!playing) return;
+        playOriginSeconds = playSeconds;
+        playTick = GetTickCount64();
+        if (!audioPreview.start(attribute.video.timeline.audio, playSeconds, schedule.getTotalSeconds())) {
+            setPlaying(false);
+            NativeDialogs::message(window, L"Cannot start audio preview. Check the audio files and FFmpeg installation.", L"Audio Preview", MB_OK | MB_ICONERROR);
+        }
+    }
+
     void TimelineWindow::setPlaying(const bool play) {
+        if (play && inspector && !inspector->applyPending()) return;
         if (play && cachePreloading.load()) {
             return;
         }
@@ -3274,6 +3299,7 @@ namespace merutilm::rff2 {
         playing = play;
         accessibilityDirty = true;
         if (!playing) {
+            audioPreview.stop();
             KillTimer(window, PLAYBACK_TIMER);
             return;
         }
@@ -3285,6 +3311,7 @@ namespace merutilm::rff2 {
         }
         playTick = GetTickCount64();
         SetTimer(window, PLAYBACK_TIMER, PLAYBACK_INTERVAL, nullptr);
+        restartAudioPreview();
     }
 
     void TimelineWindow::stopPlayback() {
@@ -3297,14 +3324,19 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::advancePlayback() {
+        if (audioPreview.takeFailure()) {
+            setPlaying(false);
+            const auto message = L"Audio preview stopped. Check the audio file, FFmpeg and the Windows output device.\n\nLog: " + audioPreview.diagnosticLog().wstring();
+            NativeDialogs::message(window, message.c_str(), L"Audio Preview", MB_OK | MB_ICONERROR);
+            return;
+        }
         const ULONGLONG now = GetTickCount64();
-        const float elapsed = static_cast<float>(now - playTick) / 1000.0f;
-        playTick = now;
-        const float total = std::max(schedule.getTotalSeconds(), 1e-3f);
-        playSeconds += elapsed;
+        const double total = std::max(schedule.getTotalSeconds(), 1e-3);
+        playSeconds = TimelineTime::elapsed(playOriginSeconds, playTick, now);
         if (playSeconds >= total) {
             if (loopPlayback) {
                 playSeconds = std::fmod(playSeconds, total);
+                restartAudioPreview();
             } else {
                 playSeconds = total;
                 setPlaying(false);
@@ -3351,6 +3383,15 @@ namespace merutilm::rff2 {
         }
     }
 
+    void TimelineWindow::cancelAudioDrag() {
+        if (!draggingAudio) return;
+        auto &clips = attribute.video.timeline.audio.clips;
+        const auto clip = std::ranges::find(clips, audioDragBefore.id, &VidAudioClip::id);
+        if (clip != clips.end()) *clip = audioDragBefore;
+        draggingAudio = false;
+        InvalidateRect(window, nullptr, FALSE);
+    }
+
     void TimelineWindow::openTrackMenu(const POINT point) {
         // What the click landed on decides what the menu offers: a key, a row of one parameter, or
         // neither, which still adds a parameter.
@@ -3369,6 +3410,11 @@ namespace merutilm::rff2 {
         }
         InvalidateRect(window, nullptr, FALSE);
 
+        if (rowTarget == AUDIO_ROW_TARGET) {
+            selectTrackRow(AUDIO_ROW_TARGET, false, false);
+            showInspectorSection(1);
+            return;
+        }
         const HMENU menu = CreatePopupMenu();
         if (menu == nullptr) {
             return;
@@ -3376,6 +3422,7 @@ namespace merutilm::rff2 {
         constexpr int CMD_ADD_KEY = 1;
         constexpr int CMD_DELETE_KEY = 2;
         constexpr int CMD_REMOVE_TRACK = 3;
+        constexpr int CMD_AUDIO = 4;
         constexpr int CMD_INTERPOLATION = 10;
         constexpr int CMD_PARAMETER = 100;
         constexpr int INTERPOLATION_COUNT = 4;
@@ -3411,6 +3458,7 @@ namespace merutilm::rff2 {
             AppendMenuW(parameters, MF_STRING, static_cast<UINT_PTR>(CMD_PARAMETER) + i,
                         UiLanguage::label(SHADER_PANELS[i].name));
         }
+        AppendMenuW(parameters, MF_STRING, CMD_AUDIO, UiLanguage::label(L"Audio"));
         AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(parameters), UiLanguage::label(L"Parameters"));
         const bool removable = current != nullptr && rowTarget != SPEED_TARGET;
         const std::wstring removeItem = rowTarget == UINT16_MAX
@@ -3433,6 +3481,9 @@ namespace merutilm::rff2 {
             return;
         }
         switch (chosen) {
+        case CMD_AUDIO:
+            showInspectorSection(1);
+            break;
         case CMD_ADD_KEY:
             addTrackKey(rowTarget, point);
             break;
@@ -3494,6 +3545,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::recordShaderEdits() {
+        cancelAudioDrag();
         if (sourceAttribute == nullptr) {
             return;
         }
@@ -3539,6 +3591,8 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::paint(const HDC target, const RECT &client) {
+        audioClipLayouts.clear();
+        audioLane = {};
         const TimelineDpiScope dpiScope(uiDpi);
         const TimelineTheme &theme = timelineTheme(lightMode);
         const int width = std::max(1, int(client.right - client.left) - inspectorReservedWidth);
@@ -3916,7 +3970,9 @@ namespace merutilm::rff2 {
                                                            bodyFont, trackNameWidth) +
                                              sc(16) + (narrow ? fontHeight(canvas, smallFont) + dip(2) : 0));
         }
-        const int trackCount = std::max<int>(1, static_cast<int>(displayedTracks.size()));
+        const size_t audioPosition = audioRowIndex < 0 ? displayedTracks.size() : std::min<size_t>(audioRowIndex, displayedTracks.size());
+        displayedTracks.insert(displayedTracks.begin() + audioPosition, nullptr);
+        const int trackCount = static_cast<int>(displayedTracks.size());
         const int guideTop = timeline.bottom - footerHeight;
         const int zoomRowTop = guideTop - zoomRowHeight;
         const int axisTop = timeline.top + axisTopInset;
@@ -3999,7 +4055,7 @@ namespace merutilm::rff2 {
         // Every row is carried by its name cell to any place in the stack, the Speed row included.
         reorderRowTargets.clear();
         for (const VidTimelineTrack *item : displayedTracks) {
-            reorderRowTargets.push_back(item->targetId);
+            reorderRowTargets.push_back(item ? item->targetId : AUDIO_ROW_TARGET);
         }
         // Every track reads the same, so every row gets the same height.
         const int rowHeight = tracksScroll ? trackRowHeight : viewHeight / trackCount;
@@ -4029,6 +4085,75 @@ namespace merutilm::rff2 {
                 }
                 const VidTimelineTrack *track =
                     row < static_cast<int>(displayedTracks.size()) ? displayedTracks[row] : nullptr;
+                if (!track) {
+                    const RECT labelCell{timeline.left + sc(8), top + sc(4), axis.left - sc(20), bottom - sc(4)};
+                    if (trackRowSelected(AUDIO_ROW_TARGET)) fillRoundRect(canvas, labelCell, theme.panelRaised, theme.accentText, sc(8));
+                    if (draggingTrackRow && trackRowDragMoved && std::ranges::find(carriedRows, AUDIO_ROW_TARGET) != carriedRows.end()) {
+                        fillRoundRect(canvas, labelCell, theme.accentSoft, theme.accentBorder, sc(8));
+                    }
+                    trackLayouts.push_back({.targetId = AUDIO_ROW_TARGET, .row = {axis.left, top, axis.right, bottom},
+                                            .label = labelCell, .editable = false, .minValue = 0, .maxValue = 1, .order = row});
+                    audioLane = {axis.left, std::max<LONG>(top, axis.top), axis.right, std::min<LONG>(bottom, axis.bottom)};
+                    drawText(canvas, L"Audio", {rowTextLeft, top, axis.left - sc(20), bottom}, theme.accentText,
+                             DT_LEFT | DT_VCENTER | DT_SINGLELINE, bodyFont);
+                    const auto &audio = attribute.video.timeline.audio;
+                    const int audioDc = SaveDC(canvas);
+                    IntersectClipRect(canvas, axis.left, std::max<LONG>(top, axis.top), axis.right, std::min<LONG>(bottom, axis.bottom));
+                    if (audio.clips.empty()) {
+                        drawText(canvas, L"Click to add audio", {axis.left + sc(8), top, axis.right, bottom}, theme.mutedText,
+                                 DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+                    }
+                    for (const auto &clip : audio.clips) {
+                        const double startSeconds = double(clip.start) / 1000000;
+                        const double endSeconds = double(clip.start + clip.duration()) / 1000000;
+                        const double firstSecond = schedule.timeAt(viewStart), lastSecond = schedule.timeAt(viewEnd);
+                        if (endSeconds < firstSecond || startSeconds > lastSecond || startSeconds >= schedule.getTotalSeconds()) continue;
+                        const int left = depthX(schedule.depthAt(startSeconds), viewStart, viewEnd, axis);
+                        const int right = depthX(schedule.depthAt(endSeconds), viewStart, viewEnd, axis);
+                        RECT bounds{std::max<LONG>(axis.left, left), top + sc(7),
+                                    std::min<LONG>(axis.right, std::max(right, left + sc(12))), bottom - sc(7)};
+                        if (bounds.right <= bounds.left) continue;
+                        const bool selected = clip.id == selectedAudioClip;
+                        const COLORREF color = !audio.exportEnabled || clip.muted ? theme.mutedText : theme.accentText;
+                        fillRoundRect(canvas, bounds, theme.panelRaised, selected ? theme.accentText : theme.grid, sc(4));
+                        const auto file = std::filesystem::path(std::u8string(clip.path.begin(), clip.path.end())).filename().wstring();
+                        drawText(canvas, file, {bounds.left + sc(10), bounds.top, bounds.right - sc(10), bounds.bottom}, color,
+                                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                        const HPEN pen = CreatePen(PS_SOLID, sc(2), color);
+                        const auto old = SelectObject(canvas, pen);
+                        for (int x : {int(bounds.left + sc(4)), int(bounds.right - sc(4))}) {
+                            MoveToEx(canvas, x, bounds.top + sc(6), nullptr);
+                            LineTo(canvas, x, bounds.bottom - sc(6));
+                        }
+                        SelectObject(canvas, old);
+                        DeleteObject(pen);
+                        RECT hit{};
+                        IntersectRect(&hit, &bounds, &audioLane);
+                        if (hit.bottom > hit.top) audioClipLayouts.push_back({clip.id, hit});
+                    }
+                    RestoreDC(canvas, audioDc);
+
+
+                    const HPEN divider = CreatePen(PS_SOLID, 1, theme.grid);
+                    const auto oldDivider = SelectObject(canvas, divider);
+                    MoveToEx(canvas, timeline.left + sc(8), bottom, nullptr);
+                    LineTo(canvas, axis.right, bottom);
+                    SelectObject(canvas, oldDivider);
+                    DeleteObject(divider);
+                    if (draggingTrackRow && trackRowDragMoved) {
+                        const int dropY = trackRowDropIndex == row ? top :
+                            trackRowDropIndex == trackCount && row == trackCount - 1 ? bottom : -1;
+                        if (dropY >= 0) {
+                            const HPEN pen = CreatePen(PS_SOLID, sc(2), theme.selected);
+                            const auto old = SelectObject(canvas, pen);
+                            MoveToEx(canvas, timeline.left + sc(8), dropY, nullptr);
+                            LineTo(canvas, axis.right, dropY);
+                            SelectObject(canvas, old);
+                            DeleteObject(pen);
+                        }
+                    }
+                    continue;
+                }
                 const uint16_t targetId =
                     track != nullptr ? track->targetId : vidTimelineTargetId(VidTimelineTarget::SPEED);
                 const bool trackActive = track == nullptr || (track->enabled && attribute.video.timeline.enabled);
@@ -4374,7 +4499,7 @@ namespace merutilm::rff2 {
         for (int row = 0; row < int(reorderRowTargets.size()) && rowHeight > 0; ++row) {
             const auto target = reorderRowTargets[row];
             const auto *current = track(target);
-            if (!current) {
+            if (!current && target != AUDIO_ROW_TARGET) {
                 continue;
             }
             const int top = timelineAxis.top - trackScrollOffset + row * rowHeight;
@@ -4388,11 +4513,12 @@ namespace merutilm::rff2 {
                       label,
                       ROLE_SYSTEM_LISTITEM,
                       STATE_SYSTEM_FOCUSABLE | STATE_SYSTEM_SELECTABLE};
-            item.value = workspace::AttributeFormModel::number(playheadValue(target));
+            item.value = target == AUDIO_ROW_TARGET ? std::to_wstring(attribute.video.timeline.audio.clips.size()) + L" clips" : workspace::AttributeFormModel::number(playheadValue(target));
             if (trackRowSelected(target)) {
                 item.state |= STATE_SYSTEM_SELECTED;
             }
             items.push_back(std::move(item));
+            if (target == AUDIO_ROW_TARGET) continue;
             const auto limits = valueRange(target);
             const RECT plot{timelineAxis.left, top, timelineAxis.right, top + rowHeight};
             for (int key = 0; key < int(current->keys.size()); ++key) {
@@ -4541,6 +4667,11 @@ namespace merutilm::rff2 {
         if (!focusItem(id)) {
             return false;
         }
+        if (Id::isTrack(id) && itemIds.target(id) == AUDIO_ROW_TARGET) {
+            selectTrackRow(AUDIO_ROW_TARGET, false, false);
+            showInspectorSection(1);
+            return true;
+        }
         if (Id::isTrack(id)) {
             return true;
         }
@@ -4656,19 +4787,20 @@ namespace merutilm::rff2 {
             if (id != Id::distance && id != Id::keyframe && id != Id::time) {
                 return false;
             }
-            const float minimum = id == Id::keyframe ? schedule.getEndDepth() : 0.f,
+            const double minimum = id == Id::keyframe ? schedule.getEndDepth() : 0.f,
                         maximum = id == Id::distance ? schedule.getStartDepth() - schedule.getEndDepth()
                                   : id == Id::time   ? schedule.getTotalSeconds()
                                                      : schedule.getStartDepth();
-            if (parsed < minimum || parsed > maximum || !focusItem(id)) {
+            if (*value < minimum || *value > maximum || !focusItem(id)) {
                 return false;
             }
-            previewDepth = id == Id::distance ? depthFromDistance(parsed)
-                           : id == Id::time   ? schedule.depthAt(parsed)
-                                              : parsed;
+            previewDepth = id == Id::distance ? depthFromDistance(*value)
+                           : id == Id::time   ? schedule.depthAt(*value)
+                                              : *value;
             syncPlaybackClock();
             if (id == Id::time) {
-                playSeconds = parsed;
+                playSeconds = *value;
+                restartAudioPreview();
             }
             requestFramePreview();
         }
@@ -4756,7 +4888,7 @@ namespace merutilm::rff2 {
         if (keyboardFocus == Id::distance || keyboardFocus == Id::keyframe || keyboardFocus == Id::time) {
             if (key == VK_LEFT || key == VK_RIGHT) {
                 const float step = (key == VK_RIGHT ? 1.f : -1.f) * (shift ? 10.f : 1.f);
-                const float seconds = std::clamp(previewSeconds() + step, 0.0f, schedule.getTotalSeconds());
+                const double seconds = std::clamp(previewSeconds() + step, 0.0, schedule.getTotalSeconds());
                 previewDepth =
                     keyboardFocus == Id::time
                         ? schedule.depthAt(seconds)
@@ -4764,6 +4896,7 @@ namespace merutilm::rff2 {
                 syncPlaybackClock();
                 if (keyboardFocus == Id::time) {
                     playSeconds = seconds;
+                    restartAudioPreview();
                 }
                 requestFramePreview();
                 InvalidateRect(window, nullptr, FALSE);
@@ -4775,7 +4908,7 @@ namespace merutilm::rff2 {
         }
         const auto target = itemIds.target(keyboardFocus);
         auto *current = track(target);
-        if (!current) {
+        if (!current && target != AUDIO_ROW_TARGET) {
             return false;
         }
         const auto row = std::ranges::find(reorderRowTargets, target);
@@ -4783,6 +4916,10 @@ namespace merutilm::rff2 {
             return false;
         }
         const int index = int(row - reorderRowTargets.begin());
+        if (target == AUDIO_ROW_TARGET && key != VK_UP && key != VK_DOWN) {
+            if (key == VK_F2 || (key == VK_F10 && shift)) showInspectorSection(1);
+            return !ctrl;
+        }
         if (key == VK_DELETE || key == VK_BACK) {
             lastUndoStep = 0;
             if (Id::isKey(keyboardFocus)) {
@@ -5182,6 +5319,16 @@ namespace merutilm::rff2 {
                 POINT point = {};
                 GetCursorPos(&point);
                 ScreenToClient(hwnd, &point);
+                if (contains(self->audioLane, point)) {
+                    bool overClip = false, edge = false;
+                    const int grip = std::max(4, int(std::lround(7 * self->uiDpi / 96.0)));
+                    for (const auto &item : self->audioClipLayouts) if (contains(item.bounds, point)) {
+                        overClip = true;
+                        edge = point.x < item.bounds.left + grip || point.x >= item.bounds.right - grip;
+                    }
+                    SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(edge ? 32644 : overClip ? 32646 : 32649)));
+                    return TRUE;
+                }
                 const bool interactive =
                     contains(self->framesButton, point) || contains(self->loadButton, point) ||
                     contains(self->saveButton, point) || contains(self->exportButton, point) || contains(self->aiButton, point) ||
@@ -5205,6 +5352,13 @@ namespace merutilm::rff2 {
             return 0;
         case WM_MOUSEMOVE: {
             const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (self->draggingAudio) {
+                const auto time = int64_t(std::llround(std::clamp(double(self->schedule.timeAt(self->viewDepthAt(point.x))), 0.0, 604800.0) * 1000000));
+                AudioClipEdit::apply(self->attribute.video.timeline.audio, self->audioDragBefore,
+                                     self->audioDragEdge, time - self->audioDragTime);
+                InvalidateRect(hwnd, nullptr, FALSE);
+                return 0;
+            }
             if (self->draggingOverlay) {
                 auto &o = self->attribute.video.timeline.zoomOverlay;
                 o.x =
@@ -5337,6 +5491,32 @@ namespace merutilm::rff2 {
             SetFocus(hwnd);
             self->accessibilityDirty = true;
             const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (contains(self->audioLane, point)) {
+                if (self->exporting || (self->inspector && !self->inspector->applyPending())) return 0;
+                for (const auto &item : self->audioClipLayouts) {
+                    if (!contains(item.bounds, point)) continue;
+                    auto &clips = self->attribute.video.timeline.audio.clips;
+                    const auto clip = std::ranges::find(clips, item.id, &VidAudioClip::id);
+                    if (clip == clips.end()) return 0;
+                    self->keyboardFocus = workspace::TimelineItems::track(AUDIO_ROW_TARGET);
+                    self->selectTrackRow(AUDIO_ROW_TARGET, false, false);
+                    self->selectedAudioClip = item.id;
+                    self->audioDragBefore = *clip;
+                    const int grip = std::max(4, int(std::lround(7 * self->uiDpi / 96.0)));
+                    self->audioDragEdge = point.x < item.bounds.left + grip ? -1 : point.x >= item.bounds.right - grip ? 1 : 0;
+                    self->audioDragTime = int64_t(std::llround(std::clamp(double(self->schedule.timeAt(self->viewDepthAt(point.x))), 0.0, 604800.0) * 1000000));
+                    if (self->audioDragEdge < 0) self->audioDragTime = clip->start;
+                    if (self->audioDragEdge > 0) self->audioDragTime = clip->start + clip->duration();
+                    self->draggingAudio = true;
+                    SetCapture(hwnd);
+                    InvalidateRect(hwnd, nullptr, FALSE);
+                    return 0;
+                }
+                self->selectTrackRow(AUDIO_ROW_TARGET, false, false);
+                self->showInspectorSection(1);
+                if (self->attribute.video.timeline.audio.clips.empty()) self->addAudioClip();
+                return 0;
+            }
             for (const auto &item : self->accessibleItems()) {
                 if (item.id >= workspace::TimelineItems::frames && item.id < workspace::TimelineItems::divider &&
                     (item.state & STATE_SYSTEM_FOCUSABLE) &&
@@ -5492,6 +5672,19 @@ namespace merutilm::rff2 {
             return 0;
         }
         case WM_LBUTTONUP:
+            if (self->draggingAudio) {
+                self->draggingAudio = false;
+                ReleaseCapture();
+                const auto &clips = self->attribute.video.timeline.audio.clips;
+                const auto clip = std::ranges::find(clips, self->selectedAudioClip, &VidAudioClip::id);
+                if (clip != clips.end() && *clip != self->audioDragBefore) {
+                    self->lastUndoStep = 0;
+                    self->commitTimeline();
+                }
+                self->inspectorSectionRequest = 1;
+                self->showInspectorSection(1);
+                return 0;
+            }
             if (self->draggingOverlay) {
                 self->draggingOverlay = false;
                 ReleaseCapture();
@@ -5515,6 +5708,7 @@ namespace merutilm::rff2 {
                 if (moved) {
                     self->moveTrackRows(carried, dropIndex);
                 }
+                if (self->selectedTrackTarget == AUDIO_ROW_TARGET) self->showInspectorSection(1);
                 InvalidateRect(hwnd, nullptr, FALSE);
             } else if (self->fieldDrag != FieldDrag::NONE) {
                 const FieldEdit clickedField = self->pendingFieldEdit;
@@ -5567,6 +5761,7 @@ namespace merutilm::rff2 {
             }
             return 0;
         case WM_CAPTURECHANGED: {
+            self->cancelAudioDrag();
             const bool previewChanged = (self->fieldDrag != FieldDrag::NONE && self->fieldDragMoved) ||
                                         self->draggingTrackKey || self->scrubbingTimeline;
             if (self->draggingOverlay) {
@@ -5595,6 +5790,12 @@ namespace merutilm::rff2 {
         }
         case WM_RBUTTONDOWN: {
             const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            if (contains(self->audioLane, point)) {
+                for (const auto &item : self->audioClipLayouts) if (contains(item.bounds, point)) self->selectedAudioClip = item.id;
+                self->inspectorSectionRequest = 1;
+                self->showInspectorSection(1);
+                return 0;
+            }
             if (point.y >= self->timelineAxis.top && point.y <= self->timelineAxis.bottom &&
                 point.x <= self->timelineAxis.right) {
                 self->openTrackMenu(point);
@@ -5608,6 +5809,13 @@ namespace merutilm::rff2 {
             }
             break;
         case WM_KEYDOWN:
+            if (self->draggingAudio) {
+                if (wParam == VK_ESCAPE) {
+                    self->cancelAudioDrag();
+                    ReleaseCapture();
+                }
+                return 0;
+            }
             if (self->overlayPositionMode && wParam == VK_ESCAPE) {
                 if (self->draggingOverlay) {
                     self->attribute.video.timeline.zoomOverlay = self->overlayDragBefore;

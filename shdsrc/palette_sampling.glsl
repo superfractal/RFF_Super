@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
-// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25
 //
 
 #define NONE 0
@@ -866,7 +866,9 @@ float decor_cycle_ratio(double iteration, float scale, double anim_iters, float 
     double ivd = double(interval);
     double inv_interval = 1.0 / ivd;
     double time_term = div_r(anim_iters, ivd, inv_interval);
-    double raw = biased_ratio(mod(coloring_curve(div_r(smooth_iteration(iteration), ivd, inv_interval)), 1))
+    // Original fractional-repeat continuity correction, GPL-3.0-only; see NOTICE.
+    double cycle = coloring_curve(div_r(smooth_iteration(iteration), ivd, inv_interval));
+    double raw = floor(cycle) + biased_ratio(mod(cycle, 1))
                + palette_attr.offset - time_term * double(palette_follow)
                + div_r(warp_iters, ivd, inv_interval);
     return float(mod(raw * double(scale), 1));

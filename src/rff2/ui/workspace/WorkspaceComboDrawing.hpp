@@ -1,5 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-24
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-24, 2026-09-25
+// Modified by Opus 5.5 on 2026-09-26
 //
 
 #pragma once
@@ -42,11 +43,6 @@ namespace merutilm::rff2::workspace {
                 return 0;
             }
             if (message == WM_ERASEBKGND) {
-                RECT bounds;
-                GetClientRect(window, &bounds);
-                const auto brush = CreateSolidBrush(context.theme->field);
-                FillRect(reinterpret_cast<HDC>(wParam), &bounds, brush);
-                DeleteObject(brush);
                 return 1;
             }
             if (message == WM_NCDESTROY) {
@@ -55,7 +51,7 @@ namespace merutilm::rff2::workspace {
             const auto result = DefSubclassProc(window, message, wParam, lParam);
             if (message == WM_WINDOWPOSCHANGED &&
                 (reinterpret_cast<WINDOWPOS *>(lParam)->flags & SWP_SHOWWINDOW)) {
-                RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
+                RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
             }
             return result;
         }
@@ -89,6 +85,17 @@ namespace merutilm::rff2::workspace {
             LineTo(dc, centerX + half, centerY - half / 2);
             SelectObject(dc, previousPen);
             DeleteObject(pen);
+        }
+        // Windows' slide-open animation shows each newly uncovered strip unpainted (white) for a frame, so the list opens without it.
+        static LRESULT withoutSlideAnimation(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+            BOOL animation = FALSE;
+            if (!SystemParametersInfoW(SPI_GETCOMBOBOXANIMATION, 0, &animation, 0) || !animation) {
+                return DefSubclassProc(window, message, wParam, lParam);
+            }
+            SystemParametersInfoW(SPI_SETCOMBOBOXANIMATION, 0, reinterpret_cast<PVOID>(FALSE), 0);
+            const auto result = DefSubclassProc(window, message, wParam, lParam);
+            SystemParametersInfoW(SPI_SETCOMBOBOXANIMATION, 0, reinterpret_cast<PVOID>(TRUE), 0);
+            return result;
         }
         static LRESULT CALLBACK procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam,
                                           UINT_PTR subclassId, DWORD_PTR contextData) {
@@ -139,7 +146,11 @@ namespace merutilm::rff2::workspace {
                 }
                 RemoveWindowSubclass(window, procedure, subclassId);
             }
-            const auto result = DefSubclassProc(window, message, wParam, lParam);
+            const bool opensList = message == WM_LBUTTONDOWN || message == WM_LBUTTONDBLCLK || message == CB_SHOWDROPDOWN ||
+                                   ((message == WM_KEYDOWN || message == WM_SYSKEYDOWN) &&
+                                    (wParam == VK_F4 || wParam == VK_DOWN || wParam == VK_UP));
+            const auto result = opensList ? withoutSlideAnimation(window, message, wParam, lParam)
+                                          : DefSubclassProc(window, message, wParam, lParam);
             if (message == WM_SETFOCUS || message == WM_KILLFOCUS || message == CB_SETCURSEL ||
                 message == WM_ENABLE) {
                 InvalidateRect(window, nullptr, FALSE);
@@ -167,7 +178,13 @@ namespace merutilm::rff2::workspace {
             }
             InvalidateRect(window, nullptr, FALSE);
         }
-        static void draw(const DRAWITEMSTRUCT &item, const WorkspaceTheme &theme, HFONT font, int inset) {
+        static void draw(const DRAWITEMSTRUCT &item, const Context &context, int inset) {
+            if (item.itemState & ODS_COMBOBOXEDIT) {
+                face(item.hwndItem, item.hDC, context);
+                return;
+            }
+            const auto &theme = *context.theme;
+            const auto font = context.font;
             const bool selected = (item.itemState & ODS_SELECTED) != 0;
             PanelDrawing::fill(item.hDC, item.rcItem, selected ? theme.selected : theme.field);
             int itemIndex = static_cast<int>(item.itemID);

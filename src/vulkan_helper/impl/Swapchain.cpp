@@ -2,10 +2,11 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-15, 2026-08-26
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #include "Swapchain.hpp"
+#include "../core/factory.hpp"
 
 #include "../core/vkh_core.hpp"
 #include "../util/BufferImageUtils.hpp"
@@ -27,10 +28,18 @@ namespace merutilm::vkh {
         VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
         std::vector<VkImage> newImages;
         std::vector<VkImageView> newImageViews;
+        std::vector<Semaphore> newPresentSemaphores;
         createSwapchain(&newSwapchain, swapchain, newExtent);
         try {
             setupSwapchainImages(newSwapchain, &newImages, &newImageViews);
+            newPresentSemaphores.reserve(newImages.size());
+            for (size_t i = 0; i < newImages.size(); ++i) {
+                newPresentSemaphores.push_back(factory::create<Semaphore>(core));
+            }
         } catch (...) {
+            for (const auto imageView : newImageViews) {
+                allocator::invoke(vkDestroyImageView, core.getLogicalDevice().getLogicalDeviceHandle(), imageView, nullptr);
+            }
             allocator::invoke(vkDestroySwapchainKHR, device, newSwapchain, nullptr);
             throw;
         }
@@ -40,6 +49,7 @@ namespace merutilm::vkh {
         swapchain = newSwapchain;
         swapchainImages = std::move(newImages);
         swapchainImageViews = std::move(newImageViews);
+        presentSemaphores = std::move(newPresentSemaphores);
         currentExtent = newExtent;
     }
 
@@ -73,10 +83,18 @@ namespace merutilm::vkh {
         VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
         std::vector<VkImage> newImages;
         std::vector<VkImageView> newImageViews;
+        std::vector<Semaphore> newPresentSemaphores;
         createSwapchain(&newSwapchain, nullptr, newExtent);
         try {
             setupSwapchainImages(newSwapchain, &newImages, &newImageViews);
+            newPresentSemaphores.reserve(newImages.size());
+            for (size_t i = 0; i < newImages.size(); ++i) {
+                newPresentSemaphores.push_back(factory::create<Semaphore>(core));
+            }
         } catch (...) {
+            for (const auto imageView : newImageViews) {
+                allocator::invoke(vkDestroyImageView, core.getLogicalDevice().getLogicalDeviceHandle(), imageView, nullptr);
+            }
             allocator::invoke(vkDestroySwapchainKHR, core.getLogicalDevice().getLogicalDeviceHandle(),
                               newSwapchain, nullptr);
             throw;
@@ -84,6 +102,7 @@ namespace merutilm::vkh {
         swapchain = newSwapchain;
         swapchainImages = std::move(newImages);
         swapchainImageViews = std::move(newImageViews);
+        presentSemaphores = std::move(newPresentSemaphores);
         currentExtent = newExtent;
     }
 
@@ -177,6 +196,7 @@ namespace merutilm::vkh {
 
 
     void SwapchainImpl::destroy() {
+        presentSemaphores.clear();
         destroyImageViews();
         if (swapchain != VK_NULL_HANDLE) {
             allocator::invoke(vkDestroySwapchainKHR, core.getLogicalDevice().getLogicalDeviceHandle(), swapchain,

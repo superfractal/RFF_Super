@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-21, 2026-08-24, 2026-08-25
-// Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-23
+// Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-23, 2026-09-26
 //
 
 #include "TimelineEvaluator.hpp"
@@ -198,7 +198,7 @@ namespace merutilm::rff2 {
         }
     }
 
-    void TimelineEvaluator::evaluate(const float depth, const float sec, const ShaderAttribute &base,
+    void TimelineEvaluator::evaluate(const float depth, const double sec, const ShaderAttribute &base,
                                      ShaderAttribute &out) const {
         out = base;
         if (!activeShaderTracks) {

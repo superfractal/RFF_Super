@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-09-06.
 // Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31
-// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -54,7 +54,7 @@ namespace merutilm::rff2 {
         bool isStaticImages = false;
         // Picks both the images the chain grades in and the shader variant that writes the first of them.
         bool hdrChain = false;
-        float currentSec = 0.0f;
+        double currentSec = 0.0f;
         float currentFrame = 0.0f;
         GpuPassTimer passTimer;
 

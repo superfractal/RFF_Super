@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 2025-09-01.
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #pragma once
@@ -10,8 +10,7 @@
 
 namespace merutilm::vkh {
     class SemaphoreImpl final : public CoreHandler {
-        VkSemaphore imageAvailable = VK_NULL_HANDLE;
-        VkSemaphore renderFinished = VK_NULL_HANDLE;
+        VkSemaphore handle = VK_NULL_HANDLE;
 
     public:
         explicit SemaphoreImpl(CoreRef core);
@@ -26,9 +25,7 @@ namespace merutilm::vkh {
 
         SemaphoreImpl &operator=(SemaphoreImpl &&) = delete;
 
-        VkSemaphore getImageAvailable() const { return imageAvailable; }
-
-        VkSemaphore getRenderFinished() const { return renderFinished; }
+        VkSemaphore getHandle() const { return handle; }
 
     private:
         void init() override;

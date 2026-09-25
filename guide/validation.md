@@ -1,5 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26. -->
 # Guide validation and measurement notes
 
 [Back to the guide](SETTINGS_GUIDE.md)
@@ -87,3 +87,67 @@ Local AI uses a scratch copy of its production UI construction with connection c
 All 62 images are inspected in six contact sheets; Location, Local AI, and Timeline are also inspected at full size. The initial blank native edit values were corrected in the capture harness and the images regenerated. Long standalone forms are made taller to show their fields; application-wired actions omitted from those standalone models are explained in the workflow text. Existing UI ellipses and untranslated headings are retained and described rather than painted over.
 
 Source review also corrects earlier ambiguity about audio and holds: the current Audio inspector exposes export enable and master gain, while per-clip edits and hold entries use timeline JSON. The manual includes the exact audio microsecond convention and an example clip. No new end-to-end inference, locator success-rate, audio playback, or video-encoding measurements are claimed by this documentation expansion. The existing 54 render comparisons and source-file preservation checks are rerun without changing those images.
+
+
+## Audio export validation, 2026-09-25
+
+The production `FFmpegPipe` implementation is exercised in an isolated Windows test with synthetic 64 × 64 video frames at 30 FPS for four seconds, using FFmpeg 8.1.1. The test links the production audio validator and audio filter builder. It does not exercise the interactive export controls, GPU rendering or long-duration reliability.
+
+The known stereo WAV source contains 440 Hz during source seconds 0–1, 1000 Hz during 1–3, and 2000 Hz during 3–4, with amplitude 0.5. The clip selects source seconds 1–3, starts at video second 1, uses 0.5-second fades, and applies clip gain 0.5 and Master Volume 0.5. The source filename includes Japanese characters and a space.
+
+| Check | Measured result |
+| --- | --- |
+| Standard SDR, PQ and HLG MP4 | One AAC audio stream; 120 video frames; 4.000-second duration. |
+| Lossless SDR MKV | One FLAC audio stream; 4.000-second duration. |
+| Source trim | Decoded steady region measures 1000 Hz. |
+| Gain | Expected RMS 0.088388; measured AAC 0.088390 and FLAC 0.088389. |
+| Fades | RMS in video seconds 1.1–1.2 and 2.8–2.9 is approximately 0.027, consistent with the selected fades. |
+| Placement and silence | Measured samples at video seconds 0.2–0.8 and 3.2–3.8 are silent. |
+| Two clips | Clips at seconds 0.5 and 2.5 retain a silent gap; the second clip has twice the measured amplitude when its clip gain is doubled. |
+| Export Audio off or all clips muted | Video completes without an audio stream, even with missing inactive sources. |
+| Missing active source | Export preparation fails and the log identifies the missing source. |
+| Corrupt source | Export fails and the log retains the encoder's invalid-input diagnostic. |
+| Cancellation | Export reports failure and the log records cancellation. |
+
+Successful runs retain the command, encoder version and zero exit code, without non-monotonic timestamp warnings. Temporary audio filter scripts are removed. During development, decoded-media checks exposed invalid timestamps after silence padding; the final filter assigns timestamps from the audio sample count, and the above checks pass with that correction.
+
+Local test sources, generated media, encoder logs and machine-readable measurements are in the gitignored `debug/audio-export-20260925/` folder. The complete RFF_Super build also passes after these changes.
+
+
+## Audio inspector validation, 2026-09-25
+
+The Audio inspector now exposes clip addition, removal, source selection, timeline placement, source trimming, clip gain, mute and fades. Parameters → Audio in the track context menu opens this inspector section, including for PNG sources. These controls supersede the earlier JSON-only per-clip workflow described in the historical validation notes above.
+
+A focused C++ test uses the production form bindings and audio validator. It checks Japanese WAV filenames, automatic four-second duration detection, corrupt and missing input rejection, microsecond-preserving seconds conversion, gain and mute edits, and rejection of overlapping clips, excessive fades and out-of-range trims without changing the previous settings. The test sources are under `debug/audio-ui-20260925/`. The Windows build passes. Interactive visual checks and native dialog operation are not exercised by this test.
+
+
+## Audio timeline editing validation, 2026-09-25
+
+A focused test exercises the production clip-edit helper with two audio files. Moving preserves the source interval; left-edge trimming changes placement and source In together; right-edge trimming changes source Out. Negative placement, overlap and source overflow leave the previous settings intact. Shortened clips retain fades that fit their new duration. The second clip remains unchanged. The test is in `debug/audio-ui-20260925/clip_drag_test.cpp`. Native mouse interaction and visual layout are not covered by this helper test.
+
+
+## Shared Audio row ordering validation, 2026-09-25
+
+Audio now participates in the regular row layout, clipping, vertical scrolling, mouse reordering and keyboard focus. It starts at the bottom. A model harness executes the production reordering method for Audio-only moves, parameter moves across Audio, mixed selections and no-op drops. Linked RGB rows stay together and hidden parameter tracks remain present. These tests pass alongside the audio clip-edit regression test. The Audio row position is tracked in the editor's Undo/Redo history and is not written into the timeline format. Native mouse and visual checks remain unperformed.
+
+
+## Audio preview validation, 2026-09-26
+
+A Windows test runs the production FFmpeg preview decoder and waveOut playback device with two clips at low master volume. Instrumentation verifies nonzero PCM submissions, including after seeking into the second clip, no further submissions after stopping, disabled-audio silence, missing-source rejection and repeated immediate start/stop. The test uses the same trim, placement, gain and fade filters as export. It does not measure acoustic output or end-to-end GPU/video synchronization. Sources are in `debug/audio-preview-20260926/`. Add Audio File now permits pending edits and applies them before adding the next source; invalid drafts remain subject to the existing validation.
+
+
+## Multi-day timing validation, 2026-09-26
+
+The tests in `debug/long-timeline-20260926/` check day/hour formatting and carry at 59.96 seconds, millisecond progression at 48 hours and six days, adjacent export frame times at 1000 FPS, long schedules and holds, and identical audio filter plans when a clip and the seek origin are shifted by multiple days. All pass.
+
+A production AudioPreview test places the first sound 0.5 seconds after a seek to 172800 seconds and 518400 seconds. The first nonzero PCM block reaches the Windows waveOut API at 484 ms and 500 ms respectively; this records submission timing, excluding device buffering and acoustic latency. The existing two-clip playback, seeking, stopping and failure tests also pass. No continuous multi-day rendering or GPU/audio end-to-end synchronization is claimed.
+
+## GPU and audio timing follow-up, 2026-09-26
+
+The follow-up harness in `debug/long-timeline-20260926/av_test.cpp` links the current production VideoRenderScene and uses AudioPreview, TimelineTime and the FFmpegPipe definition extracted from VideoWindow.cpp. It renders a black/white marker through Vulkan and reads the image back while audio plays through the Windows waveOut device. Three trials each start at 0, 172800 and 518400 seconds. The first nonzero audio block reaches waveOut 0–16 ms before the corresponding GPU marker readback; the multi-day starts show the same range as the zero-time control.
+
+A separate 60-second run starts at six days, renders 7,623 frames and checks six audio/visual cues at 0.5, 10.5, 20.5, 30.5, 40.5 and 50.5 seconds after the start. Submission/readback differences are 0, 0, 0, 0, 0 and +16 ms respectively. No increasing drift, playback error or render failure occurs during this run. Measurements use GetTickCount64 and have approximately one system tick of timing granularity.
+
+Three four-second, 60 FPS GPU-rendered test windows also pass through the production FFmpegPipe and are decoded again. Each contains 240 video frames and 48 kHz AAC audio. White frames occupy exactly frames 60–89; the tone starts at 1.000 seconds and ends at 1.500 seconds at the measurement's 1 ms resolution. FFmpeg reports success without non-monotonic timestamp warnings. For these short files, clip times are rebased to the window start; the harness first verifies that the production AudioExport offset filter for each absolute position is identical to the local export filter. These are sampled windows, not full multi-day export files.
+
+The harness supplies the marker directly and does not automate the TimelineWindow UI or measure monitor presentation, audio-device buffering or acoustic latency. The one-minute test does not establish 48-hour continuous rendering reliability. The earlier precision/formatting tests and two-clip playback, seek, stop and error regressions pass again. Measurements are saved as `av-results.csv`, `steady-preview.csv`, `decoded-av-results.json` and `av-run.log` beside the harness.

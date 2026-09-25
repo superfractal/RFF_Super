@@ -2121,7 +2121,7 @@ namespace merutilm::rff2::workspace {
                     return TRUE;
                 }
                 if (item->CtlType == ODT_COMBOBOX) {
-                    WorkspaceComboDrawing::draw(*item, self.theme, self.font, self.px(6));
+                    WorkspaceComboDrawing::draw(*item, self.comboContext, self.px(6));
                     return TRUE;
                 }
                 if (item->hwndItem == self.removeEffect) {

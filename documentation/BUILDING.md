@@ -1,6 +1,6 @@
 # Building RFF_Super
 
-Modified by GPT-6 on 2026-09-24.
+Modified by GPT-6 on 2026-09-24, 2026-09-25.
 
 This guide targets Windows x64 with the project's MSYS2 MINGW64/GCC toolchain. Run all project commands from the directory containing `CMakeLists.txt`, **not** from `documentation/`.
 
@@ -148,7 +148,7 @@ The video exporter checks for `ffmpeg.exe` beside `RFF_Super.exe` first, then se
 | Lossless RGB | `libx264rgb` |
 | HDR (PQ / HLG) | `libx265` with 10-bit support |
 
-The current video exporter redirects FFmpeg diagnostics to `NUL` and removes a stale output `.log`; it does **not** promise a per-export `.mp4.log`. If export fails, first check that FFmpeg runs in the environment used to launch RFF_Super and provides the required encoder.
+Audio export additionally requires `aac` for standard SDR/HDR or `flac` for lossless SDR. Each export keeps a `.ffmpeg.log` beside the output, named from the temporary video file. It records the FFmpeg version, command, audio filters, diagnostics and exit code. Open it through **Open Encoder Log** in the Export workspace or the log-opening option in a Timeline export failure dialog. If FFmpeg cannot start, check the recorded Windows error and the environment used to launch RFF_Super.
 
 ## Optional tools and publication
 

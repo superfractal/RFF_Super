@@ -1,8 +1,11 @@
 //
-// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26
 //
 
 #include "TimelineWindow.hpp"
+#include "IOUtilities.h"
+#include "NativeDialogs.hpp"
+#include "../video/AudioSourceInfo.hpp"
 #include "workspace/FormWorkspace.hpp"
 #include "workspace/WorkspaceButton.hpp"
 #include "workspace/TimelineOverlayForm.hpp"
@@ -228,7 +231,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::refreshInspector(bool force) {
-        if (!inspectorToggle || draggingTrackKey || draggingOverlay || draggingTrackRow) {
+        if (!inspectorToggle || draggingTrackKey || draggingOverlay || draggingTrackRow || draggingAudio) {
             return;
         }
         if (inspector && inspector->hasPending()) {
@@ -345,30 +348,30 @@ namespace merutilm::rff2 {
                           L"How this key reaches the next key on its track.", [key](auto &a) -> auto & {
                               return key(a).out;
                           });
-            model->setValidator(
-                [hasKey, trackIndex, index, target, keyChanged](const Attribute &candidate) -> std::wstring {
-                    if (!candidate.video.timeline.audio.valid()) {
-                        return L"Music clips must have valid times and cannot overlap.";
-                    }
-                    if (hasKey && *keyChanged) {
-                        const auto &keys = candidate.video.timeline.tracks[trackIndex].keys;
-                        const auto *parameter = TimelineParams::find(target);
-                        if (parameter &&
-                            (parameter->kind == TimelineParamKind::BOOL ||
-                             parameter->kind == TimelineParamKind::ENUM) &&
-                            (std::round(keys[index].value) != keys[index].value ||
-                             keys[index].out != VidKeyInterpolation::STEP)) {
-                            return L"Choose a listed value and Step interpolation for this parameter.";
-                        }
-                        for (size_t i = 0; i < keys.size(); ++i) {
-                            if (i != size_t(index) && std::abs(keys[i].depth - keys[index].depth) < 1.f) {
-                                return L"Keep animation keys at least one keyframe apart.";
-                            }
-                        }
-                    }
-                    return {};
-                });
         }
+        model->setValidator(
+            [hasKey, trackIndex, index, target, keyChanged](const Attribute &candidate) -> std::wstring {
+                if (!candidate.video.timeline.audio.valid()) {
+                    return L"Audio: Source In must be before Source Out and within the source length. Fades must fit the trimmed clip, and clips cannot overlap.";
+                }
+                if (hasKey && *keyChanged) {
+                    const auto &keys = candidate.video.timeline.tracks[trackIndex].keys;
+                    const auto *parameter = TimelineParams::find(target);
+                    if (parameter &&
+                        (parameter->kind == TimelineParamKind::BOOL ||
+                         parameter->kind == TimelineParamKind::ENUM) &&
+                        (std::round(keys[index].value) != keys[index].value ||
+                         keys[index].out != VidKeyInterpolation::STEP)) {
+                        return L"Choose a listed value and Step interpolation for this parameter.";
+                    }
+                    for (size_t i = 0; i < keys.size(); ++i) {
+                        if (i != size_t(index) && std::abs(keys[i].depth - keys[index].depth) < 1.f) {
+                            return L"Keep animation keys at least one keyframe apart.";
+                        }
+                    }
+                }
+                return {};
+            });
         model->choice("audio.enabled", 1, L"Export Audio", L"Include music in the exported video.",
                       [](auto &a) -> auto & {
                           return a.video.timeline.audio.exportEnabled;
@@ -379,11 +382,91 @@ namespace merutilm::rff2 {
                 return a.video.timeline.audio.gain;
             },
             0.f, 4.f);
+        auto &clips = snapshot->video.timeline.audio.clips;
+        if (std::ranges::find(clips, selectedAudioClip, &VidAudioClip::id) == clips.end()) {
+            selectedAudioClip = clips.empty() ? 0 : clips.front().id;
+        }
+        const uint64_t audioId = selectedAudioClip;
+        if (audioId) {
+            const auto clip = [audioId](auto &a) -> auto & {
+                auto &values = a.video.timeline.audio.clips;
+                return *std::ranges::find(values, audioId, &VidAudioClip::id);
+            };
+            auto probedPath = std::make_shared<std::wstring>();
+            auto probedDuration = std::make_shared<std::optional<int64_t>>();
+            model->text("audio.path", 1, L"Audio File", L"Choose the source for this clip. Source times refer to this file.",
+                [clip](const Attribute &a) {
+                    const auto &path = clip(a).path;
+                    return std::filesystem::path(std::u8string(path.begin(), path.end())).wstring();
+                },
+                [clip, probedPath, probedDuration](Attribute &a, const std::wstring &value) {
+                    std::error_code error;
+                    const std::filesystem::path source(value);
+                    if (!std::filesystem::is_regular_file(source, error)) return false;
+                    if (*probedPath != value) {
+                        *probedPath = value;
+                        *probedDuration = AudioSourceInfo::duration(source);
+                    }
+                    const auto duration = *probedDuration;
+                    if (!duration) return false;
+                    const auto path = std::filesystem::absolute(source).u8string();
+                    auto &c = clip(a);
+                    c.path.assign(path.begin(), path.end());
+                    c.sourceDuration = *duration;
+                    return true;
+                }, workspace::FormField::Editor::FILE);
+            const auto timeField = [&](std::string id, std::wstring label, std::wstring hint, int64_t VidAudioClip::*member) {
+                model->text(std::move(id), 1, std::move(label), std::move(hint),
+                    [clip, member](const Attribute &a) { return Model::number(double(clip(a).*member) / 1000000); },
+                    [clip, member](Attribute &a, const std::wstring &text) {
+                        double seconds = 0;
+                        if (!Model::parse(text, seconds) || !(seconds >= 0 && seconds <= 604800)) return false;
+                        clip(a).*member = static_cast<int64_t>(std::llround(seconds * 1000000));
+                        return true;
+                    });
+            };
+            timeField("audio.start", L"Start in Video (s)", L"Place the clip at this time in the video. Clips cannot overlap.", &VidAudioClip::start);
+            timeField("audio.in", L"Source In (s)", L"Start reading here in the source audio file.", &VidAudioClip::in);
+            timeField("audio.out", L"Source Out (s)", L"Stop reading here in the source audio file.", &VidAudioClip::out);
+            timeField("audio.fadeIn", L"Fade In (s)", L"Fade from silence at the beginning of the trimmed clip.", &VidAudioClip::fadeIn);
+            timeField("audio.fadeOut", L"Fade Out (s)", L"Fade to silence at the end of the trimmed clip.", &VidAudioClip::fadeOut);
+            model->numeric("audio.clipGain", 1, L"Clip Volume", L"Multiplied by Master Volume. 1 preserves the original level.",
+                [clip](auto &a) -> auto & { return clip(a).gain; }, 0.f, 4.f);
+            model->choice("audio.muted", 1, L"Mute Clip", L"Keep the clip but omit its sound from export.",
+                [clip](auto &a) -> auto & { return clip(a).muted; });
+        }
         workspace::addTimelineOverlayFields(*model);
-        model->setNormalizer([](const Attribute &, Attribute &after, const workspace::FormDraft &draft) {
+        model->setNormalizer([audioId](const Attribute &before, Attribute &after, const workspace::FormDraft &draft) {
             workspace::normalizeTimelineOverlay(after, draft);
+            if (audioId && draft.contains("audio.path")) {
+                const auto &oldClips = before.video.timeline.audio.clips;
+                auto &newClips = after.video.timeline.audio.clips;
+                const auto old = std::ranges::find(oldClips, audioId, &VidAudioClip::id);
+                auto current = std::ranges::find(newClips, audioId, &VidAudioClip::id);
+                if (old->path != current->path) {
+                    if (!draft.contains("audio.in")) current->in = 0;
+                    if (!draft.contains("audio.out")) current->out = current->sourceDuration;
+                    if (!draft.contains("audio.fadeIn")) current->fadeIn = 0;
+                    if (!draft.contains("audio.fadeOut")) current->fadeOut = 0;
+                }
+            }
         });
         auto form = model->form(L"Timeline Settings", inspectorGroups(attribute.video.data.isStatic));
+        if (audioId) {
+            workspace::FormField selected{"audio.selection", 1, L"Audio Clip", L"Select the clip to edit.",
+                [audioId] { return std::to_wstring(audioId); }};
+            selected.persisted = false;
+            for (const auto &c : clips) {
+                const auto path = std::filesystem::path(std::u8string(c.path.begin(), c.path.end()));
+                selected.choices.push_back({std::to_wstring(c.id), std::to_wstring(c.id) + L": " + path.filename().wstring()});
+            }
+            const auto pos = std::ranges::find(form.fields, std::string("audio.path"), &workspace::FormField::id);
+            form.fields.insert(pos, std::move(selected));
+        }
+        form.actions.push_back({1, L"Add Audio File", [this] {
+            if (!inspector || inspector->applyPending()) addAudioClip();
+        }, true});
+        if (audioId) form.actions.push_back({1, L"Remove Audio Clip", [this] { removeAudioClip(); }});
         for (auto &field : form.fields) {
             if (field.id == "overlay.anchor") {
                 const wchar_t *labels[]{L"Top Left",    L"Top Center",    L"Top Right",
@@ -512,6 +595,14 @@ namespace merutilm::rff2 {
                 return L"The timeline changed. Discard this draft and edit the current selection.";
             }
             auto documentDraft = draft;
+            uint64_t nextAudio = selectedAudioClip;
+            if (const auto selected = documentDraft.find("audio.selection"); selected != documentDraft.end()) {
+                if (!workspace::AttributeFormModel::parse(selected->second, nextAudio) ||
+                    std::ranges::find(attribute.video.timeline.audio.clips, nextAudio, &VidAudioClip::id) == attribute.video.timeline.audio.clips.end()) {
+                    return L"Select an existing audio clip.";
+                }
+                documentDraft.erase(selected);
+            }
             auto guide = shortsGuide;
             for (auto it = documentDraft.begin(); it != documentDraft.end();) {
                 if (!it->first.starts_with("guide.")) {
@@ -563,15 +654,26 @@ namespace merutilm::rff2 {
             if (!error.empty()) {
                 return error;
             }
+            if (selectedAudioClip != nextAudio) {
+                selectedAudioClip = nextAudio;
+                inspectorSectionRequest = 1;
+            }
             overlayPositionMode = positionMode;
             shortsGuide = guide;
             InvalidateRect(window, nullptr, FALSE);
             return {};
         };
         form.canEdit = [this] {
-            return !exporting && !draggingTrackKey && !draggingOverlay;
+            return !exporting && !draggingTrackKey && !draggingOverlay && !draggingAudio;
         };
         form.status = [this, selection] {
+            if (inspector && inspector->selectedGroup() == 1) {
+                const auto &clips = attribute.video.timeline.audio.clips;
+                const auto found = std::ranges::find(clips, selectedAudioClip, &VidAudioClip::id);
+                if (found == clips.end()) return std::wstring(L"Choose Add Audio File to include music. Times are entered in seconds.");
+                return std::format(L"Source length: {:.3f} s. Clip length: {:.3f} s. Apply edits before selecting another clip. Playback previews the audio with clip volume and fades.",
+                    double(found->sourceDuration) / 1000000, double(found->duration()) / 1000000);
+            }
             if (inspector && inspector->selectedGroup() == 2) {
                 return std::wstring(L"Settings apply to the entire video. Timeline Save includes the "
                                     L"overlay. Font files are not embedded.");
@@ -661,6 +763,50 @@ namespace merutilm::rff2 {
         if (hadFocus) {
             inspector->focus();
         }
+    }
+
+    void TimelineWindow::addAudioClip() {
+        if (exporting) return;
+        auto &audio = attribute.video.timeline.audio;
+        if (audio.clips.size() >= VidAudioAttribute::maximumClips) {
+            NativeDialogs::message(window, L"The audio clip limit has been reached.", L"Audio", MB_OK | MB_ICONERROR);
+            return;
+        }
+        const auto source = IOUtilities::ioFileDialogMulti(L"Add Audio File", IOUtilities::OPEN_FILE,
+            {{L"WAV Audio", L"wav"}, {L"MP3 Audio", L"mp3"}, {L"FLAC Audio", L"flac"},
+             {L"AAC Audio", L"m4a"}, {L"Ogg Audio", L"ogg"}, {L"All Files", L"*"}});
+        if (!source) return;
+        const auto duration = AudioSourceInfo::duration(*source);
+        if (!duration) {
+            NativeDialogs::message(window, L"Cannot read this audio file's length. Choose a readable audio file and ensure ffprobe.exe is beside RFF_Super.exe or available on PATH.", L"Audio", MB_OK | MB_ICONERROR);
+            return;
+        }
+        VidAudioClip clip;
+        clip.id = 1;
+        while (std::ranges::find(audio.clips, clip.id, &VidAudioClip::id) != audio.clips.end()) ++clip.id;
+        const auto path = std::filesystem::absolute(*source).u8string();
+        clip.path.assign(path.begin(), path.end());
+        clip.sourceDuration = clip.out = *duration;
+        for (const auto &existing : audio.clips) clip.start = std::max(clip.start, existing.start + existing.duration());
+        if (clip.start > VidAudioAttribute::maximumTime - clip.duration()) {
+            NativeDialogs::message(window, L"This clip would exceed the seven-day audio timeline limit.", L"Audio", MB_OK | MB_ICONERROR);
+            return;
+        }
+        selectedAudioClip = clip.id;
+        audio.clips.push_back(std::move(clip));
+        lastUndoStep = 0;
+        commitTimeline();
+        inspectorSectionRequest = 1;
+    }
+
+    void TimelineWindow::removeAudioClip() {
+        if (exporting) return;
+        auto &clips = attribute.video.timeline.audio.clips;
+        if (!std::erase_if(clips, [this](const VidAudioClip &clip) { return clip.id == selectedAudioClip; })) return;
+        selectedAudioClip = clips.empty() ? 0 : clips.front().id;
+        lastUndoStep = 0;
+        commitTimeline();
+        inspectorSectionRequest = 1;
     }
 
     void TimelineWindow::showParameterCatalog(std::wstring_view prefix) {

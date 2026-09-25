@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
-// Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -32,7 +32,7 @@ namespace merutilm::rff2 {
         ShaderAttribute liveShader;
         TimelineEvaluator timelineEvaluator;
         std::unique_ptr<TimelineAnimationPhases> animationIntegrator;
-        std::array<float, 3> animationScheduleKey{};
+        std::array<double, 3> animationScheduleKey{};
         bool animationInputsChanged = true;
         std::unique_ptr<VideoRenderSceneRenderer> renderer = nullptr;
 
@@ -73,13 +73,13 @@ namespace merutilm::rff2 {
 
         void applyShaderDynamic(const ShaderAttribute &shader, TimelineDirtyMask dirty) const;
 
-        void applyTimelineShader(float depth, float sec);
+        void applyTimelineShader(float depth, double sec);
 
         void updateBase(const ShaderAttribute &shader, const VidTimelineAttribute &timeline);
 
         void setTimelineSchedule(const TimelineSchedule &schedule);
 
-        void setTime(float currentSec) const;
+        void setTime(double currentSec) const;
 
         void setCurrentFrame(float currentFrame) const;
 

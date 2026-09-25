@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 2025-09-01.
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #include "Semaphore.hpp"
@@ -18,8 +18,8 @@ namespace merutilm::vkh {
     }
 
     void SemaphoreImpl::init() {
-        if (imageAvailable != VK_NULL_HANDLE || renderFinished != VK_NULL_HANDLE) {
-            throw exception_invalid_state("Semaphores are already initialized");
+        if (handle != VK_NULL_HANDLE) {
+            throw exception_invalid_state("Semaphore is already initialized");
         }
         const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();
         constexpr VkSemaphoreCreateInfo semaphoreInfo = {
@@ -27,38 +27,16 @@ namespace merutilm::vkh {
             .pNext = nullptr,
             .flags = 0
         };
-
-        VkSemaphore createdImageAvailable = VK_NULL_HANDLE;
-        VkSemaphore createdRenderFinished = VK_NULL_HANDLE;
         if (allocator::invoke(vkCreateSemaphore, device, &semaphoreInfo,
-                              nullptr, &createdImageAvailable) != VK_SUCCESS) {
-            throw exception_init("Failed to create sync objects!");
+                              nullptr, &handle) != VK_SUCCESS) {
+            throw exception_init("Failed to create semaphore!");
         }
-        try {
-            if (allocator::invoke(vkCreateSemaphore, device, &semaphoreInfo,
-                                  nullptr, &createdRenderFinished) != VK_SUCCESS) {
-                throw exception_init("Failed to create sync objects!");
-            }
-        } catch (...) {
-            allocator::invoke(vkDestroySemaphore, device, createdImageAvailable, nullptr);
-            throw;
-        }
-        imageAvailable = createdImageAvailable;
-        renderFinished = createdRenderFinished;
     }
 
     void SemaphoreImpl::destroy() {
-        if (imageAvailable == VK_NULL_HANDLE && renderFinished == VK_NULL_HANDLE) {
-            return;
-        }
-        const VkDevice device = core.getLogicalDevice().getLogicalDeviceHandle();
-        if (imageAvailable != VK_NULL_HANDLE) {
-            allocator::invoke(vkDestroySemaphore, device, imageAvailable, nullptr);
-            imageAvailable = VK_NULL_HANDLE;
-        }
-        if (renderFinished != VK_NULL_HANDLE) {
-            allocator::invoke(vkDestroySemaphore, device, renderFinished, nullptr);
-            renderFinished = VK_NULL_HANDLE;
+        if (handle != VK_NULL_HANDLE) {
+            allocator::invoke(vkDestroySemaphore, core.getLogicalDevice().getLogicalDeviceHandle(), handle, nullptr);
+            handle = VK_NULL_HANDLE;
         }
     }
 }

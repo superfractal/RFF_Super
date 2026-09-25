@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-23, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-26
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25
 //
 
 #include "UiLanguage.hpp"
@@ -1070,7 +1070,7 @@ namespace merutilm::rff2 {
                 RECT rc = {0, std::max(0, bodyTopWin), client.right, client.bottom};
                 if (delta > 0 && rc.top < rc.bottom) {
                     ScrollWindowEx(window, 0, -delta, &rc, &rc, nullptr, nullptr,
-                                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+                                   SW_INVALIDATE | SW_ERASE);
                 }
                 resizeToContent(true);
             } else {
@@ -1080,7 +1080,7 @@ namespace merutilm::rff2 {
                 RECT rc = {0, std::max(0, bodyTopWin), client.right, client.bottom};
                 if (delta > 0 && rc.top < rc.bottom) {
                     ScrollWindowEx(window, 0, delta, &rc, &rc, nullptr, nullptr,
-                                   SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+                                   SW_INVALIDATE | SW_ERASE);
                 }
             }
             // Correct anything the blit missed (off-screen rows) and place this section's body
@@ -1353,10 +1353,12 @@ namespace merutilm::rff2 {
         if (dy == 0) {
             return;
         }
+        captureSectionLayout();
         scrollY = newY;
         // Move every child control (and invalidate the exposed strip) in one shot.
         ScrollWindowEx(window, 0, dy, nullptr, nullptr, nullptr, nullptr,
-                       SW_SCROLLCHILDREN | SW_INVALIDATE | SW_ERASE);
+                       SW_INVALIDATE | SW_ERASE);
+        positionSectionChildren(true);
         SCROLLINFO si = {};
         si.cbSize = sizeof(si);
         si.fMask = SIF_POS;

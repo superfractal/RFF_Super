@@ -1,4 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26. -->
 # Animation, timeline, and export
 
 [Manual](user-manual.md) · [Animation fields](settings-reference.md#animation) · [Export and timeline controls](settings-reference.md#export-and-timeline-controls)
@@ -100,13 +101,17 @@ In this version the inspector does not expose a hold-entry editor. Save a timeli
 
 ## Audio
 
-The timeline's Audio section exposes **Export Audio** and **Master Volume** (0 silent, 1 original level, up to 4). Individual clips are stored in the timeline file; this version does not expose an add/trim clip editor in that inspector. Edit clips through a complete exported timeline JSON document and reload it. Audio clips use a source file, source in/out points, a placement time in the video, volume, and fades. A clip's duration is `source out − source in`; placement time is not another source trim value.
+Open **Audio** in the timeline settings, or right-click the track area and choose **Parameters → Audio**. **Export Audio** enables sound in the completed video, and **Master Volume** scales the mix (0 silent, 1 original level, up to 4). Choose **Add Audio File** and select a source. RFF_Super reads its duration using `ffprobe.exe`, which must be beside `RFF_Super.exe` or on PATH. A new clip initially uses the whole source and is placed after the existing clips. Audio clips use a source file, source in/out points, a placement time in the video, volume, and fades. A clip's duration is `source out − source in`; placement time is not another source trim value.
+
+The **Audio** row starts below the parameter tracks and scrolls vertically with them. Drag its name or press Alt+Up/Down to reorder it; Undo/Redo restores the row order. The Audio row position is an editor-session layout setting, not part of the saved timeline. Select the row to open its settings. This row shows clips as named blocks aligned with the timeline ruler. Add several files by choosing **Add Audio File** again for each file. Drag the middle of a block to move it without changing its source selection. Drag the left edge to change the start in the video and source In together; drag the right edge to change source Out. Clips cannot overlap. Shortening a clip also shortens fades if necessary. Escape or loss of mouse capture cancels the drag; Undo restores a completed edit. Clicking a block opens its Audio settings. An empty Audio row opens the file chooser. Only intervals within the current video view are shown; use Start in Video to bring an out-of-view clip into range. The ruler follows zoom distance, so held-depth intervals may occupy a very narrow block; use exact seconds for those intervals.
+
+Use **Audio Clip** to select a clip, then edit **Start in Video (s)**, **Source In (s)**, **Source Out (s)**, **Fade In (s)**, **Fade Out (s)**, **Clip Volume**, and **Mute Clip**. Choose **Apply** to commit edits and clip selection. **Audio File** can replace the source; a new source defaults to its full length and clears fades unless those fields are also edited. Adjust placement if it would overlap another clip. **Remove Audio Clip** removes the selected clip; Undo restores it. Times in these fields are seconds, and the status text shows source and trimmed lengths. Timeline playback previews enabled audio clips with their trim, placement, volume and fades through the Windows default output device. Pause and Stop silence the audio, and seeking or looping restarts it at the new video time. FFmpeg must be available. Add Audio File applies valid pending edits before opening the next file chooser; invalid values remain visible for correction.
 
 For example, trim a track to 12–20 seconds and place it at video time 3 seconds: eight seconds of audio plays from video seconds 3–11. Fades must fit the clip and clips must not overlap. After editing zoom speed or holds, recheck music alignment because video timing changes while the audio uses seconds.
 
 ![Illustration of source trimming and timeline placement](diagrams/timeline-audio.png)
 
-Keep the referenced music files with the project. Timeline saving can write relative paths; moving the timeline without its music can break those references. Turning **Export Audio** off preserves the editing context while omitting music from the output.
+Keep the referenced music files with the project. Timeline saving can write relative paths; moving the timeline without its music can break those references. Turning **Export Audio** off preserves the editing context while omitting music from the output. Enabled, unmuted clips are encoded with their trims, placement, volume and fades. Gaps remain silent and audio ends with the video. Standard SDR and HDR output use 48 kHz stereo AAC; lossless SDR uses 48 kHz stereo FLAC. A missing active audio source stops export and is identified in the encoder log.
 
 JSON audio times are **integer microseconds**, with 1,000,000 units per second. For the 12–20 second example, an entry in `timeline.audio.clips` could be the following. Replace the path and source duration with a real file and its actual duration, and use an unused clip ID. This is a clip fragment, not a complete importable timeline:
 
@@ -191,7 +196,7 @@ Choose **Image File**, set **Resolution & Quality**, apply the settings, and cho
 
 Choose a **Keyframe Folder**, a **Video File**, and **Export Video**. **Video FPS** accepts fractional values from 1–1000. Higher FPS increases output frames at the same duration, but does not add source keyframes. **Video Bitrate** is 1–1,000,000 kbps; increasing it can reduce compression artifacts while increasing target size. **Lossless Video** uses RGB lossless SDR output in MKV and ignores bitrate. Verify playback compatibility when choosing it as a master format.
 
-**Keyframe Transition Samples** (legacy name: Keyframe-boundary anti-aliasing) adds spatial samples near transitions. **Color Animation Samples** (legacy name: Color-animation anti-aliasing) addresses temporal changes. At a transition, spatial factor K requests K² samples; the combined count is the maximum of K² and the temporal count, rather than their product. Away from a transition, the temporal count controls sampling. Both are disabled for static PNG sources. There is no separate Stripe Antialiasing field in the current export form. See [export controls](settings-reference.md#export-and-timeline-controls) for dependencies.
+**Keyframe Transition Samples** (legacy name: Keyframe-boundary anti-aliasing) adds spatial samples near transitions. **Color Animation Samples** (legacy name: Color-animation anti-aliasing) addresses temporal changes. At a transition, spatial factor K requests K² samples; the combined count is the least common multiple of K² and the temporal count. Away from a transition, the temporal count controls sampling. Both are disabled for static PNG sources. There is no separate Stripe Antialiasing field in the current export form. See [export controls](settings-reference.md#export-and-timeline-controls) for dependencies.
 
 ![Illustration of output frame counts and target bitrates](diagrams/export-rates.png)
 
@@ -199,4 +204,13 @@ Choose a **Keyframe Folder**, a **Video File**, and **Export Video**. **Video FP
 
 **Show Video Export Preview** turns the export picture on/off while retaining progress/cancellation. **Pause Preview During Export** reserves more GPU time for the export by suspending the main live preview. Neither changes the intended video FPS. If a live preview looks flat during HDR export, assess the encoded file through the appropriate HDR playback path rather than treating that preview as an SDR comparison.
 
-Source basis: [AnimationModel](../src/rff2/ui/workspace/AnimationModel.hpp), [TimelineWindow](../src/rff2/ui/TimelineWindow.cpp), [TimelineInspector](../src/rff2/ui/TimelineInspector.cpp), [Timeline AI exchange](../src/rff2/ui/TimelineAiExchange.cpp), and [ExportWorkspace](../src/rff2/ui/workspace/ExportWorkspace.hpp). These descriptions do not claim a new end-to-end audio/video encode test.
+**Open Encoder Log** in the Export workspace opens the latest export log. Logs remain beside the chosen output, using the temporary video filename plus `.ffmpeg.log`, and contain the encoder version, command, audio processing settings, diagnostics and exit code. Timeline export failure dialogs offer to open the same log.
+
+Source basis: [AnimationModel](../src/rff2/ui/workspace/AnimationModel.hpp), [TimelineWindow](../src/rff2/ui/TimelineWindow.cpp), [TimelineInspector](../src/rff2/ui/TimelineInspector.cpp), [Timeline AI exchange](../src/rff2/ui/TimelineAiExchange.cpp), and [ExportWorkspace](../src/rff2/ui/workspace/ExportWorkspace.hpp). Audio export validation uses the production encoder pipe with synthetic video frames and a known WAV source; see [the validation record](validation.md#audio-export-validation-2026-09-25). This does not exercise interactive GPU rendering.
+
+
+## Multi-day timelines
+
+Time readouts use `MM:SS.s`, `HH:MM:SS.s`, or `Dd HH:MM:SS.s`, depending on duration. Exact Time edits remain seconds and accept six decimal places. Playback measures elapsed time from an anchored clock rather than repeatedly adding rounded frame intervals. Schedule times, export frame timestamps and CPU animation timing use double precision; saved keyframe depths and existing hold fields retain their original file representation. GPU uniform formats are unchanged.
+
+Audio placement remains limited to seven days. Preview seeks remove preceding timeline silence before decoding the selected interval. Tests at 48 hours and six days verify millisecond clock progress, frame timestamps at 1000 FPS, and audio onset after a seek. These do not constitute a multi-day render endurance test or acoustic/GPU synchronization measurement. Export resume remains unavailable.

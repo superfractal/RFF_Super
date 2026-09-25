@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-09-08.
 // Modified by Opus 5 on 2026-08-10
 // Modified by GPT-5 on 2026-08-23
-// Modified by GPT-6 on 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-21, 2026-09-23, 2026-09-25
 //
 
 #pragma once
@@ -50,8 +50,8 @@ namespace merutilm::vkh {
         bool execute(bool *submitted = nullptr) {
             return SwapchainUtils::renderFrame(wc, &frameIndex, [this](const uint32_t swapchainImageIndex) {
                 recordAndSubmit(swapchainImageIndex,
-                                wc.getSyncObject().getSemaphore(frameIndex).getImageAvailable(),
-                                wc.getSyncObject().getSemaphore(frameIndex).getRenderFinished());
+                                wc.getSyncObject().getSemaphore(frameIndex).getHandle(),
+                                wc.getSwapchain().getRenderFinished(swapchainImageIndex));
             }, submitted);
         }
 

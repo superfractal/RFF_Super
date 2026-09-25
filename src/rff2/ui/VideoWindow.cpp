@@ -4,12 +4,18 @@
 // Modified by Fable 5 on 2026-07-06
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01, 2026-09-02
 // Modified by Opus 5 on 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-21, 2026-08-25
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
 //
 
 #include "NativeDialogs.hpp"
 #include "VideoWindow.hpp"
+#include <numeric>
+#include <stdexcept>
 #include "../video/ZoomOverlay.hpp"
+#include "../video/AudioExport.hpp"
+#include "../video/TimelineTime.hpp"
+#include <fstream>
+#include <shellapi.h>
 #include "../video/VideoCameraSource.hpp"
 
 #include "IOUtilities.h"
@@ -135,10 +141,27 @@ namespace merutilm::rff2 {
             bool finished = false;
             bool succeeded = false;
             DWORD exitCode = STILL_ACTIVE;
+            std::filesystem::path logPath;
+            std::filesystem::path audioFilterPath;
+            std::wstring startupFailure;
+
+            void writeLog(const std::string_view text) const {
+                if (!logHandle || logHandle == INVALID_HANDLE_VALUE) return;
+                DWORD written = 0;
+                WriteFile(logHandle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
+            }
+
+            void writeWideLog(const std::wstring_view text) const {
+                const int count = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+                std::string utf8(count, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), utf8.data(), count, nullptr, nullptr);
+                writeLog(utf8);
+            }
+
 
             FFmpegPipe(const std::filesystem::path &output, const int width, const int height,
                        const float fps, const uint32_t bitrate, const bool lossless,
-                       const VidHdrTransfer hdr, const float peakNits,
+                       const VidHdrTransfer hdr, const float peakNits, const VidAudioAttribute &audio,
                        std::atomic<bool> *cancelRequested,
                        std::atomic<bool> *abortRequested) : cancelRequested(cancelRequested),
                                                            abortRequested(abortRequested) {
@@ -158,11 +181,36 @@ namespace merutilm::rff2 {
                 // HDR frames arrive as 16 bits per channel with alpha, which is what carries the PQ or HLG code values.
                 const bool isHdr = hdr != VidHdrTransfer::SDR;
                 std::wstring cmd = L"\"" + ffmpeg + L"\""
-                                   L" -y -hide_banner -loglevel error -f rawvideo -pixel_format " +
+                                   L" -y -nostdin -nostats -loglevel info -f rawvideo -pixel_format " +
                                    (isHdr ? std::wstring(L"rgba64le") : std::wstring(L"bgr24")) +
                                    L" -video_size " + std::to_wstring(width) + L"x" + std::to_wstring(height) +
                                    L" -framerate " + std::format(L"{}", fps) +
-                                   L" -i pipe:0 -an";
+                                   L" -i pipe:0";
+                AudioExport audioPlan;
+                std::string audioFailure;
+                try {
+                    audioPlan = AudioExport::prepare(audio);
+                    if (!audioPlan.inputs.empty()) {
+                        audioFilterPath = std::filesystem::absolute(output);
+                        audioFilterPath += L".audio.txt";
+                        std::ofstream filterFile(audioFilterPath, std::ios::binary | std::ios::trunc);
+                        filterFile << audioPlan.filters;
+                        filterFile.close();
+                        if (!filterFile) throw std::runtime_error("Cannot write the audio filter file");
+                        for (const auto &input : audioPlan.inputs) {
+                            cmd += L" -i \"" + input.wstring() + L"\"";
+                        }
+                        cmd += L" -filter_complex_script \"" + audioFilterPath.wstring() +
+                               L"\" -map 0:v:0 -map [audio] -c:a " +
+                               (lossless ? std::wstring(L"flac") : std::wstring(L"aac -b:a 192k")) +
+                               L" -ar 48000 -ac 2 -shortest";
+                    } else {
+                        cmd += L" -map 0:v:0 -an";
+                    }
+                } catch (const std::exception &error) {
+                    startupFailure = L"Cannot prepare audio. Check the audio sources and settings.";
+                    audioFailure = error.what();
+                }
                 if (isHdr) {
                     // The pixels are already encoded, so nothing here may convert them: the tags name what
                     // they carry, and the filter is asked for the matrix and the even size, nothing else.
@@ -200,18 +248,22 @@ namespace merutilm::rff2 {
                 cmd += L" \".\\" + outputFile + L"\"";
 
                 SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
-                std::filesystem::path logPath = output;
-                logPath += L".log";
-                if (const HANDLE staleLog = CreateFileW(logPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-                                                        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-                    staleLog != INVALID_HANDLE_VALUE) {
-                    CloseHandle(staleLog);
-                    DeleteFileW(logPath.c_str());
-                }
-                logHandle = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
-                                        OPEN_EXISTING, 0, nullptr);
+                logPath = std::filesystem::absolute(output);
+                logPath += L".ffmpeg.log";
+                logHandle = CreateFileW(logPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa,
+                                        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
                 if (logHandle == INVALID_HANDLE_VALUE) {
                     logHandle = nullptr;
+                    startupFailure = L"Cannot create the FFmpeg diagnostic log in the output folder.";
+                    return;
+                }
+                writeWideLog(L"RFF_Super encoder command:\r\n" + cmd + L"\r\nWorking directory: " +
+                             std::filesystem::absolute(outputDirectory).wstring() + L"\r\n");
+                if (!audioPlan.filters.empty()) writeLog("Audio filters:\r\n" + audioPlan.filters + "\r\n");
+                if (!audioFailure.empty()) writeLog("Audio preparation failed: " + audioFailure + "\r\n");
+                if (cmd.size() >= 32767) startupFailure = L"Too many audio source paths for one export. Reduce the number of audio clips or shorten their paths.";
+                if (!startupFailure.empty()) {
+                    writeWideLog(startupFailure + L"\r\n");
                     return;
                 }
                 HANDLE readEnd = nullptr;
@@ -289,6 +341,9 @@ namespace merutilm::rff2 {
                                    outputDirectory.empty() ? nullptr : outputDirectory.c_str(),
                                    &si.StartupInfo, &pi)) {
                     opened = true;
+                } else {
+                    startupFailure = std::format(L"Cannot start FFmpeg (Windows error {}).", GetLastError());
+                    writeWideLog(startupFailure + L"\r\n");
                 }
                 DeleteProcThreadAttributeList(si.lpAttributeList);
                 attributeInitialized = false;
@@ -409,6 +464,12 @@ namespace merutilm::rff2 {
                     CloseHandle(pi.hThread);
                     opened = false;
                 }
+                writeLog(std::format("\r\nRFF_Super result: exit_code={}, write_failed={}, cancelled={}, succeeded={}\r\n",
+                                     exitCode, writeFailed, isCancellationRequested(), succeeded));
+                if (!audioFilterPath.empty()) {
+                    std::error_code error;
+                    std::filesystem::remove(audioFilterPath, error);
+                }
                 if (logHandle && logHandle != INVALID_HANDLE_VALUE) {
                     CloseHandle(logHandle);
                     logHandle = nullptr;
@@ -421,6 +482,18 @@ namespace merutilm::rff2 {
 
             ~FFmpegPipe() { finish(); }
         };
+
+        void showEncoderFailure(HWND owner, std::wstring message, const std::filesystem::path &logPath) {
+            std::error_code error;
+            if (logPath.empty() || !std::filesystem::is_regular_file(logPath, error)) {
+                NativeDialogs::message(owner, message.c_str(), L"Export failed", MB_OK | MB_ICONERROR);
+                return;
+            }
+            message += L"\n\nEncoder log: " + logPath.wstring() + L"\n\nOpen the encoder log?";
+            if (NativeDialogs::message(owner, message.c_str(), L"Export failed", MB_YESNO | MB_ICONERROR) == IDYES) {
+                ShellExecuteW(owner, L"open", logPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+            }
+        }
 
         // Draws the progress readout centered in rc, laying every digit and every space on one
         // fixed cell.
@@ -1002,18 +1075,22 @@ namespace merutilm::rff2 {
         const std::filesystem::path temporaryOutput = IOUtilities::temporaryFilePath(output);
 
         // Set before the first frame is queued: it decides how wide the readback buffer is packed.
+        scene.setStatic(isStatic);
         scene.setHdrOutput(hdrTransfer, hdrPeakNits);
 
-        FFmpegPipe writer(temporaryOutput, outW, outH, fps, bitrate, lossless, hdrTransfer, hdrPeakNits,
+        FFmpegPipe writer(temporaryOutput, outW, outH, fps, bitrate, lossless, hdrTransfer, hdrPeakNits, attr.video.timeline.audio,
                           &window->closeRequested, &pipeAbort);
+        if (progress) progress->setDiagnosticLog(writer.logPath.wstring());
 
         if (!writer.isOpened()) {
+            writer.finish();
             IOUtilities::discardTemporaryFile(temporaryOutput);
+            const auto message = writer.startupFailure.empty() ? L"Cannot open the output file or video encoder."
+                                                               : writer.startupFailure;
             if (progress) {
-                progress->report(ExportProgress::Phase::FAILED, L"Cannot open the output file or video encoder.");
+                progress->report(ExportProgress::Phase::FAILED, message + L"\nEncoder log: " + writer.logPath.wstring());
             } else {
-                NativeDialogs::message(wnd, L"Cannot open file!", L"Export failed",
-                                       MB_TOPMOST | MB_ICONERROR | MB_OK);
+                showEncoderFailure(wnd, message, writer.logPath);
             }
             return;
         }
@@ -1027,6 +1104,9 @@ namespace merutilm::rff2 {
             ZoomOverlay zoomOverlay;
             // Draw text + encode one finished output frame. Rescales only when the GPU path is off.
             const auto processAndWrite = [&](const cv::Mat &img, const float zoom) {
+                if (img.empty() || img.type() != (hdrOut ? CV_16UC4 : CV_8UC3)) {
+                    throw std::runtime_error("Video frame format does not match the encoder input");
+                }
                 cv::Mat out;
                 if (img.cols != outW || img.rows != outH) {
                     cv::resize(img, out, cv::Size(outW, outH), 0, 0, cv::INTER_AREA);
@@ -1034,6 +1114,7 @@ namespace merutilm::rff2 {
                     out = img;
                 }
                 zoomOverlay.apply(out, zoom, overlaySettings, hdrTransfer);
+                if (!out.isContinuous()) out = out.clone();
                 // out is a continuous BGR24 buffer, or rgba64le once the export runs in HDR.
                 if (!writer.write(out.data, out.total() * out.elemSize())) {
                     failVideo(L"FFmpeg stopped accepting video frames.");
@@ -1062,6 +1143,9 @@ namespace merutilm::rff2 {
                     scene.getBufferCachedCondition().notify_all();
                 }
                 //MUTEX LOCK SCOPE END
+                if (buffer->image.empty() || buffer->image.type() != (hdrOut ? CV_16UC4 : CV_8UC3)) {
+                    throw std::runtime_error("Queued video frame format does not match the encoder input");
+                }
                 const int n = std::max(1, buffer->subsampleCount);
                 if (n <= 1 && accumHave == 0) {
                     // Ordinary single-sample frame: encode directly (no extra copy).
@@ -1145,7 +1229,7 @@ namespace merutilm::rff2 {
                                            : RFFDynamicMapBinary::keyframeCount(open);
             const float minNumber = -overZoom;
             auto currentFrame = static_cast<float>(maxNumber);
-            float currentSec = 0;
+            double currentSec = 0;
             // Without a timeline the depth walk is one constant speed, the mapping the schedule
             // itself falls back to, so both branches below land on the same frames at the same
             // seconds and an export comes out the same however the timeline is switched.
@@ -1161,7 +1245,6 @@ namespace merutilm::rff2 {
             cv::Mat zoomedStaticImage = cv::Mat::zeros(imgHeight, imgWidth, CV_16UC4);
             cv::Mat normalStaticImage = cv::Mat::zeros(imgHeight, imgWidth, CV_16UC4);
 
-            scene.setStatic(isStatic);
             scene.setTimelineSchedule(schedule);
 
             const uint64_t scheduledFrames = schedule.totalFrames(fps);
@@ -1174,19 +1257,9 @@ namespace merutilm::rff2 {
                 // counted from 0, so the video opens on the second and the depth the export was
                 // given rather than one frame past them. Neither one is stepped to, so neither
                 // accumulates any drift, and the walk stops before it passes the end depth.
-                currentSec = static_cast<float>(frameIndex) / fps;
-                if (uniform) {
-                    currentFrame = static_cast<float>(maxNumber) -
-                                   static_cast<float>(frameIndex) * frameInterval;
-                    if (currentFrame <= minNumber) {
-                        break;
-                    }
-                } else {
-                    if (frameIndex >= scheduledFrames) {
-                        break;
-                    }
-                    currentFrame = schedule.depthAt(currentSec);
-                }
+                currentSec = TimelineTime::frameSeconds(frameIndex, fps);
+                if (frameIndex >= scheduledFrames) break;
+                currentFrame = schedule.depthAt(currentSec);
                 // The depth the keyframe pair is read and blended at; the shader tracks still run
                 // on the depth itself, which is the axis their keys were placed on.
                 const float sampledFrame = std::min(currentFrame, topFrame);
@@ -1291,7 +1364,7 @@ namespace merutilm::rff2 {
                 // the color-animation time inside this frame's 1/fps slice so the flow is
                 // averaged over the frame (fixes Psychedelic / Color-Animation-Speed judder).
                 const auto renderSub = [&](const float jx, const float jy, const float timeFrac, const int total) {
-                    const float sampleSec = currentSec + timeFrac / fps;
+                    const double sampleSec = currentSec + timeFrac / fps;
                     scene.setSampleJitter(jx, jy);
                     scene.applyTimelineShader(currentFrame, sampleSec);
                     scene.setTime(sampleSec);
@@ -1307,7 +1380,7 @@ namespace merutilm::rff2 {
                     // Spatial grid for the boundary; spread the color-animation time across the
                     // same samples so judder is averaged out at transitions too (no extra cost).
                     const int spatialSamples = keyframeGrid * keyframeGrid;
-                    const int samples = std::max(spatialSamples, motionSamples);
+                    const int samples = std::lcm(spatialSamples, motionSamples);
                     for (int idx = 0; idx < samples; ++idx) {
                         const int spatial = idx % spatialSamples;
                         const int sx = spatial % keyframeGrid, sy = spatial / keyframeGrid;
@@ -1335,7 +1408,7 @@ namespace merutilm::rff2 {
 
                 // Depth no longer advances at a constant rate, so how far along the export is
                 // comes from the time the schedule says has passed, not from the depth left to go.
-                const float totalSec = schedule.getTotalSeconds();
+                const double totalSec = schedule.getTotalSeconds();
                 const float progressRatio = uniform || totalSec <= 0.0f
                                                 ? (static_cast<float>(maxNumber) - currentFrame) / (
                                                       static_cast<float>(maxNumber) + overZoom)
@@ -1388,7 +1461,10 @@ namespace merutilm::rff2 {
             if (progress) {
                 progress->report(ExportProgress::Phase::WRITING, L"Finishing video file...", 1);
             }
-            exitFlag.store(true);
+            {
+                std::scoped_lock lock(scene.getBufferCachedMutex());
+                exitFlag.store(true);
+            }
             scene.getBufferCachedCondition().notify_all();
             if (queueResolveThread.joinable()) {
                 queueResolveThread.join();
@@ -1448,10 +1524,9 @@ namespace merutilm::rff2 {
                                           writer.getExitCode());
                 }
                 if (progress) {
-                    progress->report(ExportProgress::Phase::FAILED, message);
+                    progress->report(ExportProgress::Phase::FAILED, message + L"\nEncoder log: " + writer.logPath.wstring());
                 } else {
-                    NativeDialogs::message(IsWindow(wnd) ? wnd : nullptr, message.c_str(), L"Export failed",
-                                           MB_OK | MB_ICONERROR | MB_TOPMOST);
+                    showEncoderFailure(IsWindow(wnd) ? wnd : nullptr, message, writer.logPath);
                 }
             }
             } catch (const std::exception &error) {

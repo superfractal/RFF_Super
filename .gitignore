@@ -52,7 +52,10 @@ __pycache__/
 /.claude/
 /.codex/
 /debug/
-/docs/
+/docs/*
+!/docs/mfr-hdr-preview.md
+!/docs/timeline-ai-exchange.md
+!/docs/numeric-input-ranges.md
 /include/
 
 # Written by the Vulkan layers that run_with_validation.bat enables

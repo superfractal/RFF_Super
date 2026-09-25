@@ -14,6 +14,8 @@ Choose either method:
 - **Beside the application:** put `ffmpeg.exe` in the same folder as `RFF_Super.exe` (normally the application's `bin/` folder). Include any DLLs required by your FFmpeg build.
 - **On PATH:** keep the extracted folder, for example `C:\Tools\ffmpeg`, and add the folder containing `ffmpeg.exe` (usually `C:\Tools\ffmpeg\bin`) to your user `Path` through Windows **Environment Variables → User variables → Path → Edit → New**. Reopen PowerShell and restart RFF_Super after saving.
 
+The Audio inspector also uses `ffprobe.exe` to read source lengths when adding or replacing a clip. Keep it beside `RFF_Super.exe` or on PATH, with any DLLs its distribution requires.
+
 The video exporter checks beside `RFF_Super.exe` first, then falls back to PATH. An older copy beside the application therefore takes priority over one on PATH.
 
 ## 3. Check the installation
@@ -22,7 +24,7 @@ For a PATH installation, run these commands in a new PowerShell window:
 
 ```powershell
 ffmpeg -version
-ffmpeg -hide_banner -encoders | Select-String 'libx264|libx264rgb|libx265'
+ffmpeg -hide_banner -encoders | Select-String 'libx264|libx264rgb|libx265|aac|flac'
 ```
 
 For an installation beside the application, open PowerShell in the folder containing `RFF_Super.exe` and use `.\ffmpeg.exe` in place of `ffmpeg` in the command examples on this page.
@@ -33,11 +35,13 @@ For an installation beside the application, open PowerShell in the folder contai
 | Lossless SDR | `libx264rgb` |
 | HDR (PQ or HLG) | `libx265` with 10-bit output support |
 
-Only the encoder for your chosen mode is required. For HDR, run `ffmpeg -hide_banner -h encoder=libx265` and check that its supported pixel formats include `yuv420p10le`.
+Audio additionally requires `aac` for standard SDR/HDR exports or `flac` for lossless SDR exports. Only the encoders for your chosen mode are required. For HDR, run `ffmpeg -hide_banner -h encoder=libx265` and check that its supported pixel formats include `yuv420p10le`.
 
 Restart RFF_Super and try a short export using the [animation and export guide](animation-and-export.md).
 
 ## If export fails
+
+Choose **Open Encoder Log** in the Export workspace, or accept the log-opening option in a Timeline export failure dialog. The `.ffmpeg.log` file stays in the video output folder under the temporary video filename. It includes the FFmpeg version, command, audio filters, diagnostics and exit code, even when the temporary video is discarded.
 
 - **Command not found:** check that PATH points to the folder containing `ffmpeg.exe`, then reopen PowerShell and restart the application.
 - **Missing DLL:** restore the complete FFmpeg package. Copying only the executable from an MSYS2 or shared build is insufficient.

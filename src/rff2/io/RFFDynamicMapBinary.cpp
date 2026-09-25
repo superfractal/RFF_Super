@@ -2,11 +2,12 @@
 // Created by Merutilm on 2025-05-08.
 // Modified by Opus 5 on 2026-08-14, 2026-08-23, 2026-08-26
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-09-01
-// Modified by GPT-6 on 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-22, 2026-09-23, 2026-09-25
 //
 
 #include "RFFDynamicMapBinary.h"
 #include <cmath>
+#include "MapLimits.hpp"
 
 #include <cstring>
 #include <filesystem>
@@ -20,7 +21,7 @@
 
 namespace merutilm::rff2 {
     namespace {
-        constexpr uint64_t MAX_MAP_PIXELS = 100'000'000;
+        constexpr uint64_t MAX_MAP_PIXELS = MapLimits::MAX_PIXELS;
     }
 
     inline const RFFDynamicMapBinary RFFDynamicMapBinary::DEFAULT = RFFDynamicMapBinary(0, 0, 0, Matrix<double>(0, 0));
@@ -291,6 +292,10 @@ namespace merutilm::rff2 {
     }
 
     void RFFDynamicMapBinary::exportFile(const std::filesystem::path &path) const {
+        if (!MapLimits::valid(iterations.getWidth(), iterations.getHeight()) || !std::isfinite(getLogZoom())) {
+            vkh::logger::w_log(L"ERROR : Invalid map dimensions or zoom");
+            return;
+        }
         const std::filesystem::path temporary = IOUtilities::temporaryFilePath(path);
         if (std::ofstream out(temporary, std::ios::out | std::ios::binary | std::ios::trunc); out.is_open()) {
             IOUtilities::encodeAndWrite(out, iterations.getWidth());
@@ -310,6 +315,10 @@ namespace merutilm::rff2 {
     }
 
     bool RFFDynamicMapBinary::exportCompressedFile(const std::filesystem::path &path) const {
+        if (!MapLimits::valid(iterations.getWidth(), iterations.getHeight()) || !std::isfinite(getLogZoom())) {
+            vkh::logger::w_log(L"ERROR : Invalid map dimensions or zoom");
+            return false;
+        }
         const std::vector<char> raw = RFFMapCompression::preprocess(iterations.getCanvas(), iterations.getWidth());
         const std::vector<char> compressed = RFFMapCompression::compress(raw, RFFMapCompression::DEFAULT_LEVEL);
         if (compressed.empty()) {

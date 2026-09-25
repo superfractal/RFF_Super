@@ -297,7 +297,7 @@ For a sequence spanning depth 10 to 0, with no speed keys and no extra final zoo
 
 #### Trim and place audio
 
-The current Audio inspector exposes Export Audio and Master Volume. Clip addition, trimming, placement, and fades are edited through the complete timeline JSON, not through an unimplemented clip editor. See [the JSON clip example](animation-and-export.md#audio) for exact units and fields.
+Open Audio in the settings inspector or choose Parameters → Audio from the track area’s right-click menu. Add Audio File selects a source and reads its duration with `ffprobe.exe`. Select an Audio Clip, edit its placement, trim, gain, mute and fades, then Apply. The UI uses seconds; saved JSON uses integer microseconds. See [Audio](animation-and-export.md#audio) for the complete workflow.
 
 **Export Audio** includes the music track. Master Volume scales the whole mix; a clip has its source file, timeline start, source in/out points, gain, mute, fade-in, and fade-out. Clips cannot overlap. Audio fades affect sound, not fractal opacity.
 

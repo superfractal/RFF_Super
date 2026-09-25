@@ -2,7 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
 // Modified by Opus 5 on 2026-08-25, 2026-08-31
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #include "TimelineSchedule.hpp"
@@ -132,7 +132,7 @@ namespace merutilm::rff2 {
         if ((!hasSpeedKeys && !hasTimedHolds) || depthSpan <= 0.0f) {
             // Nothing to integrate: one constant speed, which is what the export always did.
             schedule.uniform = true;
-            schedule.totalSeconds = depthSpan > 0.0f ? depthSpan / schedule.uniformSpeed : 0.0f;
+            schedule.totalSeconds = depthSpan > 0.0f ? static_cast<double>(depthSpan) / schedule.uniformSpeed : 0.0f;
             return schedule;
         }
 
@@ -225,7 +225,7 @@ namespace merutilm::rff2 {
                 }
             }
             integratedSeconds += integratePiece(upper, depth);
-            schedule.times[i] = static_cast<float>(integratedSeconds);
+            schedule.times[i] = integratedSeconds;
             previousDepth = depth;
         }
 
@@ -240,14 +240,14 @@ namespace merutilm::rff2 {
         std::ranges::sort(sortedHolds, [](const VidTimelineHold &a, const VidTimelineHold &b) {
             return a.depth > b.depth;
         });
-        float heldSeconds = 0.0f;
+        double heldSeconds = 0.0f;
         for (const auto &[depth, seconds]: sortedHolds) {
             schedule.holds.push_back({.depth = depth, .seconds = seconds,
                                       .startTime = schedule.integralAt(depth) + heldSeconds});
             heldSeconds += seconds;
         }
 
-        schedule.totalSeconds = static_cast<float>(integratedSeconds) + heldSeconds;
+        schedule.totalSeconds = integratedSeconds + heldSeconds;
         return schedule;
     }
 
@@ -268,9 +268,9 @@ namespace merutilm::rff2 {
                                          : static_cast<uint64_t>(frames);
     }
 
-    float TimelineSchedule::integralAt(const float depth) const {
+    double TimelineSchedule::integralAt(const float depth) const {
         if (uniform || times.empty()) {
-            return std::max(startDepth - depth, 0.0f) / uniformSpeed;
+            return std::max(double(startDepth) - depth, 0.0) / uniformSpeed;
         }
         const auto last = static_cast<float>(times.size() - 1);
         const float position = std::clamp((startDepth - depth) / depthStep, 0.0f, last);
@@ -282,7 +282,7 @@ namespace merutilm::rff2 {
         return times[index] + (times[index + 1] - times[index]) * frac;
     }
 
-    float TimelineSchedule::invertIntegral(const float sec) const {
+    float TimelineSchedule::invertIntegral(const double sec) const {
         if (uniform || times.empty()) {
             return startDepth - sec * uniformSpeed;
         }
@@ -295,14 +295,14 @@ namespace merutilm::rff2 {
         // times only increases, so the segment holding this instant is one search away.
         const auto upper = std::ranges::upper_bound(times, sec);
         const auto index = static_cast<size_t>(std::distance(times.begin(), upper)) - 1;
-        const float t0 = times[index];
-        const float t1 = times[index + 1];
-        const float frac = t1 > t0 ? (sec - t0) / (t1 - t0) : 0.0f;
+        const double t0 = times[index];
+        const double t1 = times[index + 1];
+        const double frac = t1 > t0 ? (sec - t0) / (t1 - t0) : 0.0f;
         return startDepth - (static_cast<float>(index) + frac) * depthStep;
     }
 
-    float TimelineSchedule::timeAt(const float depth) const {
-        float held = 0.0f;
+    double TimelineSchedule::timeAt(const float depth) const {
+        double held = 0.0f;
         for (const auto &hold: holds) {
             if (hold.depth > depth) {
                 held += hold.seconds;
@@ -311,7 +311,7 @@ namespace merutilm::rff2 {
         return integralAt(depth) + held;
     }
 
-    float TimelineSchedule::depthAt(const float sec) const {
+    float TimelineSchedule::depthAt(const double sec) const {
         if (sec <= 0.0f) {
             return startDepth;
         }
@@ -321,7 +321,7 @@ namespace merutilm::rff2 {
         if (uniform) {
             return startDepth - sec * uniformSpeed;
         }
-        float held = 0.0f;
+        double held = 0.0f;
         for (const auto &hold: holds) {
             if (sec < hold.startTime) {
                 break;

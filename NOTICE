@@ -464,3 +464,11 @@ Optional local inference data, not linked into or included with RFF_Super source
 PrismML Ternary-Bonsai-2-27B-mmproj-BF16.gguf, Apache-2.0, from
 https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/tree/6ed5e12
 The projector is downloaded into gitignored debug/local_ai/models/.
+
+================================================================================
+2026-09-25 shader corrections - GPL-3.0-only
+================================================================================
+The MFR SDR finish routing in shdsrc/vk_linear_interpolation.frag and fractional
+Repeat U continuity in shdsrc/palette_sampling.glsl are original project changes.
+They reuse the existing attributed transforms and add no third-party formula,
+constant set, or source code. Existing algorithm acknowledgements remain above.

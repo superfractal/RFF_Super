@@ -1135,7 +1135,12 @@ namespace merutilm::rff2 {
         }
     }
 
-    std::wstring RenderScene::dumpState() const {
+    std::wstring RenderScene::dumpState() {
+        if (backgroundThreads.runningCount() != 0 || longJobBusy.load()) {
+            return L"Scene state is unavailable while a background operation is running. Try again after it finishes.";
+        }
+        // Join the compute worker before reading its perturbator, reference, and approximation cache.
+        cancelRunningCompute();
         // Every number here is read where it lies rather than through a lock: this is a snapshot of a
         // moving thing, taken to be looked at, and a torn digit costs nothing next to stopping the
         // compute to read it.

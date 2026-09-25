@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-14
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
-// Modified by GPT-6 on 2026-09-14, 2026-09-23
+// Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-09-25
 //
 
 #pragma once
@@ -140,6 +140,17 @@ namespace merutilm::rff2 {
     void IOUtilities::readAndDecode(std::ifstream &in, T *t) {
         auto it = std::array<char, sizeof(T)>();
         in.read(it.data(), it.size());
+        if constexpr (std::is_same_v<T, bool>) {
+            if (!in) return;
+            static_assert(sizeof(bool) == 1);
+            const auto raw = static_cast<unsigned char>(it[0]);
+            if (raw > 1) {
+                in.setstate(std::ios::failbit);
+                return;
+            }
+            *t = raw != 0;
+            return;
+        }
         fromBinaryArray(it, t);
     }
 

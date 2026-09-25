@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-27
-// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06, 2026-09-24
+// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06, 2026-09-24, 2026-09-25
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-23
 //
 
@@ -32,7 +32,7 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v3.0.0 beta1";
+        constexpr auto APPLICATION_VERSION = "v3.0.0 beta2";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";

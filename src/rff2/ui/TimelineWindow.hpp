@@ -1,12 +1,13 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-08-24, 2026-08-26, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
 //
 
 #pragma once
 
 #include "workspace/ShortsGuide.hpp"
+#include "../video/AudioPreview.hpp"
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -97,6 +98,11 @@ namespace merutilm::rff2 {
         int inspectorKey = -2;
         std::string inspectorDocumentKey;
         int inspectorSectionRequest = -1;
+        AudioPreview audioPreview;
+        void restartAudioPreview();
+        uint64_t selectedAudioClip = 0;
+        void addAudioClip();
+        void removeAudioClip();
         static constexpr UINT inspectorToggleId = 0x7830;
         static constexpr UINT_PTR inspectorTimerId = 0x7831;
         void initializeInspector();
@@ -149,6 +155,16 @@ namespace merutilm::rff2 {
         HFONT captionFont = nullptr;
         HFONT valueFont = nullptr;
         RECT timelineAxis = {};
+        RECT audioLane = {};
+        int audioRowIndex = -1;
+        int undoBaselineAudioRow = -1;
+        struct AudioClipLayout { uint64_t id; RECT bounds; };
+        std::vector<AudioClipLayout> audioClipLayouts;
+        bool draggingAudio = false;
+        int audioDragEdge = 0;
+        int64_t audioDragTime = 0;
+        VidAudioClip audioDragBefore;
+        void cancelAudioDrag();
         RECT timelinePanel = {};
         RECT scrollTrack = {};
         RECT scrollThumb = {};
@@ -230,7 +246,8 @@ namespace merutilm::rff2 {
         // Playback walks the schedule in real time and the preview follows wherever it lands.
         bool playing = false;
         bool loopPlayback = false;
-        float playSeconds = 0.0f;
+        double playSeconds = 0.0;
+        double playOriginSeconds = 0.0;
         ULONGLONG playTick = 0;
         bool draggingRuler = false;
         float rulerGrabDepth = 0.0f;
@@ -262,6 +279,7 @@ namespace merutilm::rff2 {
             VidTimelineAttribute before, after;
             uint64_t serial;
             bool beforeStatic, afterStatic;
+            int beforeAudioRow = -1, afterAudioRow = -1;
         };
         std::vector<TimelineEdit> undoSteps;
         std::vector<TimelineEdit> redoSteps;
@@ -295,7 +313,7 @@ namespace merutilm::rff2 {
         uint64_t previewRequestGeneration = 0;
         uint64_t publishedPreviewGeneration = 0;
         float requestedPreviewDepth = 0.0f;
-        float requestedPreviewSec = 0.0f;
+        double requestedPreviewSec = 0.0f;
         VidTimelineAttribute requestedPreviewTimeline = {};
         ShaderAttribute requestedPreviewShader = {};
         std::shared_ptr<const TimelineSchedule> requestedPreviewSchedule;
@@ -439,7 +457,7 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] bool createFramePreview(const Attribute &initialAttribute);
 
-        [[nodiscard]] bool renderFramePreview(float depth, float sec, const VidTimelineAttribute &timeline,
+        [[nodiscard]] bool renderFramePreview(float depth, double sec, const VidTimelineAttribute &timeline,
                                               const ShaderAttribute &shader, const TimelineSchedule &timelineSchedule,
                                               uint64_t generation, cv::Mat *capture = nullptr);
 
@@ -449,9 +467,9 @@ namespace merutilm::rff2 {
 
         void stopFramePreviewWorker();
 
-        void requestFramePreview(float seconds = -1.0f);
+        void requestFramePreview(double seconds = -1.0f);
 
-        [[nodiscard]] float previewSeconds() const;
+        [[nodiscard]] double previewSeconds() const;
 
         void updateScrubDepth(POINT point);
 

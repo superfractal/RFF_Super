@@ -1,9 +1,40 @@
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26. -->
 # Update History
 
-## 2026/09/25
+### 2026/09/26
 
-* **3.0.0 - New Generation**
+* **3.0.0-beta2 - Video and Rendering**
+  * Timeline time readouts now include hours and days for long videos. Playback, seeking and export frame times now retain fine timing at multi-day positions.
+  * Audio preview now starts promptly at distant timeline positions instead of processing the entire preceding silent interval.
+  * Timeline playback now previews enabled audio clips with source trimming, volume and fades, including pause, seeking and looping.
+  * Add Audio File now applies valid pending edits before opening the file chooser, so another clip can be added without manually applying the previous selection.
+  * Audio now shares the normal track list and vertical scrolling, starts below the parameter tracks, and supports row dragging, Alt+Up/Down and Undo/Redo for row order.
+  * Timeline Editor now shows an Audio row with named clips. Drag a clip to move its playback position, or drag either edge to adjust its source interval; Escape cancels a drag and Undo restores a completed edit.
+  * Added Add Audio File (Timeline Editor, Audio): RFF_Super offers an audio clip selector, source-file selection, start time, source trimming, clip volume, mute and fades in seconds, with clip removal and Undo. Parameters in the right-click menu also opens Audio settings.
+  * Added Open Encoder Log (Export workspace): RFF_Super keeps the FFmpeg version, export settings, diagnostics and exit code in a log beside the video output. Export failure dialogs also offer to open the log.
+* **Fixes**
+  * Video export now includes enabled audio clips with source trimming, timeline placement, Master Volume, clip volume, mute and fades. Audio ends with the video; gaps remain silent.
+  * Main view and video preview now present successive frames reliably, including after window resizing.
+  * Keyframe generation now rejects invalid Zoom Step per Keyframe values and steps too small to advance at the current depth, instead of repeatedly saving the same zoom position.
+  * PNG keyframe generation now restores Stripe, Slope, Fog and Bloom settings on completion, cancellation or failure, including before automatic video creation.
+  * Debug: Dump Scene State now stops calculation before reading the scene and remains unavailable while background operations are running.
+  * Video export no longer remains at Writing video after the final queued frame has been written.
+  * PNG video export now retains the selected PQ or HLG output format and rejects frames whose pixel format does not match the export.
+  * PNG video timelines now apply constant Color tracks even when their values match the original scene settings.
+  * Map saving and keyframe generation now enforce the same 100000000-pixel limit as map loading, including enlarged camera-padding keyframes.
+  * Settings and timeline loading now reject invalid on/off values instead of accepting damaged true/false fields.
+  * Video export now weights spatial and temporal antialiasing samples evenly at keyframe boundaries. Some combinations require more rendering samples.
+  * Timeline Editor now continues updating the Zoom readout throughout Extra Final Zoom-in and matches the exported zoom.
+  * MFR Shoulder, MFR Log and MFR Linear SDR output now applies VHS, Mono and Print Finish with layer ordering disabled; MFR False Color retains its diagnostic appearance.
+  * Texture and Pattern cycle coordinates now remain continuous across palette-cycle boundaries with fractional Repeat U values.
+  * Workspace dropdown selection fields now retain consistent backgrounds, text positions and focus styling during selection and focus changes.
+  * Workspace dropdown lists no longer clear to an empty background before their options are redrawn.
+  * Workspace dropdown lists, such as Effects in the Dark theme, now open in one step instead of briefly showing white strips as they slide open.
+  * Settings windows now move partially visible input fields to their correct positions when scrolling or folding sections.
+
+### 2026/09/25
+
+* **3.0.0 beta1**
   * RFF_Super accepts 1–1000 FPS for preview and video, 0–8 extra final zoom-in, and consistent color, shading and blur input ranges across settings panels and timeline tracks. Legacy integer inputs reject negative and overflowing values; out-of-range numeric timeline files require adjustment before loading.
   * RFF_Super offers lightweight exploration without FlyWire models or setup downloads.
   * RFF_Super saves compact settings, shader presets and timelines while continuing to read older files and retaining active appearance controls.

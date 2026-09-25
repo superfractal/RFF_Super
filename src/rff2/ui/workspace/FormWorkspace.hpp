@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
 // Modified by GPT-5 on 2026-09-17
 //
 
@@ -1080,7 +1080,7 @@ namespace merutilm::rff2::workspace {
             case WM_DRAWITEM: {
                 const auto *item = reinterpret_cast<DRAWITEMSTRUCT *>(l);
                 if (item->CtlType == ODT_COMBOBOX) {
-                    WorkspaceComboDrawing::draw(*item, self->theme, self->font, self->px(6));
+                    WorkspaceComboDrawing::draw(*item, self->comboContext, self->px(6));
                     return TRUE;
                 }
                 if (item->CtlType == ODT_BUTTON) {

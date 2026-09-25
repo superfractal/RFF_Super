@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
 //
 
 #include "NativeDialogs.hpp"
@@ -21,6 +21,7 @@
 #include "TimelineWindow.hpp"
 #include "VideoWindow.hpp"
 #include "../io/RFFStaticMapBinary.h"
+#include "../io/MapLimits.hpp"
 #include "../preset/shader/bloom/ShdBloomPresets.h"
 #include "../preset/shader/fog/ShdFogPresets.h"
 #include "../preset/shader/slope/ShdSlopePresets.h"
@@ -88,7 +89,7 @@ namespace merutilm::rff2 {
         window->registerSectionHeader(L"Keyframes", false);
         window->registerTextInput<float>(
             L"Zoom Step per Keyframe", &defaultZoomIncrement, Unparser::FLOAT, Parser::FLOAT,
-            [](const float &v) { return v > 1; }, Callback::NOTHING, L"Set zoom step per keyframe",
+            [](const float &v) { return std::isfinite(v) && v > 1; }, Callback::NOTHING, L"Set zoom step per keyframe",
             L"How much the view zooms in between two adjacent keyframes (log scale).");
 
         window->registerCheckboxInput(
@@ -350,6 +351,42 @@ namespace merutilm::rff2 {
                 bool nextFrame = false;
                 Attribute &settings = scene.getAttribute();
                 const VideoAttribute &videoSettings = settings.video;
+                if (!MapLimits::valid(scene.getIterationBufferWidth(settings), scene.getIterationBufferHeight(settings))) {
+                    NativeDialogs::message(nullptr, L"Keyframes require 1 to 100,000,000 pixels. Reduce resolution or internal scale.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+                const float increment = std::log10(videoSettings.data.defaultZoomIncrement);
+                const auto validNextZoom = [increment](const float zoom) {
+                    const float next = zoom - increment;
+                    return std::isfinite(zoom) && std::isfinite(increment) && increment > 0 &&
+                           std::isfinite(next) && next < zoom;
+                };
+                if (!validNextZoom(logZoom)) {
+                    NativeDialogs::message(nullptr, L"Zoom step is invalid or too small at this depth. Increase Zoom Step per Keyframe.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+                struct RestoreEffects {
+                    RenderScene &scene;
+                    ShdStripeAttribute stripe;
+                    ShdSlopeAttribute slope;
+                    ShdFogAttribute fog;
+                    ShdBloomAttribute bloom;
+                    bool changed;
+                    void restore() {
+                        if (!changed) return;
+                        auto &shader = scene.getAttribute().shader;
+                        shader.stripe = stripe;
+                        shader.slope = slope;
+                        shader.fog = fog;
+                        shader.bloom = bloom;
+                        scene.getRequests().requestShader();
+                        changed = false;
+                    }
+                    ~RestoreEffects() { restore(); }
+                } restoreEffects{scene, settings.shader.stripe, settings.shader.slope,
+                                 settings.shader.fog, settings.shader.bloom, videoSettings.data.isStatic};
 
                 // Every wait here can also end because the thread was asked to stop, which is what
                 // a shutdown does: the render loop that would answer the request is already gone,
@@ -403,11 +440,12 @@ namespace merutilm::rff2 {
                         std::max(videoSettings.data.cameraScale,
                                  static_cast<uint32_t>(std::ceil((std::hypot(w, h) + 8.0) / std::min(w, h))));
                     if (w <= 0 || h <= 0 || scale > 64 || w * scale > 65535 || h * scale > 65535 ||
+                        !MapLimits::valid(static_cast<uint32_t>(w * scale), static_cast<uint32_t>(h * scale)) ||
                         settings.render.clarityMultiplier * settings.render.ssaa * scale >
                             scene.getMaxInternalScale()) {
                         NativeDialogs::message(
                             nullptr,
-                            L"Camera padding exceeds the GPU buffer/image limit or keyframe dimension limit (65535). Reduce resolution or padding scale.",
+                            L"Camera padding exceeds the GPU limit or keyframe limits (65535 per side, 100,000,000 pixels). Reduce resolution or padding scale.",
                             L"Camera keyframes", MB_OK | MB_ICONERROR);
                         return;
                     }
@@ -446,7 +484,6 @@ namespace merutilm::rff2 {
                         return;
                     }
                 }
-                const float increment = std::log10(videoSettings.data.defaultZoomIncrement);
                 while (logZoom > Constants::Fractal::ZOOM_MIN) {
                     if (state.interruptRequested() || nextFrame) {
                         //incomplete frame
@@ -458,6 +495,11 @@ namespace merutilm::rff2 {
                         return;
                     }
                     if (state.interruptRequested()) {
+                        return;
+                    }
+                    if (!validNextZoom(logZoom)) {
+                        NativeDialogs::message(nullptr, L"Zoom step no longer advances at this depth. Increase Zoom Step per Keyframe.",
+                                               L"Keyframe generation", MB_OK | MB_ICONERROR);
                         return;
                     }
                     if (videoSettings.data.isStatic) {
@@ -517,6 +559,7 @@ namespace merutilm::rff2 {
                 }
 
                 restore.restore();
+                restoreEffects.restore();
                 if (!videoSettings.exportation.autoCreateVideo) {
                     vkh::logger::w_log(L"Keyframe generation complete. Auto video creation is disabled.");
                     return;

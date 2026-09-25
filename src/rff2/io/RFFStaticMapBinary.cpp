@@ -2,11 +2,12 @@
 // Created by Merutilm on 2025-06-23.
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-31
-// Modified by GPT-6 on 2026-09-22
+// Modified by GPT-6 on 2026-09-22, 2026-09-25
 //
 
 #include "RFFStaticMapBinary.h"
 #include <cmath>
+#include "MapLimits.hpp"
 
 #include "../../vulkan_helper/core/logger.hpp"
 #include "../ui/IOUtilities.h"
@@ -21,7 +22,7 @@ namespace merutilm::rff2 {
         // The same ceiling the dynamic map is read under. A keyframe header is three numbers with
         // nothing behind them to check against, so a file naming a four-billion-pixel frame passes
         // a bare "greater than zero" test and is carried on into an int cast and a window extent.
-        constexpr uint64_t MAX_MAP_PIXELS = 100000000;
+        constexpr uint64_t MAX_MAP_PIXELS = MapLimits::MAX_PIXELS;
     }
 
     const RFFStaticMapBinary RFFStaticMapBinary::DEFAULT = RFFStaticMapBinary(0, 0, 0);
@@ -71,6 +72,10 @@ namespace merutilm::rff2 {
     }
 
     void RFFStaticMapBinary::exportFile(const std::filesystem::path &path) const {
+        if (!MapLimits::valid(getWidth(), getHeight()) || !std::isfinite(getLogZoom())) {
+            vkh::logger::w_log(L"ERROR : Invalid map dimensions or zoom");
+            return;
+        }
         const std::filesystem::path temporary = IOUtilities::temporaryFilePath(path);
         if (std::ofstream out(temporary, std::ios::out | std::ios::binary | std::ios::trunc); out.is_open()) {
             IOUtilities::encodeAndWrite(out, getLogZoom());

@@ -1,9 +1,10 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
 //
 
 #pragma once
 #include "../NativeDialogs.hpp"
+#include <shellapi.h>
 #include "AttributeFormModel.hpp"
 #include "FormValues.hpp"
 #include "../../attr/NumericSettingLimits.hpp"
@@ -544,6 +545,15 @@ namespace merutilm::rff2::workspace {
                               {1, L"Choose Keyframe Folder", [self] { self->chooseKeyframes(); }},
                               {1, L"Choose Video File", [self] { self->chooseVideo(); }},
                               {1, L"Export Video", [self] { self->startVideo(); }},
+                              {1, L"Open Encoder Log", [self] {
+                                   const auto path = self->progress->getDiagnosticLog();
+                                   if (path.empty()) {
+                                       NativeDialogs::message(self->owner, L"No encoder log is available for this export.",
+                                                              L"Encoder Log", MB_OK | MB_ICONINFORMATION);
+                                   } else {
+                                       ShellExecuteW(self->owner, L"open", path.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                                   }
+                               }},
                               {1, L"Cancel Export", [self] { self->cancel(); }, true, true}};
             return result;
         }

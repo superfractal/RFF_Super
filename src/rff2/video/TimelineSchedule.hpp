@@ -1,7 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -42,7 +42,7 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] float getEndDepth() const { return endDepth; }
 
-        [[nodiscard]] float getTotalSeconds() const { return totalSeconds; }
+        [[nodiscard]] double getTotalSeconds() const { return totalSeconds; }
 
         // Output frames the export will write at this frame rate.
         [[nodiscard]] std::uint64_t totalFrames(float fps) const;
@@ -51,10 +51,10 @@ namespace merutilm::rff2 {
         [[nodiscard]] float speedAt(float depth) const;
 
         // Seconds from the start of the video to the moment this depth is reached.
-        [[nodiscard]] float timeAt(float depth) const;
+        [[nodiscard]] double timeAt(float depth) const;
 
         // The depth shown at this instant. Clamped to the axis outside the video's own length.
-        [[nodiscard]] float depthAt(float sec) const;
+        [[nodiscard]] float depthAt(double sec) const;
 
         // The value a track holds at this depth, or fallback when the track carries no keys.
         static float evaluateTrack(const VidTimelineTrack &track, float depth, float fallback);
@@ -68,9 +68,9 @@ namespace merutilm::rff2 {
     private:
         struct HoldPoint {
             float depth;
-            float seconds;
+            double seconds;
             // Seconds from the start of the video to the moment this hold begins.
-            float startTime;
+            double startTime;
         };
 
         bool uniform = true;
@@ -78,19 +78,19 @@ namespace merutilm::rff2 {
         float endDepth = 0.0f;
         float depthStep = 0.0f;
         float uniformSpeed = 1.0f;
-        float totalSeconds = 0.0f;
+        double totalSeconds = 0.0f;
         // The speed track, copied so the schedule stays valid however the attribute is later edited.
         VidTimelineTrack speedTrack = {};
         bool hasSpeedTrack = false;
         float speedMinimum = 0.0f;
         float speedMaximum = 0.0f;
         // Cumulative time of the speed integral alone, sampled at even depth steps from startDepth.
-        std::vector<float> times = {};
+        std::vector<double> times = {};
         // Held in playback order, holds of no length dropped.
         std::vector<HoldPoint> holds = {};
 
-        [[nodiscard]] float integralAt(float depth) const;
+        [[nodiscard]] double integralAt(float depth) const;
 
-        [[nodiscard]] float invertIntegral(float sec) const;
+        [[nodiscard]] float invertIntegral(double sec) const;
     };
 }

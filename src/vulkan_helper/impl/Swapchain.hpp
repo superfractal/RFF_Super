@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-15, 2026-08-26
 // Modified by GPT-5 on 2026-09-01
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-25
 //
 
 #pragma once
@@ -13,6 +13,7 @@
 #include "../core/vkh_base.hpp"
 #include "../handle/CoreHandler.hpp"
 #include "Surface.hpp"
+#include "Semaphore.hpp"
 
 namespace merutilm::vkh {
     class SwapchainImpl final : public CoreHandler {
@@ -21,6 +22,7 @@ namespace merutilm::vkh {
         VkSwapchainKHR swapchain = nullptr;
         std::vector<VkImage> swapchainImages = {};
         std::vector<VkImageView> swapchainImageViews = {};
+        std::vector<Semaphore> presentSemaphores = {};
         // The size the present images were really created at, which populateSwapchainExtent() stops reporting once the window moves on without a recreate.
         VkExtent2D currentExtent = {};
         // What the surface actually offers, picked once at init: none of the three is guaranteed by
@@ -58,6 +60,10 @@ namespace merutilm::vkh {
 
         [[nodiscard]] VkSwapchainKHR getSwapchainHandle() const {
             return swapchain;
+        }
+
+        [[nodiscard]] VkSemaphore getRenderFinished(const uint32_t imageIndex) const {
+            return presentSemaphores.at(imageIndex)->getHandle();
         }
 
         [[nodiscard]] std::span<const VkImage> getSwapchainImages() const {

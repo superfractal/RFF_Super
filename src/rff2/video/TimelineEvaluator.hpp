@@ -1,6 +1,6 @@
 //
 // Modified by GPT-5 on 2026-08-18
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -21,7 +21,7 @@ namespace merutilm::rff2 {
             return activeShaderTracks;
         }
 
-        void evaluate(float depth, float sec, const ShaderAttribute &base, ShaderAttribute &out) const;
+        void evaluate(float depth, double sec, const ShaderAttribute &base, ShaderAttribute &out) const;
 
         [[nodiscard]] TimelineDirtyMask diff(const ShaderAttribute &previous,
                                              const ShaderAttribute &next) const;
