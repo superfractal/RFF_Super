@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
 // Modified by Opus 5.5 on 2026-09-23
 //
 
@@ -307,8 +307,9 @@ namespace merutilm::rff2 {
             const double steps = std::clamp(smoothZoomPending, -4.0, 4.0);
             smoothZoomPending -= steps;
             const float oldZoom = attr.fractal.logZoom;
-            const float newZoom = std::clamp(static_cast<float>(oldZoom + steps * Constants::Fractal::ZOOM_INTERVAL),
-                                           Constants::Fractal::ZOOM_MIN, Constants::Fractal::ZOOM_DEADLINE);
+            // ZOOM_DEADLINE selects deep perturbation; it is not a navigation limit.
+            const float newZoom = std::max(Constants::Fractal::ZOOM_MIN,
+                                          static_cast<float>(oldZoom + steps * Constants::Fractal::ZOOM_INTERVAL));
             const double delta = static_cast<double>(newZoom) - oldZoom;
             if (delta != 0) {
                 const auto w = getIterationBufferWidth(attr), h = getIterationBufferHeight(attr);
@@ -731,7 +732,8 @@ namespace merutilm::rff2 {
 
                     if (auto it = static_cast<uint64_t>((*renderer->iterationStagingBufferContext)(x, y)); it != 0) {
                         setStatusMessage(Constants::Status::ITERATION_STATUS,
-                                         std::format(L"I : {} ({}, {})", it, x, y));
+                                         std::format(L"I : {} ({}, {})", StatusText::grouped(it),
+                                                     StatusText::grouped(x), StatusText::grouped(y)));
                     }
                 }
                 break;
@@ -2029,7 +2031,7 @@ namespace merutilm::rff2 {
     }
 
     std::wstring RenderScene::browsedImageStatus(const int index) const {
-        return std::format(L"I : {}/{}", index + 1, browsedImages.size());
+        return std::format(L"I : {}/{}", StatusText::grouped(index + 1), StatusText::grouped(browsedImages.size()));
     }
 
     RECT RenderScene::imageCanvasArea() const {
@@ -2629,7 +2631,7 @@ namespace merutilm::rff2 {
         const auto refreshInterval = Utilities::getRefreshInterval(logZoom);
         std::function actionPerRefCalcIteration = [refreshInterval, this, &start](const uint64_t p) {
             if (p % refreshInterval == 0) {
-                setStatusMessage(Constants::Status::RENDER_STATUS, std::format(std::locale(), L"P : {:L}", p));
+                setStatusMessage(Constants::Status::RENDER_STATUS, std::format(L"P : {}", StatusText::grouped(p)));
                 setStatusMessage(Constants::Status::TIME_STATUS, Utilities::elapsed_time(start));
             }
         };
@@ -2731,7 +2733,8 @@ namespace merutilm::rff2 {
         }
 
         setStatusMessage(Constants::Status::PERIOD_STATUS,
-                         std::format(L"P : {:L} ({:L}, {:L})", lastPeriod, refLength, mpaLen));
+                         std::format(L"P : {} ({}, {})", StatusText::grouped(lastPeriod),
+                                     StatusText::grouped(refLength), StatusText::grouped(mpaLen)));
         if (state.interruptRequested()) return false;
         return true;
     }

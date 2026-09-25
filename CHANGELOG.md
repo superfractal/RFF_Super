@@ -3,6 +3,13 @@
 
 ### 2026/09/26
 
+* **3.0.0-beta3 - Deep Zoom**
+* **Fixes**
+  * Status bar messages now align to the left within their existing fields.
+  * Status bar P now accommodates three counts of 10000000000 when space allows, while calculation-time and progress fields share the remaining space equally.
+  * Status bar I and P values now use commas every three digits, including 1,000 and the values in parentheses.
+  * RFF_Super now zooms beyond 1e290 with the mouse wheel and no longer jumps back to 1e290 when zooming out from deeper views.
+
 * **3.0.0-beta2 - Video and Rendering**
   * Timeline time readouts now include hours and days for long videos. Playback, seeking and export frame times now retain fine timing at multi-day positions.
   * Audio preview now starts promptly at distant timeline positions instead of processing the entire preceding silent interval.

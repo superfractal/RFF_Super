@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
 //
 
 #include "NativeDialogs.hpp"
@@ -424,6 +424,29 @@ namespace merutilm::rff2 {
             rightEdges[i] = (i + 1) * statusBarWidth / Constants::Status::LENGTH;
         }
 
+        int timeWidth = UiDpi::pixels(160, uiDpi);
+        int periodWidth = UiDpi::pixels(380, uiDpi);
+        if (const HDC dc = GetDC(statusBar)) {
+            const auto font = reinterpret_cast<HFONT>(SendMessageW(statusBar, WM_GETFONT, 0, 0));
+            const auto previousFont = SelectObject(dc, font ? font : GetStockObject(DEFAULT_GUI_FONT));
+            const auto textWidth = [dc, this](const wchar_t *text, const int fallback) {
+                SIZE size{};
+                return GetTextExtentPoint32W(dc, text, static_cast<int>(std::wcslen(text)), &size)
+                    ? static_cast<int>(size.cx) + UiDpi::pixels(28, uiDpi) : fallback;
+            };
+            timeWidth = textWidth(L"  T : 000:00:00:000", timeWidth);
+            periodWidth = textWidth(L"  P : 10,000,000,000 (10,000,000,000, 10,000,000,000)", periodWidth);
+            SelectObject(dc, previousFont);
+            ReleaseDC(statusBar, dc);
+        }
+        // Keep I and Z in place and give P the space saved by compact time and progress fields.
+        const int compactTimeWidth = std::min(statusBarWidth / Constants::Status::LENGTH, timeWidth);
+        const int periodStart = rightEdges[Constants::Status::ZOOM_STATUS];
+        rightEdges[Constants::Status::PERIOD_STATUS] = periodStart +
+            std::min(periodWidth, statusBarWidth - periodStart - 2 * compactTimeWidth);
+        rightEdges[Constants::Status::TIME_STATUS] = rightEdges[Constants::Status::PERIOD_STATUS] +
+            (statusBarWidth - rightEdges[Constants::Status::PERIOD_STATUS]) / 2;
+
         SendMessageW(statusBar, SB_SETPARTS, Constants::Status::LENGTH, (LPARAM)rightEdges.data());
         InvalidateRect(masterWindow, nullptr, TRUE);
         if (workspaceShell) {
@@ -520,7 +543,7 @@ namespace merutilm::rff2 {
         SetTextColor(draw->hDC, settingsTheme().text);
         try {
             UiLanguage::drawText(draw->hDC, text.c_str(), -1, &rc,
-                                 (index == Constants::Status::RENDER_STATUS ? DT_RIGHT : DT_LEFT) | DT_VCENTER |
+                                 DT_LEFT | DT_VCENTER |
                                      DT_SINGLELINE | DT_END_ELLIPSIS);
         } catch (...) {
             SelectObject(draw->hDC, previousFont);
