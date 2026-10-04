@@ -1,9 +1,10 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-24, 2026-09-29, 2026-10-01
 //
 
 #pragma once
 #include "WorkspaceForm.hpp"
+#include "NumericAdjustment.hpp"
 #include "../../attr/FractalAttribute.h"
 #include "../../attr/NumericSettingLimits.hpp"
 #include "../../attr/Selectable.h"
@@ -89,6 +90,8 @@ namespace merutilm::rff2::workspace {
             using T = std::remove_reference_t<decltype(get(std::declval<FractalAttribute &>()))>;
             Binding binding;
             binding.field = {std::move(id), group, std::move(label), std::move(hint), {}, {}};
+            const double step = binding.field.id == "explore.pitch" ? 1 : binding.field.id == "explore.fov" ? 5 : binding.field.id == "explore.panoramaRange" ? .5 : 0;
+            binding.field.nudge = numericAdjustment(minimum, maximum, step);
             binding.read = [get](const FractalAttribute &value) { return number(get(value)); };
             binding.write = [get, minimum, maximum](FractalAttribute &target, const std::wstring &text) {
                 T value{};
@@ -113,6 +116,12 @@ namespace merutilm::rff2::workspace {
                                                           : L"Enter a finite number from ") +
                        number(minimum) + L" to " + number(maximum) + L".";
             };
+            if (binding.field.id == "explore.rotation" || binding.field.id == "explore.pitch" || binding.field.id == "explore.fov") {
+                const auto clean = [](std::wstring text) { std::erase(text, L'\u00b0'); return text; };
+                binding.write = [write = binding.write, clean](FractalAttribute &target, const std::wstring &text) { return write(target, clean(text)); };
+                binding.field.validate = [validate = binding.field.validate, clean](const std::wstring &text) { return validate(clean(text)); };
+                binding.field.nudge = [nudge = binding.field.nudge, clean](const std::wstring &text, int direction, bool coarse) { return nudge(clean(text), direction, coarse); };
+            }
             bindings.push_back(std::move(binding));
         }
         template <class Getter>
@@ -182,7 +191,7 @@ namespace merutilm::rff2::workspace {
             bindings.push_back(
                 {{"explore.imag", 0, L"Imaginary", L"High-precision center coordinate.", {}, {}}, imag, {}});
             numeric(
-                "explore.zoom", 0, L"Log Zoom (e)", L"Natural-log magnification. 0 to 16777216.",
+                "explore.zoom", 0, L"Log Zoom (10)", L"Base-10 logarithm of zoom magnification. 0 to 16777216.",
                 [](auto &a) -> auto & { return a.logZoom; }, NumericSettingLimits::logZoom.minimum, NumericSettingLimits::logZoom.maximum);
             numeric(
                 "explore.rotation", 0, L"Rotation", L"Degrees. Also controls panorama yaw.",
@@ -229,8 +238,8 @@ namespace merutilm::rff2::workspace {
                 std::numeric_limits<uint16_t>::max());
             numeric(
                 "explore.maxMultiplier", 3, L"Max Multiplier Between Levels",
-                L"Ratio between adjacent period levels, 1 to 255.",
-                [](auto &a) -> auto & { return a.mpaAttribute.maxMultiplierBetweenLevel; }, uint8_t(1),
+                L"Ratio between adjacent period levels, 2 to 255.",
+                [](auto &a) -> auto & { return a.mpaAttribute.maxMultiplierBetweenLevel; }, uint8_t(2),
                 std::numeric_limits<uint8_t>::max());
             numeric(
                 "explore.precision", 3, L"Precision Level", L"-15 to -3. Lower values favor accuracy.",
@@ -377,6 +386,13 @@ namespace merutilm::rff2::workspace {
             for (size_t i = 0; i < bindings.size(); ++i) {
                 auto field = bindings[i].field;
                 field.read = [self, i] { return self->bindings[i].read(self->attribute()); };
+                if (field.id == "explore.maxIterations" || field.id == "explore.autoMultiplier") {
+                    const bool automatic = field.id == "explore.autoMultiplier";
+                    field.dependencies.push_back("explore.autoIterations");
+                    field.enabled = [self, automatic](const FormDraft &) {
+                        return self->attribute().autoMaxIteration == automatic;
+                    };
+                }
                 if (!field.validate) {
                     field.validate = [self, i](const std::wstring &text) -> std::wstring {
                         const auto &binding = self->bindings[i];

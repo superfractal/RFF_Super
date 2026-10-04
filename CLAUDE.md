@@ -17,3 +17,7 @@ Follow the placement rules in AGENTS.md ("Code Modification Tracking"): put the 
 ```
 
 Never abbreviate modification dates with a range or ellipsis such as `..` or `...`, even when the list grows long. Write every relevant change date individually in ISO `YYYY-MM-DD` form, separated by commas.
+
+Header history follows the **Header history** rule in AGENTS.md. Preserve existing entries,
+merge same-name modification dates oldest first, and keep license/provenance comments outside
+the block.

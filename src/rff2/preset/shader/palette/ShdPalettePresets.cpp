@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-20, 2026-08-25, 2026-08-31
 // Modified by GPT-5 on 2026-08-21
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-03, 2026-10-04
 //
 
 #include "ShdPalettePresets.h"
@@ -155,6 +155,9 @@ namespace merutilm::rff2 {
         return "RandomSmooth [Recommend]";
     }
 
+    // Inigo Quilez cosine-palette formula; express article code license unverified, see NOTICE for limited mathematical use.
+    // Cosine-equation counterpart: Eric Arneback, glsl-cos-palette at 2183c23, MIT; Quilez origin and historical limits are in NOTICE.
+    // 2026-10-04 clarification: Quilez's ll2GD3 shader has an archived original-author MIT grant; see NOTICE and extern/licenses/iquilez-palettes-MIT.txt.
     ShdPaletteAttribute ShdPalettePresets::RandomSmooth::genPalette() const {
         ShdPaletteAttribute p = {};
         p.colors.reserve(200);
@@ -198,6 +201,19 @@ namespace merutilm::rff2 {
         p.iterationInterval = glm::vec4(50 + rff_math::random_f() * 200); // Random interval 50-250
         p.offsetRatio = 0.0f;
         p.colorSmoothing = ShdPalColorSmoothingMethod::NORMAL;
+        return p;
+    }
+
+    std::string ShdPalettePresets::RandomSmoothShort::getName() const {
+        return "RandomSmooth [10-20]";
+    }
+
+    // Cosine-equation counterpart: Eric Arneback, glsl-cos-palette at 2183c23, MIT; Quilez origin and historical limits are in NOTICE.
+    // 2026-10-04 clarification: Quilez's ll2GD3 shader has an archived original-author MIT grant; see NOTICE and extern/licenses/iquilez-palettes-MIT.txt.
+    ShdPaletteAttribute ShdPalettePresets::RandomSmoothShort::genPalette() const {
+        // Reuse RandomSmooth's cosine palette; see NOTICE for the technique's attribution.
+        auto p = RandomSmooth().genPalette();
+        p.iterationInterval = glm::vec4(10.0f + rff_math::random_f() * 10.0f);
         return p;
     }
 
@@ -549,6 +565,8 @@ namespace merutilm::rff2 {
     std::string ShdPalettePresets::GlossySunset::getName() const {
         return "Glossy Sunset";
     }
+    // Cosine-equation counterpart: Eric Arneback, glsl-cos-palette at 2183c23, MIT; Quilez origin and historical limits are in NOTICE.
+    // 2026-10-04 clarification: Quilez's ll2GD3 shader has an archived original-author MIT grant; see NOTICE and extern/licenses/iquilez-palettes-MIT.txt.
     ShdPaletteAttribute ShdPalettePresets::GlossySunset::genPalette() const {
         ShdPaletteAttribute p = {};
         for (uint8_t cnt = 0; cnt < 200; ++cnt) {
@@ -569,6 +587,7 @@ namespace merutilm::rff2 {
         return "Long Rainbow 7";
     }
 
+    // Inherited RFF-2.0 GPL palette; matching seven-stop table: ChrisBuilds, terminaltexteffects at 14d34ec, MIT; see NOTICE.
     ShdPaletteAttribute ShdPalettePresets::LongRainbow7::genPalette() const {
         auto p = ShdPaletteAttribute();
         p.colors.reserve(7);
@@ -687,6 +706,7 @@ namespace merutilm::rff2 {
         return "Rainbow";
     }
 
+    // Inherited RFF-2.0 GPL palette; matching seven-stop table: ChrisBuilds, terminaltexteffects at 14d34ec, MIT; see NOTICE.
     ShdPaletteAttribute ShdPalettePresets::Rainbow::genPalette() const {
         auto p = ShdPaletteAttribute();
         p.colors.reserve(7);

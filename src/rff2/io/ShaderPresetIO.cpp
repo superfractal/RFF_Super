@@ -7,7 +7,8 @@
 // Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
-// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #include "ShaderPresetIO.h"
@@ -32,7 +33,7 @@ namespace merutilm::rff2 {
             }
         }
 
-        constexpr uint64_t MAX_PALETTE_COLORS = 1ULL << 20;
+        constexpr uint64_t MAX_PALETTE_COLORS = 64000000;
         constexpr uint64_t MAX_TEXTURE_PATH_BYTES = 1024ULL * 1024;
 
         template <typename T> bool finiteStored(T value) {
@@ -510,13 +511,13 @@ namespace merutilm::rff2 {
         const auto &color = shader.color;
         const auto &fog = shader.fog;
         if (!allFinite({fog.chaosAmount, fog.chaosScale, fog.chaosThreshold, fog.chaosTransition,
-                        fog.chaosFeather, fog.chaosBlur, fog.chaosHighlights, fog.chaosShade}) ||
+                        fog.chaosFeather, fog.chaosBlur, fog.chaosShade}) ||
             fog.chaosAmount < 0.0f || fog.chaosAmount > 1.0f || fog.chaosScale < 0.5f ||
             fog.chaosScale > 4.0f || fog.chaosThreshold < 0.0f || fog.chaosThreshold > 1.0f ||
             fog.chaosTransition < 0.01f || fog.chaosTransition > 1.0f || fog.chaosFeather < 0.0f ||
             fog.chaosFeather > 32.0f || fog.chaosBlur < 0.0f || fog.chaosBlur > 32.0f ||
-            fog.chaosHighlights < 0.0f || fog.chaosHighlights > 1.0f || fog.chaosShade < 0.0f ||
-            fog.chaosShade > 0.5f) {
+            fog.chaosShade < 0.0f ||
+            fog.chaosShade > 1.0f || !enumInRange(fog.chaosBlurAverage, 0, 1)) {
             return false;
         }
         const auto &bloom = shader.bloom;
@@ -1301,11 +1302,10 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, shader.fog.chaosTransition);
         IOUtilities::encodeAndWrite(out, shader.fog.chaosFeather);
         IOUtilities::encodeAndWrite(out, shader.fog.chaosBlur);
-        IOUtilities::encodeAndWrite(out, shader.fog.chaosHighlights);
         IOUtilities::encodeAndWrite(out, shader.fog.chaosShade);
     }
 
-    void ShaderPresetIO::readChaosBlur(std::ifstream &in, ShaderAttribute &shader) {
+    void ShaderPresetIO::readChaosBlur(std::ifstream &in, ShaderAttribute &shader, const bool legacyHighlights) {
         const ShdFogAttribute defaults{};
         shader.fog.chaosAmount = defaults.chaosAmount;
         shader.fog.chaosScale = defaults.chaosScale;
@@ -1313,7 +1313,6 @@ namespace merutilm::rff2 {
         shader.fog.chaosTransition = defaults.chaosTransition;
         shader.fog.chaosFeather = defaults.chaosFeather;
         shader.fog.chaosBlur = defaults.chaosBlur;
-        shader.fog.chaosHighlights = defaults.chaosHighlights;
         shader.fog.chaosShade = defaults.chaosShade;
         const auto hasMore = [&in] {
             return !in.fail() && in.rdbuf()->sgetc() != std::char_traits<char>::eof();
@@ -1345,12 +1344,45 @@ namespace merutilm::rff2 {
         if (hasMore()) {
             IOUtilities::readAndDecode(in, &shader.fog.chaosBlur);
         }
-        if (hasMore()) {
-            IOUtilities::readAndDecode(in, &shader.fog.chaosHighlights);
+        // Older files carry the retired Highlight Detail here; it is read only to keep Shade in place.
+        if (legacyHighlights && hasMore()) {
+            float retiredHighlights = 0.0f;
+            IOUtilities::readAndDecode(in, &retiredHighlights);
+            if (!in.fail() && (!std::isfinite(retiredHighlights) || retiredHighlights < 0.0f || retiredHighlights > 1.0f)) {
+                in.setstate(std::ios::failbit);
+                return;
+            }
         }
         if (hasMore()) {
             IOUtilities::readAndDecode(in, &shader.fog.chaosShade);
         }
+    }
+
+    void ShaderPresetIO::writeChaosAverage(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, uint32_t(0x31414243));
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.fog.chaosBlurAverage));
+    }
+
+    void ShaderPresetIO::readChaosAverage(std::ifstream &in, ShaderAttribute &shader) {
+        shader.fog.chaosBlurAverage = ShdChaosBlurAverage::GAMMA;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0, average = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != 0x31414243) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        if (in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        IOUtilities::readAndDecode(in, &average);
+        if (in.fail() || average > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.fog.chaosBlurAverage = static_cast<ShdChaosBlurAverage>(average);
     }
 
     void ShaderPresetIO::writeSurfaceReplacement(std::ostream &out, const ShaderAttribute &shader) {
@@ -2591,6 +2623,7 @@ namespace merutilm::rff2 {
         writeBandDecorations(out, shader);
         writeSurfaceReplacement(out, shader);
         writeChaosBlur(out, shader);
+        writeChaosAverage(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -2750,11 +2783,13 @@ namespace merutilm::rff2 {
         readStudioLighting(in, s, version < 4);
         readBandDecorations(in, s);
         readSurfaceReplacement(in, s);
-        readChaosBlur(in, s);
+        readChaosBlur(in, s, version < 5);
+        readChaosAverage(in, s);
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");
             return false;
         }
+        s.camera = out.camera;
         out = std::move(s);
         return true;
     }

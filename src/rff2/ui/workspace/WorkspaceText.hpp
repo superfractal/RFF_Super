@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-19, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -7,7 +8,7 @@
 
 namespace merutilm::rff2::workspace {
     enum class TextKey {
-        Explore, Appearance, Animation, Export, Undo, Redo, Save, Effects, BaseStyle, EditPalette,
+        Explore, Appearance, Animation, Export, Undo, Redo, Save, SurfaceEffects, BaseStyle, EditPalette,
         SearchResults, NoResults, SearchPlaceholder, Color, Reflection, Film, Contour, Emission,
         Flame, Print, Noise, Relief, Mix, SearchShortcut, ClearSearch
     };
@@ -20,7 +21,7 @@ namespace merutilm::rff2::workspace {
             case TextKey::Undo: return UiLanguage::label(L"Undo");
             case TextKey::Redo: return UiLanguage::label(L"Redo");
             case TextKey::Save: return UiLanguage::label(L"Save");
-            case TextKey::Effects: return UiLanguage::label(L"Effects");
+            case TextKey::SurfaceEffects: return UiLanguage::label(L"Surface Effects");
             case TextKey::BaseStyle: return UiLanguage::label(L"Base Style");
             case TextKey::EditPalette: return UiLanguage::label(L"Edit Palette →");
             case TextKey::SearchResults: return UiLanguage::label(L"Search Results");

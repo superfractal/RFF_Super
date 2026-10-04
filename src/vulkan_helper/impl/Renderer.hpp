@@ -3,9 +3,12 @@
 // Modified by Opus 5 on 2026-08-10
 // Modified by GPT-5 on 2026-08-23
 // Modified by GPT-6 on 2026-09-21, 2026-09-23, 2026-09-25
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
+#include <optional>
+
 #include "../configurator/PipelineConfigurator.hpp"
 #include "../core/vkh.hpp"
 #include "../executor/ScopedCommandBufferExecutor.hpp"
@@ -71,7 +74,22 @@ namespace merutilm::vkh {
             offscreenPass = false;
         }
 
+    protected:
+        // Submits what cmdRender has recorded so far and waits for it, so no single submission holds the whole frame.
+        void splitSubmission() {
+            if (!executor) {
+                return;
+            }
+            executor->finishWithoutSignal();
+            executor.reset();
+            wc.getSyncObject().getFence(frameIndex).wait();
+            executor.emplace(wc, frameIndex, VK_NULL_HANDLE, frameRenderFinished);
+        }
+
     private:
+        std::optional<ScopedCommandBufferExecutor> executor;
+        VkSemaphore frameRenderFinished = VK_NULL_HANDLE;
+
         void recordAndSubmit(const uint32_t swapchainImageIndex, const VkSemaphore imageAvailableSemaphore,
                              const VkSemaphore renderFinishedSemaphore) {
             DescriptorUpdateQueue queue = DescriptorUpdater::createQueue();
@@ -84,10 +102,16 @@ namespace merutilm::vkh {
             DescriptorUpdater::write(device, queue);
 
             beforeCmdRender();
-            ScopedCommandBufferExecutor executor(wc, frameIndex, imageAvailableSemaphore,
-                                                 renderFinishedSemaphore);
-            cmdRender(swapchainImageIndex);
-            executor.finish();
+            frameRenderFinished = renderFinishedSemaphore;
+            executor.emplace(wc, frameIndex, imageAvailableSemaphore, renderFinishedSemaphore);
+            try {
+                cmdRender(swapchainImageIndex);
+                executor->finish();
+            } catch (...) {
+                executor.reset();
+                throw;
+            }
+            executor.reset();
         }
 
         virtual void beforeCmdRender() = 0;

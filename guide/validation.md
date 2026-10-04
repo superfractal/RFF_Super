@@ -1,8 +1,36 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Guide validation and measurement notes
 
 [Back to the guide](SETTINGS_GUIDE.md)
+
+## Source review, 2026-10-04
+
+The guide was compared with the October 4 source tree and the October 1–4 update history. Corrections: RFC version 8 (reads 3–7); Zoom Holds are edited in the Timeline Settings inspector; Frozen Colors are swatches rather than a comma-separated value field; the workspace no longer offers Smootherstep for Iteration Coloring; the timeline transport has one Play / Pause button and the readout is named Magnification; the Shader menu has 15 entries; Calculation Threads defaults to the logical core count; the Animation sections are named Color Animation, Keyframes, and Video Camera. Added: Match Planar Framing, Material Presets, Link G & B to R, the single starting key of a new track, Clear Image, Palette Preview, Hide Sections / Show Sections, the layer panel's Reset button, Ctrl+Shift+Z, and the current export labels Video Frame Rate and HDR Peak Brightness (nits). All 118 numeric ranges in the field reference that have a workspace limit were compared with the form models and match. The Chaos Blur comparison is marked as rendered before the October 2–3 Chaos Blur changes; it was not re-rendered. This is a source and documentation check, not a new UI capture or rendering test.
+
+## Menu and overlay documentation review, 2026-10-01
+
+The release menu and optional AI entry points are compared with `menu-visibility.json`, including preset names and the available shader examples. All 135 leaf entries are now represented, with no extra entries. Open Guide is included in the feature map and its confirmation workflow is documented. Overlay timing and the Parameters menu shortcuts match the current source; the guide distinguishes those shortcuts from animatable tracks and from menu-visibility controls.
+
+The guide checks cover 17 Markdown files including README, local link targets and heading anchors, 59 static menu-action labels, and the retained UI/render image inventories. This is a source and documentation check, not a new live UI or rendering test. The September 24 UI gallery remains a dated capture.
+
+## Documentation review, 2026-09-30
+
+The workflow chapters and field reference are checked against the current source tree. The older image and runtime measurements below retain their original test dates; this review does not rerun the GPU renderer, encoder, or AI server.
+
+| Area | Source evidence and corrections |
+| --- | --- |
+| Location and calculation | `ExploreModel.hpp` and `CallbackFractal.cpp`: current Log Zoom (10) label and MPA multiplier minimum 2. Calculation/render preset tables checked against their preset implementations. |
+| Appearance | `AppearanceForms.cpp`: Band Period maximum 1,000,000,000. All 157 extracted appearance labels remain documented, alongside 29 shader layer slots. |
+| File and workspace workflows | `CallbackFile.cpp`, `MapLimits.hpp`, workspace forms and `VideoFrameSource.cpp`: Save Location / Settings for a new filename versus Ctrl+S updating the current file, 100,000,000-pixel map limit, contiguous equal-size source frames, and RFSM metadata required with PNG keyframes. |
+| Optional AI access | `SettingsMenu.cpp`, `MenuVisibilityIO.hpp`, and `TimelineAiExchange.cpp`: menu visibility file location, restart, English keys, and default-hidden Local AI / AI Edit entry points. |
+| Automatic video | `LocalAiWindow.cpp`, `LocalAiVideoOptions.hpp`, and `LocalAiExplorationRoute.hpp`: startup requirements, option ranges, route selection, retries, output folders, persistence, and cancellation. |
+| Timeline and export | `TimelineOverlayForm.hpp`, `TimelineInspector.cpp`, `IterationOverlayValue.hpp`, and `VideoWindow.cpp`: independent maximum-iteration overlay, N/A metadata handling, F1 help, and least-common-multiple export sampling. Audio, holds, interpolation, and save/load workflows checked against timeline forms and I/O. |
+
+The retained visual inventory has **60 UI PNGs, 14 forms, 57 form-group captures, and 474 field rows**. Retired explorer entries were removed on September 25. There are **five Mermaid workflows** and six explanatory PNG diagrams. Earlier counts below describe the original preparation, not the files currently shipped.
+
+The review checks local Markdown/HTML link targets and heading anchors across README and all 16 guide pages, table structure, code fences, all 58 static menu-action labels, UI image hashes/dimensions and captured field coverage, and the hashes/dimensions and recorded pixel differences of all 110 fractal images / 54 comparison pairs. The throwaway verification script is `debug/guide_review_20260930.py`. These checks verify the documentation and existing assets, not current rendering repeatability or unperformed end-to-end workflows.
 
 ## Image method
 
@@ -48,7 +76,7 @@ Studio/material comparisons hold their prerequisites fixed within each pair, and
 1. The first comparison harness supplied one map for two zoom levels, creating a narrow erroneous right-edge strip when the renderer fell back to the wider map. The harness now computes the actual wider map. All final images were regenerated, without cropping away the border.
 2. The first Roughness test had Specular Intensity 0. Both images were identical. With Studio On and Specular Intensity 0.8 on both sides, Roughness 0.1 and 0.8 produce visibly different reflections.
 
-No production-code fix was needed for these harness/setup issues. The field descriptions also distinguish currently misleading hints from actual behavior: Log Zoom uses base 10, Zoom Step per Keyframe is a magnification ratio, and zero Compression Threshold means zero tolerance rather than the explicit reference-compression off switch.
+No production-code fix was needed for these harness/setup issues. The original field descriptions distinguished misleading hints from actual behavior: Log Zoom uses base 10, Zoom Step per Keyframe is a magnification ratio, and zero Compression Threshold means zero tolerance rather than the explicit reference-compression off switch. The Log Zoom label and hint have since been corrected in the application.
 
 ## Reproducing and scope
 

@@ -1,5 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
 # RFF_Super complete field reference
 
 Read the [shader feature overview](shader-overview.md) for an explanation of each group, and use the [coverage checklist](shader-coverage.md) to locate features by their source panel. Surface editor names can differ from the registry labels below; see [Surface editor display names](#surface-editor-display-names).
@@ -21,6 +22,7 @@ Field names, choices, and defaults were read from current production form models
 - [Explore](#explore)
 - [Animation](#animation)
 - [Zoom Overlay](#zoom-overlay)
+- [Max Iterations Display](#max-iterations-display)
 - [Surface Effects](#surface-effects)
 - [Export and timeline controls](#export-and-timeline-controls)
 - [Surface editor display names](#surface-editor-display-names)
@@ -129,6 +131,12 @@ Field names, choices, and defaults were read from current production form models
 | Relief Waves | 0 | Adds wave modulation to relief; 0 disables it. | 0 to 1 |
 | Wave Frequency | 0.5 | Frequency of relief waves; requires Relief Waves above zero. | 0.03 to 1.5 |
 | Zoom Reference | -1 | Reference zoom for compensation. Use Current Zoom binds it; -1 is unbound. | Saved reference zoom: 0 to 16777216, or -1 for an unbound reference. |
+
+### Material Presets
+
+| Action | Result |
+| --- | --- |
+| Bronze / Pearl / Obsidian / Ceramic | Turns Studio on and sets Roughness, Metalness, Clearcoat, Coat Roughness, Specular Intensity, Specular Anisotropy, Iridescence, and Film Thickness (nm) to that material's values in one undoable edit. |
 
 ## Textures
 
@@ -266,8 +274,8 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Chaos Transition | 0.5 | Transition from sharp through partial to full irregularity blur. | Smooth transition from sharp through medium blur to full blur as local irregularity increases. |
 | Chaos Feather | 6 | Softens the selected region boundary, relative to 1280 image width. | Softens the detected region boundary, in pixels at 1280 width. Detection follows the current zoom and location. |
 | Chaos Blur Radius | 4 | Circular blur radius in the selected regions, relative to 1280 width. | Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality controls sampling. |
-| Chaos Highlight Detail | 0.2 | Restores some original bright detail over the blur; 0 gives pure blur. | Retains a little of the original bright detail over the lens blur. Zero gives a pure circular blur. |
-| Chaos Shade | 0 | Darkens selected intricate/defocused regions. | Darkens intricate defocused regions to separate them from smooth foreground surfaces. |
+| Chaos Shade | 0 | Darkens selected intricate/defocused regions by the selection alone, up to black at 1 whatever Chaos Amount is. | Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, fully selected regions turn black whatever Chaos Amount is. |
+| Chaos Blur Averaging | Average in Gamma Space | Where the circular blur averages its samples. Gamma Space keeps dark gaps between bright details dark; Linear Space lets bright detail spread and brightens blurred regions. | Average in Gamma Space, Average in Linear Space |
 
 ## Animated Materials
 
@@ -295,7 +303,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Evolution | 0.4 | Rate/direction of internal pattern evolution. | -10 to 10 |
 | Flow Bend | 12 | Bends the procedural flow. | -180 to 180 |
 | Seed | 1 | Changes the deterministic arrangement without moving the fractal. | 0 to 65535 |
-| Band Period | 80 | Iteration interval for band-related structure/masking. | 1 to 1e+06 |
+| Band Period | 80 | Iteration interval for band-related structure/masking. | 1 to 1e+09 |
 | Primary Color | 0.64, 0.79, 1, 1 | The two colors used by the selected material effect. | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Secondary Color | 1, 0.25, 0.025, 1 | The two colors used by the selected material effect. | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 
@@ -305,10 +313,11 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
+| Link G & B to R | On | Palette workspace only. While On, changing Cycle Length (R) sets G and B to the same value. | On, Off |
 | Cycle Length (R) | 64 | Iterations per channel cycle; halving all three doubles repetition in iteration space. | 1 to 1e18 iterations per channel cycle. |
 | Cycle Length (G) | 64 | Iterations per channel cycle; halving all three doubles repetition in iteration space. | 1 to 1e18 iterations per channel cycle. |
 | Cycle Length (B) | 64 | Iterations per channel cycle; halving all three doubles repetition in iteration space. | 1 to 1e18 iterations per channel cycle. |
-| Iteration Coloring | Linear | Curve applied before palette cycling; changes color-band spacing across depth. | Linear, Square root, Cube root, Log, LogLog, Smoothstep, Smootherstep |
+| Iteration Coloring | Linear | Curve applied before palette cycling; changes color-band spacing across depth. | Linear, Square root, Cube root, Log, LogLog, Smoothstep. The legacy Palette window also offers Smootherstep; files that use it still render with it. |
 | Color Smoothing | Normal | None makes discrete steps; Normal/Reversed choose within-step interpolation direction. | None, Normal, Reversed |
 | Color Interpolation | RGB | Blend space between entries: encoded RGB, perceptual OKLab, or Linear RGB. | RGB, OKLab, Linear RGB |
 | Start Offset | 0 | Initial phase in cycles; moves colors without moving geometry. | 0 to 1 |
@@ -366,6 +375,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Color Settings File | (empty) | External RFC, RFSP, KFR, or KFP supplying colors. Read first, then apply. | RFC, RFSP, KFR or KFP. Read first, then apply. |
+| Palette Preview | (display only) | Shows the current palette drawn with each Color Smoothing and each Color Interpolation choice, before color correction, so the choices can be compared without applying them. A chosen Color Settings File also shows its colors before they are applied. | Not saved; nothing to edit. |
 | Include Color Correction | Off | Also imports Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. | Off, On |
 
 ## Render & Preview
@@ -374,8 +384,8 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Rendering FPS | 60 | Live display limit, independent of video export rate. Lower values can reduce preview GPU load. | Live rendering limit: 1 to 1000 frames per second. Lower values reduce rendering load. Video export has a separate FPS setting. |
-| Calculation Threads | 16 | CPU calculation workers, limited to logical cores; applies to the next calculation. | 1 up to this computer's logical core count. Applied to the next calculation. |
+| Rendering FPS | 60 | Live display limit, independent of video export rate. Lower values can reduce preview GPU load. | Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. Video export has a separate FPS setting. |
+| Calculation Threads | Logical core count | CPU calculation workers, limited to logical cores; applies to the next calculation. | 1 up to this computer's logical core count. Applied to the next calculation. |
 
 ### Calculation Preview
 
@@ -393,19 +403,19 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | --- | --- | --- | --- |
 | Real | -0.849999999999999991673 | High-precision center coordinates; preserve all digits for deep locations. | High-precision center coordinate. |
 | Imaginary | 0 | High-precision center coordinates; preserve all digits for deep locations. | High-precision center coordinate. |
-| Log Zoom (e) | 2 | Base-10 scale in the renderer: +1 means 10 times magnification at fixed canvas size. The current hint incorrectly calls this natural-log. | 0 to 16777216; base-10 scale in the renderer. |
+| Log Zoom (10) | 2 | Base-10 scale: +1 means 10 times magnification at fixed canvas size. Older captures show the incorrect label Log Zoom (e). | 0 to 16777216; base-10 scale. |
 | Rotation | 0 | Calculated view rotation in degrees; also panorama yaw. Requires recalculation. | Degrees. Also controls panorama yaw. |
 
 ### Iterations
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Automatic Iterations | On | Derives the Mandelbrot iteration ceiling from period times Auto Iteration Multiplier; period detection stays automatic. | O, X |
+| Automatic Iterations | On | Derives the Mandelbrot iteration ceiling from period times Auto Iteration Multiplier; period detection stays automatic. | On, Off |
 | Max Iteration | 300 | Manual escape-iteration ceiling when Automatic Iterations is off. | Used when Automatic Iterations is off. |
 | Auto Iteration Multiplier | 150 | Multiplier of detected period; raises the ceiling for difficult pixels. | Used when Automatic Iterations is on. |
 | Bailout | 1e+30 | Escape radius, affecting termination and smooth iteration evaluation; separate from MPA tolerance. | Escape radius, 2 to 1e38. |
 | Decimalize Iteration | LogLog | Fractional iteration method. The normal quadratic escape-potential path gives the same smoothing for exposed non-None choices. | Linear, Square root, Log, LogLog |
-| Absolute Iteration Mode | Off | Absolute iteration reporting; bypasses Boundary Trace Fill. | O, X |
+| Absolute Iteration Mode | Off | Absolute iteration reporting; bypasses Boundary Trace Fill. | On, Off |
 
 ### Reference
 
@@ -414,14 +424,14 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Reuse Reference | Disabled | Disabled creates an independent reference; Current/Centered select reuse where a compatible reference exists. | Current, Centered, Disabled |
 | Compression Criteria | 0 | Repeated-reference batch threshold; 0 disables reference compression. | Minimum reference batch; 0 disables compression. |
 | Compression Threshold | 0 | Positive N sets relative threshold 10^-N; higher is stricter. Zero gives zero tolerance; explicitly disable with Compression Criteria 0. | 0 to 255; see reference-compression discussion in the main guide. |
-| Disable Normalization | Off | Disables reference-compressor normalization; advanced storage tuning. | O, X |
+| Disable Normalization | Off | Disables reference-compressor normalization; advanced storage tuning. | On, Off |
 
 ### MP-Approximation
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Min Skip Reference | 4 | Minimum usable MPA skip; above the longest period can leave the table empty. | MPA follows periodic structure; minimum 4. |
-| Max Multiplier Between Levels | 2 | Spacing of intermediate MPA period levels; affects table/search structure. | Ratio between adjacent period levels, 1 to 255. |
+| Max Multiplier Between Levels | 2 | Spacing of intermediate MPA period levels; affects table/search structure. | Ratio between adjacent period levels, 2 to 255. |
 | Precision Level | -3 | MPA epsilon exponent: -5 means 10^-5. More negative is stricter. | -15 to -3. Lower values favor accuracy. |
 | Selection Method | Highest | Searches period levels from the low or high end; performance depends on periodic structure. | Lowest, Highest |
 | Compression Method | No compression | MPA table packing; separate from reference compression and disk map compression. | No compression, Little compression, Strongest |
@@ -445,7 +455,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 ## Animation
 
-### Color Motion
+### Color Animation
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
@@ -463,7 +473,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Freeze Match Tolerance | 0.02 | Fraction of a cycle matched to frozen colors; larger freezes a wider range. | Fraction of one color cycle, 0 to 1. Lower values freeze a narrower band. |
-| Frozen Iteration Values | (empty) | Up to 16 iteration values whose colors are held still; empty clears them. | Up to 16 comma-separated iteration values. Empty removes all frozen colors. |
+| Frozen Colors | (none) | Up to 16 frozen bands, shown as swatches. Pick Color to Freeze adds one; click a swatch to remove it; Clear Frozen Colors removes all. | Swatches; ? marks a band whose picked screen color is unavailable in this session. |
 
 ### Zoom Motion
 
@@ -480,7 +490,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Timeline Enabled | On | Applies saved tracks without deleting them when off. | On, Off |
 | Estimated Keyframes | 100 | Length estimate before folder loading; export counts actual files. | Preview length before loading keyframes: 1 to 100000. |
 
-### Keyframe Generation
+### Keyframes
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
@@ -489,7 +499,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Camera Padding Scale | 4 | Linear padding factor; doubling quadruples source pixels and associated storage. | 2 to 64. Memory and disk use grow with the square of this value. |
 | Render from PNG Images | Off | Uses already-colored PNGs; iteration-dependent effects require maps instead. | On, Off |
 
-### Camera
+### Video Camera
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
@@ -504,6 +514,8 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Camera Panorama Range | 0 | Log10 radius limit; detail remains limited by saved source coverage. | Log10 radius limit, 0 to 6. Available detail depends on saved padding. |
 | Camera Layout | Ground and Sky | Ground and Sky versus Full Sphere video mapping. | Ground and Sky, Full Sphere |
 
+**Match Planar Framing** (action in this section, in the legacy Video Camera window, and on a camera track's right-click menu) writes keys at the playhead for 360 Camera projection, Pitch −90, a Field of View calculated from the loaded keyframes' aspect ratio, Ground and Sky layout, and a Panorama Range that covers the frame, keeping rotation. It needs keyframes loaded in the Timeline Editor that were generated with Rotation / 360 Padding. Undo restores all of them together.
+
 ## Zoom Overlay
 
 ### Appearance
@@ -511,6 +523,8 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Show Zoom Ratio | On | Show the zoom ratio in preview and exported video. | On, Off |
+| Display Start (s) | 0 | First visible time, including zoom holds. 0 means the video start. | 0–604800 seconds. |
+| Display End (s) | 0 | First hidden time. 0 means the video end; otherwise it must exceed Display Start. | 0–604800 seconds. |
 | Decimal Places | 6 | Digits after the decimal point in the zoom ratio: 0 to 9. Default: 6. | See effect/dependency column. |
 | Custom Appearance | Off | Off preserves the legacy font and placement. Editing a style enables Custom Appearance. | On, Off |
 | Alignment | 0 | Choose an anchor and a position with a two-percent margin. | See effect/dependency column. |
@@ -530,6 +544,19 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Shadow Y (% of font) | 8 | -100 to 100 percent of the font size. | See effect/dependency column. |
 | Shadow Color | 0, 0, 0, 1 | Choose a color, enter #RRGGBBAA, #RRGGBB, or R, G, B, A in 0–1. | See effect/dependency column. |
 | Shadow Color Opacity (%) | 100 | 0 is transparent; 100 is opaque. | See effect/dependency column. |
+
+## Max Iterations Display
+
+Open **Max Iterations Display** in the Timeline Editor. This is a separate overlay from Zoom Display, with independent visibility, placement, font, text color, outline, and shadow. Shared styling fields use the ranges listed under [Zoom Overlay](#zoom-overlay); it has no Decimal Places or Custom Appearance switch.
+
+| Setting | Fresh default | What changing it does / dependency |
+| --- | --- | --- |
+| Show Max Iterations | Off | Shows the source-map iteration limit in preview and exported video. It does not show the hovered pixel's iteration value. |
+| Display Start (s) | 0 | First visible time, including zoom holds; 0 means the video start. Range: 0–604800 seconds. |
+| Display End (s) | 0 | First hidden time; 0 means the video end. A nonzero end must exceed Display Start. Range: 0–604800 seconds. |
+| Interpolate per Frame | Off | Gradually changes the displayed count between source maps. It does not change calculation or rendering limits. |
+
+See [overlay workflow and source limitations](animation-and-export.md#zoom-overlay-and-preview-guides) for position editing and PNG behavior.
 
 ## Surface Effects
 
@@ -720,7 +747,7 @@ These controls are available through Shader → HDR / the **HDR & Tone Mapping**
 | Video Transfer | SDR | Chooses exported signal transfer, independently of the SDR preview curve. | SDR, HDR10 (PQ), HLG |
 | HDR Peak Brightness (nits) | 1000 | Peak brightness for PQ export. Separate from MFR Mastering Peak. | 100 to 10000 |
 
-[Curve overview](shader-overview.md#hdr-and-tone-mapping) · [Detailed MFR behavior](../docs/mfr-hdr-preview.md)
+[Curve overview](shader-overview.md#hdr-and-tone-mapping) · [Detailed MFR behavior](../documentation/notes/mfr-hdr-preview.md)
 
 The ACES choice is a curve approximation, not a full ACES transform; see the attribution in [NOTICE](../NOTICE).
 
@@ -735,7 +762,7 @@ The ACES choice is a curve approximation, not a full ACES transform; see the att
 | Bring to Front / Send to Back | Action | Moves the contribution to the last/first compositing position. |
 | Drag a layer | Action | Reorders that contribution. Moving enables Custom Layer Order. |
 | Layer visibility | Initially visible | Hides/shows a contribution without discarding its settings; changing visibility enables custom order. |
-| Restore Original Order | Action | Resets the order and visibility and turns Custom Layer Order off. |
+| Restore Original Order | Action | Resets the order and visibility and turns Custom Layer Order off. The layer panel's **Reset** button does the same. |
 | Undo / Redo | Action | Restores recorded layer-order/visibility edits through edit history. |
 
 [All 29 layer slots and their purposes](shader-overview.md#shader-layers). Visibility alone does not activate a disabled effect or overcome zero opacity. Warp and palette-coordinate mapping are not reorderable color layers.
@@ -751,10 +778,11 @@ The ACES choice is a curve approximation, not a full ACES transform; see the att
 | Apply Palette Preset | Applies the selected complete palette recipe and seed. |
 | Read Color File / Apply Imported Colors | Reads the chosen color source, then applies it with optional Color Correction. |
 | Use Current Zoom | Binds Lustre's Zoom Reference to the current fractal zoom. |
+| Clear Image | Textures only: removes that layer's image and turns the layer off, leaving its other settings. Choosing an image turns the layer on. |
 | Reset Layer | Restores the selected Texture, Pattern, or Animated Materials layer to its defaults. |
 | Copy to Next Layer | Overwrites the next layer with the current layer's settings. |
 | Move Toward Bottom / Move Toward Top | Swaps neighboring layer slots; available directions depend on the selected slot. |
-| Save Shader Preset / Load Shader Preset | Saves/restores appearance settings in `.rfsp`; full location/configuration uses `.rfc`. |
+| Save Appearance Settings / Load Appearance Settings | Saves/restores appearance settings in `.rfsp`; full location/configuration uses `.rfc`. |
 | Surface: Reset selected value/color | Restores the selected control's default. |
 | Surface: Reset effect | Restores the selected effect category's controls. |
 | Clear added effects (keep base style) | Clears additional surface effect contributions while keeping the base style. |
@@ -762,7 +790,7 @@ The ACES choice is a curve approximation, not a full ACES transform; see the att
 
 ## Export and timeline controls
 
-The detailed manual covers the remaining controls in context. The [actual UI gallery](ui-gallery.md#export) also lists every current Export form control and its input guidance.
+The detailed manual covers the remaining controls in context. The [actual UI gallery](ui-gallery.md#export) also lists the captured Export form controls and their input guidance.
 
 - [Detailed animation, timeline, audio, and export workflows](animation-and-export.md)
 - [Local AI setup, appearance, and zoom exploration](local-ai.md)
@@ -783,3 +811,11 @@ Repeated timeline parameters have the same meaning as their static control above
 [Appearance forms](../src/rff2/ui/workspace/AppearanceForms.cpp) · [Palette workspace](../src/rff2/ui/workspace/PaletteWorkspace.hpp) · [Explore model](../src/rff2/ui/workspace/ExploreModel.hpp) · [Animation model](../src/rff2/ui/workspace/AnimationModel.hpp) · [Surface controls](../src/rff2/ui/workspace/SurfaceParameterRegistry.hpp) · [Surface colors](../src/rff2/ui/workspace/SurfaceColorRegistry.hpp) · [Export workspace](../src/rff2/ui/workspace/ExportWorkspace.hpp) · [Timeline overlay](../src/rff2/ui/workspace/TimelineOverlayForm.hpp)
 
 Modified/created documentation: GPT-6, 2026-09-24.
+
+## Overlay display timing
+
+Zoom Overlay and Max Iterations Display each offer a Show switch, Display Start (s), and Display End (s). Both times default to 0 and accept 0–604800 seconds. Start 0 means the video start; End 0 means the video end. Either time can remain 0, and both 0 shows the enabled text throughout. A nonzero end must exceed start. Apply the settings to display text from start inclusive to end exclusive, including zoom holds. No separate Limit Display Time switch or visibility track is required. Open these settings from the footer buttons or the track context menu's Parameters submenu.
+
+## Zoom holds
+
+Timeline Settings → Zoom Holds offers Add Zoom Hold at Playhead, Zoom Hold selection, Hold Keyframe, Hold Duration (s), and Remove Selected Hold. New holds use 2 seconds. Duration accepts 0–604800 seconds, with 0 disabling the hold. Keyframe position uses the loaded source range. Apply commits edits; Undo/Redo and `.rfc`, `.rfvt`, and timeline JSON preserve the hold data.

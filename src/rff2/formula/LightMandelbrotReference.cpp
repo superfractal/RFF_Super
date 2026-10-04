@@ -2,9 +2,12 @@
 // Created by Merutilm on 2025-05-09.
 // Modified by Sonnet 5 on 2026-07-06
 // Modified by Opus 5 on 2026-09-04
+// Modified by GPT-6 on 2026-09-27, 2026-09-29
 //
 
 #include "LightMandelbrotReference.h"
+
+#include <limits>
 
 #include <cmath>
 
@@ -76,7 +79,8 @@ namespace merutilm::rff2 {
 
         auto tools = std::vector<ArrayCompressionTool>();
         uint64_t compressed = 0;
-        uint64_t maxIteration = calc.maxIteration;
+        // Automatic iteration limits must not truncate the period search using the previous view's period.
+        const uint64_t maxIteration = calc.autoMaxIteration ? std::numeric_limits<uint64_t>::max() : calc.maxIteration;
         auto [compressCriteria, compressionThresholdPower, withoutNormalize] = calc.referenceCompAttribute;
         auto func = std::move(actionPerRefCalcIteration);
         double compressionThreshold = compressionThresholdPower <= 0 ? 0 : pow(10, -compressionThresholdPower);
@@ -158,9 +162,11 @@ namespace merutilm::rff2 {
 
 
             if (compressCriteria > 0 && iteration >= 1) {
+                // A reused prefix must precede the run whose stored values will be removed.
                 if (const uint64_t refIndex = ArrayCompressor::compress(tools, reuseIndex + 1);
+                    canReuse && reuseIndex < iteration - reuseIndex && refIndex < rr.size() &&
                     ((zr == rr[refIndex] && zr == 0) || fabs(zr / rr[refIndex] - 1) <= compressionThreshold) &&
-                    ((zi == ri[refIndex] && zi == 0) || fabs(zi / ri[refIndex] - 1) <= compressionThreshold) && canReuse
+                    ((zi == ri[refIndex] && zi == 0) || fabs(zi / ri[refIndex] - 1) <= compressionThreshold)
                 ) {
                     ++reuseIndex;
                 } else if (reuseIndex != 0) {
@@ -193,6 +199,12 @@ namespace merutilm::rff2 {
             }
         }
 
+
+        if (compressCriteria > 0 && reuseIndex > compressCriteria) {
+            const auto compressor = ArrayCompressionTool(1, iteration - reuseIndex + 1, iteration);
+            compressed += compressor.range();
+            tools.push_back(compressor);
+        }
 
         if (!strictFPG) fpgBn = fp_complex_calculator(fpgBnr, fpgBni, exp10);
         if (fpgReference == nullptr) fpgReference = std::make_unique<fp_complex>(z);

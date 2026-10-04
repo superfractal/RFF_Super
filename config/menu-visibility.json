@@ -1,0 +1,181 @@
+{
+  "File": {
+    "New Document": true,
+    "Save Settings": true,
+    "Save Map": true,
+    "Save Image": true,
+    "Save Location / Settings": true,
+    "Load Map": true,
+    "Load Image": true,
+    "Load Location / Settings": true,
+    "Save Appearance Settings": true,
+    "Load Appearance Settings": true
+  },
+  "Fractal": {
+    "Reference": true,
+    "Iterations": true,
+    "MP-Approximation": true,
+    "Automatic Iterations": true,
+    "Absolute Iteration Mode": true,
+    "Formula": true,
+    "Projection": true
+  },
+  "Render": {
+    "Render Properties": true,
+    "Rendering FPS": true,
+    "Linear Interpolation": true,
+    "Boundary Trace Fill": true,
+    "2-Color Preview Mode": true,
+    "Coarse Preview": true,
+    "Smooth Zooming": true,
+    "Dither": true
+  },
+  "Shader": {
+    "Palette": true,
+    "Texture": true,
+    "Pattern": true,
+    "Warp": true,
+    "Stripe": true,
+    "Slope": true,
+    "Color": true,
+    "Effects": true,
+    "Fog": true,
+    "Bloom": true,
+    "HDR": true,
+    "Shader Layers": true,
+    "Load KFR Color": true,
+    "Import Color": true,
+    "Local AI appearance": false
+  },
+  "Preset": {
+    "Calculation": {
+      "Ultra Fast": true,
+      "Fast": true,
+      "Normal": true,
+      "Best": true,
+      "Ultra Best": true,
+      "Stable": true,
+      "More Stable": true,
+      "Ultra Stable": true
+    },
+    "Render": {
+      "Potato": true,
+      "Low": true,
+      "Medium": true,
+      "High": true,
+      "Ultra": true,
+      "Extreme [DANGER]": true
+    },
+    "Resolution": {
+      "640x360": true,
+      "960x540": true,
+      "1280x720": true,
+      "1600x900": true,
+      "1920x1080": true,
+      "360x640": true
+    },
+    "Shader": {
+      "Palette": {
+        "LongRandom64 [Recommend]": true,
+        "RandomSmooth [Recommend]": true,
+        "RandomSmooth [10-20]": true,
+        "Classic 1": true,
+        "Classic 2": true,
+        "Arctic Aurora": true,
+        "Azure": true,
+        "Cinematic": true,
+        "Crimson Magma": true,
+        "Deep Space": true,
+        "Desert": true,
+        "Electric Dreams": true,
+        "Flame": true,
+        "Glossy Berry": true,
+        "Glossy Cyber": true,
+        "Glossy Fire": true,
+        "Glossy Forest": true,
+        "Glossy Ice": true,
+        "Glossy Metal": true,
+        "Glossy Neon": true,
+        "Glossy Ocean": true,
+        "Glossy Pastel": true,
+        "Glossy Sunset": true,
+        "Long Rainbow 7": true,
+        "Midnight Neon": true,
+        "Misty Forest": true,
+        "Pastel Dream": true,
+        "Rainbow": true,
+        "Volcanic Ash": true,
+        "LongRandom64 2 [DANGER]": true
+      },
+      "Stripe": {
+        "Disabled": true,
+        "Slow Animated": true,
+        "Fast Animated": true,
+        "Smooth": true,
+        "Smooth Translucent": true
+      },
+      "Slope": {
+        "Disabled": true,
+        "Normal 1": true,
+        "Normal 2": true
+      },
+      "Color": {
+        "Disabled": true,
+        "Weak Contrast": true,
+        "High Contrast": true,
+        "Dull": true,
+        "Vivid": true
+      },
+      "Fog": {
+        "Disabled": true,
+        "Low": true,
+        "Medium": true,
+        "High": true,
+        "Ultra": true
+      },
+      "Bloom": {
+        "Disabled": true,
+        "Highlighted": true,
+        "Highlighted Strong": true,
+        "Weak": true,
+        "Normal": true,
+        "Strong": true
+      },
+      "Example": {
+        "1": true,
+        "2": true
+      }
+    }
+  },
+  "Video": {
+    "Data Settings": true,
+    "Animation Settings": true,
+    "Timeline Editor": true,
+    "Export Settings": true,
+    "Generate Video Keyframe": true,
+    "Export Zooming Video": true
+  },
+  "View": {
+    "Language / 言語 (restart required)": {
+      "English": true,
+      "日本語": true
+    },
+    "Show Setting Descriptions": true,
+    "Use Legacy Settings UI": true,
+    "Dark Mode": true
+  },
+  "Explore": {
+    "Recompute": true,
+    "Cancel": true,
+    "Reset": true,
+    "Find Center": true,
+    "Locate Minibrot": true
+  },
+  "?": {
+    "Open Guide": true,
+    "Version": true
+  },
+  "Timeline Editor": {
+    "AI Edit": false
+  }
+}

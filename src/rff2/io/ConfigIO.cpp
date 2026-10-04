@@ -7,8 +7,8 @@
 // Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
-// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-29, 2026-09-30
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04
 //
 
 #include "ConfigIO.h"
@@ -47,7 +47,7 @@ namespace merutilm::rff2 {
                 !std::isfinite(fr.bailout) || fr.bailout < 2.0f || fr.bailout > 1e38f ||
                 !std::isfinite(fr.mpaAttribute.epsilonPower) || fr.mpaAttribute.epsilonPower < -15.0f ||
                 fr.mpaAttribute.epsilonPower > -3.0f || fr.mpaAttribute.minSkipReference < 4 ||
-                fr.mpaAttribute.maxMultiplierBetweenLevel == 0 || !std::isfinite(fr.rotation) ||
+                fr.mpaAttribute.maxMultiplierBetweenLevel < 2 || !std::isfinite(fr.rotation) ||
                 !enumInRange(fr.decimalizeIterationMethod, 0, 4) ||
                 !enumInRange(fr.mpaAttribute.mpaSelectionMethod, 0, 1) ||
                 !enumInRange(fr.mpaAttribute.mpaCompressionMethod, 0, 2) ||
@@ -61,7 +61,7 @@ namespace merutilm::rff2 {
             if (!std::isfinite(re.clarityMultiplier) || re.clarityMultiplier <= 0.01f ||
                 re.ssaa < 1 || re.ssaa > 8 ||
                 static_cast<double>(re.clarityMultiplier) * re.ssaa > MAX_RENDER_SCALE ||
-                !std::isfinite(re.fps) || re.fps <= 0.0f || re.threads == 0) {
+                !std::isfinite(re.fps) || re.fps < 0.0f || re.threads == 0) {
                 return false;
             }
             if (!std::isfinite(vi.data.defaultZoomIncrement) || vi.data.defaultZoomIncrement <= 1.0f ||
@@ -86,6 +86,7 @@ namespace merutilm::rff2 {
 
     bool ConfigIO::save(const std::filesystem::path &path, const Attribute &attr,
                         const uint16_t width, const uint16_t height) {
+        if (!attr.video.timeline.zoomOverlay.validDisplayTime() || !attr.video.timeline.maxIterationOverlay.validDisplayTime()) return false;
         const std::filesystem::path temporary = IOUtilities::temporaryFilePath(path);
         std::ofstream out(temporary, std::ios::out | std::ios::binary | std::ios::trunc);
         if (!out.is_open()) {
@@ -291,6 +292,11 @@ namespace merutilm::rff2 {
         ShaderPresetIO::writeSurfaceReplacement(out, attr.shader);
         ShaderPresetIO::writeChaosBlur(out, attr.shader);
         TimelineIO::writeOverlayPrecision(out, vi.timeline.zoomOverlay);
+        TimelineIO::writeOverlayIterations(out, vi.timeline.legacyOverlay());
+        TimelineIO::writeIterationAppearance(out, vi.timeline);
+        TimelineIO::writeOverlayTiming(out, vi.timeline);
+        ShaderPresetIO::writeChaosAverage(out, attr.shader);
+        IOUtilities::encodeAndWrite(out, vi.exportation.gpuSubmitSplit);
 
 
     }
@@ -719,8 +725,17 @@ namespace merutilm::rff2 {
         if (!AudioTimelineIO::read(in, vi.timeline.audio)) return false;
         ShaderPresetIO::readBandDecorations(in, t.shader);
         ShaderPresetIO::readSurfaceReplacement(in, t.shader);
-        ShaderPresetIO::readChaosBlur(in, t.shader);
+        ShaderPresetIO::readChaosBlur(in, t.shader, version < 8);
         TimelineIO::readOverlayPrecision(in, vi.timeline.zoomOverlay);
+        TimelineIO::readOverlayIterations(in, vi.timeline.zoomOverlay);
+        TimelineIO::readIterationAppearance(in, vi.timeline);
+        TimelineIO::readOverlayTiming(in, vi.timeline);
+        ShaderPresetIO::readChaosAverage(in, t.shader);
+        vi.exportation.gpuSubmitSplit = 0;
+        if (hasMore()) {
+            IOUtilities::readAndDecode(in, &vi.exportation.gpuSubmitSplit);
+            if (vi.exportation.gpuSubmitSplit > 64) return false;
+        }
         try { AudioTimelineIO::resolvePaths(vi.timeline.audio, path); }
         catch (const std::filesystem::filesystem_error&) { return false; }
         vi.animation.showText = vi.timeline.zoomOverlay.visible;

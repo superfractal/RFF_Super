@@ -2,7 +2,8 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #include "TimelineParams.hpp"
@@ -309,8 +310,7 @@ namespace merutilm::rff2 {
             NESTED_VALUE(FOG_CHAOS_TRANSITION, L"Chaos Blur", L"Chaos Transition", FLOAT, FOG, 0.01f, 1.0f, fog, chaosTransition),
             NESTED_VALUE(FOG_CHAOS_FEATHER, L"Chaos Blur", L"Chaos Feather", FLOAT, FOG, 0.0f, 32.0f, fog, chaosFeather),
             NESTED_VALUE(FOG_CHAOS_BLUR, L"Chaos Blur", L"Chaos Blur Radius", FLOAT, FOG, 0.0f, 32.0f, fog, chaosBlur),
-            NESTED_VALUE(FOG_CHAOS_HIGHLIGHTS, L"Chaos Blur", L"Chaos Highlight Detail", FLOAT, FOG, 0.0f, 1.0f, fog, chaosHighlights),
-            NESTED_VALUE(FOG_CHAOS_SHADE, L"Chaos Blur", L"Chaos Shade", FLOAT, FOG, 0.0f, 0.5f, fog, chaosShade),
+            NESTED_VALUE(FOG_CHAOS_SHADE, L"Chaos Blur", L"Chaos Shade", FLOAT, FOG, 0.0f, 1.0f, fog, chaosShade),
 
 
             NESTED_VALUE(BLOOM_THRESHOLD, L"Bloom", L"Threshold", FLOAT, BLOOM, 0.0f, 1.0f, bloom, threshold),
@@ -366,6 +366,11 @@ namespace merutilm::rff2 {
         return nullptr;
     }
 
+    bool TimelineParams::isOverlay(const uint16_t id) {
+        return id == vidTimelineTargetId(VidTimelineTarget::ZOOM_OVERLAY_VISIBLE) ||
+               id == vidTimelineTargetId(VidTimelineTarget::MAX_ITERATION_OVERLAY_VISIBLE);
+    }
+
     bool TimelineParams::movesOverStaticImage(const uint16_t id) {
         const TimelineParamDesc *param = find(id);
         if (param == nullptr) {
@@ -404,7 +409,6 @@ namespace merutilm::rff2 {
             case FOG_CHAOS_TRANSITION:
             case FOG_CHAOS_FEATHER:
             case FOG_CHAOS_BLUR:
-            case FOG_CHAOS_HIGHLIGHTS:
             case FOG_CHAOS_SHADE:
                 return false;
             default:

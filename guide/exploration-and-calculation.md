@@ -1,5 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Exploration and calculation
 
 [Manual](user-manual.md) · [Exact calculation fields](settings-reference.md#explore)
@@ -56,7 +57,7 @@ These are calculation projections. The similarly named camera controls in Animat
 
 ![Actual render performance controls](ui/performance-0.png)
 
-**Calculation Threads** affects the next CPU calculation, from one worker up to the computer's logical core count. Increasing it can shorten independent pixel work, but setup, memory traffic, and GPU work can limit the benefit. **Rendering FPS** caps live redraws; it does not change exported video FPS or the CPU iteration limit.
+**Calculation Threads** affects the next CPU calculation, from one worker up to the computer's logical core count. Increasing it can shorten independent pixel work, but setup, memory traffic, and GPU work can limit the benefit. **Rendering FPS** caps live redraws (0 removes the cap); it does not change exported video FPS or the CPU iteration limit.
 
 **Coarse Preview** shows an early coarse result during computation. **Two-Color Preview** uses a simplified calculation preview. **Boundary Trace Fill** changes how regions are filled during calculation; compare critical fine detail after toggling it. These controls trigger recalculation. **Linear Interpolation** smooths resampling; **Dither** reduces visible quantization banding with small output variations. Neither creates missing fractal detail.
 

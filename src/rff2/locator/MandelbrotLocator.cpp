@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-05-16.
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-29
 //
 
 #include "MandelbrotLocator.h"
@@ -42,6 +43,9 @@ namespace merutilm::rff2 {
         }
 
         fp_complex_calculator bn = reference->fpgBn.edit(exp10);
+        if (mpz_sgn(bn.getReal().value) == 0 && mpz_sgn(bn.getImag().value) == 0) {
+            return nullptr;
+        }
         fp_complex_calculator z = reference->fpgReference.edit(exp10);
         z /= bn.negate();
         return std::make_unique<fp_complex>(z);
@@ -135,7 +139,11 @@ namespace merutilm::rff2 {
         const int doubledExp10 = Perturbator::logZoomToExp10(doubledLogZoom);
         auto e = doubledZoomCalc.center.edit(doubledExp10);
         doubledZoomCalc.absoluteIterationMode = false;
-        doubledZoomCalc.center = fp_complex(e += findCenterOffset(*perturbator)->edit(doubledExp10));
+        const auto initialOffset = findCenterOffset(*perturbator);
+        if (initialOffset == nullptr) {
+            return nullptr;
+        }
+        doubledZoomCalc.center = fp_complex(e += initialOffset->edit(doubledExp10));
         doubledZoomCalc.logZoom = doubledLogZoom;
 
         dex doubledZoomDcMax = perturbator->getDcMaxAsDoubleExp() / dex_exp::exp10(logZoom);
@@ -160,7 +168,11 @@ namespace merutilm::rff2 {
                 }
             }
 
-            fp_complex off = *findCenterOffset(doubledZoomPerturbator == nullptr ? *perturbator : *doubledZoomPerturbator);
+            const auto offset = findCenterOffset(doubledZoomPerturbator == nullptr ? *perturbator : *doubledZoomPerturbator);
+            if (offset == nullptr) {
+                return nullptr;
+            }
+            fp_complex off = *offset;
             e = doubledZoomCalc.center.edit(doubledExp10);
             doubledZoomCalc.center = fp_complex(e += off.edit(doubledExp10));
             ++centerFixCount;

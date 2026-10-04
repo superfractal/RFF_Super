@@ -1,4 +1,7 @@
+//
 // Modified by GPT-6 on 2026-09-25
+//
+
 #pragma once
 #include <windows.h>
 #include <array>

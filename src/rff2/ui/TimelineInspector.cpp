@@ -1,5 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26
+// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
 //
 
 #include "TimelineWindow.hpp"
@@ -9,6 +10,7 @@
 #include "workspace/FormWorkspace.hpp"
 #include "workspace/WorkspaceButton.hpp"
 #include "workspace/TimelineOverlayForm.hpp"
+#include "workspace/TimelineHoldForm.hpp"
 #include "../io/TimelineIO.h"
 #include "../io/AudioTimelineIO.hpp"
 #include "../video/TimelineParams.hpp"
@@ -33,6 +35,9 @@ namespace merutilm::rff2 {
             TimelineIO::writeTimeline(bytes, value);
             AudioTimelineIO::write(bytes, value.audio);
             TimelineIO::writeOverlayPrecision(bytes, value.zoomOverlay);
+            TimelineIO::writeOverlayIterations(bytes, value.legacyOverlay());
+            TimelineIO::writeIterationAppearance(bytes, value);
+            TimelineIO::writeOverlayTiming(bytes, value);
             return bytes.str();
         }
         bool offered(const TimelineParamDesc &parameter, bool staticSource) {
@@ -55,7 +60,7 @@ namespace merutilm::rff2 {
             return parameter && offered(*parameter, staticSource);
         }
         std::vector<std::wstring> inspectorGroups(bool staticSource) {
-            std::vector<std::wstring> groups{L"Selection", L"Audio", L"Zoom Overlay", L"Panel Layout"};
+            std::vector<std::wstring> groups{L"Selection", L"Audio", L"Zoom Display", L"Max Iterations Display", L"Panel Layout", L"Preview Guide", L"Zoom Holds"};
             for (const auto &parameter : TimelineParams::all()) {
                 if (!offered(parameter, staticSource)) {
                     continue;
@@ -117,6 +122,32 @@ namespace merutilm::rff2 {
                 result.push_back({std::to_wstring(i), std::to_wstring(i)});
             }
             return result;
+        }
+        // While Custom Appearance is Off the zoom overlay keeps its legacy look, so the rows it governs are dimmed.
+        void dimLegacyAppearanceRows(std::vector<workspace::FormField> &fields) {
+            const auto custom = std::ranges::find(fields, std::string("overlay.custom"), &workspace::FormField::id);
+            if (custom == fields.end()) {
+                return;
+            }
+            const auto readCustom = custom->read;
+            const auto governed = [](const std::string &id) {
+                return workspace::overlayAppearanceField(id, "overlay.");
+            };
+            for (auto &field : fields) {
+                if (!governed(field.id)) {
+                    continue;
+                }
+                field.dimmed = [readCustom, governed](const workspace::FormDraft &draft) {
+                    if (const auto pending = draft.find("overlay.custom"); pending != draft.end()) {
+                        return pending->second == L"0";
+                    }
+                    // Applying an edit to any governed row turns Custom Appearance on, so a pending one lifts the dimming.
+                    if (std::ranges::any_of(draft, [&](const auto &entry) { return governed(entry.first); })) {
+                        return false;
+                    }
+                    return readCustom() == L"0";
+                };
+            }
         }
     }
 
@@ -276,6 +307,8 @@ namespace merutilm::rff2 {
             [this, snapshot, baseline, hasKey, key, target, keyChanged, overlayOnly] {
                 if (*overlayOnly) {
                     attribute.video.timeline.zoomOverlay = snapshot->video.timeline.zoomOverlay;
+                    attribute.video.timeline.maxIterationOverlay = snapshot->video.timeline.maxIterationOverlay;
+                    attribute.video.timeline.interpolateMaxIteration = snapshot->video.timeline.interpolateMaxIteration;
                     lastUndoStep = 0;
                     commitOverlay();
                     *baseline = documentKey(attribute.video.timeline);
@@ -344,13 +377,19 @@ namespace merutilm::rff2 {
                     },
                     minimum, maximum);
             }
-            model->choice("key.interpolation", 0, L"Interpolation",
-                          L"How this key reaches the next key on its track.", [key](auto &a) -> auto & {
-                              return key(a).out;
-                          });
+            if (!parameter || (parameter->kind != TimelineParamKind::BOOL && parameter->kind != TimelineParamKind::ENUM)) {
+                model->choice("key.interpolation", 0, L"Interpolation",
+                              L"How this key reaches the next key on its track.", [key](auto &a) -> auto & {
+                                  return key(a).out;
+                              });
+            }
         }
         model->setValidator(
             [hasKey, trackIndex, index, target, keyChanged](const Attribute &candidate) -> std::wstring {
+                if (!candidate.video.timeline.zoomOverlay.validDisplayTime() ||
+                    !candidate.video.timeline.maxIterationOverlay.validDisplayTime()) {
+                    return L"Display End must be after Display Start, or 0 for the end of the video.";
+                }
                 if (!candidate.video.timeline.audio.valid()) {
                     return L"Audio: Source In must be before Source Out and within the source length. Fades must fit the trimmed clip, and clips cannot overlap.";
                 }
@@ -435,7 +474,13 @@ namespace merutilm::rff2 {
             model->choice("audio.muted", 1, L"Mute Clip", L"Keep the clip but omit its sound from export.",
                 [clip](auto &a) -> auto & { return clip(a).muted; });
         }
+        const auto &holds = snapshot->video.timeline.holds;
+        if (selectedZoomHold < 0 || selectedZoomHold >= int(holds.size()))
+            selectedZoomHold = holds.empty() ? -1 : 0;
+        if (selectedZoomHold >= 0)
+            workspace::TimelineHoldForm::fields(*model, selectedZoomHold, schedule.getEndDepth(), schedule.getStartDepth());
         workspace::addTimelineOverlayFields(*model);
+        workspace::addTimelineOverlayFields(*model, true);
         model->setNormalizer([audioId](const Attribute &before, Attribute &after, const workspace::FormDraft &draft) {
             workspace::normalizeTimelineOverlay(after, draft);
             if (audioId && draft.contains("audio.path")) {
@@ -452,6 +497,30 @@ namespace merutilm::rff2 {
             }
         });
         auto form = model->form(L"Timeline Settings", inspectorGroups(attribute.video.data.isStatic));
+        for (auto &field : form.fields) {
+            if (field.group == 4) {
+                field.group = 3;
+            }
+        }
+        if (selectedZoomHold >= 0) {
+            workspace::FormField selected{"hold.selection", workspace::TimelineHoldForm::group, L"Zoom Hold",
+                L"Choose a hold, edit its position or duration, then Apply. Apply pending edits when switching holds.",
+                [index = selectedZoomHold] { return std::to_wstring(index); }};
+            selected.persisted = false;
+            for (size_t i = 0; i < holds.size(); ++i)
+                selected.choices.push_back({std::to_wstring(i), std::format(L"{}: K {} / {} s", i + 1,
+                    Model::number(holds[i].depth), Model::number(holds[i].seconds))});
+            const auto pos = std::ranges::find(form.fields, std::string("hold.depth"), &workspace::FormField::id);
+            form.fields.insert(pos, std::move(selected));
+        }
+        for (int page : {0, workspace::TimelineHoldForm::group})
+            form.actions.push_back({page, L"Add Zoom Hold at Playhead", [this] {
+                if (!inspector || inspector->applyPending()) addZoomHold();
+            }, true});
+        if (selectedZoomHold >= 0)
+            form.actions.push_back({workspace::TimelineHoldForm::group, L"Remove Selected Hold", [this] {
+                if (!inspector || inspector->applyPending()) removeZoomHold();
+            }, true});
         if (audioId) {
             workspace::FormField selected{"audio.selection", 1, L"Audio Clip", L"Select the clip to edit.",
                 [audioId] { return std::to_wstring(audioId); }};
@@ -468,7 +537,7 @@ namespace merutilm::rff2 {
         }, true});
         if (audioId) form.actions.push_back({1, L"Remove Audio Clip", [this] { removeAudioClip(); }});
         for (auto &field : form.fields) {
-            if (field.id == "overlay.anchor") {
+            if (field.id == "overlay.anchor" || field.id == "iterationOverlay.anchor") {
                 const wchar_t *labels[]{L"Top Left",    L"Top Center",    L"Top Right",
                                         L"Middle Left", L"Center",        L"Middle Right",
                                         L"Bottom Left", L"Bottom Center", L"Bottom Right"};
@@ -476,7 +545,7 @@ namespace merutilm::rff2 {
                     field.choices.push_back({std::to_wstring(i), labels[i]});
                 }
             }
-            if (field.id == "overlay.style") {
+            if (field.id == "overlay.style" || field.id == "iterationOverlay.style") {
                 field.choices = {
                     {L"0", L"Regular"}, {L"1", L"Bold"}, {L"2", L"Italic"}, {L"3", L"Bold Italic"}};
             }
@@ -487,16 +556,21 @@ namespace merutilm::rff2 {
             L"Edit Overlay Position",
             L"Drag in the preview or use arrow keys. Shift moves ten pixels. Escape cancels a drag.",
             [this] {
-                return overlayPositionMode ? L"1" : L"0";
+                return overlayPositionMode && !editingIterationOverlay ? L"1" : L"0";
             },
             {{L"0", L"Off"}, {L"1", L"On"}}};
         positionField.persisted = false;
         positionField.validate = [](const std::wstring &value) {
             return value == L"0" || value == L"1" ? std::wstring{} : L"Choose On or Off.";
         };
+        auto iterationPositionField = positionField;
+        iterationPositionField.id = "iterationOverlay.positionMode";
+        iterationPositionField.group = 3;
+        iterationPositionField.read = [this] { return overlayPositionMode && editingIterationOverlay ? L"1" : L"0"; };
+        form.fields.insert(form.fields.begin(), std::move(iterationPositionField));
         form.fields.insert(form.fields.begin(), std::move(positionField));
         workspace::FormField guideField{"guide.visible",
-                                        2,
+                                        5,
                                         L"YouTube Shorts Guide",
                                         L"Preview only; never exported. Shaded margins mark areas to avoid: "
                                         L"top UI, bottom title and description, right controls, and left "
@@ -511,7 +585,7 @@ namespace merutilm::rff2 {
         };
         form.fields.push_back(std::move(guideField));
         workspace::FormField guideDescriptions{"guide.descriptions",
-                                               2,
+                                               5,
                                                L"Show Guide Descriptions",
                                                L"Show explanatory labels around the preview guide. Off keeps "
                                                L"only the shaded margins and dashed frame. Preview only.",
@@ -527,7 +601,7 @@ namespace merutilm::rff2 {
         const auto guideMargin = [&](const char *id, const wchar_t *label,
                                      int workspace::ShortsGuide::*member) {
             workspace::FormField field{
-                id, 2, label,
+                id, 5, label,
                 L"Approximate margin as a percentage of the video frame. 0 to 40; preview only.",
                 [this, member] {
                     return std::to_wstring(shortsGuide.*member);
@@ -553,6 +627,14 @@ namespace merutilm::rff2 {
                 }
             }
         }
+        const auto cameraPage = std::ranges::find(form.groups, L"Add Parameter: Camera");
+        if (cameraPage != form.groups.end()) {
+            form.actions.push_back({int(cameraPage - form.groups.begin()), L"Match Planar Framing",
+                                    [this] { matchCameraToPlanar(window); }});
+        }
+        if (target >= uint16_t(VidTimelineTarget::CAMERA_ROTATION) && target <= uint16_t(VidTimelineTarget::CAMERA_LAYOUT)) {
+            form.actions.push_back({0, L"Match Planar Framing", [this] { matchCameraToPlanar(window); }});
+        }
         for (const auto &parameter : TimelineParams::all()) {
             if (!offered(parameter, attribute.video.data.isStatic)) {
                 continue;
@@ -566,7 +648,7 @@ namespace merutilm::rff2 {
                  }});
         }
         form.actions.push_back({0, L"Add Parameter", [this] {
-                                    inspectorSectionRequest = 4;
+                                    inspectorSectionRequest = 7;
                                 }});
         if (found != snapshot->video.timeline.tracks.end()) {
             if (supported) {
@@ -595,6 +677,13 @@ namespace merutilm::rff2 {
                 return L"The timeline changed. Discard this draft and edit the current selection.";
             }
             auto documentDraft = draft;
+            int nextHold = selectedZoomHold;
+            if (const auto selected = documentDraft.find("hold.selection"); selected != documentDraft.end()) {
+                if (!workspace::AttributeFormModel::parse(selected->second, nextHold) ||
+                    nextHold < 0 || nextHold >= int(attribute.video.timeline.holds.size()))
+                    return L"Choose an existing zoom hold.";
+                documentDraft.erase(selected);
+            }
             uint64_t nextAudio = selectedAudioClip;
             if (const auto selected = documentDraft.find("audio.selection"); selected != documentDraft.end()) {
                 if (!workspace::AttributeFormModel::parse(selected->second, nextAudio) ||
@@ -634,7 +723,9 @@ namespace merutilm::rff2 {
                 }
                 it = documentDraft.erase(it);
             }
-            const auto position = documentDraft.find("overlay.positionMode");
+            const bool iterationPosition = documentDraft.contains("iterationOverlay.positionMode");
+            const auto position = documentDraft.find(iterationPosition ? "iterationOverlay.positionMode" : "overlay.positionMode");
+            const bool hasPosition = position != documentDraft.end();
             bool positionMode = overlayPositionMode;
             if (position != documentDraft.end()) {
                 if (position->second != L"0" && position->second != L"1") {
@@ -648,17 +739,22 @@ namespace merutilm::rff2 {
             });
             *overlayOnly =
                 !documentDraft.empty() && std::ranges::all_of(documentDraft, [](const auto &field) {
-                    return field.first.starts_with("overlay.");
+                    return field.first.starts_with("overlay.") || field.first.starts_with("iterationOverlay.");
                 });
             const auto error = apply(documentDraft);
             if (!error.empty()) {
                 return error;
+            }
+            if (selectedZoomHold != nextHold) {
+                selectedZoomHold = nextHold;
+                inspectorSectionRequest = workspace::TimelineHoldForm::group;
             }
             if (selectedAudioClip != nextAudio) {
                 selectedAudioClip = nextAudio;
                 inspectorSectionRequest = 1;
             }
             overlayPositionMode = positionMode;
+            if (hasPosition) editingIterationOverlay = iterationPosition;
             shortsGuide = guide;
             InvalidateRect(window, nullptr, FALSE);
             return {};
@@ -667,6 +763,8 @@ namespace merutilm::rff2 {
             return !exporting && !draggingTrackKey && !draggingOverlay && !draggingAudio;
         };
         form.status = [this, selection] {
+            if (inspector && inspector->selectedGroup() == workspace::TimelineHoldForm::group)
+                return std::wstring(L"Add a hold at the playhead, then set its keyframe and duration and Apply. Only zoom pauses; color animation, constant rotation and audio continue. Holds outside the source range do not play.");
             if (inspector && inspector->selectedGroup() == 1) {
                 const auto &clips = attribute.video.timeline.audio.clips;
                 const auto found = std::ranges::find(clips, selectedAudioClip, &VidAudioClip::id);
@@ -674,11 +772,14 @@ namespace merutilm::rff2 {
                 return std::format(L"Source length: {:.3f} s. Clip length: {:.3f} s. Apply edits before selecting another clip. Playback previews the audio with clip volume and fades.",
                     double(found->sourceDuration) / 1000000, double(found->duration()) / 1000000);
             }
-            if (inspector && inspector->selectedGroup() == 2) {
-                return std::wstring(L"Settings apply to the entire video. Timeline Save includes the "
-                                    L"overlay. Font files are not embedded.");
+            if (inspector && inspector->selectedGroup() == 2 && !attribute.video.timeline.zoomOverlay.custom) {
+                return std::wstring(L"Custom Appearance is Off, so the dimmed rows keep the legacy look. "
+                                    L"Editing one of them turns Custom Appearance on.");
             }
-            if (inspector && inspector->selectedGroup() >= 4) {
+            if (inspector && (inspector->selectedGroup() == 2 || inspector->selectedGroup() == 3)) {
+                return std::wstring{};
+            }
+            if (inspector && inspector->selectedGroup() >= 7) {
                 return std::wstring(attribute.video.data.isStatic
                                         ? L"Only parameters supported by PNG sources are listed. "
                                         : L"Add a parameter, then edit its keys in Selection. ") +
@@ -725,30 +826,35 @@ namespace merutilm::rff2 {
         form.actions.push_back({2, L"Reset Appearance", [this] {
                                     resetOverlayAppearance();
                                 }});
-        form.actions.push_back({3, L"70% Preview", [this] {
+        form.actions.push_back({3, L"Choose Font", [this] { chooseOverlayFont(true); }});
+        form.actions.push_back({3, L"Reset Position", [this] { resetOverlayPosition(true); }});
+        form.actions.push_back({3, L"Fit Inside Frame", [this] { fitOverlayInsideFrame(true); }});
+        form.actions.push_back({3, L"Reset Appearance", [this] { resetOverlayAppearance(true); }});
+        form.actions.push_back({4, L"70% Preview", [this] {
                                     applyLayoutPreset(70);
                                 }});
-        form.actions.push_back({3, L"50% / 50%", [this] {
+        form.actions.push_back({4, L"50% / 50%", [this] {
                                     applyLayoutPreset(50);
                                 }});
-        form.actions.push_back({3, L"70% Tracks", [this] {
+        form.actions.push_back({4, L"70% Tracks", [this] {
                                     applyLayoutPreset(30);
                                 }});
-        form.actions.push_back({3, L"Reset Settings Width", [this] {
+        form.actions.push_back({4, L"Reset Settings Width", [this] {
                                     dockState.inspectorWidth = 340;
                                     layoutWorkspaceDock();
                                     saveWorkspaceDock();
                                 }});
-        form.actions.push_back({3, L"Move Settings Left", [this] {
+        form.actions.push_back({4, L"Move Settings Left", [this] {
                                     dockState.inspectorLeft = true;
                                     layoutWorkspaceDock();
                                     saveWorkspaceDock();
                                 }});
-        form.actions.push_back({3, L"Move Settings Right", [this] {
+        form.actions.push_back({4, L"Move Settings Right", [this] {
                                     dockState.inspectorLeft = false;
                                     layoutWorkspaceDock();
                                     saveWorkspaceDock();
                                 }});
+        dimLegacyAppearanceRows(form.fields);
         inspector = std::make_unique<workspace::FormWorkspace>(
             window, std::move(form), bodyFont, inspectorTheme, uiDpi / 96.f,
             [] {
@@ -809,9 +915,33 @@ namespace merutilm::rff2 {
         inspectorSectionRequest = 1;
     }
 
+    void TimelineWindow::addZoomHold() {
+        if (exporting || !commitFieldEdit()) return;
+        setPlaying(false);
+        selectedZoomHold = workspace::TimelineHoldForm::add(attribute.video.timeline,
+            std::clamp(previewDepth, schedule.getEndDepth(), schedule.getStartDepth()));
+        if (selectedZoomHold < 0) {
+            NativeDialogs::message(window, L"The timeline cannot contain more than 65536 zoom holds.", L"Zoom Holds", MB_OK);
+            return;
+        }
+        lastUndoStep = 0;
+        commitTimeline();
+        inspectorSectionRequest = workspace::TimelineHoldForm::group;
+    }
+
+    void TimelineWindow::removeZoomHold() {
+        if (exporting || !workspace::TimelineHoldForm::remove(attribute.video.timeline, selectedZoomHold)) return;
+        setPlaying(false);
+        selectedZoomHold = attribute.video.timeline.holds.empty() ? -1 :
+            std::min(selectedZoomHold, int(attribute.video.timeline.holds.size()) - 1);
+        lastUndoStep = 0;
+        commitTimeline();
+        inspectorSectionRequest = workspace::TimelineHoldForm::group;
+    }
+
     void TimelineWindow::showParameterCatalog(std::wstring_view prefix) {
         const auto groups = inspectorGroups(attribute.video.data.isStatic);
-        for (size_t i = 4; i < groups.size(); ++i) {
+        for (size_t i = 7; i < groups.size(); ++i) {
             if (std::wstring_view(groups[i])
                     .substr(std::wstring_view(L"Add Parameter: ").size())
                     .starts_with(prefix)) {

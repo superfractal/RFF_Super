@@ -3,6 +3,7 @@
 // Modified by Sonnet 5 on 2026-07-06
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-08-06
+// Modified by GPT-6 on 2026-09-30
 //
 
 #pragma once
@@ -59,6 +60,7 @@ namespace merutilm::rff2 {
         return applyIterationRatio(iteration, ratio, decimalizeIterationMethod);
     }
 
+    // Log-log smoothing: Vepstas (1997), with bailout normalization; see NOTICE; project license unchanged.
     inline double Perturbator::getQuadraticDoubleValueIteration(const uint64_t iteration,
         const double prevIterDistance, const double currIterDistance,
         const FrtDecimalizeIterationMethod &decimalizeIterationMethod, const float bailout) {
@@ -96,6 +98,7 @@ namespace merutilm::rff2 {
     // between the last two magnitudes collapses to ~0 whenever a step overshoots the bailout (with
     // bailout 128 a typical escape lands near |z|^2, giving a ratio around 1e-5), which quantizes
     // the iteration count to integers and makes an animated palette snap band to band.
+    // Generalized log-log smoothing uses a locally estimated degree; mathematical reference and limits in NOTICE.
     inline double Perturbator::getPotentialDoubleValueIteration(const uint64_t iteration,
         const double prevIterDistance, const double currIterDistance,
         const FrtDecimalizeIterationMethod &decimalizeIterationMethod, const float bailout) {

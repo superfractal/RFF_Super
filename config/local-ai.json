@@ -1,0 +1,4881 @@
+{
+  "appearance_palette_only": false,
+  "automatic_video": {
+    "ai_appearance_enabled": false,
+    "appearance_before_zoom": true,
+    "color_animation_mode": 0,
+    "color_animation_speed": 1.0,
+    "exploration_steps": 15,
+    "improve_appearance": false,
+    "limit_zoom": false,
+    "locate_minibrot": true,
+    "max_changes": 0,
+    "max_log_zoom": 100.0,
+    "palette_only": false,
+    "random_smooth_palette": true,
+    "retry_decrease": 1.0,
+    "retry_locate": true,
+    "zoom_factor": 4.0
+  },
+  "endpoint": "http://127.0.0.1:18080/v1/chat/completions",
+  "max_errors": 100,
+  "max_refinements": 3,
+  "model": "qwen3.6-35b-a3b-byteshape",
+  "request": {
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    },
+    "max_tokens": 24576,
+    "min_p": 0.0,
+    "presence_penalty": 0.0,
+    "repeat_penalty": 1.0,
+    "response_format": {
+      "schema": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "effect.1.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.1.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.1.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.1.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.1.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.1.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.1.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.1.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.1.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.1.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.1.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.1.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.2.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.2.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.2.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.2.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.2.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.2.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.2.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.2.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.2.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.3.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.3.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.3.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.3.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.3.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.3.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.3.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.3.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.3.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.4.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.4.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.4.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.4.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.4.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.4.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.4.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.4.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.4.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "fog.blurQuality": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "hdr.exposure": {
+                    "maximum": 16.0,
+                    "minimum": -16.0,
+                    "type": "number"
+                  },
+                  "hdr.headroom": {
+                    "maximum": 64.0,
+                    "minimum": 0.01,
+                    "type": "number"
+                  },
+                  "hdr.method": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "hdr.mfrPeakNits": {
+                    "maximum": 10000.0,
+                    "minimum": 100.0,
+                    "type": "number"
+                  },
+                  "hdr.use": {
+                    "type": "boolean"
+                  },
+                  "layer.order": {
+                    "items": {
+                      "maximum": 29,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "maxItems": 29,
+                    "minItems": 29,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "layer.visible.1": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.10": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.11": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.12": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.13": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.14": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.15": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.16": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.17": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.18": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.19": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.20": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.21": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.22": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.23": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.24": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.25": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.26": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.27": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.28": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.29": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.6": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.7": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.8": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.9": {
+                    "type": "boolean"
+                  },
+                  "layerOrder.enabled": {
+                    "type": "boolean"
+                  },
+                  "palette.animationMode": {
+                    "enum": [
+                      0,
+                      1,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.bandBranchAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "palette.bandLineCount": {
+                    "maximum": 256.0,
+                    "minimum": 1.0,
+                    "type": "integer"
+                  },
+                  "palette.bandLineEnabled": {
+                    "type": "boolean"
+                  },
+                  "palette.bandLineGroove": {
+                    "type": "boolean"
+                  },
+                  "palette.bandLineOpacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineSoftness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineWidth": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentDensity": {
+                    "maximum": 2.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentInset": {
+                    "maximum": 0.25,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentSize": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandSpineAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandSpineDensity": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandSpineLength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.colorInterpolation": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.colorSmoothing": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.colors": {
+                    "items": {
+                      "items": [
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "const": 1
+                        }
+                      ],
+                      "maxItems": 4,
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    "maxItems": 64,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "palette.enableGloss": {
+                    "type": "boolean"
+                  },
+                  "palette.glossColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "palette.grooveAuto": {
+                    "type": "boolean"
+                  },
+                  "palette.grooveDepth": {
+                    "maximum": 5.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.grooveWidth": {
+                    "maximum": 0.5,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.seamless": {
+                    "type": "boolean"
+                  },
+                  "palette.stopEasing": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.stops": {
+                    "items": {
+                      "items": [
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "const": 1
+                        }
+                      ],
+                      "maxItems": 5,
+                      "minItems": 5,
+                      "type": "array"
+                    },
+                    "maxItems": 32,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "param.100": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1000": {
+                    "type": "boolean"
+                  },
+                  "param.1001": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.1002": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.1003": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1004": {
+                    "maximum": 6.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1005": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1006": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1007": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.1008": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.1009": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.101": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1010": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.102": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.103": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.104": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.105": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.106": {
+                    "maximum": 1000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.107": {
+                    "maximum": 12.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.108": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.109": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.110": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.111": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.112": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.113": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.114": {
+                    "maximum": 6.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.200": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.201": {
+                    "maximum": 1000000.0,
+                    "minimum": 9.999999747378752e-05,
+                    "type": "number"
+                  },
+                  "param.202": {
+                    "maximum": 1000000.0,
+                    "minimum": 9.999999747378752e-05,
+                    "type": "number"
+                  },
+                  "param.203": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.204": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.205": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.305": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.306": {
+                    "maximum": 100000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.307": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.308": {
+                    "maximum": 64.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.309": {
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.310": {
+                    "maximum": 10.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.311": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.312": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.313": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.314": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.315": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.316": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.317": {
+                    "type": "boolean"
+                  },
+                  "param.318": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.319": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.320": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.321": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.322": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.323": {
+                    "maximum": 12.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.324": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.325": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.326": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.327": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.328": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.329": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.330": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.331": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.332": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.400": {
+                    "maximum": 10.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.401": {
+                    "maximum": 0.9990000128746033,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.402": {
+                    "maximum": 1000.0,
+                    "minimum": -1000.0,
+                    "type": "number"
+                  },
+                  "param.403": {
+                    "maximum": 10.0,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.404": {
+                    "maximum": 1.0,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.405": {
+                    "maximum": 0.9990000128746033,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.500": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.501": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.502": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.503": {
+                    "type": "boolean"
+                  },
+                  "param.504": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.505": {
+                    "maximum": 100.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.506": {
+                    "maximum": 256.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.507": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.508": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.509": {
+                    "maximum": 1.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.510": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.511": {
+                    "maximum": 256.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.512": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.513": {
+                    "maximum": 4.0,
+                    "minimum": 0.5,
+                    "type": "number"
+                  },
+                  "param.514": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.515": {
+                    "maximum": 1.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.516": {
+                    "maximum": 32.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.517": {
+                    "maximum": 32.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.518": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.519": {
+                    "maximum": 0.5,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.600": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.601": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.602": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.603": {
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.800": {
+                    "type": "boolean"
+                  },
+                  "param.801": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.802": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.803": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.804": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.805": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.806": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.807": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.808": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.809": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.810": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.811": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.812": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.813": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.814": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.815": {
+                    "type": "boolean"
+                  },
+                  "param.816": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.817": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.818": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.819": {
+                    "type": "boolean"
+                  },
+                  "param.830": {
+                    "type": "boolean"
+                  },
+                  "param.831": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.832": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.833": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.834": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.835": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.836": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.837": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.838": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.839": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.840": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.841": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.842": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.843": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.844": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.845": {
+                    "type": "boolean"
+                  },
+                  "param.846": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.847": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.848": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.849": {
+                    "type": "boolean"
+                  },
+                  "param.860": {
+                    "type": "boolean"
+                  },
+                  "param.861": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.862": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.863": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.864": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.865": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.866": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.867": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.868": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.869": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.870": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.871": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.872": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.873": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.874": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.875": {
+                    "type": "boolean"
+                  },
+                  "param.876": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.877": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.878": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.879": {
+                    "type": "boolean"
+                  },
+                  "param.890": {
+                    "type": "boolean"
+                  },
+                  "param.891": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.892": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.893": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.894": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.895": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.896": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.897": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.898": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.899": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.900": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.901": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.902": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.903": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.904": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.905": {
+                    "type": "boolean"
+                  },
+                  "param.906": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.907": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.908": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.909": {
+                    "type": "boolean"
+                  },
+                  "slope.azimuth": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.depth": {
+                    "maximum": 10000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossBands": {
+                    "maximum": 32.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "slope.glossColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "slope.glossIntensity": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossPhase": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossRelief": {
+                    "maximum": 16.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossSharpness": {
+                    "maximum": 256.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "slope.glossSource": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.invertRelief": {
+                    "type": "boolean"
+                  },
+                  "slope.layerCommon": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.lightBlend": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.lustreRelief": {
+                    "type": "boolean"
+                  },
+                  "slope.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.reflectionRatio": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.reliefAutoZoom": {
+                    "type": "boolean"
+                  },
+                  "slope.replaceSurfaceStyle": {
+                    "type": "boolean"
+                  },
+                  "slope.shadingBlend": {
+                    "enum": [
+                      0,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.surfaceBlend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.tintBlend": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.zenith": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.aoRadius": {
+                    "maximum": 64.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.backgroundBrightness": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.boundaryGuard": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.chromaticShift": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.chromeStrength": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmGrain": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmHue": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmStrength": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmThickness": {
+                    "maximum": 2000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.flameStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.frostStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.frostThreshold": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.grungeScale": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.iridescence": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerFrost": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerMetal": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerMono": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerPhonk": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerPrint": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerQuantize": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerSea": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerSigil": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerVhs": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.normalSmooth": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.paletteColorMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.phonkRed": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.pixelMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.pixelSize": {
+                    "maximum": 16.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.printAsagi": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printBlue": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printFoam": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printIndigo": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printInk": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printPaper": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.prismSpread": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.prismWidth": {
+                    "maximum": 3.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "surface.reflectionBrightness": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.reflectionContrast": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.reflectionCurve": {
+                    "maximum": 3.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "surface.reflectionDetail": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.reliefDepth": {
+                    "maximum": 16.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.reliefWaves": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaAccentColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaBalance": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaBody": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaBodyColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaGlow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaGlowColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaParticleSize": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.seaParticles": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaThreshold": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.shadowCrush": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.sparkleStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.specularAA": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.clearcoat": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.clearcoatRoughness": {
+                    "maximum": 1.0,
+                    "minimum": 0.03999999910593033,
+                    "type": "number"
+                  },
+                  "surface.studio.directIntensity": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.enabled": {
+                    "type": "boolean"
+                  },
+                  "surface.studio.environmentIntensity": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.ior": {
+                    "maximum": 3.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.studio.metalness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.roughness": {
+                    "maximum": 1.0,
+                    "minimum": 0.03999999910593033,
+                    "type": "number"
+                  },
+                  "surface.studioEnvironmentFollow": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studioEnvironmentRotation": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.style": {
+                    "maximum": 6,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "surface.styleBackgroundColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleBackgroundMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleColorMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDamage": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailLight": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailSuppress": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailThreshold": {
+                    "maximum": 0.4000000059604645,
+                    "minimum": 0.004999999888241291,
+                    "type": "number"
+                  },
+                  "surface.styleGlintSize": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.styleHighlightColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleHighlightMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleInkPreserve": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleMonochrome": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.surfacePhase": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoBalance": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoColors": {
+                    "maximum": 6.0,
+                    "minimum": 3.0,
+                    "type": "integer"
+                  },
+                  "surface.ukiyoFlatness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoFoam": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoGrain": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.vhsNoise": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.waveFrequency": {
+                    "maximum": 1.5,
+                    "minimum": 0.029999999329447746,
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary",
+              "changes"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "additionalProperties": false,
+                "minProperties": 0,
+                "properties": {
+                  "effect.1.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.1.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.1.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.1.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.1.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.1.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.1.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.1.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.1.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.1.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.1.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.1.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.1.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.1.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.2.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.2.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.2.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.2.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.2.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.2.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.2.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.2.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.2.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.2.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.2.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.2.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.3.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.3.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.3.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.3.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.3.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.3.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.3.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.3.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.3.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.3.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.3.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.3.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.blend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.color": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.4.density": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.direction": {
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number"
+                  },
+                  "effect.4.distortion": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.dropSize": {
+                    "maximum": 8.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.enabled": {
+                    "type": "boolean"
+                  },
+                  "effect.4.evolution": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.4.glow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.length": {
+                    "maximum": 2.0,
+                    "minimum": 0.05,
+                    "type": "number"
+                  },
+                  "effect.4.mask": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.period": {
+                    "maximum": 1000000000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "effect.4.rainShape": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.scale": {
+                    "maximum": 100.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "effect.4.secondary": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "effect.4.seed": {
+                    "maximum": 65535.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "effect.4.speed": {
+                    "maximum": 10.0,
+                    "minimum": -10.0,
+                    "type": "number"
+                  },
+                  "effect.4.syncColorAnimation": {
+                    "type": "boolean"
+                  },
+                  "effect.4.type": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "effect.4.width": {
+                    "maximum": 10.0,
+                    "minimum": 0.1,
+                    "type": "number"
+                  },
+                  "fog.blurQuality": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "hdr.exposure": {
+                    "maximum": 16.0,
+                    "minimum": -16.0,
+                    "type": "number"
+                  },
+                  "hdr.headroom": {
+                    "maximum": 64.0,
+                    "minimum": 0.01,
+                    "type": "number"
+                  },
+                  "hdr.method": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3,
+                      4,
+                      5,
+                      6,
+                      7
+                    ],
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "hdr.mfrPeakNits": {
+                    "maximum": 10000.0,
+                    "minimum": 100.0,
+                    "type": "number"
+                  },
+                  "hdr.use": {
+                    "type": "boolean"
+                  },
+                  "layer.order": {
+                    "items": {
+                      "maximum": 29,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "maxItems": 29,
+                    "minItems": 29,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "layer.visible.1": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.10": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.11": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.12": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.13": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.14": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.15": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.16": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.17": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.18": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.19": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.20": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.21": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.22": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.23": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.24": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.25": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.26": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.27": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.28": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.29": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.6": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.7": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.8": {
+                    "type": "boolean"
+                  },
+                  "layer.visible.9": {
+                    "type": "boolean"
+                  },
+                  "layerOrder.enabled": {
+                    "type": "boolean"
+                  },
+                  "palette.animationMode": {
+                    "enum": [
+                      0,
+                      1,
+                      3,
+                      4
+                    ],
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.bandBranchAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "palette.bandLineCount": {
+                    "maximum": 256.0,
+                    "minimum": 1.0,
+                    "type": "integer"
+                  },
+                  "palette.bandLineEnabled": {
+                    "type": "boolean"
+                  },
+                  "palette.bandLineGroove": {
+                    "type": "boolean"
+                  },
+                  "palette.bandLineOpacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineSoftness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandLineWidth": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentDensity": {
+                    "maximum": 2.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentInset": {
+                    "maximum": 0.25,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandOrnamentSize": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandSpineAmount": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.bandSpineDensity": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "palette.bandSpineLength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.colorInterpolation": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.colorSmoothing": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.colors": {
+                    "items": {
+                      "items": [
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "const": 1
+                        }
+                      ],
+                      "maxItems": 4,
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    "maxItems": 64,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "palette.enableGloss": {
+                    "type": "boolean"
+                  },
+                  "palette.glossColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "palette.grooveAuto": {
+                    "type": "boolean"
+                  },
+                  "palette.grooveDepth": {
+                    "maximum": 5.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.grooveWidth": {
+                    "maximum": 0.5,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "palette.seamless": {
+                    "type": "boolean"
+                  },
+                  "palette.stopEasing": {
+                    "enum": [
+                      0,
+                      1,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "palette.stops": {
+                    "items": {
+                      "items": [
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "maximum": 1,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        {
+                          "const": 1
+                        }
+                      ],
+                      "maxItems": 5,
+                      "minItems": 5,
+                      "type": "array"
+                    },
+                    "maxItems": 32,
+                    "minItems": 2,
+                    "type": "array"
+                  },
+                  "param.100": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1000": {
+                    "type": "boolean"
+                  },
+                  "param.1001": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.1002": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.1003": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1004": {
+                    "maximum": 6.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1005": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1006": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.1007": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.1008": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.1009": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.101": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.1010": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.102": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.103": {
+                    "maximum": 9.999999843067494e+17,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.104": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.105": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.106": {
+                    "maximum": 1000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.107": {
+                    "maximum": 12.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.108": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.109": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.110": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.111": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.112": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.113": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.114": {
+                    "maximum": 6.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.200": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.201": {
+                    "maximum": 1000000.0,
+                    "minimum": 9.999999747378752e-05,
+                    "type": "number"
+                  },
+                  "param.202": {
+                    "maximum": 1000000.0,
+                    "minimum": 9.999999747378752e-05,
+                    "type": "number"
+                  },
+                  "param.203": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.204": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.205": {
+                    "maximum": 1000000.0,
+                    "minimum": -1000000.0,
+                    "type": "number"
+                  },
+                  "param.305": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.306": {
+                    "maximum": 100000.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.307": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.308": {
+                    "maximum": 64.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.309": {
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.310": {
+                    "maximum": 10.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.311": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.312": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.313": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.314": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.315": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.316": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.317": {
+                    "type": "boolean"
+                  },
+                  "param.318": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.319": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.320": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.321": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.322": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.323": {
+                    "maximum": 12.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.324": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.325": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.326": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.327": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.328": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.329": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.330": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.331": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.332": {
+                    "maximum": 360000.0,
+                    "minimum": -360000.0,
+                    "type": "number"
+                  },
+                  "param.400": {
+                    "maximum": 10.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.401": {
+                    "maximum": 0.9990000128746033,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.402": {
+                    "maximum": 1000.0,
+                    "minimum": -1000.0,
+                    "type": "number"
+                  },
+                  "param.403": {
+                    "maximum": 10.0,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.404": {
+                    "maximum": 1.0,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.405": {
+                    "maximum": 0.9990000128746033,
+                    "minimum": -1.0,
+                    "type": "number"
+                  },
+                  "param.500": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.501": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.502": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.503": {
+                    "type": "boolean"
+                  },
+                  "param.504": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.505": {
+                    "maximum": 100.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "param.506": {
+                    "maximum": 256.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.507": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.508": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.509": {
+                    "maximum": 1.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.510": {
+                    "maximum": 4.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "param.511": {
+                    "maximum": 256.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.512": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.513": {
+                    "maximum": 4.0,
+                    "minimum": 0.5,
+                    "type": "number"
+                  },
+                  "param.514": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.515": {
+                    "maximum": 1.0,
+                    "minimum": 0.009999999776482582,
+                    "type": "number"
+                  },
+                  "param.516": {
+                    "maximum": 32.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.517": {
+                    "maximum": 32.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.518": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.519": {
+                    "maximum": 0.5,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.600": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.601": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.602": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.603": {
+                    "maximum": 100.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.800": {
+                    "type": "boolean"
+                  },
+                  "param.801": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.802": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.803": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.804": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.805": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.806": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.807": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.808": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.809": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.810": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.811": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.812": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.813": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.814": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.815": {
+                    "type": "boolean"
+                  },
+                  "param.816": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.817": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.818": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.819": {
+                    "type": "boolean"
+                  },
+                  "param.830": {
+                    "type": "boolean"
+                  },
+                  "param.831": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.832": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.833": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.834": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.835": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.836": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.837": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.838": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.839": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.840": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.841": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.842": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.843": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.844": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.845": {
+                    "type": "boolean"
+                  },
+                  "param.846": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.847": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.848": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.849": {
+                    "type": "boolean"
+                  },
+                  "param.860": {
+                    "type": "boolean"
+                  },
+                  "param.861": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.862": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.863": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.864": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.865": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.866": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.867": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.868": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.869": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.870": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.871": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.872": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.873": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.874": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.875": {
+                    "type": "boolean"
+                  },
+                  "param.876": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.877": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.878": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.879": {
+                    "type": "boolean"
+                  },
+                  "param.890": {
+                    "type": "boolean"
+                  },
+                  "param.891": {
+                    "maximum": 7.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.892": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.893": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.894": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.895": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "param.896": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.897": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.898": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.899": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.900": {
+                    "maximum": 200.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.901": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.902": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.903": {
+                    "maximum": 2.0,
+                    "minimum": -2.0,
+                    "type": "number"
+                  },
+                  "param.904": {
+                    "maximum": 1000000000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.905": {
+                    "type": "boolean"
+                  },
+                  "param.906": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "param.907": {
+                    "maximum": 1.0,
+                    "minimum": -0.5,
+                    "type": "number"
+                  },
+                  "param.908": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "param.909": {
+                    "type": "boolean"
+                  },
+                  "slope.azimuth": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.depth": {
+                    "maximum": 10000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossBands": {
+                    "maximum": 32.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "slope.glossColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "slope.glossIntensity": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossPhase": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossRelief": {
+                    "maximum": 16.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.glossSharpness": {
+                    "maximum": 256.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "slope.glossSource": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.invertRelief": {
+                    "type": "boolean"
+                  },
+                  "slope.layerCommon": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.lightBlend": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.lustreRelief": {
+                    "type": "boolean"
+                  },
+                  "slope.opacity": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.reflectionRatio": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "slope.reliefAutoZoom": {
+                    "type": "boolean"
+                  },
+                  "slope.replaceSurfaceStyle": {
+                    "type": "boolean"
+                  },
+                  "slope.shadingBlend": {
+                    "enum": [
+                      0,
+                      2
+                    ],
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.surfaceBlend": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ],
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.tintBlend": {
+                    "enum": [
+                      0,
+                      1
+                    ],
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "integer"
+                  },
+                  "slope.zenith": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.aoRadius": {
+                    "maximum": 64.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.backgroundBrightness": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.boundaryGuard": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.chromaticShift": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.chromeStrength": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmGrain": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmHue": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmStrength": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.filmThickness": {
+                    "maximum": 2000.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.flameStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.frostStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.frostThreshold": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.grungeScale": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.iridescence": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerFrost": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerMetal": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerMono": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerPhonk": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerPrint": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerQuantize": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerSea": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerSigil": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.layerVhs": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.normalSmooth": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.paletteColorMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.phonkRed": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.pixelMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.pixelSize": {
+                    "maximum": 16.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.printAsagi": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printBlue": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printFoam": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printIndigo": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printInk": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.printPaper": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.prismSpread": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.prismWidth": {
+                    "maximum": 3.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "surface.reflectionBrightness": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.reflectionContrast": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.reflectionCurve": {
+                    "maximum": 3.0,
+                    "minimum": 0.10000000149011612,
+                    "type": "number"
+                  },
+                  "surface.reflectionDetail": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.reliefDepth": {
+                    "maximum": 16.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.reliefWaves": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaAccentColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaBalance": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaBody": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaBodyColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaGlow": {
+                    "maximum": 4.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaGlowColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.seaParticleSize": {
+                    "maximum": 3.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.seaParticles": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.seaThreshold": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.shadowCrush": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.sparkleStrength": {
+                    "maximum": 3.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.specularAA": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.clearcoat": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.clearcoatRoughness": {
+                    "maximum": 1.0,
+                    "minimum": 0.03999999910593033,
+                    "type": "number"
+                  },
+                  "surface.studio.directIntensity": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.enabled": {
+                    "type": "boolean"
+                  },
+                  "surface.studio.environmentIntensity": {
+                    "maximum": 8.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.ior": {
+                    "maximum": 3.0,
+                    "minimum": 1.0,
+                    "type": "number"
+                  },
+                  "surface.studio.metalness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studio.roughness": {
+                    "maximum": 1.0,
+                    "minimum": 0.03999999910593033,
+                    "type": "number"
+                  },
+                  "surface.studioEnvironmentFollow": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.studioEnvironmentRotation": {
+                    "maximum": 359.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.style": {
+                    "maximum": 6,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "surface.styleBackgroundColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleBackgroundMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleColorMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDamage": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailLight": {
+                    "maximum": 2.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailSuppress": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleDetailThreshold": {
+                    "maximum": 0.4000000059604645,
+                    "minimum": 0.004999999888241291,
+                    "type": "number"
+                  },
+                  "surface.styleGlintSize": {
+                    "maximum": 4.0,
+                    "minimum": 0.25,
+                    "type": "number"
+                  },
+                  "surface.styleHighlightColor": {
+                    "items": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxItems": 4,
+                    "minItems": 4,
+                    "type": "array"
+                  },
+                  "surface.styleHighlightMix": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleInkPreserve": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.styleMonochrome": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.surfacePhase": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoBalance": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoColors": {
+                    "maximum": 6.0,
+                    "minimum": 3.0,
+                    "type": "integer"
+                  },
+                  "surface.ukiyoFlatness": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoFoam": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.ukiyoGrain": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.vhsNoise": {
+                    "maximum": 1.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  "surface.waveFrequency": {
+                    "maximum": 1.5,
+                    "minimum": 0.029999999329447746,
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "satisfied": {
+                "type": "boolean"
+              },
+              "score": {
+                "maximum": 100,
+                "minimum": 0,
+                "type": "number"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary",
+              "changes",
+              "score",
+              "satisfied"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "json_object"
+    },
+    "temperature": 0.6,
+    "top_k": 20,
+    "top_p": 0.95
+  },
+  "timeout_seconds": 600,
+  "vision": true
+}

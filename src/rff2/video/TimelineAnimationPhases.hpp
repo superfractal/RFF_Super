@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-23, 2026-09-26
+// Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30
 //
 
 #pragma once
@@ -92,6 +92,7 @@ namespace merutilm::rff2 {
             return ratesOf(shader);
         }
 
+        // Gauss-Legendre mathematical nodes/weights (NIST DLMF 3.5(v)); project GPLv3 implementation, see NOTICE.
         [[nodiscard]] Values gauss(const double start, const double end, const bool fourPoints) const {
             constexpr std::array<double, 2> twoNodes{0.5773502691896257, -0.5773502691896257};
             constexpr std::array<double, 4> fourNodes{0.8611363115940526, 0.3399810435848563,

@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-18, 2026-09-19, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-09-29
 //
 
 #pragma once
@@ -120,6 +121,8 @@ namespace merutilm::rff2::workspace {
         RECT preview{}, transport{}, tracks{}, divider{}, toggle{};
         bool tracksVisible = false, tracksAvailable = false;
         int maximumTracksHeight = 0, paneSpace = 0;
+        // Below this width the embedded header stacks Keyframes above the file buttons, so the panes start lower.
+        static constexpr int narrowHeaderWidth = 656;
         static TimelineDockLayout arrange(int width, int height, UINT dpi, const TimelineDockState& state,
                                           int header = 0, int minimumTracks = TimelineDockState::minimumHeight) {
             const auto px = [dpi](int value) { return UiDpi::pixels(value, dpi); };
@@ -129,7 +132,7 @@ namespace merutilm::rff2::workspace {
             const int margin = std::min({px(12), width / 2, height / 2});
             int headerHeight = header;
             if (headerHeight == 0) {
-                headerHeight = width < px(560) ? 108 : 60;
+                headerHeight = width < px(narrowHeaderWidth) ? 108 : 60;
             }
             const int top = std::min(std::max(0, height - margin), px(headerHeight));
             const int bottom = std::max(top, height - margin);

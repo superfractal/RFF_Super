@@ -1,15 +1,20 @@
 //
-// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-09-30
 //
 
 #include "LocalAiWindow.hpp"
 #include "SettingsMenu.hpp"
 #include "CallbackExplore.hpp"
+#include "CallbackVideo.hpp"
+#include <fstream>
 #include "../locator/MandelbrotLocator.h"
 #include "NativeDialogs.hpp"
 #include "UiDpi.hpp"
 #include "IOUtilities.h"
 #include "../io/LocalAiSettings.hpp"
+#include "../io/Utf8Prefix.hpp"
+#include "../io/LocalAiVideoOptions.hpp"
+#include "../io/LocalAiExplorationRoute.hpp"
 #include "../io/ConfigIO.h"
 #include "../constants/ExtensionConstants.hpp"
 #include <mutex>
@@ -21,22 +26,26 @@
 #include <opencv2/imgcodecs.hpp>
 #include "workspace/WorkspaceButton.hpp"
 #include "workspace/WorkspaceEditDrawing.hpp"
+#include "workspace/WorkspaceComboDrawing.hpp"
 
 namespace merutilm::rff2 {
     namespace {
         struct Job {
             std::atomic_bool cancel{false};
             std::atomic_bool done{false};
+            std::atomic_bool contextReset{false};
             std::mutex mutex;
             std::string log;
             std::string error;
             LocalAiSettings::Statistics statistics;
             int channel = 0;
+            std::optional<LocalAiSettings::Json> plan;
             std::optional<LocalAiSettings::Result> result;
             std::optional<LocalAiSettings::ZoomTarget> destination;
             void append(const std::string &text) {
                 std::lock_guard lock(mutex);
                 channel = 0;
+                if (text.find("[Context reset]") != std::string::npos) contextReset = true;
                 log += text + "\r\n";
             }
             void token(const std::string &text, bool reasoning = false) {
@@ -56,7 +65,40 @@ namespace merutilm::rff2 {
             float zoom = 0;
             std::string error;
         };
+        enum class AutoPhase { Off, Planning, Exploring, Appearance, Video };
         struct State {
+            HWND automaticTab{}, startAutomatic{}, chooseDirectory{}, videoCount{}, autoErrors{}, pairViews{};
+            HWND autoZoomFactor{}, autoSteps{}, autoLimitZoom{}, autoMaxZoom{};
+            HWND autoLocate{}, autoRetryLocate{}, autoRetryDecrease{}, autoImprove{}, autoMaxChanges{}, autoColorSpeed{}, autoColorMode{};
+            HWND autoPaletteOnly{}, autoRandomSmooth{}, autoAppearanceFirst{}, paletteOnly{}, randomPalette{};
+            LocalAiVideoOptions automaticOptions;
+            bool viewingAutomatic = false;
+            AutoPhase autoPhase = AutoPhase::Off;
+            int autoPending = 0;
+            std::array<int, 5> phaseFailures{};
+            std::chrono::steady_clock::time_point retryAt{};
+            int autoLimit = 5;
+            int failedConcepts = 0;
+            int completedVideos = 0;
+            int requestedVideos = 1;
+            int explorationSteps = 3;
+            std::string explorationFactor = "2";
+            std::filesystem::path outputRoot, runDirectory, keyframeDirectory;
+            std::shared_ptr<CallbackVideo::AutomaticJob> videoJob;
+            std::optional<FractalAttribute> cycleStart, videoLocation, pairOriginal;
+            std::optional<FractalAttribute> routeStart;
+            uint32_t routeSeed = 0;
+            LocalAiRouteDeck routeDeck;
+            int routeVideo = -1;
+            std::string routeInstruction;
+            LocalAiSettings::Json routeRecord;
+            std::optional<ShaderAttribute> cycleShader;
+            bool capturingOverview = false;
+            std::string overviewImage;
+            LocalAiSettings::Json plan;
+            std::string previousConcepts, automaticLog, autoReason;
+            bool videoExportOnly = false;
+
             HWND input{};
             HWND output{};
             HWND generate{};
@@ -86,6 +128,10 @@ namespace merutilm::rff2 {
             int retries = 0;
             std::shared_ptr<LocateJob> locating;
             bool exploring = false;
+            std::optional<Attribute> explorationStart;
+            std::string initialZoomFactor;
+            std::chrono::steady_clock::time_point zoomRetryAt{};
+            bool generationRestartPending = false;
             bool viewingZoom = false;
             bool verifyZoom = false;
             std::optional<FractalAttribute> beforeZoom;
@@ -217,7 +263,7 @@ namespace merutilm::rff2 {
             return normalized;
         }
         void output(const std::shared_ptr<State> &state, const std::string &text) {
-            (state->viewingZoom ? state->explorationLog : state->appearanceLog) = text;
+            (state->viewingAutomatic ? state->automaticLog : state->viewingZoom ? state->explorationLog : state->appearanceLog) = text;
             if (text == state->shown) {
                 return;
             }
@@ -266,24 +312,53 @@ namespace merutilm::rff2 {
                    (!state->revisionTracked || state->scene->getPreviewRevision() == state->capturedRevision);
         }
         void busy(const std::shared_ptr<State> &state, bool active) {
+            active = active || state->autoPhase != AutoPhase::Off;
+            for (auto control : {state->automaticTab, state->startAutomatic, state->chooseDirectory,
+                                 state->videoCount, state->autoErrors, state->pairViews, state->newChat,
+                                 state->autoZoomFactor, state->autoSteps, state->autoLimitZoom, state->autoLocate,
+                                 state->autoImprove, state->autoRandomSmooth, state->autoAppearanceFirst, state->autoColorSpeed,
+                                 state->paletteOnly, state->randomPalette})
+                if (control) EnableWindow(control, !active);
             for (auto control :
                  {state->generate, state->input, state->errorLimit, state->autoRefine, state->refinementLimit,
                   state->startZoom, state->locate, state->appearanceTab, state->exploreTab, state->zoomInput,
                   state->zoomLimit, state->zoomErrors}) {
                 EnableWindow(control, !active);
             }
-            EnableWindow(state->zoomFactor, !active || state->exploring);
+            EnableWindow(state->zoomFactor, !active || (state->exploring && state->autoPhase == AutoPhase::Off));
             const bool locateEnabled =
                 !active && SendMessageW(state->locate, BM_GETCHECK, 0, 0) == BST_CHECKED;
             EnableWindow(state->retryLocate, locateEnabled);
             EnableWindow(state->repeatExplore, locateEnabled);
             EnableWindow(state->retryDecrement,
                          locateEnabled && SendMessageW(state->retryLocate, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            EnableWindow(state->autoMaxZoom, !active && SendMessageW(state->autoLimitZoom, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            const bool automaticLocate = !active && SendMessageW(state->autoLocate, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            EnableWindow(state->autoRetryLocate, automaticLocate);
+            EnableWindow(state->autoRetryDecrease, automaticLocate && SendMessageW(state->autoRetryLocate, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            EnableWindow(state->autoMaxChanges, !active && SendMessageW(state->autoImprove, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            EnableWindow(state->autoPaletteOnly, !active && SendMessageW(state->autoImprove, BM_GETCHECK, 0, 0) == BST_CHECKED);
             EnableWindow(state->cancel, active);
             EnableWindow(state->undo, !active && state->before.has_value());
         }
         void finishRefinement(const std::shared_ptr<State> &state, const std::string &reason,
-                              bool restoreBest = true) {
+                              bool restoreBest = true, bool success = false) {
+            const bool same = unchanged(state);
+            if (state->pairOriginal) {
+                if (same) {
+                    state->scene->getAttribute().fractal = *state->pairOriginal;
+                    state->scene->getRequests().requestRecompute();
+                    rememberCurrentView(state);
+                    state->revisionTracked = false;
+                }
+                state->pairOriginal.reset();
+                state->capturingOverview = false;
+            }
+            state->overviewImage.clear();
+            if (state->autoPhase != AutoPhase::Off) {
+                state->autoReason = reason;
+                state->autoPending = same ? (success ? 1 : 2) : 3;
+            }
             if (state->refining && restoreBest && state->best && unchanged(state)) {
                 state->scene->getAttribute().shader = *state->best;
                 state->scene->getRequests().requestShader();
@@ -292,6 +367,7 @@ namespace merutilm::rff2 {
             }
             state->refining = false;
             state->exploring = false;
+            state->generationRestartPending = false;
             state->capturePending = false;
             state->ready.reset();
             state->completed = true;
@@ -304,11 +380,87 @@ namespace merutilm::rff2 {
             output(state, state->sessionLog + "\r\n" + reason);
         }
         void queueCapture(const std::shared_ptr<State> &state) {
+            if (!state->exploring && !state->pairOriginal &&
+                (state->autoPhase == AutoPhase::Appearance ||
+                 SendMessageW(state->pairViews, BM_GETCHECK, 0, 0) == BST_CHECKED)) {
+                state->pairOriginal = state->scene->getAttribute().fractal;
+                auto &fractal = state->scene->getAttribute().fractal;
+                fractal.center = fp_complex("-0.85", "0", Perturbator::logZoomToExp10(2));
+                fractal.logZoom = 2;
+                state->overviewImage.clear();
+                state->capturingOverview = true;
+                state->scene->getRequests().requestRecompute();
+                rememberCurrentView(state);
+            }
             state->revisionTracked = false;
             state->capturePending = true;
             state->captureStarted = std::chrono::steady_clock::now();
             busy(state, true);
             output(state, state->sessionLog + "\r\nWaiting for the rendered image...");
+        }
+        void resetExploration(const std::shared_ptr<State> &state) {
+            state->scene->getState().cancel();
+            state->scene->getAttribute() = *state->explorationStart;
+            state->scene->getRequests().requestRecompute();
+            state->scene->getRequests().requestShader();
+            state->job.reset();
+            state->locating.reset();
+            state->ready.reset();
+            state->before.reset();
+            state->best.reset();
+            state->bestScore = -1;
+            state->appliedSignature.clear();
+            state->history.clear();
+            state->sessionLog.clear();
+            state->appearanceLog.clear();
+            state->explorationLog.clear();
+            state->automaticLog.clear();
+            state->statistics = {};
+            state->completed = false;
+            state->refining = false;
+            state->autoStart = false;
+            state->newChatPending = false;
+            state->capturePending = false;
+            state->rounds = 0;
+            state->cycles = 0;
+            state->retries = 0;
+            state->locateNext = false;
+            state->verifyZoom = false;
+            state->beforeZoom.reset();
+            state->attemptedX = 0;
+            state->attemptedY = 0;
+            state->attemptedFactor = LocalAiSettings::zoomFactor(state->initialZoomFactor);
+            state->lostStructureRetries = 0;
+            state->staleImageRetries = 0;
+            state->rejectedTargets.clear();
+            state->iterationEvidence = LocalAiSettings::Json::object();
+            state->candidateImages.clear();
+            state->pairOriginal.reset();
+            state->capturingOverview = false;
+            state->overviewImage.clear();
+            state->capturedRevision = 0;
+            state->revisionTracked = false;
+            state->autoPending = 0;
+            state->autoReason.clear();
+            state->previousConcepts.clear();
+            state->plan = LocalAiSettings::Json::object();
+            state->videoLocation.reset();
+            state->videoExportOnly = false;
+            state->keyframeDirectory.clear();
+            state->phaseFailures.fill(0);
+            state->failedConcepts = 0;
+            SetWindowTextW(state->zoomFactor, UiLanguage::utf8(state->initialZoomFactor).c_str());
+            rememberCurrentView(state);
+        }
+        void preserveAutomaticAnimation(const std::shared_ptr<State> &state, ShaderAttribute &shader) {
+            if (state->autoPhase == AutoPhase::Off || !state->cycleShader) return;
+            const auto &original = state->cycleShader->palette;
+            shader.palette.animationSpeed = state->automaticOptions.colorAnimationSpeed;
+            shader.palette.animationMode = ShdPaletteAnimationMode::LINEAR;
+            shader.palette.animationFlowAmount = original.animationFlowAmount;
+            shader.palette.animationFlowScale = original.animationFlowScale;
+            shader.palette.animationFlowSpeed = original.animationFlowSpeed;
+            shader.palette.animationFlowSwirl = original.animationFlowSwirl;
         }
         void startRequest(const std::shared_ptr<State> &state, const std::string &image) {
             if (state->sessionLog.size() > 200000) {
@@ -318,7 +470,8 @@ namespace merutilm::rff2 {
             const auto original = state->scene->getAttribute().shader;
             const auto instruction = state->instruction;
             const auto history = state->history;
-            const auto connection = state->connection;
+            auto connection = state->connection;
+            connection["evaluation_only"] = state->vision && state->refining && state->maxRounds > 0 && state->rounds >= state->maxRounds;
             auto job = std::make_shared<Job>();
             state->completed = false;
             state->statistics = {};
@@ -327,6 +480,22 @@ namespace merutilm::rff2 {
                 state->ready.reset();
                 EnableWindow(state->apply, FALSE);
                 busy(state, true);
+                if (state->autoPhase == AutoPhase::Planning) {
+                    job->append(state->sessionLog + "\r\nAI is proposing an original abstract theme...");
+                    const auto previous = state->previousConcepts;
+                    std::thread([job, connection, previous] {
+                        try {
+                            auto runtime = connection;
+                            const auto info = LocalAiSettings::serverInfo(runtime, job->cancel);
+                            runtime["runtime_context"] = info.at("context");
+                            job->plan = LocalAiSettings::proposeVideo(runtime, job->cancel, previous, {},
+                                [job](const auto &text) { job->append(text); });
+                        }
+                        catch (const std::exception &e) { job->error = e.what(); }
+                        job->done = true;
+                    }).detach();
+                    return;
+                }
                 if (state->exploring) {
                     job->append(state->sessionLog + "\r\nAI zoom: " + std::to_string(state->rounds) + " / " +
                                 std::to_string(state->maxRounds));
@@ -355,10 +524,11 @@ namespace merutilm::rff2 {
                     return;
                 }
                 job->append(state->sessionLog + "\r\n" +
-                            (state->vision ? "Image evaluation " + std::to_string(state->rounds) + " / " +
-                                                 std::to_string(state->maxRounds)
-                                           : "Generating settings"));
-                std::thread([job, original, instruction, connection, image, history]() mutable {
+                            (state->vision ? (state->rounds == 0 ? "Initial image evaluation" :
+                                "Checking image after change " + std::to_string(state->rounds)) +
+                                " (change limit: " + std::to_string(state->maxRounds) + ")" : "Generating settings"));
+                const auto overview = state->overviewImage;
+                std::thread([job, original, instruction, connection, image, history, overview]() mutable {
                     try {
                         auto runtime = connection;
                         const auto info = LocalAiSettings::serverInfo(runtime, job->cancel);
@@ -373,7 +543,7 @@ namespace merutilm::rff2 {
                                 std::lock_guard lock(job->mutex);
                                 job->statistics = stats;
                             },
-                            image, history);
+                            image, history, overview);
                     } catch (const std::exception &e) {
                         job->error = e.what();
                     }
@@ -384,17 +554,20 @@ namespace merutilm::rff2 {
                 throw;
             }
         }
-        void applyProposal(const std::shared_ptr<State> &state) {
+        void applyProposal(const std::shared_ptr<State> &state, bool refine) {
             if (!unchanged(state)) {
                 throw std::runtime_error(
                     "The view or appearance changed. Generate again for the current image.");
             }
             auto &current = state->scene->getAttribute().shader;
-            auto next = LocalAiSettings::apply(current, state->ready->patch);
-            if (next.slope.lustreRelief && next.slope.reliefZoomReference < 0) {
+            const bool paletteOnly = state->connection.value("palette_only", false);
+            auto next = LocalAiSettings::apply(current, state->ready->patch, paletteOnly, true);
+            preserveAutomaticAnimation(state, next);
+            if (!paletteOnly && next.slope.lustreRelief && next.slope.reliefZoomReference < 0) {
                 next.slope.reliefZoomReference = state->scene->getAttribute().fractal.logZoom;
             }
             if (signature(next) == signature(current)) {
+                if (state->autoPhase == AutoPhase::Appearance && state->maxRounds == 0) return;
                 throw std::runtime_error("No further setting change was proposed.");
             }
             if (!state->refining) {
@@ -407,13 +580,272 @@ namespace merutilm::rff2 {
             state->scene->getRequests().requestShader();
             state->ready.reset();
             EnableWindow(state->apply, FALSE);
-            if (state->vision) {
+            if (state->vision && refine) {
                 state->refining = true;
                 ++state->rounds;
                 queueCapture(state);
             } else {
                 EnableWindow(state->undo, TRUE);
                 output(state, "Settings applied.");
+            }
+        }
+
+        void stopAutomatic(const std::shared_ptr<State> &state, const std::string &reason) {
+            state->autoPhase = AutoPhase::Off;
+            state->autoPending = 0;
+            state->generationRestartPending = false;
+            state->autoStart = false;
+            state->sessionLog += "\r\n" + reason;
+            busy(state, false);
+            output(state, state->sessionLog);
+            if (!state->runDirectory.empty()) {
+                std::ofstream log(state->runDirectory / "session.log", std::ios::binary);
+                log << state->sessionLog;
+            }
+        }
+        std::filesystem::path freshDirectory(const std::filesystem::path &root, const std::string &prefix) {
+            const auto stamp = std::chrono::system_clock::now().time_since_epoch().count();
+            for (int suffix = 0; suffix < 1000; ++suffix) {
+                const auto path = root / (prefix + std::to_string(stamp) + "_" + std::to_string(suffix));
+                if (std::filesystem::create_directory(path)) return path;
+            }
+            throw std::runtime_error("Cannot reserve a fresh output folder");
+        }
+        void startAutomaticPlan(const std::shared_ptr<State> &state) {
+            state->autoPhase = AutoPhase::Planning;
+            state->sessionLog += "\r\n[Video " + std::to_string(state->completedVideos + 1) +
+                ", concept attempt " + std::to_string(state->failedConcepts + 1) + " / " +
+                std::to_string(state->autoLimit) + "]";
+            if (state->routeVideo != state->completedVideos) {
+                const auto choice = state->routeDeck.next();
+                auto start = *state->cycleStart;
+                std::string name = "Free exploration";
+                state->routeInstruction.clear();
+                if (choice.route != LocalAiExplorationRoute::Free) {
+                    const bool needle = choice.route == LocalAiExplorationRoute::Needle;
+                    name = needle ? "Needle near Re=-2" : "Elephant Valley near Re=+0.25";
+                    const auto size = state->scene->documentCanvasSize();
+                    const double span = needle ? 0.08 : 0.06;
+                    start.logZoom = state->automaticOptions.boundedZoom(
+                        std::max(1.f, float(std::log10(std::max(1L, std::min(size.cx, size.cy)) / span))));
+                    start.center = fp_complex(needle ? "-1.97" : "0.27",
+                        needle ? (choice.side > 0 ? "0.002" : "-0.002") :
+                                 (choice.side > 0 ? "0.008" : "-0.008"),
+                        Perturbator::logZoomToExp10(start.logZoom));
+                    start.rotation = 0;
+                    state->routeInstruction = needle ?
+                        "Harness route: explore the thin antenna near Re=-2. Choose visible filament tips or "
+                        "detail along thin filaments; do not substitute a large bulb junction for a needle. " :
+                        "Harness route: explore Elephant Valley near the main cardioid cusp at Re=+0.25. "
+                        "Follow visible narrow valley detail in this view. ";
+                    state->routeInstruction +=
+                        "This route takes precedence over the artistic theme; interpret the theme within it. ";
+                }
+                state->routeStart = std::move(start);
+                state->routeVideo = state->completedVideos;
+                state->routeRecord = {{"seed", state->routeSeed}, {"video", state->completedVideos + 1},
+                    {"route", name}, {"selection", "shuffled groups of three; one of each route"},
+                    {"re", state->routeStart->center.real.to_string()},
+                    {"im", state->routeStart->center.imag.to_string()},
+                    {"log_zoom", state->routeStart->logZoom}};
+            }
+            state->scene->getAttribute().fractal = *state->routeStart;
+            state->scene->getRequests().requestRecompute();
+            state->sessionLog += "\r\n[Harness route] " + state->routeRecord.dump();
+            std::ofstream routeFile(state->runDirectory / "route.json", std::ios::binary);
+            routeFile << state->routeRecord.dump(2);
+            routeFile.close();
+            if (!routeFile) throw std::runtime_error("Cannot save exploration route");
+            state->exploring = false;
+            state->refining = false;
+            state->capturePending = false;
+            rememberCurrentView(state);
+            state->revisionTracked = false;
+            startRequest(state, {});
+        }
+        void restartAutomaticConcept(const std::shared_ptr<State> &state) {
+            if (!state->runDirectory.empty()) {
+                std::ofstream log(state->runDirectory / "session.log", std::ios::binary);
+                log << state->sessionLog;
+            }
+            state->runDirectory = freshDirectory(state->outputRoot, "rff_ai_");
+            state->scene->getAttribute().fractal = *state->cycleStart;
+            state->scene->getAttribute().shader = *state->cycleShader;
+            preserveAutomaticAnimation(state, state->scene->getAttribute().shader);
+            state->scene->getRequests().requestRecompute();
+            state->scene->getRequests().requestShader();
+            state->history.clear();
+            state->best.reset();
+            state->bestScore = -1;
+            state->ready.reset();
+            state->rounds = 0;
+            state->statistics = {};
+            state->pairOriginal.reset();
+            state->overviewImage.clear();
+            state->capturingOverview = false;
+            state->videoLocation.reset();
+            state->videoExportOnly = false;
+            state->keyframeDirectory.clear();
+            state->phaseFailures.fill(0);
+            state->sessionLog += "\r\n[Reset] Restored the starting view and appearance; retained video and color animation settings.";
+            startAutomaticPlan(state);
+        }
+        void startAutomaticExploration(const std::shared_ptr<State> &state) {
+            auto &scene = *state->scene;
+            scene.getAttribute().fractal = *state->routeStart;
+            scene.getRequests().requestRecompute();
+            state->autoPhase = AutoPhase::Exploring;
+            state->exploring = true;
+            state->refining = false;
+            state->maxRounds = state->explorationSteps;
+            state->rounds = 0;
+            state->retries = 0;
+            state->cycles = 0;
+            state->verifyZoom = false;
+            state->locateNext = false;
+            state->beforeZoom.reset();
+            state->rejectedTargets.clear();
+            state->candidateImages.clear();
+            state->lostStructureRetries = 0;
+            state->staleImageRetries = 0;
+            state->repeatCycles = false;
+            state->instruction = state->routeInstruction + state->plan.at("exploration").get<std::string>();
+            SetWindowTextW(state->zoomFactor, UiLanguage::utf8(state->explorationFactor).c_str());
+            SetWindowTextW(state->zoomInput, UiLanguage::utf8(state->instruction).c_str());
+            state->sessionLog += "\r\n[AI zoom] " + state->instruction;
+            rememberCurrentView(state);
+            queueCapture(state);
+        }
+        void startAutomaticAppearance(const std::shared_ptr<State> &state) {
+            state->autoPhase = AutoPhase::Appearance;
+            state->exploring = false;
+            state->refining = false;
+            state->autoStart = false;
+            state->rounds = 0;
+            state->bestScore = -1;
+            state->best.reset();
+            state->history.clear();
+            auto &shader = state->scene->getAttribute().shader;
+            if (state->automaticOptions.randomSmooth) {
+                shader = LocalAiSettings::randomSmoothColors(shader, true);
+                state->scene->getRequests().requestShader();
+                state->sessionLog += "\r\nRandomSmooth [10-20] palette generated.";
+            }
+            state->connection["palette_only"] = state->automaticOptions.paletteOnly;
+            state->connection["preserve_color_animation"] = true;
+            rememberCurrentView(state);
+            state->revisionTracked = false;
+            if (!state->automaticOptions.improveAppearance) {
+                finishRefinement(state, "AI appearance adjustment is disabled. Color animation settings retained.", false, true);
+                return;
+            }
+            state->refining = true;
+            state->autoStart = true;
+            state->vision = true;
+            state->maxRounds = state->automaticOptions.maxChanges;
+            state->before = shader;
+            state->instruction = state->plan.at("appearance").get<std::string>();
+            SetWindowTextW(state->input, UiLanguage::utf8(state->instruction).c_str());
+            state->sessionLog += state->automaticOptions.paletteOnly ? "\r\n[AI appearance: palette colors only]" : "\r\n[AI appearance: all appearance settings]";
+            queueCapture(state);
+        }
+        void startAutomaticVideo(const std::shared_ptr<State> &state) {
+            state->autoPhase = AutoPhase::Video;
+            state->scene->getAttribute().fractal = *state->videoLocation;
+            state->scene->getRequests().requestRecompute();
+            if (!state->videoExportOnly)
+                state->keyframeDirectory = freshDirectory(state->runDirectory, "keyframes_");
+            const auto size = state->scene->documentCanvasSize();
+            if (!ConfigIO::save(state->runDirectory / "settings.rfc", state->scene->getAttribute(), size.cx, size.cy))
+                throw std::runtime_error("Cannot save automatic video settings");
+            const auto extension = state->scene->getAttribute().video.exportation.lossless ? ".mkv" : ".mp4";
+            const auto outputPath = state->runDirectory /
+                ("video_" + std::to_string(state->phaseFailures[int(AutoPhase::Video)] + 1) + extension);
+            state->sessionLog += state->videoExportOnly ? "\r\n[Retry video export]" : "\r\n[Keyframes -> video]";
+            state->videoJob = std::make_shared<CallbackVideo::AutomaticJob>();
+            try {
+                CallbackVideo::automaticVideo(*state->scene, state->keyframeDirectory, outputPath,
+                                              state->videoJob, state->videoExportOnly);
+            } catch (...) { state->videoJob.reset(); throw; }
+            busy(state, true);
+        }
+        void automaticTick(const std::shared_ptr<State> &state) {
+            if (state->autoPhase == AutoPhase::Off || state->job || state->locating) return;
+            if (state->videoJob) {
+                const auto job = state->videoJob;
+                const auto status = job->progress->snapshot();
+                const int bytes = WideCharToMultiByte(CP_UTF8, 0, status.message.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                std::string message(std::max(1, bytes), '\0');
+                WideCharToMultiByte(CP_UTF8, 0, status.message.c_str(), -1, message.data(), int(message.size()), nullptr, nullptr);
+                message.resize(message.size() - 1);
+                output(state, state->sessionLog + "\r\n" + message);
+                if (!job->done) return;
+                state->videoExportOnly = job->keyframesReady;
+                state->videoJob.reset();
+                state->scene->getAttribute().fractal = *state->videoLocation;
+                state->scene->getRequests().requestRecompute();
+                rememberCurrentView(state);
+                state->revisionTracked = false;
+                if (job->stop.stop_requested() || status.phase == ExportProgress::Phase::CANCELLED) {
+                    stopAutomatic(state, "Automatic video cancelled. Completed files are retained.");
+                    return;
+                }
+                state->autoPending = status.phase == ExportProgress::Phase::COMPLETED ? 1 : 2;
+                state->autoReason = message;
+            }
+            if (!state->autoPending || std::chrono::steady_clock::now() < state->retryAt) return;
+            const int result = std::exchange(state->autoPending, 0);
+            const auto phase = state->autoPhase;
+            try {
+                if (result == 3 || (phase != AutoPhase::Video &&
+                    (signature(state->scene->getAttribute().shader) != state->expectedShader ||
+                     viewSignature(*state->scene) != state->expectedView))) {
+                    stopAutomatic(state, "Stopped because settings changed outside Local LLM. " + state->autoReason);
+                    return;
+                }
+                const bool success = result == 1;
+                if (!success) {
+                    ++state->phaseFailures[int(phase)];
+                    const int failures = ++state->failedConcepts;
+                    state->sessionLog += "\r\nFailure " + std::to_string(failures) + " / " +
+                        std::to_string(state->autoLimit) + ": " + state->autoReason;
+                    if (failures >= state->autoLimit) {
+                        stopAutomatic(state, "Error limit reached. Automatic video stopped.");
+                        return;
+                    }
+                    state->previousConcepts = "Previous attempt failed: " + utf8Prefix(state->autoReason, 500) +
+                        "\nPropose a different concept and prompts.\n" + utf8Prefix(state->previousConcepts, 3500);
+                    state->sessionLog += "\r\n[New concept] Retrying from AI theme generation and AI zoom.";
+                    restartAutomaticConcept(state);
+                    return;
+                }
+                state->sessionLog += "\r\n" + state->autoReason;
+                state->phaseFailures[int(phase)] = 0;
+                if (phase == AutoPhase::Exploring) {
+                    state->videoLocation = state->scene->getAttribute().fractal;
+                    if (state->automaticOptions.appearanceBeforeZoom) startAutomaticVideo(state);
+                    else startAutomaticAppearance(state);
+                } else if (phase == AutoPhase::Appearance) {
+                    state->videoExportOnly = false;
+                    if (state->automaticOptions.appearanceBeforeZoom) startAutomaticExploration(state);
+                    else startAutomaticVideo(state);
+                } else if (phase == AutoPhase::Video) {
+                    ++state->completedVideos;
+                    state->sessionLog += "\r\nCompleted videos: " + std::to_string(state->completedVideos);
+                    std::ofstream log(state->runDirectory / "session.log", std::ios::binary);
+                    log << state->sessionLog;
+                    log.close();
+                    if (state->requestedVideos && state->completedVideos >= state->requestedVideos) {
+                        stopAutomatic(state, "Automatic video complete.");
+                        return;
+                    }
+                    state->failedConcepts = 0;
+                    restartAutomaticConcept(state);
+                }
+            } catch (const std::exception &e) {
+                state->autoPending = 2;
+                state->autoReason = e.what();
+                state->retryAt = std::chrono::steady_clock::now() + std::chrono::seconds(2);
             }
         }
 
@@ -488,10 +920,18 @@ namespace merutilm::rff2 {
             HWND zoomPromptLabel{};
             HWND zoomLimitLabel{};
             HWND decrementLabel{};
+            HWND automaticDescription{}, directoryLabel{}, countLabel{}, automaticErrorLabel{};
+            HWND automaticFactorLabel{}, automaticStepsLabel{}, automaticChangesLabel{}, automaticColorLabel{}, automaticModeLabel{};
+            std::vector<HWND> automaticControls;
+            std::array<HWND, 3> automaticSections{};
+            std::array<std::vector<HWND>, 3> automaticPages;
+            HWND automaticHint{};
+            int automaticSection = 0;
             bool zoomTab = false;
             HFONT font{};
             workspace::WorkspaceTheme theme = workspace::WorkspaceTheme::current();
             workspace::WorkspaceButton::Context drawing{&theme, nullptr, 1};
+            workspace::WorkspaceComboDrawing::Context comboDrawing{&theme, nullptr, 1};
             std::shared_ptr<State> state;
             std::vector<std::pair<HWND, std::function<void()>>> actions;
             int px(int n) const {
@@ -516,6 +956,7 @@ namespace merutilm::rff2 {
                                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH,
                                    UiLanguage::fontFace());
                 drawing.font = font;
+                comboDrawing = {&theme, font, drawing.scale};
                 model = control(L"STATIC", L"Checking local connection...", 0);
                 context = control(L"STATIC", L"Context: checking...", 0);
                 speed = control(L"STATIC", L"Generation: -- tokens/s", 0);
@@ -539,7 +980,7 @@ namespace merutilm::rff2 {
             }
             HWND registerPrimaryButton(const std::wstring &title, std::function<void()> action) {
                 auto w = control(L"BUTTON", title.c_str(), WS_TABSTOP | BS_PUSHBUTTON);
-                workspace::WorkspaceButton::attach(w, title == L"Generate settings");
+                workspace::WorkspaceButton::attach(w, title == L"Generate RandomSmooth palette");
                 actions.emplace_back(w, std::move(action));
                 return w;
             }
@@ -554,18 +995,23 @@ namespace merutilm::rff2 {
                 auto place = [&](HWND w, int x, int y, int width, int height) {
                     MoveWindow(w, x + px(12), y + px(8), std::max(1, width), std::max(1, height), TRUE);
                 };
-                place(state->appearanceTab, 0, 0, (width - gap) / 2, button);
-                place(state->exploreTab, (width + gap) / 2, 0, (width - gap) / 2, button);
+                place(state->appearanceTab, 0, 0, third, button);
+                place(state->exploreTab, third + gap, 0, third, button);
+                place(state->automaticTab, 2 * (third + gap), 0, third, button);
                 place(state->newChat, 0, px(50), px(160), button);
                 place(connectionButton, width - px(200), px(50), px(200), button);
+                ShowWindow(state->newChat, state->viewingAutomatic ? SW_HIDE : SW_SHOW);
                 ShowWindow(model, SW_HIDE);
+                ShowWindow(connectionButton, SW_SHOW);
+                ShowWindow(state->cancel, SW_SHOW);
                 ShowWindow(context, SW_SHOW);
                 ShowWindow(speed, SW_SHOW);
-                const int appearanceVisibility = zoomTab ? SW_HIDE : SW_SHOW;
-                const int zoomVisibility = zoomTab ? SW_SHOW : SW_HIDE;
+                const int appearanceVisibility = zoomTab || state->viewingAutomatic ? SW_HIDE : SW_SHOW;
+                const int zoomVisibility = zoomTab && !state->viewingAutomatic ? SW_SHOW : SW_HIDE;
                 for (auto w :
                      {promptLabel, state->input, state->autoRefine, refinementLabel, state->refinementLimit,
-                      state->generate, state->apply, state->undo, state->errorLimit}) {
+                      state->generate, state->apply, state->undo, state->errorLimit, state->pairViews,
+                      state->paletteOnly, state->randomPalette}) {
                     ShowWindow(w, appearanceVisibility);
                 }
                 for (auto w :
@@ -574,15 +1020,109 @@ namespace merutilm::rff2 {
                       state->retryLocate, state->repeatExplore, state->retryDecrement, decrementLabel}) {
                     ShowWindow(w, zoomVisibility);
                 }
-                const HWND activeTab = zoomTab ? state->exploreTab : state->appearanceTab;
-                const HWND inactiveTab = zoomTab ? state->appearanceTab : state->exploreTab;
+                const HWND activeTab = state->viewingAutomatic ? state->automaticTab : zoomTab ? state->exploreTab : state->appearanceTab;
+                for (auto tab : {state->appearanceTab, state->exploreTab, state->automaticTab}) {
+                    RemovePropW(tab, L"RFF.Button.Primary");
+                    InvalidateRect(tab, nullptr, FALSE);
+                }
                 SetPropW(activeTab, L"RFF.Button.Primary", reinterpret_cast<HANDLE>(1));
-                RemovePropW(inactiveTab, L"RFF.Button.Primary");
                 InvalidateRect(state->appearanceTab, nullptr, FALSE);
                 InvalidateRect(state->exploreTab, nullptr, FALSE);
                 const int field = px(88), fieldX = width - field, indent = px(24);
                 for (auto w : {settingsHeading, afterHeading}) {
                     ShowWindow(w, zoomVisibility);
+                }
+                for (auto control : automaticControls) ShowWindow(control, state->viewingAutomatic ? SW_SHOW : SW_HIDE);
+                ShowWindow(errorLabel, state->viewingAutomatic ? SW_HIDE : SW_SHOW);
+                if (state->viewingAutomatic) {
+                    place(automaticDescription, 0, px(58), width - px(212), px(24));
+                    for (int i = 0; i < 3; ++i) {
+                        place(automaticSections[i], i * (third + gap), px(112), third, button);
+                        RemovePropW(automaticSections[i], L"RFF.Button.Primary");
+                        if (i == automaticSection) SetPropW(automaticSections[i], L"RFF.Button.Primary", reinterpret_cast<HANDLE>(1));
+                        InvalidateRect(automaticSections[i], nullptr, FALSE);
+                        for (auto control : automaticPages[i]) ShowWindow(control, i == automaticSection ? SW_SHOW : SW_HIDE);
+                    }
+                    const wchar_t *hints[] = {
+                        L"Choose where to save videos and when to stop.",
+                        L"Control zoom depth and Minibrot correction.",
+                        L"Choose whether AI adjusts colors only or the full appearance."
+                    };
+                    SetWindowTextW(automaticHint, UiLanguage::text(hints[automaticSection]).c_str());
+                    place(automaticHint, 0, px(162), width, px(40));
+                    auto row = [&](HWND label, HWND edit, int y, int inset = 0) {
+                        place(label, inset, px(y + 5), fieldX - gap - inset, px(24));
+                        place(edit, fieldX, px(y), field, px(32));
+                    };
+                    place(state->chooseDirectory, 0, px(210), px(200), button);
+                    place(directoryLabel, 0, px(258), width, px(24));
+                    row(countLabel, state->videoCount, 306);
+                    row(automaticErrorLabel, state->autoErrors, 354);
+                    row(automaticFactorLabel, state->autoZoomFactor, 210);
+                    row(automaticStepsLabel, state->autoSteps, 254);
+                    row(state->autoLimitZoom, state->autoMaxZoom, 298);
+                    place(state->autoLocate, 0, px(350), width, px(30));
+                    row(state->autoRetryLocate, state->autoRetryDecrease, 394, px(24));
+                    place(state->autoRandomSmooth, 0, px(206), width, px(30));
+                    place(state->autoImprove, 0, px(242), width, px(30));
+                    place(state->autoPaletteOnly, px(24), px(278), width - px(24), px(30));
+                    row(automaticChangesLabel, state->autoMaxChanges, 314, px(24));
+                    row(automaticColorLabel, state->autoColorSpeed, 354);
+                    place(automaticModeLabel, 0, px(399), width - px(192), px(24));
+                    place(state->autoColorMode, width - px(180), px(394), px(180), px(180));
+                    workspace::WorkspaceComboDrawing::applyMetrics(state->autoColorMode, comboDrawing, px(32));
+                    place(state->autoAppearanceFirst, 0, px(438), width, px(30));
+                    place(automaticPages[2].back(), 0, px(474), width, px(60));
+                    place(state->startAutomatic, 0, px(548), width - px(128) - gap, px(38));
+                    place(state->cancel, width - px(128), px(548), px(128), px(38));
+                    place(resultLabel, 0, px(602), width, px(22));
+                    const int footer = std::max(px(772), int(r.bottom) - button - px(20));
+                    place(state->output, 0, px(632), width, footer - px(632) - gap);
+                    place(context, 0, footer, width - px(140) - gap, px(44));
+                    place(speed, width - px(140), footer, px(140), px(24));
+                    HWND previous = HWND_TOP;
+                    for (auto control : {state->appearanceTab, state->exploreTab, state->automaticTab,
+                                         connectionButton, automaticSections[0], automaticSections[1], automaticSections[2], state->chooseDirectory,
+                                         state->videoCount, state->autoErrors, state->autoZoomFactor, state->autoSteps,
+                                         state->autoLimitZoom, state->autoMaxZoom, state->autoLocate,
+                                         state->autoRetryLocate, state->autoRetryDecrease,
+                                         state->autoRandomSmooth, state->autoImprove, state->autoPaletteOnly,
+                                         state->autoMaxChanges, state->autoColorSpeed, state->autoColorMode, state->autoAppearanceFirst, state->startAutomatic,
+                                         state->cancel, state->output}) {
+                        SetWindowPos(control, previous, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                        previous = control;
+                    }
+                    return;
+                }
+                if (!zoomTab) {
+                    place(state->paletteOnly, 0, px(96), width, px(30));
+                    place(promptLabel, 0, px(136), width, px(22));
+                    place(state->input, 0, px(164), width, px(64));
+                    place(errorLabel, 0, px(243), width - px(104), px(24));
+                    place(state->errorLimit, fieldX, px(238), field, px(30));
+                    place(state->autoRefine, 0, px(278), width - px(220), px(30));
+                    place(refinementLabel, width - px(206), px(283), px(104), px(24));
+                    place(state->refinementLimit, fieldX, px(278), field, px(30));
+                    place(state->pairViews, 0, px(314), width, px(30));
+                    place(state->randomPalette, 0, px(354), width, button);
+                    place(state->generate, 0, px(398), width - px(128) - gap, button);
+                    place(state->cancel, width - px(128), px(398), px(128), button);
+                    place(resultLabel, 0, px(448), width, px(22));
+                    const int footer = std::max(px(736), int(r.bottom) - button - px(20));
+                    place(state->output, 0, px(478), width, footer - px(478) - button - gap * 2);
+                    place(state->apply, 0, footer - button - gap, (width - gap) / 2, button);
+                    place(state->undo, (width + gap) / 2, footer - button - gap, (width - gap) / 2, button);
+                    place(context, 0, footer, width - px(140) - gap, px(44));
+                    place(speed, width - px(140), footer, px(140), px(24));
+                    HWND previous = HWND_TOP;
+                    for (auto control : {state->appearanceTab, state->exploreTab, state->automaticTab,
+                         state->newChat, connectionButton, state->paletteOnly, state->input, state->errorLimit,
+                         state->autoRefine, state->refinementLimit, state->pairViews, state->randomPalette,
+                         state->generate, state->cancel, state->output, state->apply, state->undo}) {
+                        SetWindowPos(control, previous, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                        previous = control;
+                    }
+                    return;
                 }
                 place(zoomTab ? zoomPromptLabel : promptLabel, 0, px(102), width, px(22));
                 place(zoomTab ? state->zoomInput : state->input, 0, px(130), width, px(64));
@@ -601,7 +1141,8 @@ namespace merutilm::rff2 {
                 place(state->retryLocate, indent, px(454), width - indent, px(30));
                 place(state->repeatExplore, indent, px(494), width - indent, px(30));
                 row(decrementLabel, state->retryDecrement, 540, indent);
-                const int actionY = zoomTab ? 588 : 364, logY = actionY + 80;
+                place(state->pairViews, 0, px(354), width, button);
+                const int actionY = zoomTab ? 588 : 410, logY = actionY + 80;
                 place(zoomTab ? state->startZoom : state->generate, 0, px(actionY), width - px(128) - gap,
                       button);
                 place(state->cancel, width - px(128), px(actionY), px(128), button);
@@ -613,7 +1154,7 @@ namespace merutilm::rff2 {
                 place(state->undo, (width + gap) / 2, footer - button - gap, (width - gap) / 2, button);
                 place(context, 0, footer, width - px(140) - gap, px(44));
                 place(speed, width - px(140), footer, px(140), px(24));
-                std::vector<HWND> order{state->appearanceTab, state->exploreTab, state->newChat,
+                std::vector<HWND> order{state->appearanceTab, state->exploreTab, state->automaticTab, state->newChat,
                                         connectionButton, zoomTab ? state->zoomInput : state->input};
                 order.reserve(24);
                 if (zoomTab) {
@@ -622,7 +1163,7 @@ namespace merutilm::rff2 {
                                                state->retryDecrement, state->startZoom});
                 } else {
                     order.insert(order.end(), {state->errorLimit, state->autoRefine, state->refinementLimit,
-                                               state->generate});
+                                               state->pairViews, state->generate});
                 }
                 order.insert(order.end(), {state->cancel, state->output, state->apply, state->undo});
                 HWND previous = HWND_TOP;
@@ -722,10 +1263,35 @@ namespace merutilm::rff2 {
                 }
                 if (m == WM_COMMAND && HIWORD(wp) == BN_CLICKED &&
                     (reinterpret_cast<HWND>(lp) == self->state->locate ||
-                     reinterpret_cast<HWND>(lp) == self->state->retryLocate)) {
+                     reinterpret_cast<HWND>(lp) == self->state->retryLocate ||
+                     reinterpret_cast<HWND>(lp) == self->state->autoLimitZoom ||
+                     reinterpret_cast<HWND>(lp) == self->state->autoLocate ||
+                     reinterpret_cast<HWND>(lp) == self->state->autoRetryLocate ||
+                     reinterpret_cast<HWND>(lp) == self->state->autoImprove)) {
                     busy(self->state, false);
                 }
                 if (m == WM_COMMAND && HIWORD(wp) == BN_CLICKED) {
+                    const auto clicked = reinterpret_cast<HWND>(lp);
+                    if (clicked == self->state->autoImprove || clicked == self->state->autoPaletteOnly ||
+                        clicked == self->state->autoRandomSmooth || clicked == self->state->autoAppearanceFirst || clicked == self->state->paletteOnly) {
+                        try {
+                            const auto connection = LocalAiSettings::readConnection();
+                            const int limit = LocalAiSettings::errorLimit(connection);
+                            if (clicked == self->state->paletteOnly) {
+                                LocalAiSettings::saveAppearanceOptions(
+                                    SendMessageW(clicked, BM_GETCHECK, 0, 0) == BST_CHECKED, limit);
+                            } else {
+                                auto options = LocalAiVideoOptions::read(connection.value("automatic_video", LocalAiSettings::Json::object()));
+                                options.improveAppearance = SendMessageW(self->state->autoImprove, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                                options.paletteOnly = SendMessageW(self->state->autoPaletteOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                                options.randomSmooth = SendMessageW(self->state->autoRandomSmooth, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                                options.appearanceBeforeZoom = SendMessageW(self->state->autoAppearanceFirst, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                                LocalAiSettings::saveVideoOptions(options.json(), limit);
+                            }
+                        } catch (const std::exception &e) {
+                            output(self->state, std::string("Cannot save appearance options: ") + e.what());
+                        }
+                    }
                     for (const auto &[control, invoke] : self->actions) {
                         if (control == reinterpret_cast<HWND>(lp)) {
                             invoke();
@@ -734,7 +1300,10 @@ namespace merutilm::rff2 {
                     }
                 }
                 if (m == WM_DRAWITEM) {
-                    workspace::WorkspaceButton::draw(*reinterpret_cast<DRAWITEMSTRUCT *>(lp), self->drawing);
+                    const auto &item = *reinterpret_cast<DRAWITEMSTRUCT *>(lp);
+                    if (item.CtlType == ODT_COMBOBOX)
+                        workspace::WorkspaceComboDrawing::draw(item, self->comboDrawing, self->px(6));
+                    else workspace::WorkspaceButton::draw(item, self->drawing);
                     return TRUE;
                 }
                 if (m == WM_CTLCOLOREDIT || m == WM_CTLCOLORSTATIC) {
@@ -748,6 +1317,14 @@ namespace merutilm::rff2 {
                                       reinterpret_cast<HWND>(lp) == self->state->zoomLimit ||
                                       reinterpret_cast<HWND>(lp) == self->state->zoomErrors ||
                                       reinterpret_cast<HWND>(lp) == self->state->retryDecrement ||
+                                      reinterpret_cast<HWND>(lp) == self->state->videoCount ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoErrors ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoZoomFactor ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoSteps ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoMaxZoom ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoRetryDecrease ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoMaxChanges ||
+                                      reinterpret_cast<HWND>(lp) == self->state->autoColorSpeed ||
                                       reinterpret_cast<HWND>(lp) == self->state->output;
                     SetTextColor(dc, self->theme.foreground);
                     SetBkColor(dc, edit ? self->theme.field : self->theme.background);
@@ -883,8 +1460,9 @@ namespace merutilm::rff2 {
             SetWindowTextW(state->input, L"");
             EnableWindow(state->apply, FALSE);
             SetWindowTextW(state->zoomInput, L"");
-            output(state, "Enter a description, generate, then apply the proposed settings.");
-            SetFocus(state->input);
+            output(state, state->viewingZoom ? "Describe the features to explore, then start AI zoom." :
+                "Describe the desired appearance and generate AI settings, or generate a RandomSmooth palette directly.");
+            SetFocus(state->viewingZoom ? state->zoomInput : state->input);
         }
         void finishLocateJob(const std::shared_ptr<State> &state) {
             auto result = state->locating;
@@ -907,12 +1485,14 @@ namespace merutilm::rff2 {
                     const auto reason = result->error.empty()
                                             ? std::string("Minibrot center did not converge.")
                                             : result->error;
-                    if (!state->retryLower) {
+                    if (!state->retryLower || state->retries + 1 >= LocalAiSettings::errorLimit(state->connection)) {
                         throw std::runtime_error(reason);
                     }
                     auto &fractal = state->scene->getAttribute().fractal;
                     fractal.logZoom = LocalAiSettings::retryLogZoom(
-                        fractal.logZoom, inputText(state->retryDecrement), Constants::Fractal::ZOOM_MIN);
+                        fractal.logZoom, state->autoPhase != AutoPhase::Off
+                            ? std::to_string(state->automaticOptions.retryDecrease) : inputText(state->retryDecrement),
+                        Constants::Fractal::ZOOM_MIN);
                     state->scene->getRequests().requestRecompute();
                     state->locateNext = true;
                     ++state->retries;
@@ -924,7 +1504,10 @@ namespace merutilm::rff2 {
                 }
                 auto &fractal = state->scene->getAttribute().fractal;
                 fractal.center = *result->center;
-                fractal.logZoom = result->zoom;
+                fractal.logZoom = state->autoPhase == AutoPhase::Exploring
+                    ? state->automaticOptions.boundedZoom(result->zoom) : result->zoom;
+                if (fractal.logZoom != result->zoom)
+                    state->sessionLog += "\r\nLocated minibrot: display Log Zoom is limited to " + std::to_string(fractal.logZoom) + ".";
                 state->scene->getRequests().requestRecompute();
                 ++state->cycles;
                 state->sessionLog +=
@@ -943,6 +1526,15 @@ namespace merutilm::rff2 {
         LRESULT CALLBACK tick(HWND w, UINT m, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR data) {
             auto &state = *reinterpret_cast<std::shared_ptr<State> *>(data);
             if (m == WM_DESTROY && !state->closed.exchange(true)) {
+                state->autoPhase = AutoPhase::Off;
+                if (state->videoJob) state->videoJob->cancel();
+                if (state->pairOriginal && unchanged(state)) {
+                    state->scene->getAttribute().fractal = *state->pairOriginal;
+                    state->scene->getRequests().requestRecompute();
+                    state->pairOriginal.reset();
+                    rememberCurrentView(state);
+                    state->revisionTracked = false;
+                }
                 if (state->locating) {
                     state->locating->cancel = true;
                     state->scene->getState().interrupt();
@@ -968,12 +1560,26 @@ namespace merutilm::rff2 {
             }
             if (m == WM_TIMER && wp == 8821) {
                 refreshMetrics(state);
+                automaticTick(state);
+            }
+            if (m == WM_TIMER && wp == 8821 && state->generationRestartPending &&
+                std::chrono::steady_clock::now() >= state->zoomRetryAt) {
+                state->generationRestartPending = false;
+                try {
+                    if (!unchanged(state)) throw std::runtime_error("Stopped: settings changed before restarting AI.");
+                    if (state->autoPhase != AutoPhase::Off) restartAutomaticConcept(state);
+                    else queueCapture(state);
+                } catch (const std::exception &e) {
+                    finishRefinement(state, e.what());
+                }
+                return 0;
             }
             if (m == WM_TIMER && wp == 8821 && state->locating && state->locating->done) {
                 finishLocateJob(state);
                 return 0;
             }
-            if (m == WM_TIMER && wp == 8821 && state->capturePending && !state->job) {
+            if (m == WM_TIMER && wp == 8821 && state->capturePending && !state->job &&
+                std::chrono::steady_clock::now() >= state->zoomRetryAt) {
                 try {
                     if (!unchanged(state)) {
                         throw std::runtime_error(
@@ -989,6 +1595,18 @@ namespace merutilm::rff2 {
                     }
                     auto images = state->scene->renderComparison(state->scene->getAttribute().shader, 0.f);
                     if (!images.second.empty()) {
+                        if (state->capturingOverview) {
+                            state->overviewImage = pngDataUrl(images.second);
+                            state->capturingOverview = false;
+                            state->scene->getAttribute().fractal = *state->pairOriginal;
+                            state->scene->getRequests().requestRecompute();
+                            rememberCurrentView(state);
+                            state->revisionTracked = false;
+                            state->captureStarted = std::chrono::steady_clock::now();
+                            output(state, state->sessionLog + "\r\nImage 1 ready. Rendering image 2 at the original location...");
+                            return 0;
+                        }
+                        state->pairOriginal.reset();
                         state->capturedRevision = state->scene->getPreviewRevision();
                         state->revisionTracked = true;
                         if (state->exploring) {
@@ -1029,6 +1647,12 @@ namespace merutilm::rff2 {
                                 state->rejectedTargets.clear();
                                 state->lostStructureRetries = 0;
                                 state->sessionLog += "\r\nIteration structure retained after zoom.";
+                            }
+                            if (state->autoPhase == AutoPhase::Exploring && !state->locateNext &&
+                                state->cycles == 0 && state->automaticOptions.reachedLimit(state->scene->getAttribute().fractal.logZoom)) {
+                                state->maxRounds = state->rounds;
+                                state->locateNext = state->useMinibrot;
+                                state->sessionLog += "\r\nMaximum Log Zoom reached. Exploration ends here.";
                             }
                             auto &candidates = evidence["candidates"];
                             for (auto it = candidates.begin(); it != candidates.end();) {
@@ -1116,7 +1740,7 @@ namespace merutilm::rff2 {
                                 throw;
                             }
                         } else if (state->exploring && state->rounds >= state->maxRounds) {
-                            finishRefinement(state, "AI exploration complete. Current location retained.");
+                            finishRefinement(state, "AI exploration complete. Current location retained.", true, true);
                         } else {
                             auto image = pngDataUrl(images.second);
                             state->capturePending = false;
@@ -1139,6 +1763,7 @@ namespace merutilm::rff2 {
                 if (job->done.load()) {
                     state->job.reset();
                     state->sessionLog = job->log;
+                    if (job->contextReset) state->history.clear();
                     state->completed = true;
                     if (state->newChatPending) {
                         state->newChatPending = false;
@@ -1154,10 +1779,47 @@ namespace merutilm::rff2 {
                         return 0;
                     }
                     if (!job->error.empty()) {
+                        if (state->autoPhase != AutoPhase::Off) {
+                            if (job->error.starts_with("Context capacity is too small"))
+                                stopAutomatic(state, job->error);
+                            else finishRefinement(state, job->error);
+                            return 0;
+                        }
+                        if (state->exploring &&
+                            state->explorationStart && unchanged(state)) {
+                            try {
+                                resetExploration(state);
+                                state->sessionLog = "[Full reset] AI generation retries failed. Restarting from the initial view, shader and empty AI state.";
+                                state->zoomRetryAt = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                                state->generationRestartPending = true;
+                                busy(state, true);
+                                output(state, state->sessionLog);
+                            } catch (const std::exception &e) {
+                                finishRefinement(state, e.what());
+                            }
+                            return 0;
+                        }
                         finishRefinement(state, job->error);
                         return 0;
                     }
                     try {
+                        if (state->autoPhase == AutoPhase::Planning && job->plan) {
+                            if (!unchanged(state)) {
+                                finishRefinement(state, "View changed during theme generation.");
+                                return 0;
+                            }
+                            state->plan = *job->plan;
+                            std::ofstream manifest(state->runDirectory / "concept.json", std::ios::binary);
+                            manifest << state->plan.dump(2);
+                            manifest.close();
+                            if (!manifest) throw std::runtime_error("Cannot save AI concept");
+                            state->previousConcepts = state->plan.dump(-1, ' ', true) + "\n" + utf8Prefix(state->previousConcepts, 3500);
+                            state->sessionLog += "\r\nTheme: " + state->plan.at("title").get<std::string>();
+                            state->phaseFailures[int(AutoPhase::Planning)] = 0;
+                            if (state->automaticOptions.appearanceBeforeZoom) startAutomaticAppearance(state);
+                            else startAutomaticExploration(state);
+                            return 0;
+                        }
                         if (signature(state->scene->getAttribute().shader) != state->expectedShader) {
                             throw std::runtime_error("Stopped: appearance settings changed while waiting for "
                                                      "AI. Generate again for the current appearance.");
@@ -1193,13 +1855,26 @@ namespace merutilm::rff2 {
                                     state->sessionLog += "\r\nAI exploration ended: " + target.summary;
                                     queueCapture(state);
                                 } else {
-                                    finishRefinement(state, "AI exploration stopped: " + target.summary);
+                                    finishRefinement(state, "AI exploration stopped: " + target.summary, true, state->rounds > 0);
                                 }
                                 return 0;
                             }
-                            const double factor = LocalAiSettings::zoomFactor(inputText(state->zoomFactor));
+                            const double requestedFactor = LocalAiSettings::zoomFactor(inputText(state->zoomFactor));
+                            const double factor = state->autoPhase == AutoPhase::Exploring
+                                ? state->automaticOptions.boundedFactor(state->scene->getAttribute().fractal.logZoom, requestedFactor)
+                                : requestedFactor;
+                            if (factor <= 1) {
+                                state->maxRounds = state->rounds;
+                                state->locateNext = state->useMinibrot;
+                                queueCapture(state);
+                                return 0;
+                            }
                             state->beforeZoom = state->scene->getAttribute().fractal;
                             state->scene->zoomToImagePoint(target.x, target.y, factor);
+                            if (state->autoPhase == AutoPhase::Exploring) {
+                                auto &zoom = state->scene->getAttribute().fractal.logZoom;
+                                zoom = state->automaticOptions.boundedZoom(zoom);
+                            }
                             ++state->rounds;
                             state->verifyZoom = true;
                             state->attemptedX = target.x;
@@ -1216,6 +1891,12 @@ namespace merutilm::rff2 {
                         }
                         if (job->result) {
                             state->ready = job->result;
+                            if (state->autoPhase == AutoPhase::Appearance && state->maxRounds == 0) {
+                                if (!job->result->patch["changes"].empty()) applyProposal(state, false);
+                                state->revisionTracked = false;
+                                finishRefinement(state, "Initial appearance complete. Re-evaluation and refinement skipped (0).", false, true);
+                                return 0;
+                            }
                             if (state->vision) {
                                 const auto &result = *job->result;
                                 state->history += "\nEvaluation " + std::to_string(state->rounds) +
@@ -1243,19 +1924,19 @@ namespace merutilm::rff2 {
                                                      "Finished after " + std::to_string(state->rounds) +
                                                          " applied changes. Best model score: " +
                                                          std::to_string(state->bestScore) + " / 100. " +
-                                                         stopReason);
+                                                         stopReason, true, true);
                                     return 0;
                                 }
                                 if (state->refining) {
-                                    applyProposal(state);
+                                    applyProposal(state, true);
                                     return 0;
                                 }
                                 if (result.patch["changes"].empty()) {
-                                    finishRefinement(state, "No setting change needed. " + result.summary);
+                                    finishRefinement(state, "No setting change needed. " + result.summary, true, true);
                                     return 0;
                                 }
                                 if (state->autoStart) {
-                                    applyProposal(state);
+                                    applyProposal(state, true);
                                     return 0;
                                 }
                             }
@@ -1268,11 +1949,7 @@ namespace merutilm::rff2 {
                             }
                             output(
                                 state,
-                                detail +
-                                    (state->vision
-                                         ? "\r\nApply and refine starts automatic image evaluation (up to " +
-                                               std::to_string(state->maxRounds) + " changes)."
-                                         : "") +
+                                detail + "\r\nApply applies these settings once." +
                                     "\r\n\r\nGeneration log:\r\n" + job->log);
                             EnableWindow(state->apply, TRUE);
                         }
@@ -1295,7 +1972,8 @@ namespace merutilm::rff2 {
         }
     } // namespace
     void LocalAiWindow::open(SettingsMenu &menu, RenderScene &scene) {
-        auto frame = std::make_unique<SettingsWindow>(L"Local LLM", 780);
+        auto frame = std::make_unique<SettingsWindow>(
+            L"Local LLM", 780, -1, Constants::Win32::SETTINGS_INPUT_HEIGHT, true);
         const auto state = std::make_shared<State>();
         state->scene = &scene;
         auto *panel = new View(*frame, state);
@@ -1304,6 +1982,7 @@ namespace merutilm::rff2 {
         state->model = panel->model;
         state->appearanceTab = panel->registerPrimaryButton(L"Appearance settings", [panel] {
             panel->zoomTab = false;
+            panel->state->viewingAutomatic = false;
             panel->state->viewingZoom = false;
             const auto log = panel->state->appearanceLog;
             output(panel->state, log);
@@ -1311,6 +1990,7 @@ namespace merutilm::rff2 {
         });
         state->exploreTab = panel->registerPrimaryButton(L"AI zoom exploration", [panel] {
             panel->zoomTab = true;
+            panel->state->viewingAutomatic = false;
             panel->state->viewingZoom = true;
             const auto log = panel->state->explorationLog;
             output(panel->state, log);
@@ -1339,7 +2019,7 @@ namespace merutilm::rff2 {
             }
         });
         state->errorLimit =
-            panel->control(L"EDIT", L"3", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
+            panel->control(L"EDIT", L"5", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
         workspace::WorkspaceEditDrawing::attach(state->errorLimit, panel->drawing);
         SendMessageW(state->errorLimit, EM_SETLIMITTEXT, 3, 0);
         IAccPropServices *access = nullptr;
@@ -1356,6 +2036,12 @@ namespace merutilm::rff2 {
         } catch (const std::exception &) {
         }
         state->input = editor(*panel, false, UiLanguage::label(L"Desired appearance"));
+        state->paletteOnly = panel->control(L"BUTTON", L"Limit AI changes to palette colors", WS_TABSTOP | BS_AUTOCHECKBOX);
+        SetWindowSubclass(state->paletteOnly, View::checkboxProcedure, 8832, reinterpret_cast<DWORD_PTR>(panel));
+        bool paletteOnly = true;
+        try { paletteOnly = LocalAiSettings::readConnection().value("appearance_palette_only", true); }
+        catch (const std::exception &) {}
+        SendMessageW(state->paletteOnly, BM_SETCHECK, paletteOnly ? BST_CHECKED : BST_UNCHECKED, 0);
         state->autoRefine =
             panel->control(L"BUTTON", L"Automatically apply and refine", WS_TABSTOP | BS_AUTOCHECKBOX);
         SetWindowSubclass(state->autoRefine, View::checkboxProcedure, 8832,
@@ -1377,7 +2063,7 @@ namespace merutilm::rff2 {
         } catch (const std::exception &) {
         }
         state->generate = panel->registerPrimaryButton(L"Generate settings", [state] {
-            if (state->job || state->capturePending || state->locating) {
+            if (state->job || state->capturePending || state->locating || state->autoPhase != AutoPhase::Off) {
                 return;
             }
             try {
@@ -1387,6 +2073,11 @@ namespace merutilm::rff2 {
                 }
                 auto connection = LocalAiSettings::readConnection();
                 const bool autoStart = SendMessageW(state->autoRefine, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                if (SendMessageW(state->pairViews, BM_GETCHECK, 0, 0) == BST_CHECKED &&
+                    (!connection.value("vision", false) ||
+                     state->scene->getAttribute().fractal.formulaType != FractalFormulaType::MANDELBROT ||
+                     state->scene->getAttribute().fractal.projectionMethod != FrtProjectionMethod::PLANAR))
+                    throw std::runtime_error("Two-view appearance requires vision and planar Mandelbrot.");
                 if (autoStart && !connection.value("vision", false)) {
                     throw std::runtime_error("Automatic refinement requires vision: true in "
                                              "local-ai.json and a vision-capable server.");
@@ -1406,7 +2097,10 @@ namespace merutilm::rff2 {
                     throw std::runtime_error("Error limit must be an integer from 1 to 100.");
                 }
                 const int limit = std::stoi(limitText);
-                LocalAiSettings::saveErrorLimit(limit);
+                const bool paletteOnly = SendMessageW(state->paletteOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                LocalAiSettings::saveAppearanceOptions(paletteOnly, limit);
+                connection["palette_only"] = paletteOnly;
+                connection["preserve_color_animation"] = true;
                 connection["max_errors"] = limit;
                 state->instruction = instruction;
                 state->connection = connection;
@@ -1424,8 +2118,6 @@ namespace merutilm::rff2 {
                 rememberCurrentView(state);
                 state->revisionTracked = false;
                 state->staleImageRetries = 0;
-                SetWindowTextW(state->apply,
-                               UiLanguage::label(state->vision ? L"Apply and refine" : L"Apply settings"));
                 EnableWindow(state->apply, FALSE);
                 if (state->vision) {
                     queueCapture(state);
@@ -1437,7 +2129,31 @@ namespace merutilm::rff2 {
                 finishRefinement(state, e.what());
             }
         });
+        state->randomPalette = panel->registerPrimaryButton(L"Generate RandomSmooth palette", [state] {
+            if (state->job || state->capturePending || state->locating || state->generationRestartPending ||
+                state->autoPhase != AutoPhase::Off) return;
+            try {
+                auto &shader = state->scene->getAttribute().shader;
+                auto next = LocalAiSettings::randomSmoothColors(shader);
+                state->before = shader;
+                shader = std::move(next);
+                state->appliedSignature = signature(shader);
+                state->ready.reset();
+                state->scene->getRequests().requestShader();
+                EnableWindow(state->apply, FALSE);
+                EnableWindow(state->undo, TRUE);
+                output(state, "RandomSmooth palette generated. Other appearance and color animation settings retained.");
+            } catch (const std::exception &e) {
+                output(state, e.what());
+            }
+        });
         state->cancel = panel->registerPrimaryButton(L"Cancel", [state] {
+            if (state->videoJob) {
+                state->videoJob->cancel();
+                output(state, state->sessionLog + "\r\nCancelling video; waiting for the encoder to stop...");
+                return;
+            }
+            if (state->autoPhase != AutoPhase::Off) stopAutomatic(state, "Automatic video cancelled.");
             if (state->locating) {
                 state->locating->cancel = true;
                 state->scene->getState().interrupt();
@@ -1447,31 +2163,31 @@ namespace merutilm::rff2 {
             if (state->job) {
                 state->job->cancel = true;
                 output(state, "Cancellation requested. Waiting for the pending request to stop...");
-            } else if (state->capturePending) {
+            } else if (state->capturePending || state->generationRestartPending || state->exploring || state->refining) {
                 finishRefinement(state, state->exploring ? "AI zoom stopped. Current location retained."
                                                          : "Cancelled. The best evaluated appearance is "
                                                            "retained when the view is unchanged.");
             }
         });
         state->output = editor(*panel, true, UiLanguage::label(L"Result"));
-        output(state, "Enter a description, generate, then apply the proposed settings.");
-        state->apply = panel->registerPrimaryButton(L"Apply settings", [state] {
+        output(state, "Describe the desired appearance and generate AI settings, or generate a RandomSmooth palette directly.");
+        state->apply = panel->registerPrimaryButton(L"Apply", [state] {
             if (!state->ready || state->job || state->capturePending) {
                 return;
             }
             try {
-                applyProposal(state);
+                applyProposal(state, false);
             } catch (const std::exception &e) {
                 finishRefinement(state, e.what());
             }
         });
-        state->undo = panel->registerPrimaryButton(L"Undo AI changes", [state] {
+        state->undo = panel->registerPrimaryButton(L"Undo appearance changes", [state] {
             auto &current = state->scene->getAttribute().shader;
             if (!state->before) {
                 return;
             }
             if (signature(current) != state->appliedSignature) {
-                output(state, "Appearance has changed since applying AI settings. Undo was skipped to "
+                output(state, "Appearance has changed since applying settings. Undo was skipped to "
                               "preserve your newer edits.");
                 return;
             }
@@ -1479,7 +2195,7 @@ namespace merutilm::rff2 {
             state->before.reset();
             state->scene->getRequests().requestShader();
             EnableWindow(state->undo, FALSE);
-            output(state, "AI appearance changes undone.");
+            output(state, "Appearance changes undone.");
         });
         state->zoomFactor = panel->control(L"EDIT", L"2", WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL);
         workspace::WorkspaceEditDrawing::attach(state->zoomFactor, panel->drawing);
@@ -1489,9 +2205,10 @@ namespace merutilm::rff2 {
         workspace::WorkspaceEditDrawing::attach(state->zoomLimit, panel->drawing);
         SendMessageW(state->zoomLimit, EM_SETLIMITTEXT, 4, 0);
         state->zoomErrors =
-            panel->control(L"EDIT", L"3", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
+            panel->control(L"EDIT", L"5", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
         workspace::WorkspaceEditDrawing::attach(state->zoomErrors, panel->drawing);
         SendMessageW(state->zoomErrors, EM_SETLIMITTEXT, 3, 0);
+        SetWindowTextW(state->zoomErrors, UiLanguage::utf8(inputText(state->errorLimit)).c_str());
         if (SUCCEEDED(CoCreateInstance(CLSID_AccPropServices, nullptr, CLSCTX_INPROC_SERVER,
                                        IID_IAccPropServices, reinterpret_cast<void **>(&access)))) {
             access->SetHwndPropStr(state->zoomFactor, OBJID_CLIENT, CHILDID_SELF, PROPID_ACC_NAME,
@@ -1499,7 +2216,7 @@ namespace merutilm::rff2 {
             access->Release();
         }
         state->startZoom = panel->registerPrimaryButton(L"Start AI zoom", [state] {
-            if (state->job || state->capturePending || state->locating) {
+            if (state->job || state->capturePending || state->locating || state->autoPhase != AutoPhase::Off) {
                 return;
             }
             try {
@@ -1524,6 +2241,7 @@ namespace merutilm::rff2 {
                 }
                 connection["max_errors"] = std::stoi(errors);
                 LocalAiSettings::errorLimit(connection);
+                LocalAiSettings::saveErrorLimit(std::stoi(errors));
                 state->instruction = inputText(state->zoomInput);
                 if (state->instruction.empty()) {
                     throw std::runtime_error("Describe the features you want to explore first.");
@@ -1557,6 +2275,9 @@ namespace merutilm::rff2 {
                 }
                 state->scene->getState().cancel();
                 state->connection = connection;
+                state->explorationStart = state->scene->getAttribute();
+                state->initialZoomFactor = inputText(state->zoomFactor);
+                state->zoomRetryAt = {};
                 state->vision = true;
                 state->exploring = true;
                 state->refining = false;
@@ -1596,6 +2317,218 @@ namespace merutilm::rff2 {
         }
         SetWindowPos(state->retryDecrement, state->repeatExplore, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        state->pairViews = panel->control(L"BUTTON", L"Evaluate overview (-0.85, 0, zoom 2) and current view",
+                                          WS_TABSTOP | BS_AUTOCHECKBOX);
+        SendMessageW(state->pairViews, BM_SETCHECK, BST_CHECKED, 0);
+        SetWindowSubclass(state->pairViews, View::checkboxProcedure, 8832, reinterpret_cast<DWORD_PTR>(panel));
+        state->automaticTab = panel->registerPrimaryButton(L"Automatic video", [panel] {
+            panel->state->viewingAutomatic = true;
+            output(panel->state, panel->state->automaticLog);
+            panel->layout();
+        });
+        panel->automaticDescription = panel->control(L"STATIC",
+            L"AI-generated themes and videos", 0);
+        panel->automaticHint = panel->control(L"STATIC", L"", 0);
+        const wchar_t *sectionNames[] = {L"Output", L"Zoom", L"Appearance"};
+        for (int i = 0; i < 3; ++i) {
+            panel->automaticSections[i] = panel->registerPrimaryButton(sectionNames[i], [panel, i] {
+                panel->automaticSection = i;
+                panel->layout();
+            });
+        }
+        panel->directoryLabel = panel->control(L"STATIC", L"Choose an output folder.", SS_PATHELLIPSIS);
+        panel->countLabel = panel->control(L"STATIC", L"Videos (0 = until cancelled, up to 1000)", 0);
+        panel->automaticErrorLabel = panel->control(L"STATIC", L"Error limit (1-100)", 0);
+        state->videoCount = panel->control(L"EDIT", L"1", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
+        state->autoErrors = panel->control(L"EDIT", L"5", WS_TABSTOP | WS_BORDER | ES_NUMBER | ES_AUTOHSCROLL);
+        SetWindowTextW(state->autoErrors, UiLanguage::utf8(inputText(state->errorLimit)).c_str());
+        for (auto field : {state->videoCount, state->autoErrors}) {
+            workspace::WorkspaceEditDrawing::attach(field, panel->drawing);
+            SendMessageW(field, EM_SETLIMITTEXT, 4, 0);
+        }
+        if (SUCCEEDED(CoCreateInstance(CLSID_AccPropServices, nullptr, CLSCTX_INPROC_SERVER,
+                                       IID_IAccPropServices, reinterpret_cast<void **>(&access)))) {
+            access->SetHwndPropStr(state->videoCount, OBJID_CLIENT, CHILDID_SELF, PROPID_ACC_NAME,
+                                   L"Videos to create (0 = until cancelled)");
+            access->SetHwndPropStr(state->autoErrors, OBJID_CLIENT, CHILDID_SELF, PROPID_ACC_NAME,
+                                   L"Error limit (1-100)");
+            access->Release();
+        }
+        try {
+            auto savedOptions = LocalAiSettings::readConnection().value("automatic_video", LocalAiSettings::Json::object());
+            if (!savedOptions.contains("color_animation_speed"))
+                savedOptions["color_animation_speed"] = state->scene->getAttribute().shader.palette.animationSpeed;
+            state->automaticOptions = LocalAiVideoOptions::read(savedOptions);
+        } catch (const std::exception &e) {
+            state->automaticLog = std::string("Automatic video defaults loaded: ") + e.what();
+        }
+        const auto &automaticOptions = state->automaticOptions;
+        const auto automaticField = [panel](const std::string &value, const wchar_t *name, bool integer = false) {
+            auto control = panel->control(L"EDIT", UiLanguage::utf8(value).c_str(),
+                WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL | (integer ? ES_NUMBER : 0));
+            workspace::WorkspaceEditDrawing::attach(control, panel->drawing);
+            SendMessageW(control, EM_SETLIMITTEXT, 24, 0);
+            IAccPropServices *access = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_AccPropServices, nullptr, CLSCTX_INPROC_SERVER,
+                                           IID_IAccPropServices, reinterpret_cast<void **>(&access)))) {
+                access->SetHwndPropStr(control, OBJID_CLIENT, CHILDID_SELF, PROPID_ACC_NAME, name);
+                access->Release();
+            }
+            return control;
+        };
+        const auto automaticCheckbox = [panel](const wchar_t *name, bool checked) {
+            auto control = panel->control(L"BUTTON", name, WS_TABSTOP | BS_AUTOCHECKBOX);
+            SendMessageW(control, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
+            SetWindowSubclass(control, View::checkboxProcedure, 8832, reinterpret_cast<DWORD_PTR>(panel));
+            return control;
+        };
+        const auto numberText = [](double value) { std::ostringstream text; text << std::setprecision(9) << value; return text.str(); };
+        panel->automaticFactorLabel = panel->control(L"STATIC", L"Zoom per AI step (1 < factor <= 100)", 0);
+        panel->automaticStepsLabel = panel->control(L"STATIC", L"Exploration steps (1-1000)", 0);
+        panel->automaticChangesLabel = panel->control(L"STATIC", L"Max changes (0 = initial proposal only)", 0);
+        state->autoZoomFactor = automaticField(numberText(automaticOptions.zoomFactor), L"Zoom per AI step (1 < factor <= 100)");
+        state->autoSteps = automaticField(std::to_string(automaticOptions.explorationSteps), L"Exploration steps (1-1000)", true);
+        state->autoLimitZoom = automaticCheckbox(L"Limit Log Zoom to", automaticOptions.limitZoom);
+        state->autoMaxZoom = automaticField(numberText(automaticOptions.maxLogZoom), L"Maximum Log Zoom");
+        state->autoLocate = automaticCheckbox(L"Locate Minibrot after exploration", automaticOptions.locateMinibrot);
+        state->autoRetryLocate = automaticCheckbox(L"On failure, lower Log Zoom by", automaticOptions.retryLocate);
+        state->autoRetryDecrease = automaticField(numberText(automaticOptions.retryDecrease), L"Locate retry Log Zoom decrease (greater than 0 to 10)");
+        state->autoImprove = automaticCheckbox(L"Enable AI appearance adjustment", automaticOptions.improveAppearance);
+        state->autoPaletteOnly = automaticCheckbox(L"Limit AI changes to palette colors", automaticOptions.paletteOnly);
+        state->autoRandomSmooth = automaticCheckbox(L"Generate a RandomSmooth [10-20] palette for each video", automaticOptions.randomSmooth);
+        state->autoAppearanceFirst = automaticCheckbox(L"Adjust appearance before Auto Zoom", automaticOptions.appearanceBeforeZoom);
+        panel->automaticColorLabel = panel->control(L"STATIC", L"Color Animation Speed", 0);
+        state->autoColorSpeed = automaticField(numberText(automaticOptions.colorAnimationSpeed), L"Color Animation Speed (iterations per second; negative reverses direction)");
+        panel->automaticModeLabel = panel->control(L"STATIC", L"Color Animation Mode", 0);
+        state->autoColorMode = panel->control(L"COMBOBOX", L"Color Animation Mode",
+            WS_TABSTOP | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL);
+        SendMessageW(state->autoColorMode, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Linear"));
+        SendMessageW(state->autoColorMode, CB_SETCURSEL, 0, 0);
+        workspace::WorkspaceComboDrawing::attach(state->autoColorMode, panel->comboDrawing);
+        EnableWindow(state->autoColorMode, FALSE);
+        state->autoMaxChanges = automaticField(std::to_string(automaticOptions.maxChanges), L"Appearance Max changes (0-10; 0 skips re-evaluation)", true);
+        state->chooseDirectory = panel->registerPrimaryButton(L"Choose output folder", [state, panel] {
+            const auto folder = IOUtilities::ioDirectoryDialog(L"Automatic video output folder");
+            if (folder) {
+                state->outputRoot = *folder;
+                SetWindowTextW(panel->directoryLabel, folder->c_str());
+            }
+        });
+        state->startAutomatic = panel->registerPrimaryButton(L"Start automatic video", [state] {
+            if (state->job || state->capturePending || state->locating || state->videoJob ||
+                state->autoPhase != AutoPhase::Off) return;
+            try {
+                if (state->outputRoot.empty()) throw std::runtime_error("Choose the output folder first.");
+                if (state->scene->isImageBrowsing() || state->scene->getVideoGenerationActive() ||
+                    state->scene->getVideoExportActive() || state->scene->isLongJobBusy() ||
+                    !state->scene->isIdleCompute() || state->scene->getRequests().recomputeRequested)
+                    throw std::runtime_error("Wait for rendering and other operations to finish.");
+                auto connection = LocalAiSettings::readConnection();
+                if (!connection.value("vision", false)) throw std::runtime_error("Automatic video requires vision: true.");
+                const auto &fractal = state->scene->getAttribute().fractal;
+                if (fractal.formulaType != FractalFormulaType::MANDELBROT ||
+                    fractal.projectionMethod != FrtProjectionMethod::PLANAR)
+                    throw std::runtime_error("Automatic video requires planar Mandelbrot.");
+                const auto integer = [](HWND control, int minimum, int maximum) {
+                    const auto text = inputText(control);
+                    if (text.empty() || text.size() > 4 || text.find_first_not_of("0123456789") != std::string::npos)
+                        throw std::runtime_error("Enter a whole number within the displayed range.");
+                    const int value = std::stoi(text);
+                    if (value < minimum || value > maximum)
+                        throw std::runtime_error("A number is outside its displayed range.");
+                    return value;
+                };
+                state->requestedVideos = integer(state->videoCount, 0, 1000);
+                state->autoLimit = integer(state->autoErrors, 1, 100);
+                const auto decimal = [](HWND control, const char *name) {
+                    const auto text = inputText(control);
+                    size_t consumed = 0;
+                    double number = 0;
+                    try { number = std::stod(text, &consumed); }
+                    catch (const std::exception &) { throw std::runtime_error(std::string(name) + " must be a finite number."); }
+                    if (consumed != text.size() || !std::isfinite(number))
+                        throw std::runtime_error(std::string(name) + " must be a finite number.");
+                    return number;
+                };
+                auto options = state->automaticOptions.json();
+                options["ai_appearance_enabled"] = SendMessageW(state->autoImprove, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                options["palette_only"] = SendMessageW(state->autoPaletteOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                options["random_smooth_palette"] = SendMessageW(state->autoRandomSmooth, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                options["appearance_before_zoom"] = SendMessageW(state->autoAppearanceFirst, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                if (options["ai_appearance_enabled"].get<bool>()) options["max_changes"] = integer(state->autoMaxChanges, 0, 10);
+                options["exploration_steps"] = integer(state->autoSteps, 1, 1000);
+                options["zoom_factor"] = decimal(state->autoZoomFactor, "Zoom per AI step");
+                options["limit_zoom"] = SendMessageW(state->autoLimitZoom, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                if (options["limit_zoom"].get<bool>()) options["max_log_zoom"] = decimal(state->autoMaxZoom, "Maximum Log Zoom");
+                options["locate_minibrot"] = SendMessageW(state->autoLocate, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                options["retry_locate"] = SendMessageW(state->autoRetryLocate, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                if (options["locate_minibrot"].get<bool>() && options["retry_locate"].get<bool>())
+                    options["retry_decrease"] = decimal(state->autoRetryDecrease, "Locate retry decrease");
+                options["color_animation_speed"] = decimal(state->autoColorSpeed, "Color Animation Speed");
+                options["color_animation_mode"] = 0;
+                const auto validated = LocalAiVideoOptions::read(options);
+                if (validated.limitZoom && validated.maxLogZoom < fractal.logZoom)
+                    throw std::runtime_error("Maximum Log Zoom must be at least the starting view's Log Zoom.");
+                if (validated.locateMinibrot && fractal.reuseReferenceMethod != FrtReuseReferenceMethod::DISABLED)
+                    throw std::runtime_error("Locate Minibrot requires disabled reference reuse.");
+                if (validated.locateMinibrot && validated.retryLocate)
+                    LocalAiSettings::retryLogZoom(100, std::to_string(validated.retryDecrease), 0);
+                LocalAiSettings::saveVideoOptions(validated.json(), state->autoLimit);
+                state->automaticOptions = validated;
+                state->explorationSteps = validated.explorationSteps;
+                state->explorationFactor = inputText(state->autoZoomFactor);
+                connection["max_errors"] = state->autoLimit;
+                connection["max_refinements"] = validated.changesPerAttempt();
+                state->connection = connection;
+                state->useMinibrot = validated.locateMinibrot;
+                state->retryLower = validated.locateMinibrot && validated.retryLocate;
+                state->cycleStart = fractal;
+                state->cycleShader = state->scene->getAttribute().shader;
+                state->cycleShader->palette.animationSpeed = validated.colorAnimationSpeed;
+                state->cycleShader->palette.animationMode = ShdPaletteAnimationMode::LINEAR;
+                state->failedConcepts = 0;
+                state->history.clear();
+                state->previousConcepts.clear();
+                state->connection["preserve_color_animation"] = true;
+                state->runDirectory = freshDirectory(state->outputRoot, "rff_ai_");
+                state->phaseFailures.fill(0);
+                state->autoPending = 0;
+                state->retryAt = {};
+                state->completedVideos = 0;
+                state->routeSeed = std::random_device{}();
+                state->routeDeck = LocalAiRouteDeck(state->routeSeed);
+                state->routeVideo = -1;
+                state->routeStart.reset();
+                state->videoExportOnly = false;
+                state->sessionLog = "Automatic video started. Error limit: " + std::to_string(state->autoLimit);
+                state->sessionLog += validated.appearanceBeforeZoom ? "\r\nOrder: appearance -> Auto Zoom -> video. Appearance is evaluated at the starting view and overview." : "\r\nOrder: Auto Zoom -> appearance -> video.";
+                state->scene->getState().cancel();
+                state->autoPhase = AutoPhase::Planning;
+                state->scene->getAttribute().shader = *state->cycleShader;
+                state->explorationStart = state->scene->getAttribute();
+                state->initialZoomFactor = state->explorationFactor;
+                state->zoomRetryAt = {};
+                state->scene->getRequests().requestShader();
+                startAutomaticPlan(state);
+            } catch (const std::exception &e) {
+                stopAutomatic(state, e.what());
+            }
+        });
+        SetPropW(state->startAutomatic, L"RFF.Button.Primary", reinterpret_cast<HANDLE>(1));
+        auto appearanceHelp = panel->control(L"STATIC",
+            L"Uncheck the palette limit to let AI adjust shading and effects too. RandomSmooth [10-20] runs before AI when both are enabled. Color animation settings are retained.", 0);
+        panel->automaticPages[0] = {panel->directoryLabel, panel->countLabel, panel->automaticErrorLabel,
+            state->videoCount, state->autoErrors, state->chooseDirectory};
+        panel->automaticPages[1] = {panel->automaticFactorLabel, panel->automaticStepsLabel,
+            state->autoZoomFactor, state->autoSteps, state->autoLimitZoom, state->autoMaxZoom,
+            state->autoLocate, state->autoRetryLocate, state->autoRetryDecrease};
+        panel->automaticPages[2] = {state->autoRandomSmooth, state->autoImprove, state->autoPaletteOnly,
+            panel->automaticChangesLabel, state->autoMaxChanges, panel->automaticColorLabel, state->autoColorSpeed,
+            panel->automaticModeLabel, state->autoColorMode, state->autoAppearanceFirst, appearanceHelp};
+        panel->automaticControls = {panel->automaticDescription, panel->automaticHint, state->startAutomatic};
+        for (auto section : panel->automaticSections) panel->automaticControls.push_back(section);
+        for (const auto &page : panel->automaticPages)
+            panel->automaticControls.insert(panel->automaticControls.end(), page.begin(), page.end());
         busy(state, false);
         EnableWindow(state->apply, FALSE);
         EnableWindow(state->undo, FALSE);

@@ -1,6 +1,7 @@
 //
-// Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-21, 2026-09-23, 2026-09-26
 // Modified by GPT-5 on 2026-09-17
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
 //
 
 #pragma once
@@ -25,6 +26,7 @@ namespace merutilm::rff2::workspace {
         std::vector<HWND> controls;
         WorkspaceComboDrawing::Context drawing;
         PanelBackBuffer listBuffer;
+        PanelBackBuffer helpBuffer, statusBuffer;
         int width = 1, height = 1, scroll = 0, wheel = 0;
         bool syncing = false;
         bool dragCandidate = false, dragging = false;
@@ -68,6 +70,38 @@ namespace merutilm::rff2::workspace {
             if (bool(IsWindowEnabled(control)) != enabled) {
                 EnableWindow(control, enabled);
             }
+        }
+        static LRESULT CALLBACK labelProc(HWND label, UINT message, WPARAM w, LPARAM l,
+                                          UINT_PTR id, DWORD_PTR data) {
+            auto &self = *reinterpret_cast<ShaderLayerWorkspace *>(data);
+            if (message == WM_ERASEBKGND) {
+                return 1;
+            }
+            if (message == WM_PAINT) {
+                PAINTSTRUCT paint;
+                const auto target = BeginPaint(label, &paint);
+                try {
+                    RECT bounds;
+                    GetClientRect(label, &bounds);
+                    auto &buffer = label == self.status ? self.statusBuffer : self.helpBuffer;
+                    const auto memory = buffer.begin(target, bounds.right, bounds.bottom);
+                    const auto dc = memory ? memory : target;
+                    PanelDrawing::fill(dc, bounds, self.context.theme.background);
+                    DefSubclassProc(label, WM_PRINTCLIENT, reinterpret_cast<WPARAM>(dc), PRF_CLIENT);
+                    if (memory) {
+                        buffer.present(target);
+                    }
+                } catch (...) {
+                    EndPaint(label, &paint);
+                    throw;
+                }
+                EndPaint(label, &paint);
+                return 0;
+            }
+            if (message == WM_NCDESTROY) {
+                RemoveWindowSubclass(label, labelProc, id);
+            }
+            return DefSubclassProc(label, message, w, l);
         }
         static void positionControl(HWND control, int x, int y, int w, int h) {
             RECT before;
@@ -222,8 +256,18 @@ namespace merutilm::rff2::workspace {
             check.top += (check.bottom - check.top - px(12)) / 2;
             check.bottom = check.top + px(12);
             drawVisibilityMark(item.hDC, check, visible, selected);
+            // The bottom row is applied first, so numbering counts up from the bottom.
+            const int applyOrder = int(labels.size()) - int(item.itemID);
+            RECT badge = item.rcItem;
+            badge.left += px(26);
+            badge.right = badge.left + px(20);
+            badge.top += (badge.bottom - badge.top - px(18)) / 2;
+            badge.bottom = badge.top + px(18);
+            PanelDrawing::rounded(item.hDC, badge, theme.track, theme.track, px(9));
+            PanelDrawing::text(item.hDC, std::to_wstring(applyOrder), badge,
+                               selected ? theme.selectedForeground : theme.secondary, context.font, DT_CENTER);
             RECT text = item.rcItem;
-            text.left += px(28);
+            text.left += px(54);
             text.right -= px(4);
             PanelDrawing::text(item.hDC, labels[item.itemID], text,
                                selected  ? theme.selectedForeground
@@ -624,6 +668,8 @@ namespace merutilm::rff2::workspace {
                              LBS_HASSTRINGS,
                          12);
             status = child(L"STATIC", L"", SS_LEFT, 13);
+            SetWindowSubclass(help, labelProc, 1, DWORD_PTR(this));
+            SetWindowSubclass(status, labelProc, 1, DWORD_PTR(this));
             controls = {list};
             const wchar_t *names[] = {L"Move Up", L"Move Down", L"Bring to Front", L"Send to Back",
                                       L"Undo",    L"Redo",      L"Reset",          L"Hide Layer"};
@@ -639,8 +685,8 @@ namespace merutilm::rff2::workspace {
             }
             AccessibleControl::describe(
                 list, L"Layer Order",
-                L"Higher layers are applied later. Up and Down move the selected layer. Shift with an arrow "
-                L"selects another layer. Space shows or hides it.",
+                L"Numbers show the order: 1 is applied first, the top layer last. Up and Down move the selected "
+                L"layer. Shift with an arrow selects another layer. Space shows or hides it.",
                 L"layers.selected");
             metrics(this->context.font, this->context.scale);
             themeChanged();
@@ -660,7 +706,11 @@ namespace merutilm::rff2::workspace {
             height = h;
             positionControl(window, 0, 0, w, h);
             const int statusHeight = px(44);
-            const int content = std::max(h, px(180) + statusHeight);
+            // Everything except the list: heading above it, buttons, caption and padding below it.
+            const int fixedHeight = px(108) + statusHeight;
+            // The list is only as tall as its rows, so the buttons and caption sit right below it.
+            const int rowsHeight = std::max<int>(1, int(rows.size())) * px(24);
+            const int content = std::max(h, std::min(rowsHeight, px(72)) + fixedHeight);
             scroll = std::clamp(scroll, 0, content - h);
             SCROLLINFO info{sizeof(info), SIF_RANGE | SIF_PAGE | SIF_POS};
             info.nMax = content - 1;
@@ -674,7 +724,7 @@ namespace merutilm::rff2::workspace {
                 positionControl(control, left, top - scroll, cw, ch);
             };
             place(help, x, px(16), available, px(24));
-            const int listTop = px(48), listHeight = std::max(px(72), content - px(108) - statusHeight);
+            const int listTop = px(48), listHeight = std::min(rowsHeight, content - fixedHeight);
             place(list, x, listTop, available, listHeight);
             int next = listTop + listHeight + px(10);
             const int cell = std::max(1, (available - 2 * gap) / 3);
@@ -703,6 +753,7 @@ namespace merutilm::rff2::workspace {
                 next.push_back(std::move(label));
             }
             const bool changed = next != labels || nextRows != rows;
+            const bool rowCountChanged = nextRows.size() != rows.size();
             const int previousRow = selectedRow();
             rows = std::move(nextRows);
             if (selectedRow() < 0 && !rows.empty()) {
@@ -734,6 +785,9 @@ namespace merutilm::rff2::workspace {
                 SendMessageW(list, WM_SETREDRAW, TRUE, 0);
                 InvalidateRect(list, nullptr, FALSE);
             }
+            if (rowCountChanged) {
+                layout(width, height);
+            }
             if (SendMessageW(list, LB_GETCURSEL, 0, 0) != selected) {
                 SendMessageW(list, LB_SETCURSEL, selected, 0);
             }
@@ -745,8 +799,8 @@ namespace merutilm::rff2::workspace {
             enableControl(buttons[6], canEdit && model->order() != ShdLayerOrder{});
             auto text = UiLanguage::text(
                 GetFocus() == list
-                    ? L"\u2191/\u2193: Move  \u00b7  Space: Show/hide\nTop layers are applied last."
-                    : L"Higher layers are applied later.");
+                    ? L"\u2191/\u2193: Move  \u00b7  Space: Show/hide\nNumbers show the order: 1 is applied first."
+                    : L"Numbers show the order: 1 is applied first.\nThe top layer is applied last.");
             if (model->order().enabled && model->shader().slope.paletteColorMix > 0 &&
                 shaderLayerActive(model->shader(), ShdLayer::SURFACE_COLOR)) {
                 int color = -1, lastMaterial = -1;
@@ -790,6 +844,8 @@ namespace merutilm::rff2::workspace {
             layout(width, height);
         }
         void themeChanged() override {
+            // The panel's own scrollbar follows the theme, as the list's does.
+            applyDarkThemeClass(window, false);
             for (auto control : controls) {
                 applyDarkThemeClass(control, false);
             }

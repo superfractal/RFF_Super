@@ -2,7 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-31
 // Modified by Opus 5 on 2026-08-31
-// Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-23
+// Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -57,6 +57,19 @@ namespace merutilm::rff2 {
 
         // False leaves the export exactly as it is without a timeline: one constant Zoom Speed.
         VidZoomOverlayAttribute zoomOverlay;
+        VidZoomOverlayAttribute maxIterationOverlay = [] {
+            VidZoomOverlayAttribute value;
+            value.visible = false;
+            value.custom = true;
+            value.y = .065f;
+            return value;
+        }();
+        bool interpolateMaxIteration = false;
+        [[nodiscard]] VidZoomOverlayAttribute legacyOverlay() const {
+            auto value = zoomOverlay;
+            value.showMaxIteration = maxIterationOverlay.visible;
+            return value;
+        }
         VidAudioAttribute audio;
         bool enabled = true;
 

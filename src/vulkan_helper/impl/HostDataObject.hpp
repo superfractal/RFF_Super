@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-07-15.
 // Modified by Opus 5 on 2026-08-26
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-29
 //
 
 #pragma once
@@ -133,6 +133,8 @@ namespace merutilm::vkh {
         [[nodiscard]] uint32_t getOffset(const uint32_t target) const { return offsets[target]; }
 
         [[nodiscard]] uint32_t getSizeByte(const uint32_t target) const { return sizes[target]; }
+
+        [[nodiscard]] size_t getReservedSizeByte(const uint32_t target) const { return reservedByte(target); }
 
         [[nodiscard]] uint32_t getTotalSizeByte() const { return static_cast<uint32_t>(data.size()); }
 

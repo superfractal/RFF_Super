@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-21, 2026-08-24, 2026-08-25
-// Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-23, 2026-09-26
+// Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-01
 //
 
 #include "TimelineEvaluator.hpp"
@@ -31,6 +31,7 @@ namespace merutilm::rff2 {
             return {};
         }
 
+        // Catmull and Rom (1974), uniform cubic polynomial; project GPLv3 implementation and mathematical reference in NOTICE.
         float cubic(const float p0, const float p1, const float p2, const float p3, const float u) {
             const float u2 = u * u;
             const float u3 = u2 * u;

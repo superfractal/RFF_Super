@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-23, 2026-09-26
 //
 
 #include "PaletteSources.hpp"
@@ -17,6 +17,7 @@ namespace merutilm::rff2::workspace {
         static const std::vector<std::shared_ptr<const Presets::ShaderPresets::PalettePreset>> library{
             std::make_shared<LongRandom64>(),
             std::make_shared<RandomSmooth>(),
+            std::make_shared<RandomSmoothShort>(),
             std::make_shared<Classic1>(),
             std::make_shared<Classic2>(),
             std::make_shared<ArcticAurora>(),

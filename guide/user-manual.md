@@ -1,14 +1,15 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # RFF_Super user manual
 
-This English manual describes the user-facing features in the September 24, 2026 source tree. Start with a workflow chapter, then use the field reference for exact controls. All links and images use repository-relative paths for GitHub.
+This English manual describes the user-facing features reviewed against the October 4, 2026 source tree. Start with a workflow chapter, then use the field reference for exact controls. The UI images retain their September 24 capture state; current differences are explained in the text. All links and images use repository-relative paths for GitHub.
 
 | What you want to do | Detailed chapter |
 | --- | --- |
 | Open, save, browse, compare, search, and arrange the workspace | [Workspace and files](workspace-and-files.md) |
 | Navigate, calculate, locate minibrots, or tune performance | [Exploration and calculation](exploration-and-calculation.md) |
-| Use a local model to propose appearance changes or explore locations | [Local AI](local-ai.md) |
+| Enable optional AI tools, propose appearance changes, explore locations, or create automatic videos | [Local AI](local-ai.md) |
 | Animate colors and cameras, edit keys/audio/overlays, generate maps, and export | [Animation and export](animation-and-export.md) |
 | Choose calculation/render presets, recover a session, and diagnose problems | [Presets, recovery, and diagnostics](presets-and-recovery.md) |
 | Understand every shader family, its prerequisites, and advanced Surface options | [Shader feature overview](shader-overview.md) |

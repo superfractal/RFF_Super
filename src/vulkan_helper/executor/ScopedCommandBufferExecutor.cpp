@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-28.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "ScopedCommandBufferExecutor.hpp"
@@ -44,6 +45,14 @@ namespace merutilm::vkh {
     }
 
     void ScopedCommandBufferExecutor::finish() {
+        submit(renderFinished);
+    }
+
+    void ScopedCommandBufferExecutor::finishWithoutSignal() {
+        submit(VK_NULL_HANDLE);
+    }
+
+    void ScopedCommandBufferExecutor::submit(const VkSemaphore signalSemaphore) {
         if (finished) {
             throw exception_invalid_state("Command buffer has already been submitted.");
         }
@@ -61,8 +70,8 @@ namespace merutilm::vkh {
             .pWaitDstStageMask = imageAvailable == VK_NULL_HANDLE ? nullptr : &waitPipelineStage,
             .commandBufferCount = 1u,
             .pCommandBuffers = &cbh,
-            .signalSemaphoreCount = renderFinished == VK_NULL_HANDLE ? 0 : 1u,
-            .pSignalSemaphores = renderFinished == VK_NULL_HANDLE ? nullptr : &renderFinished,
+            .signalSemaphoreCount = signalSemaphore == VK_NULL_HANDLE ? 0 : 1u,
+            .pSignalSemaphores = signalSemaphore == VK_NULL_HANDLE ? nullptr : &signalSemaphore,
         };
         FenceRef frameFence = wc.getSyncObject().getFence(frameIndex);
         frameFence.reset();

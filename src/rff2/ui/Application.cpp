@@ -3,7 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
@@ -127,7 +128,7 @@ namespace merutilm::rff2 {
                     CallbackFile::saveCurrentConfig(*scene);
                 }
             },
-            Utilities::getDefaultPath() / L"workspace-favorites.txt");
+            Utilities::getConfigFile(L"workspace-favorites.txt"));
         workspaceShell->bindPreviewFocus([this] { return timelineWorkspace; });
         workspaceShell->bindAppearanceReset(
             [this]() -> ShaderAttribute & { return scene->getAttribute().shader; });
@@ -154,7 +155,7 @@ namespace merutilm::rff2 {
                                                        if (IsWindow(timelineWorkspace)) {
                                                            TimelineWindow::syncWorkspace(timelineWorkspace);
                                                        }
-                                                   });
+                                                   }, [this](double iteration) { return scene->pickedFreezeColor(iteration); });
         auto animationForm =
             animation->form(L"Animation", {L"Color Animation", L"Frozen Colors", L"Zoom Motion", L"Timeline",
                                            L"Keyframes", L"Video Camera"});
@@ -181,6 +182,7 @@ namespace merutilm::rff2 {
             {3, L"Stop Timeline", [this] { TimelineWindow::workspaceAction(timelineWorkspace, 1); }, true},
             {3, L"Load Keyframe Folder",
              [this] { TimelineWindow::workspaceAction(openTimelineEditor(), 2); }},
+            {5, L"Match Planar Framing", [this] { TimelineWindow::matchCameraToPlanar(openTimelineEditor()); }},
             {4, L"Generate Keyframes",
              [this] { CallbackVideo::GENERATE_VID_KEYFRAME(*settingsMenu, *scene); }}};
         animationForm.status = [this]() -> std::wstring {

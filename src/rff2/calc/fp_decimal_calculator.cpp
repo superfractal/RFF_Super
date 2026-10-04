@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-05.
 // Modified by GPT-5 on 2026-08-31
+// Modified by GPT-6 on 2026-09-29
 //
 
 #include "fp_decimal_calculator.h"
@@ -258,12 +259,15 @@ namespace merutilm::rff2 {
         mpz_export(&mantissa, &cnt, -1, sizeof(mantissa), 0, 0, temp);
 
 
-        const int fExp2 = exp2 + shift + 52;
+        const int64_t fExp2 = static_cast<int64_t>(exp2) + shift + 52;
         //0100 0000 0000 : 2^1
         //0000 0000 0000 : 2^-1023
         //0111 1111 1111 : 2^1024
         if (fExp2 > 0x03ff) {
             return sgn == 1 ? INFINITY : -INFINITY;
+        }
+        if (fExp2 < -1074) {
+            return sgn == 1 ? 0.0 : -0.0;
         }
         const int mantissa_shift = fExp2 <= -0x03ff ? -0x03ff - fExp2 + 1 : 0;
         mantissa = (mantissa >> mantissa_shift) & 0x800fffffffffffffULL;

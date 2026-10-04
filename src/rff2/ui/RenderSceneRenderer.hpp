@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-09-05.
 // Modified by Opus 5 on 2026-08-10, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
-// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-22
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-29
 //
 
 #pragma once
@@ -308,8 +308,10 @@ namespace merutilm::rff2 {
             mark("iteration");
             if (layerShader.layerOrder.enabled) {
                 cmdOrderedLayers();
+                mark("ordered layers");
                 vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(cbh, mfg(SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
                 if (!offscreenPass) vkh::RenderPassFullscreenRecorder::cmdFullscreenPresentOnlyRenderPass<RCCPresent>(wc, frameIndex, swapchainImageIndex, {rendererPresent}, {{}});
+                mark("present");
                 return;
             }
 

@@ -1,6 +1,7 @@
 //
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 // Modified by GPT-5 on 2026-09-17
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -995,8 +996,8 @@ namespace merutilm::rff2::workspace {
             const auto tab = workspaceNavigation.tab(activeWorkspace);
             SendMessageW(workspaceChooser, CB_SETCURSEL, tab, 0);
             const bool navigationShown = geometry.compact ? navigationOpen : navigationDockedOpen;
-            SetWindowTextW(headerButtons[7], navigationShown ? (page() ? L"Hide Sections" : L"Hide Effects")
-                                                             : (page() ? L"Show Sections" : L"Show Effects"));
+            // One name for the section list on every page, matching the header above it.
+            SetWindowTextW(headerButtons[7], navigationShown ? L"Hide Sections" : L"Show Sections");
             SetWindowTextW(headerButtons[8], inspectorOpen ? L"Hide Settings" : L"Show Settings");
             UiLanguage::caption(headerButtons[7]);
             UiLanguage::caption(headerButtons[8]);
@@ -1742,7 +1743,12 @@ namespace merutilm::rff2::workspace {
                     return true;
                 },
                 [this] { refresh(); }, rangeHint, std::wstring(displayLabel(*parameter)),
-                std::wstring(parameter->id.begin(), parameter->id.end()));
+                std::wstring(parameter->id.begin(), parameter->id.end()),
+                [parameter](const std::wstring &text, int direction, bool coarse) {
+                    float value;
+                    if (!AttributeFormModel::parse(text, value) || !parameter->valid(value)) return text;
+                    return AttributeFormModel::number(parameter->nudged(value, direction * (coarse ? 10 : 1)));
+                });
         }
         void chooseColor(HWND owner, const SurfaceColor &parameter) {
             const glm::vec4 before = attribute().*parameter.member;
@@ -1781,7 +1787,7 @@ namespace merutilm::rff2::workspace {
                 }
                 return;
             }
-            text(dc, uiText(TextKey::Effects), box(18, 12, width - 40, 36), theme.foreground, true);
+            text(dc, uiText(TextKey::SurfaceEffects), box(18, 12, width - 40, 36), theme.foreground, true);
             text(dc, uiText(TextKey::BaseStyle), box(18, 64, width - 114, 28), theme.secondary);
             PanelDrawing::rounded(
                 dc, EffectsLayout::studio(width).pixels(scale),
@@ -1906,12 +1912,19 @@ namespace merutilm::rff2::workspace {
                          box(20, 10, surfaceTrack(), 38), theme.foreground, true);
                 }
                 if (query.empty()) {
-                    fill(dc, surfaceTabBounds(details ? 1 : 0), theme.selected);
+                    // Drawn like the workspace tabs in the header: a base line, then accent text and underline.
+                    const RECT firstTab = surfaceTabBounds(0), lastTab = surfaceTabBounds(1);
+                    fill(dc, {firstTab.left, firstTab.bottom - px(1), lastTab.right, firstTab.bottom}, theme.track);
                     for (int i = 0; i < 2; ++i) {
-                        auto bounds = surfaceTabBounds(i);
-                        InflateRect(&bounds, -px(16), 0);
-                        text(dc, i ? detailLabel() : L"Basic", bounds,
-                             details == bool(i) ? theme.selectedForeground : theme.secondary);
+                        const RECT bounds = surfaceTabBounds(i);
+                        const bool active = details == bool(i);
+                        if (active) {
+                            fill(dc, {bounds.left + px(8), bounds.bottom - px(3), bounds.right - px(8),
+                                      bounds.bottom - px(1)},
+                                 theme.accent);
+                        }
+                        PanelDrawing::text(dc, i ? detailLabel() : L"Basic", bounds,
+                                           active ? theme.accent : theme.secondary, font, DT_CENTER);
                     }
                 } else {
                     const int count = rowCount();
@@ -2709,7 +2722,7 @@ namespace merutilm::rff2::workspace {
             const wchar_t *headerLabels[] = {
                 uiText(TextKey::Undo),    uiText(TextKey::Redo),       uiText(TextKey::Save),
                 uiText(TextKey::Explore), uiText(TextKey::Appearance), uiText(TextKey::Animation),
-                uiText(TextKey::Export),  uiText(TextKey::Effects),    L"Hide Settings"};
+                uiText(TextKey::Export),  L"Hide Sections",           L"Hide Settings"};
             for (int i = 0; i < int(headerButtons.size()); ++i) {
                 headerButtons[i] = CreateWindowExW(
                     0, L"BUTTON", headerLabels[i], WS_CHILD | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 1, 1,
@@ -3765,7 +3778,7 @@ namespace merutilm::rff2::workspace {
                                                   panelLayout.navigationRight, panelLayout.navigationOuter);
             const int top = headerLayout.height + menuInset,
                       right = geometry.inspector.right - geometry.inspector.left;
-            const int grip = px(32), inspectorTop = top + grip;
+            const int grip = px(PanelDockHandle::height), inspectorTop = top + grip;
             canvasBounds = layoutAppearancePanels(geometry.canvas);
             compact = geometry.compact || !navigationDockedOpen;
             ShowWindow(compactCategory, !page() && compact && query.empty() ? SW_SHOWNA : SW_HIDE);
@@ -3825,6 +3838,12 @@ namespace merutilm::rff2::workspace {
                                    RECT{geometry.navigation.left, top, geometry.navigation.right, height});
             const auto place = [&](HWND control, RECT bounds, bool show, bool combo = false) {
                 const bool lostFocus = GetFocus() == control && !show;
+                if (control == workspaceModule && !headerLayout.stacked) {
+                    RECT faceBounds;
+                    if (GetWindowRect(control, &faceBounds)) {
+                        bounds.top = (headerLayout.height - (faceBounds.bottom - faceBounds.top)) / 2;
+                    }
+                }
                 SetWindowPos(control, nullptr, bounds.left, bounds.top,
                              std::max(1L, bounds.right - bounds.left),
                              combo ? px(300) : std::max(1L, bounds.bottom - bounds.top),

@@ -1,7 +1,8 @@
 //
 // Modified by Opus 5 on 2026-08-07, 2026-08-08, 2026-08-12, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-23
 // Modified by GPT-5 on 2026-08-16, 2026-08-23
-// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23, 2026-10-03
+// Modified by Opus 5.5 on 2026-10-02, 2026-10-03
 //
 
 #version 450
@@ -35,8 +36,9 @@ layout (set = 1, binding = 0) uniform FogUBO {
     float chaos_transition;
     float chaos_feather;
     float chaos_blur;
-    float chaos_highlights;
     float chaos_shade;
+    // 0 = average the aperture in display gamma, 1 = in linear light.
+    float chaos_linear;
 
 } fog_attr;
 
@@ -396,24 +398,41 @@ int blur_rings() {
     return fog_attr.blur_quality > 0.5 ? 16 : 8;
 }
 
+// Interleaved Gradient Noise (Jorge Jimenez, SIGGRAPH 2014), same as vk_linear_interpolation.frag; no code license, see NOTICE.
+// Adapted from Alan Wolfe, IGNLDS main.py at a9f3ab9, MIT; GLSL fract and the project seed are retained, see NOTICE.
+float ign(vec2 p, float seed) {
+    const float ignScale = 52.9829189;
+    const float ignX = 0.06711056;
+    const float ignY = 0.00583715;
+    return fract(ignScale * fract(ignX * p.x + ignY * p.y + seed));
+}
+
+// Golden-angle spiral from H. Vogel, Math. Biosci. 44 (1979); formula only, written here, no code copied, see NOTICE.
+// The half-offset is the midpoint in squared radius of each equal-area annulus; Vogel supplies the angular arrangement, see NOTICE.
+vec2 vogel_disc(int i, int n, float rotation) {
+    float angle = float(i) * 2.39996323 + rotation;
+    return sqrt((float(i) + 0.5) / float(n)) * vec2(cos(angle), sin(angle));
+}
+
 // Original RFF_Super artistic circular-aperture gather, GPL-3.0-only; see NOTICE, Chaos blur.
 vec3 chaos_blur(vec2 coord, float radius) {
     if (radius <= 0.0) return texture(fog_canvas, coord).rgb;
     radius = min(radius, 4096.0);
     vec2 texel = 1.0 / vec2(textureSize(fog_canvas, 0));
-    int rings = fog_attr.blur_quality > 0.5 ? 8 : 4;
+    int taps = fog_attr.blur_quality > 0.5 ? 160 : 48;
+    float rotation = ign(gl_FragCoord.xy, 0.0) * 6.28318531;
     vec3 sum = vec3(0.0);
     float weight = 0.0;
-    [[dont_unroll]] for (int y = -rings; y < rings; ++y) {
-        [[dont_unroll]] for (int x = -rings; x < rings; ++x) {
-            vec2 aperture = (vec2(x, y) + 0.5) / float(rings);
-            float w = 1.0 - smoothstep(0.85, 1.0, length(aperture));
-            if (w <= 0.0) continue;
-            sum += texture(fog_canvas, coord + aperture * radius * texel).rgb * w;
-            weight += w;
-        }
+    bool linearAverage = fog_attr.chaos_linear > 0.5;
+    [[dont_unroll]] for (int i = 0; i < taps; ++i) {
+        vec2 aperture = vogel_disc(i, taps, rotation);
+        float w = 1.0 - smoothstep(0.85, 1.0, length(aperture));
+        vec3 tap = texture(fog_canvas, coord + aperture * radius * texel).rgb;
+        // Display gamma keeps bright specks from lifting the dark gaps between them to grey.
+        sum += (linearAverage ? tap : pow(max(tap, vec3(0.0)), vec3(1.0 / 2.2))) * w;
+        weight += w;
     }
-    return sum / weight;
+    return linearAverage ? sum / weight : pow(sum / weight, vec3(2.2));
 }
 
 vec3 blend_chaos_blur(vec2 coord, float legacyRadius, float chaosRadius) {
@@ -462,14 +481,19 @@ float chaos_defocus() {
     if (feather == 0) {
         complexity = chaos_irregularity(uvec2(gl_FragCoord.xy), radius);
     } else {
-        [[dont_unroll]] for (int y = -1; y <= 1; ++y) {
-            [[dont_unroll]] for (int x = -1; x <= 1; ++x) {
-                ivec2 p = clamp(ivec2(gl_FragCoord.xy) + ivec2(x, y) * feather,
-                               ivec2(0), ivec2(iteration_info_attr.extent) - 1);
-                float weight = float((x == 0 ? 2 : 1) * (y == 0 ? 2 : 1));
-                complexity += chaos_irregularity(uvec2(p), radius) * weight / 16.0;
-            }
+        // A round Gaussian footprint; the old 3x3 grid stamped each edge nine times and squared the holes off.
+        int taps = fog_attr.blur_quality > 0.5 ? 16 : 10;
+        float rotation = ign(gl_FragCoord.xy, 0.5) * 6.28318531;
+        float total = 0.0;
+        [[dont_unroll]] for (int i = 0; i < taps; ++i) {
+            vec2 offset = vogel_disc(i, taps, rotation);
+            ivec2 p = clamp(ivec2(gl_FragCoord.xy + offset * float(feather)),
+                            ivec2(0), ivec2(iteration_info_attr.extent) - 1);
+            float weight = exp(-2.0 * dot(offset, offset));
+            complexity += chaos_irregularity(uvec2(p), radius) * weight;
+            total += weight;
         }
+        complexity /= total;
     }
     float depth = smoothstep(fog_attr.chaos_threshold,
                             fog_attr.chaos_threshold + max(fog_attr.chaos_transition, 0.01), complexity);
@@ -498,10 +522,7 @@ void main() {
         float focusRadius = fog_attr.focus_blur * focus_defocus(uvec2(gl_FragCoord.xy));
         chaosRadius = fog_attr.chaos_blur * chaosDefocus;
         float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
-        vec3 blurred = blend_chaos_blur(coord, blur_radius(focusRadius * scale), blur_radius(chaosRadius * scale));
-        float sourceLight = grayScale(color.rgb);
-        float highlight = clamp((sourceLight - grayScale(blurred)) / max(sourceLight, 1e-6), 0.0, 1.0);
-        color.rgb = mix(blurred, color.rgb, highlight * fog_attr.chaos_highlights);
+        color.rgb = blend_chaos_blur(coord, blur_radius(focusRadius * scale), blur_radius(chaosRadius * scale));
     }
 
     // rim_mask fades the fog toward the rim footprint: 0 keeps the full-frame fog, 1 confines it to the rim.
@@ -556,7 +577,8 @@ void main() {
     // blurred copy - a pixel just outside the band is softened, not half-replaced.
     float defocus = focus_defocus(uvec2(gl_FragCoord.xy));
     if (chaosDefocus > 0.0) {
-        color.rgb *= 1.0 - fog_attr.chaos_shade * chaosDefocus;
+        // Shade follows the selection alone, so Chaos Amount sets the blur without capping how dark it goes.
+        color.rgb *= 1.0 - fog_attr.chaos_shade * clamp(chaosDefocus / fog_attr.chaos_amount, 0.0, 1.0);
     } else if (defocus > 0.0) {
         vec3 source = texture(fog_canvas, coord).rgb;
         vec3 blurred = local_blur(coord, blur_radius(fog_attr.focus_blur * defocus * multiplier), blur_rings());

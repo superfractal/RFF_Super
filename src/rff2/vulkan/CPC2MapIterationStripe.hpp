@@ -5,6 +5,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-24, 2026-08-25, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -51,7 +52,8 @@ namespace merutilm::rff2 {
             : ComputePipelineConfigurator(engine, windowContextIndex,
                                           hdrChain
                                               ? "vk_2_map_iter_stripe_hdr.comp"
-                                              : "vk_2_map_iter_stripe.comp") {
+                                              : "vk_2_map_iter_stripe.comp",
+                                          VK_PIPELINE_CREATE_DISPATCH_BASE_BIT) {
             if (shader) {
                 specModes.setPalette(shader->palette);
                 specModes.setStripe(shader->stripe);

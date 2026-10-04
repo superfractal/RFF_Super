@@ -1,5 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Workspace and files
 
 [Manual](user-manual.md) · [Actual UI gallery](ui-gallery.md)
@@ -8,13 +9,13 @@
 
 The four main workspaces are **Location & Calculation**, **Surface Effects**, **Animation**, and **Export**. A workspace can contain several modules: for example, appearance has separate Palette, Lighting & Relief, Textures, Patterns, Warp & Stripe, Finishing, Animated Materials, Comparison, and Shader Layers modules.
 
-Choose a section to show its controls. Type a value, read the validation message, then choose **Apply & Render**. Until applied, the text is a draft; the picture still uses the last valid applied settings. **Discard** restores the displayed fields to their applied values. Switching sections does not mean that a pending edit has been applied. A marked invalid field must be corrected before that draft can be committed.
+Choose a section to show its controls. The section list's header button reads **Hide Sections** or **Show Sections** to collapse or restore the list; in the appearance workspace the list is headed **Surface Effects**, like the module chooser above it. Type a value, read the validation message, then choose **Apply & Render**. Until applied, the text is a draft; the picture still uses the last valid applied settings. **Discard** restores the displayed fields to their applied values. Switching sections does not mean that a pending edit has been applied. A marked invalid field must be corrected before that draft can be committed.
 
 The location panel illustrates this arrangement:
 
 ![Actual Location form with high-precision coordinates and Apply and Render](ui/explore-0.png)
 
-**Zoom-label correction:** this version displays “Log Zoom (e)” and a natural-log hint. The actual renderer uses base 10. Adding 1 multiplies magnification by 10 at a fixed canvas size. The image reproduces the current UI; the explanation here follows the calculation.
+**Log Zoom (10)** uses base 10: adding 1 multiplies magnification by 10 at a fixed canvas size. The September 24 capture above retains the older, incorrect “Log Zoom (e)” label; the current workspace and legacy dialog both use the corrected label.
 
 The workspace's history follows applied edits. **Undo** returns to the previous committed state and **Redo** reapplies it. In an active text field, normal text editing shortcuts can take precedence over workspace history. Loading/replacing a document changes the context in which history is valid; save named versions for durable checkpoints.
 
@@ -25,7 +26,7 @@ The workspace's history follows applied edits. **Undo** returns to the previous 
 | F6 / Shift+F6 | Move focus between workspace regions and the preview. |
 | Tab / Shift+Tab | Move among controls in a region. |
 | Enter in a form field | Apply the form, unless an open selection list is handling Enter. |
-| Ctrl+Z / Ctrl+Y | Undo/redo an applied workspace edit outside text editing. |
+| Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) | Undo/redo an applied workspace edit outside text editing. |
 | Ctrl+S | Save the current settings document; choose a filename for an unnamed document. |
 
 Search results lead to the relevant setting rather than enabling an effect automatically. If a setting changes nothing, check its master switch, opacity, selected source, and animation mode. [Dependency troubleshooting](SETTINGS_GUIDE.md#when-a-setting-seems-to-do-nothing) explains common cases.
@@ -67,10 +68,12 @@ flowchart LR
 | **Save Map**, `.rfm` | Saves calculated dynamic iteration data. Wait until calculation finishes before saving. Use it for recoloring or as a video source. |
 | **Save Map**, `.rfmz` | Losslessly compresses dynamic map data on disk. It is separate from reference-orbit and MPA table compression. |
 | **Save Image** | Writes rendered pixels. A PNG does not contain the iteration data needed to redo palette/relief calculations. |
-| **Save Shader Preset**, `.rfsp` | Saves appearance for reuse at another location. Load Shader Preset applies the look without using it as a location file. |
+| **Save Appearance Settings**, `.rfsp` | Saves appearance for reuse at another location. Load Appearance Settings applies the look without using it as a location file. |
 | **Timeline Save**, `.rfvt` or `.json` | Saves timing, tracks, audio references, and zoom-overlay settings. It does not embed keyframe maps, music, texture images, or font files. |
 
-New settings saves use RFC version 7. RFF_Super still reads RFC versions 3 through 6, but older releases cannot open version 7. Shader preset and timeline formats are unchanged.
+New settings saves use RFC version 8. RFF_Super still reads RFC versions 3 through 7, but earlier releases cannot open version 8, and appearance presets (`.rfsp`) saved by this version are likewise unreadable by earlier releases. Keep a backup before moving files between releases; newer optional fields, including timeline overlays, may not be retained by older readers.
+
+Map files have a separate limit of **100,000,000 internal pixels**, including Clarity, SSAA, and any source padding. A canvas that fits the GPU can still exceed this file limit. Reduce the internal dimensions before saving maps or generating map keyframes.
 
 **New Document** creates a fresh document. When replacing work, use the program's unsaved-change prompt to keep or discard it deliberately. If saving reports a failure, the open edits remain; correct the destination problem and save again.
 
@@ -100,4 +103,21 @@ For a reproducible comparison, retain the RFC files and use a fixed time, canvas
 
 **View → Language / 言語** selects English or Japanese; restart is required. **Show Setting Descriptions** shows explanatory text under controls. **Dark Mode** changes the interface colors. **Use Legacy Settings UI** makes relevant menu entries open the older settings windows instead of the corresponding workspace sections. The old and new interfaces edit the same application settings, although labels and control arrangement differ.
 
-Source basis: [Application](../src/rff2/ui/Application.cpp), [File commands](../src/rff2/ui/CallbackFile.cpp), [WorkspaceShell](../src/rff2/ui/workspace/WorkspaceShell.hpp), and [ComparisonWorkspace](../src/rff2/ui/workspace/ComparisonWorkspace.cpp).
+## Menu visibility and optional AI entry points
+
+`menu-visibility.json` controls which menu entries appear. It lives in the `config/` folder beside the executable's folder: with `bin/RFF_Super.exe`, this is `config/menu-visibility.json`. A copy left at the application root by an older build is moved there on startup. On first startup, the application writes a template if the file is absent and the directory is writable. Edit it while RFF_Super is closed, then restart.
+
+The file controls the main menu bar and the Timeline Editor's **AI Edit** button. The timeline's right-click **Parameters** menu, including **Zoom Overlay** and **Max Iterations Display**, is not controlled by this file; adding those keys has no effect. Existing files are not automatically expanded when new menu entries are introduced. To control the guide entry, add `"Open Guide": true` or `false` inside the `"?"` object.
+
+Keys use the original English captions even in the Japanese interface. Set an item to `false` to hide it, or `true` to show it; setting a whole menu to `false` hides its submenu. Missing ordinary entries default to visible. **Local AI appearance** and the timeline's **AI Edit** button default to hidden and need explicit enabling:
+
+```json
+{
+  "Shader": { "Local AI appearance": true },
+  "Timeline Editor": { "AI Edit": true }
+}
+```
+
+Merge these entries into an existing file if you want to retain its other visibility choices. This changes access points, not the saved artwork or model connection. If either AI entry is missing, check this file before troubleshooting the server. See [Local AI setup](local-ai.md) and [Timeline AI Edit](animation-and-export.md#timeline-ai-edit).
+
+Source basis: [Application](../src/rff2/ui/Application.cpp), [File commands](../src/rff2/ui/CallbackFile.cpp), [WorkspaceShell](../src/rff2/ui/workspace/WorkspaceShell.hpp), [ComparisonWorkspace](../src/rff2/ui/workspace/ComparisonWorkspace.cpp), and [menu visibility](../src/rff2/io/MenuVisibilityIO.hpp).

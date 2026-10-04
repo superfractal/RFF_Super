@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-26, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-23, 2026-10-01
 //
 
 #pragma once
@@ -84,5 +84,6 @@ namespace merutilm::rff2 {
         // Whether a PNG source can move this parameter at all: a finished picture never runs the pass
         // that reads the iteration buffer, so everything that pass draws is dead over one.
         static bool movesOverStaticImage(uint16_t id);
+        static bool isOverlay(uint16_t id);
     };
 }

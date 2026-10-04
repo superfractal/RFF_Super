@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-20, 2026-08-31
 // Modified by GPT-5 on 2026-08-21
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -48,6 +48,12 @@ namespace merutilm::rff2::ShdPalettePresets {
     };
 
     struct RandomSmooth final : public Presets::ShaderPresets::PalettePreset {
+        [[nodiscard]] std::string getName() const override;
+
+        [[nodiscard]] ShdPaletteAttribute genPalette() const override;
+    };
+
+    struct RandomSmoothShort final : public Presets::ShaderPresets::PalettePreset {
         [[nodiscard]] std::string getName() const override;
 
         [[nodiscard]] ShdPaletteAttribute genPalette() const override;

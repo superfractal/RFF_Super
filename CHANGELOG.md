@@ -1,7 +1,154 @@
-<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-09-30, 2026-10-01, 2026-10-02. -->
+<!-- Modified by Opus 5.5 on 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03, 2026-10-04. -->
 # Update History
 
-### 2026/09/26
+## 2026/10/04
+
+* **3.0.0**
+  * Added Match Planar Framing (Video Camera): RFF_Super matches the planar scale at the playhead using the loaded keyframe aspect ratio, a downward-facing 360 camera and Ground layout, while retaining rotation. Undo restores all matching settings together.
+  * Added Zoom Holds (Timeline Settings): RFF_Super offers zoom pauses at keyframe positions, with editable durations and Undo. Color animation, constant-period rotation and audio continue during each pause, and settings and timeline files retain the pauses.
+  * Added Display Start (s) and Display End (s) (Timeline Editor, Zoom Overlay and Max Iterations Display): RFF_Super controls each readout independently in preview and video export. Start 0 means the video start and End 0 means the video end; dedicated display tracks are no longer offered.
+    * Settings and timeline files retain the display intervals; older files keep unrestricted display.
+  * Added Save Appearance Settings and Load Appearance Settings (File menu): RFF_Super saves and loads `.rfsp` appearance presets.
+  * Added Open Guide (? menu): RFF_Super opens the online user manual in the default browser after confirming the link; Cancel leaves the browser closed.
+  * RFF_Super keeps its settings files in a config folder beside bin, and moves the ones an earlier version left beside bin into it on first use. A crash report is written to the recovery folder.
+    * Local AI now finds its connection settings whatever folder RFF_Super is started from.
+    * The Shader menu reads its examples from example/shader, and moves a shader_example folder from an earlier version there on first use.
+* **Settings Choices**
+  * Settings panels show On/Off settings as checkboxes.
+    * A checkbox sits the same distance below its name as a text box does, and its row is only as tall as the box, so the next setting no longer starts after a wider gap.
+  * Long settings lists are split into groups by a thin line and some space: Iteration Coloring, Start Offset and Palette Gloss in Color Cycle; Recessed Grooves, Spine Amount and Line Glow in Band Line; Independent Specular Light, Relief Waves and Iridescence in Lighting & Relief; Palette Follow in Textures and Patterns, plus Edge Enabled in Patterns; Rim Mask in Fog; Sync Color Animation and Primary Color in Animated Materials.
+  * A setting with two to four short choices shows them as buttons side by side, so one click picks a choice; longer lists stay drop-down lists.
+  * Alignment (Timeline Settings) is picked on a 3 x 3 grid, with the chosen position named beside it, and Font Style is set with separate B and I buttons.
+  * Interpolation shows the curve each choice draws between keys, and Iteration Coloring (Palette) shows each choice as a tile with its curve, three to a row so every name fits. Smootherstep is no longer offered there; files that use it still render with it.
+  * Settings windows: radio choices whose labels fit sit side by side in one row, and the Texture and Pattern layer numbers read as tabs. Color Smoothing and Color Interpolation keep one row per choice with their previews.
+* **GPU Work Split**
+  * Added GPU Work Split (Video settings, Export workspace): RFF_Super can send each video frame to the GPU in smaller parts, so a long export at a high resolution or Supersampling is not cut off by VK_ERROR_DEVICE_LOST when Windows resets a GPU that stays busy with one piece of work for about 2 seconds.
+    * 0 sends each frame in one part, as before; 1 sends each shader pass on its own; 2 to 64 also divide the fractal pass into that many horizontal bands. The exported video is the same at every value, and higher values export slightly slower.
+    * Settings files from earlier versions load with GPU Work Split at 0.
+  * During a video export, the console shows about every 2 seconds how many parts each frame is sent in, how long the longest part takes on the GPU and in which pass, and how close that comes to the Windows limit, with a summary when the export ends.
+* **Timeline Editor**
+  * With no keyframe folder loaded, the preview reads No keyframes loaded and offers Select keyframe folder... in its middle; the transport no longer repeats the request.
+  * The transport readout of the keyframes' zoom is named Magnification, and the zoom control under the tracks is named Timeline zoom, so the two are no longer both called Zoom.
+  * Play and Pause are one button, which shows Pause while playback runs.
+  * The ruler marks the end of the video with its distance and total time, and the tick labels sit to the right of their ticks, clear of the playhead.
+  * Track rows keep a compact height instead of stretching to fill the track area, and the divider between the preview and the transport shows a grip for resizing it.
+  * The timeline scrollbar is slimmer and appears only while the timeline is zoomed in.
+  * Timeline Settings shows On/Off settings as checkboxes. While Custom Appearance is Off, the Zoom Display rows it governs are dimmed, and the panel notes that editing one of them turns it on.
+  * RFF_Super creates new tracks with one keyframe at the start and holds its value through the end, without automatically adding an ending keyframe.
+* **Appearance Workspace**
+  * The section list is headed Surface Effects, the same name as the module chooser above it, and its header button reads Hide Sections or Show Sections on every page.
+  * Shader Layers numbers each layer in the order it is applied, 1 first, and the list is only as tall as its layers, with Move Up, Move Down and Reset directly below.
+  * The Basic and Detail tabs are drawn like the workspace tabs, with the selected tab in the accent color and underlined.
+  * The strips for dragging the section list and the settings panel are half as tall and show a grip; their names appear as tooltips.
+  * Secondary text in the settings panels is easier to read, in both the dark and the light theme.
+* **Menu Visibility**
+  * RFF_Super reads `menu-visibility.json` from the folder that holds `local-ai.json` and hides menu-bar items set to false; setting a whole menu or submenu to false hides its contents.
+    * When the file is missing, RFF_Super writes a template using the original English captions in every interface language; changes take effect at the next start.
+  * Local AI appearance (Shader menu) and the AI Edit button in the Timeline Editor are hidden by default and appear when `menu-visibility.json` sets them to true.
+* **Local LLM**
+  * Automatic video accepts 0 for Max changes to apply the initial appearance proposal and continue without re-evaluation or refinement.
+  * RFF_Super offers Adjust appearance before Auto Zoom for automatic videos. The saved option adjusts the overview and starting view before exploration; the default retains adjustment after exploration.
+* **Rendering**
+  * Palette coloring in the preview and in video rendering is faster when Cycle Length (R), (G) and (B) share one value — up to about twice as fast with Log, Log-Log, Cube Root or frozen colors — and every pixel keeps exactly the color it had.
+  * Rendering FPS accepts 0, which removes the limit on live redraws. Video Frame Rate still starts at 1.
+  * Chaos Blur (Fog settings) no longer washes intricate regions out to a light grey: blurred areas keep the dark color between bright details and stay close to the original brightness.
+  * Chaos Blur no longer offers Chaos Highlight Detail. Smooth surfaces next to blurred regions keep their white lines as sharp as with Chaos Blur off, and blurred regions no longer carry scattered bright specks.
+    * Settings files, shader presets and timelines from earlier versions still open; their Chaos Highlight Detail value and track are ignored. Settings files and shader presets saved by this version cannot be opened by earlier versions of RFF_Super.
+  * Added Chaos Blur Averaging (Fog settings): Average in Gamma Space keeps the dark gaps between bright details dark, and Average in Linear Space lets bright detail spread and brightens the blurred regions. Settings files and shader presets without it open with Average in Gamma Space.
+  * Chaos Shade now goes up to 1 and darkens by the detected region alone, so at 1 the fully selected regions turn black whatever Chaos Amount is. Files that use Chaos Shade with Chaos Amount below 1 now render darker than before.
+  * Chaos Blur (Fog settings) keeps blurred holes and edges round instead of squared off, and its blur no longer shows faint repeated copies of bright detail. The detected region now fades out evenly in every direction.
+* **Fixes**
+  * Keyframe generation now preserves the selected fractal rotation and 360 projection without replacing the Video Camera settings; 360 projections retain their framing without planar padding.
+  * Video camera: planar and panorama projections now keep the same rotation direction when switching projection modes.
+  * RFF_Super displays setting colors as clickable swatches that open the color picker, with borders that match the interface theme.
+  * RFF_Super clears canceled input errors with Escape, waits for Band Lines and reflection selections to be confirmed before editing dependent values, and enables manual iteration limits only when Automatic Iterations is Off.
+  * RFF_Super now retains escape colors for custom formulas such as sin(z^3+c) at large bailout values instead of showing black when the orbit overflows.
+  * RFF_Super shows the screen color captured by Pick Color in frozen-color swatches for the current session, and marks unavailable samples with a question mark.
+  * RFF_Super waits for related selections to be confirmed before editing dependent values, keeping color-stop targets and RGB linking consistent with the selected state.
+  * RFF_Super preserves legacy arrow increments for relief depth, repeats, projection settings, MFR mastering brightness and iteration periods, and disables unavailable color-stop and Lustre controls.
+  * RFF_Super keeps the original Surface sliders and spacing while appearance forms use numeric fields and arrow keys without additional sliders.
+  * RFF_Super displays frozen colors as individually removable color swatches instead of an iteration-value input, and preserves unrelated pending edits while applying one field.
+  * RFF_Super adjusts HDR peak brightness by 100 nits with the arrow keys (1000 with Shift) and disables video encoding controls when the selected output does not use them.
+  * RFF_Super offers palette comparison and import previews, and Bronze, Pearl, Obsidian and Ceramic material presets in appearance workspaces.
+  * Workspace numeric fields now retain fractional arrow adjustments where supported, and Escape discards the current field's pending input.
+  * Texture selection now enables the layer, Clear Image removes only its image and enabled state, and inactive appearance controls now appear disabled.
+  * Palette workspace: Link G & B to R is now available and starts On; changing Cycle Length (R) also updates G and B.
+  * Workspace numeric fields now support Up and Down arrows, with Shift for larger adjustments.
+  * RFF_Super keeps image evaluation responses in the required format during corrections, instead of repeatedly rejecting missing score and satisfied fields.
+  * Automatic video now retains AI failure details and stops at Error limit instead of repeatedly returning to concept attempt 1. Theme generation shows each request attempt and its failure reason.
+  * Automatic video now keeps Color Animation Mode at Linear, including when loading saved modes, while Color Animation Speed remains editable.
+  * Smooth Zoom now shows the low-resolution draft and the full-resolution pass as one calculation: the percentage and elapsed time continue into the full pass, and Done appears only when that pass finishes. The elapsed time covers both calculations and excludes the zoom animation between them.
+  * Timeline Editor: the Keyframes folder box and the file buttons now stay fully visible in medium-width windows instead of being covered by the preview.
+  * Timeline Editor: the Zoom Overlay and Max Iterations Display buttons now leave space above and below them in the footer.
+  * Appearance presets now retain the current camera position and orientation when loaded.
+  * Presets containing the 64000000-color LongRandom64 2 palette now reopen successfully.
+  * An unreadable example preset now leaves the current appearance intact and reports the loading failure.
+  * Band Line now accepts very small widths without failing during palette preparation.
+  * Video export: Band Line decorations now retain the preview's repeat positions when the repeat count includes a fractional part.
+  * Stripe now leaves colors unchanged when either interval is zero, in previews and video rendering.
+  * Band Period now accepts values up to 1000000000, and Undo and Redo restore values above 1000000.
+  * Palette previews now handle large built-in palettes at high display scaling without invalid color selections.
+  * Local LLM now retains complete characters when shortening multilingual retry and concept history, so later requests remain readable.
+  * Locate Minibrot now reports an unavailable reference after reference-generation cancellation instead of closing RFF_Super.
+  * Find Center and Locate Minibrot now return a failure when the current reference cannot provide a center correction, instead of terminating RFF_Super.
+  * Reference settings now retain the current value of the other coordinate when only one coordinate is edited.
+  * Reference and Explore now describe Log Zoom (10) as a base-10 value in English and Japanese.
+  * Dragging from A/B Comparison now continues panning after the comparison view closes.
+  * The custom language menu now marks the selected language.
+  * Settings windows: keyboard increments now move logarithmic sliders above zero when their smallest positive value is below 1.
+  * Settings windows now refresh their background colors when the high-contrast palette changes.
+  * GPU timing now counts each completed frame once during smooth navigation.
+  * GPU timing now includes ordered-layer rendering and presentation in preview totals.
+  * Video GPU timing now keeps measurements under the correct effect names when enabled layers change.
+  * Rendering progress now uses a valid refresh interval at zero and very small positive zoom values.
+  * Rendering now starts normally for images with heights near 65535 instead of hanging during preparation.
+  * Max Multiplier Between Levels now requires at least 2, preventing unbounded preparation with a value of 1.
+  * Reference compression now preserves access to repeated reference sections instead of failing when those sections are used.
+  * JPEG loading now preserves the expected color interpolation at the right edge.
+  * Interlaced RGB PNG images now load correctly with an alpha channel.
+  * BMP loading now preserves pixel positions and channel colors in images with custom color masks.
+  * BMP image information now reports positive dimensions and the decoded color-channel count.
+  * RGB PSD images without an alpha channel now load as opaque in both compressed and uncompressed files.
+  * GIF loading now preserves the intended transparency when an image uses its own color palette.
+  * TGA loading now preserves horizontal orientation, 16-bit truecolor and palettes whose first color index is nonzero.
+  * Short HDR images now return their image information successfully.
+  * Shader Layers: the panel's scroll bar is now dark in the dark theme instead of white, and it no longer appears when the layers, buttons and caption already fit.
+  * Zoom Step per Keyframe (Animation, Keyframes, and Video > Data Settings) now describes its value as the magnification between neighboring keyframes, where 2 means each keyframe is 2x deeper, instead of as a logarithmic step.
+
+## 2026/09/26
+
+* **3.0.0-beta4 - Iteration Overlay**
+  * Added RandomSmooth [10-20] (Shader, Palette): RFF_Super generates RandomSmooth colors with a palette cycle length between 10 and 20.
+  * Local LLM: RFF_Super offers saved switches for AI appearance adjustment, palette-only AI changes, and a fresh RandomSmooth palette for each automatic video. AI can adjust shading and effects when the palette-only limit is off; color animation is retained in every mode.
+  * Automatic video enables AI appearance adjustment by default and retains explicitly saved on/off choices.
+  * Added Automatic video (Local LLM): RFF_Super proposes abstract themes, explores, generates RandomSmooth palette colors, generates keyframes and exports videos for a chosen count or until cancelled. Failed stages restart with a new concept within Error limit.
+  * Local LLM defaults Error limit to 5 while retaining the 1–100 range and existing saved values.
+  * Automatic video offers a saved Log Zoom ceiling, exploration settings, and Locate Minibrot with optional zoom-decrease retries.
+  * Added Color Animation Speed and Color Animation Mode (Local LLM, Automatic video, Appearance): RFF_Super retains the selected animation while generating new palette colors.
+  * Automatic video restores the starting position and appearance for every new concept and video while retaining output and video settings.
+  * Local LLM continues with a fresh chat when history reaches the context limit, preserving the current goal, settings, images and progress. A request that still exceeds capacity stops with an explanation.
+  * Added Show Max Iterations (Timeline Editor, Max Iterations Display): RFF_Super displays the larger iteration limit of the two source maps in previews and exported videos, independently of Show Zoom Ratio.
+  * Zoom Display and Max Iterations Display offer separate positions, fonts, colors, outlines and shadows. Preview Guide has its own settings page.
+  * Added Interpolate per Frame (Timeline Editor, Max Iterations Display): the displayed count gradually changes between adjacent source maps. Rendering keeps its existing iteration limits.
+  * PNG keyframes now save their maximum iteration count in `.rfsm` metadata. Earlier keyframes remain readable and show N/A when the count is unavailable.
+  * Settings and timelines retain both overlays and Interpolate per Frame. Earlier files remain readable, with interpolation off and the saved maximum-iteration visibility preserved.
+  * Keyframe generation saves each frame's location and settings in a matching numbered `.rfc` file, including PNG, uncompressed and compressed map keyframes. Saved settings retain the chosen effects and camera view rather than temporary source-generation adjustments.
+  * Timeline Editor now labels Text Overlays as Zoom Overlay and offers Max Iterations Display in place of Controls. Each button opens its corresponding settings page, and F1 opens the controls guide.
+  * Timeline Editor now lists Max Iterations Display directly above Panel Layout in the settings selector.
+* **Fixes**
+  * Local LLM now appears in the OBS window capture selection list.
+  * Local LLM: RFF_Super now retries interrupted AI generation and, if retries fail during AI zoom or automatic video, restores the starting view and shader, clears AI history and progress, and starts again from the beginning until cancelled.
+  * Automatic video now skips AI appearance evaluation when AI appearance adjustment is disabled and retains the current palette when RandomSmooth is also disabled.
+  * Local LLM now distinguishes four-number palette.colors entries from five-number palette.stops entries in its appearance instructions.
+  * Automatic video now identifies each video and concept attempt.
+  * Automatic video now groups settings into Output, Zoom and Appearance pages, with aligned input fields and a larger log that stays visible alongside Start automatic video and Cancel.
+  * Timeline overlays now align each text line to the selected left, center or right alignment.
+  * RFF_Super now keeps timeline overlay labels steady as digits change within the same digit count, with evenly spaced numbers in previews and exported videos.
+  * RFF_Super now vertically centers the module selector, such as Surface Effects, within the workspace header when the header fits on one row.
+  * Shader Layers: the help text now stays visible without flickering while resizing the Effects panel.
+  * Status bar I now updates after each keyframe calculation, even with the pointer stationary or keyframe preview paused.
+  * Timeline Editor: Click to add audio now sits in the center of the empty audio lane, and Audio labels use the same neutral text color as other track names.
 
 * **3.0.0-beta3 - Deep Zoom**
 * **Fixes**
@@ -39,7 +186,7 @@
   * Workspace dropdown lists, such as Effects in the Dark theme, now open in one step instead of briefly showing white strips as they slide open.
   * Settings windows now move partially visible input fields to their correct positions when scrolling or folding sections.
 
-### 2026/09/25
+## 2026/09/25
 
 * **3.0.0 beta1**
   * RFF_Super accepts 1–1000 FPS for preview and video, 0–8 extra final zoom-in, and consistent color, shading and blur input ranges across settings panels and timeline tracks. Legacy integer inputs reject negative and overflowing values; out-of-range numeric timeline files require adjustment before loading.

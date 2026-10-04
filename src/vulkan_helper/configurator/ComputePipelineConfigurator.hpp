@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-08-28.
 // Modified by GPT-5 on 2026-08-23
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -38,6 +39,14 @@ namespace merutilm::vkh {
 
         void cmdRender(VkCommandBuffer commandBuffer, uint32_t frameIndex,
                        DescIndexPicker &&descIndices) override;
+
+        // Dispatches only work-group rows [firstRow, firstRow + rowCount); the pipeline needs VK_PIPELINE_CREATE_DISPATCH_BASE_BIT.
+        void cmdRenderRows(VkCommandBuffer commandBuffer, uint32_t frameIndex, DescIndexPicker &&descIndices,
+                           uint32_t firstRow, uint32_t rowCount);
+
+        [[nodiscard]] uint32_t getWorkGroupRows() const {
+            return (extent.height + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE;
+        }
 
         void setExtent(const VkExtent2D &extent) {
             this->extent = extent;

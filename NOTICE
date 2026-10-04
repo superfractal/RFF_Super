@@ -1,18 +1,39 @@
 RFF Super - Third-Party Notices
 
-Notice mappings updated by GPT-6 on 2026-09-25.
+Notice mappings updated by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-03, 2026-10-04.
+Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04.
 
 RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
 GNU General Public License v3; see LICENSE. This file records the third-party
 components it uses and their license terms.
 
+Current owner disposition - 2026-10-04: extern/nlohmann/json.hpp is restored
+byte-for-byte to upstream v3.12.0. Later descriptions of local JSON repairs
+and the ObjectType rewrite are historical and no longer describe that file.
+Rainbow and historical ObjectType permission are accepted by the owner with
+no further investigation or remediation requested. See the final owner
+disposition section below and documentation/license-owner-disposition-2026-10-04.md.
+
+The shared legacy/workspace palette preview in src/rff2/ui/PalettePreview.hpp
+uses the existing ShdPaletteAttribute.h interpolation implementation. Its Oklab,
+sRGB and smootherstep provenance remains as recorded below; no new color-space
+implementation is introduced by the UI preview. The same header also shares the
+existing frozen-color swatch sampler from CallbackShader.cpp with the workspace.
+
 Copyright (C) 2025-2026 Merutilm     - original RFF-2.0
 Copyright (C) 2025-2026 SuperFractal - RFF Super, modifications from 2026-07-05 onward
 
-The full texts of the licenses of the primary components this program links are
-reproduced in LICENSE: the GNU GPL v3, the Apache License 2.0 (OpenCV, and the
-Vulkan headers and loader), the GNU LGPL v3 (GMP), the BSD 3-Clause License
-(zstd), and the MIT License (GLM).
+The combined program is distributed under GPL version 3. Individual files
+that offer GPL-3.0-or-later retain that broader option for those portions;
+it does not extend the combined program's grant to later GPL versions.
+Third-party license alternatives and notices remain in force for their parts.
+
+LICENSE reproduces the GNU GPL v3 for the combined program and the Apache
+License 2.0 (OpenCV and the identified Vulkan components), GNU LGPL v3 (one
+of GMP's alternatives), BSD 3-Clause License (zstd), and MIT License (GLM).
+The distribution selects GPLv3 for GMP as explained below. Additional
+component terms are retained in this NOTICE, extern/licenses/ and
+third-party/licenses/; LICENSE alone is not the complete dependency bundle.
 
 Source distribution: stb_image and nlohmann JSON are bundled in extern/;
 short adapted implementations and their acknowledgements are listed below.
@@ -26,7 +47,21 @@ converted models, Python/PyArrow setup packages or model downloader belong
 in a distribution. Old local models/ directories are not part of the product.
 Bio Explorer and its lightweight heuristic controller were removed on 2026-09-25.
 
-FFmpeg is neither linked nor distributed; see the entry at the end.
+FFmpeg is neither linked nor distributed; see the FFmpeg entry below.
+
+Local custom-formula perturbation experiment (2026-10-01)
+--------------------------------------------------------
+The gitignored tools in debug/custom-perturbation-20261001 use locally installed
+GNU MPC 1.4.1, GNU MPFR 4.2.2 and GMP 6.3.0 for high-precision reference orbits
+and independent per-pixel direct calculations. These experimental dependencies
+are not added to the RFF_Super application or its distribution bundle.
+GNU MPC is by Andreas Enge, Mickael Gastineau, Philippe Theveny and Paul Zimmermann;
+MPC and MPFR are licensed under LGPL-3.0-or-later, as stated in their installed
+headers. GMP's licensing is recorded below. No library source is copied.
+Sources: https://www.multiprecision.org/mpc/ and https://www.mpfr.org/.
+The experiment's finite-difference identities are independently expanded
+elementary algebra and trigonometric identities. Its smooth-iteration comparison
+uses the generalized log-log convention and limitations documented below.
 
 ================================================================================
 Windows binary dependency bundle - reviewed 2026-09-24
@@ -75,6 +110,10 @@ Björn Ottosson - Oklab
 The linear-sRGB/Oklab conversion matrices are from "A perceptual color space
 for image processing". The accompanying conversion code is offered by its
 author in the public domain or, alternatively, under the MIT License.
+This project relies on the author's public-domain dedication; the upstream
+MIT alternative remains available. The matrices appear in palette_sampling.glsl,
+vk_2_map_iter_stripe.comp, vk_slope.frag, ShdPaletteAttribute.h and
+TimelineEvaluator.cpp.
 https://bottosson.github.io/posts/oklab/
 
 Krzysztof Narkowicz - ACES curve fit
@@ -82,6 +121,8 @@ Krzysztof Narkowicz - ACES curve fit
 The ACES (Narkowicz fit) tone-map option uses Narkowicz's compact curve fit
 to the ACES RRT+ODT, not the ACES transform itself. The published curve code is
 offered under CC0 or the MIT License.
+This project relies on the CC0 option for this curve fit; the upstream MIT
+alternative remains available. This does not license the full ACES transforms.
 https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 
 Jorge Jimenez - Interleaved Gradient Noise
@@ -89,8 +130,11 @@ Jorge Jimenez - Interleaved Gradient Noise
 The dithering noise constants follow "Next Generation Post Processing in Call
 of Duty: Advanced Warfare", presented at SIGGRAPH 2014. What is taken is the
 three published constants and the fract() form around them, in
-shdsrc/vk_linear_interpolation.frag and shdsrc/vk_2_map_iter_stripe.comp. The
-presentation attaches no license statement to the technique.
+shdsrc/vk_linear_interpolation.frag, shdsrc/vk_2_map_iter_stripe.comp and
+shdsrc/vk_fog.frag. The
+presentation attaches no license statement to the technique. The current
+implementation's separate Alan Wolfe MIT grant is identified in the
+"Interleaved Gradient Noise - licensed replacement expression" entry below.
 https://www.advances.realtimerendering.com/s2014/index.html
 
 John Hable - Uncharted 2 filmic curve
@@ -99,7 +143,9 @@ The Filmic tone-map option follows the curve presented in "Uncharted 2: HDR
 Lighting" at GDC 2010 and restated on the author's blog. What is taken is the
 rational form of the curve and its six published constants, in
 shdsrc/vk_linear_interpolation.frag. Neither the talk nor the blog post attaches
-a license statement to the curve.
+a license statement to the curve. The current implementation's separate
+Sascha Willems MIT grant is identified in the "Hable curve - licensed
+replacement implementation" entry below.
 https://gdcvault.com/play/1012459/Uncharted-2-HDR
 https://filmicworlds.com/blog/filmic-tonemapping-operators/
 
@@ -127,6 +173,10 @@ Chris Wellons - lowbias32
 The pattern-noise integer hash uses lowbias32 from hash-prospector, distributed
 under the Unlicense.
 https://github.com/skeeto/hash-prospector
+The permission text is retained in extern/licenses/lowbias32-UNLICENSE.txt
+and third-party/licenses/bundled/lowbias32-UNLICENSE.txt; release staging copies
+the extern/licenses text into the binary bundle. Source and permission checked
+on 2026-09-30 at the repository's master URLs; this is not a pinned commit.
 
 Iñigo Quilez - cosine palettes
 
@@ -134,11 +184,119 @@ Procedural palette presets use the cosine-palette technique described in
 "Palettes".
 https://iquilezles.org/articles/palettes/
 
+The RandomSmooth generator in src/rff2/preset/shader/palette/ShdPalettePresets.cpp
+uses the short a + b*cos(2*pi*(c*t+d)) form with randomized frequencies and
+phases. Quilez's linked Palettes shader ll2GD3 carries an archived original-author
+MIT grant for its cosine function and seven examples; see "Archive permission
+findings and owner clarification - 2026-10-04" and
+extern/licenses/iquilez-palettes-MIT.txt. This does not license arbitrary
+article text or unrelated code. The separate Erkaman MIT counterpart is
+also retained below; neither reference establishes the actual historical donor.
+
+RandomSmooth [10-20] reuses the existing RandomSmooth color generator and only
+sets a shorter iteration interval; it introduces no copied third-party code.
+
+Edwin Catmull and Raphael Rom - uniform cubic interpolation
+
+src/rff2/video/TimelineSchedule.cpp (catmullRom) and
+src/rff2/video/TimelineEvaluator.cpp (cubic) evaluate the standard uniform
+Catmull-Rom polynomial, with endpoint tangents (p2-p0)/2 and (p3-p1)/2.
+Mathematical reference: "A Class of Local Interpolating Splines", Computer
+Aided Geometric Design, 1974, pp. 317-326. Historical reference and derivation:
+https://alvyray.com/Memos/CG/Pixar/spline77.pdf
+https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxvec3catmullrom
+These references identify the mathematics; they do not assert that Microsoft
+or Lucasfilm source code is incorporated or supply a separate code license.
+
+Quintic smootherstep - mathematical reference to Ken Perlin
+
+The eased_cycle functions in shdsrc/palette_sampling.glsl and
+shdsrc/vk_2_map_iter_stripe.comp, samplePaletteStops in
+src/rff2/attr/ShdPaletteAttribute.h and iterationColoringCurve in
+src/rff2/ui/workspace/ChoiceEditors.hpp (which draws the Iteration Coloring
+tiles) use 6*t^5 - 15*t^4 + 10*t^3. Ken Perlin's
+"Improving Noise" (2002), section 3, describes this interpolation polynomial:
+https://mrl.cs.nyu.edu/~perlin/paper445.pdf
+It also follows from endpoint values 0 and 1 with zero first and second
+derivatives at both ends. This concerns the polynomial, not a Perlin noise
+library, permutation table, or license to copy the paper's text.
+
+Additional mathematical references - project implementation licenses unchanged
+
+These references identify mathematics or related techniques; they do not assert
+that the cited authors' source code was copied, grant rights to their articles,
+or change the licenses of independently written project implementations.
+
+- ExpressionParser.cpp uses an operator-stack/postfix parsing approach related
+  to Edsger W. Dijkstra's "ALGOL 60 Translation" (1961), shunting-yard parsing:
+  https://ir.cwi.nl/pub/9251
+- Perturbator.h implements log-log escape smoothing, with bailout normalization
+  and a locally estimated degree in the general-formula variant. Background:
+  Linas Vepstas, "Renormalizing the Mandelbrot Escape" (1997):
+  https://linas.org/art-gallery/escape/escape.html
+- The Burning Ship examples/RIABS operation in ExpressionParser.cpp/.h and
+  CallbackFractal.cpp refer to Michael Michelitsch and Otto E. Roessler,
+  "The burning ship and its quasi-Julia sets" (1992):
+  https://doi.org/10.1016/0097-8493(92)90032-Q
+  CallbackFractal.cpp also explains the smoothing used by Perturbator.h.
+- effects.glsl uses a normal/half-vector power highlight. vk_slope.frag uses
+  an artistic variation. Background: Jim Blinn, "Models of Light Reflection
+  for Computer Synthesized Pictures" (1977); these are not claims of a complete
+  physically based model:
+  https://www.microsoft.com/en-us/research/publication/models-of-light-reflection-for-computer-synthesized-pictures/
+- RFFMapCompression.cpp uses a two-dimensional Lorenzo predictor on bit
+  patterns with reversible residual coding. Reference: Lawrence Ibarria,
+  Peter Lindstrom, Jarek Rossignac and Andrzej Szymczak, "Out-of-core compression
+  and decompression of large n-dimensional scalar fields" (2003):
+  https://doi.org/10.1111/1467-8659.00681
+  The paper builds on earlier parallelogram prediction; the full compression
+  pipeline here is not identified as a copied implementation of that paper.
+- TimelineSchedule.cpp uses adaptive Simpson integration, a textbook numerical
+  quadrature method. Reference for Simpson's rule and error term: NIST DLMF,
+  section 3.5, equations 3.5.6 and 3.5.8:
+  https://dlmf.nist.gov/3.5
+- RenderScene.cpp uses fixed-tile boundary-based filling, related to the
+  Mariani-Silver approach. It does not implement recursive subdivision and
+  should not be described as the full Mariani-Silver algorithm. Background:
+  https://ricomariani.medium.com/the-mariani-silver-algorithm-for-drawing-the-mandelbrot-set-a71e31bc20b6
+- TimelineWindow.cpp selects decimal 1/2/5 tick intervals. Background: Paul S.
+  Heckbert, "Nice Numbers for Graph Labels", Graphics Gems (1990), pp. 61-63:
+  https://www.realtimerendering.com/resources/GraphicsGems/gems.html
+  Similarity to the published short rule does not establish a code-copying
+  history. No Graphics Gems implementation license is assigned to local code.
+- The bundled stb_image decoder implements PNG Paeth filtering and Adam7
+  interlacing, specified by PNG. These format references supplement, not
+  replace, stb_image's retained public-domain and IJG notices:
+  https://www.w3.org/TR/2003/REC-PNG-20031110/
+
+Gauss-Legendre quadrature - mathematical reference
+
+src/rff2/video/TimelineAnimationPhases.hpp uses two- and four-point rules to
+integrate animation rates. The two-point nodes are +/-1/sqrt(3), with unit
+weights. The four-point node magnitudes are sqrt((3 +/- 2*sqrt(6/5))/7);
+outer and inner weights are (18-sqrt(30))/36 and (18+sqrt(30))/36 respectively.
+These mathematical values were checked against the constants on 2026-09-30.
+Verification reference: NIST DLMF, section 3.5(v), Gauss-Legendre formula:
+https://dlmf.nist.gov/3.5#v
+This is a mathematical reference, not a claim that NIST code was copied.
+
+Short mathematical references and unresolved code permissions
+
+The Hable, Jimenez, Quilez and Markstein entries identify limited formulas,
+constants or numerical methods. Attribution does not create a missing license
+for protected source code. Express code-reuse terms have not been established
+for all of those references; do not interpret their inclusion here as such a
+grant. The project retains the references and numerical behavior.
+The current IGN and Hable implementation grants and the recovered Quilez
+shader grant are identified separately above and below; this paragraph does
+not retract those permissions.
+No paper prose or figures are supplied by these entries.
+
 Boost C++ Libraries - hash_combine
 
 The one-line seed-mixing expressions in src/vulkan_helper/hash/BoostHasher.hpp
 and extern/nlohmann/json.hpp
-follows the boost::hash_combine form and is used under the Boost Software
+follow the boost::hash_combine form and are used under the Boost Software
 License 1.0, whose text and the accompanying copyright notice are reproduced
 in the section below.
 https://www.boost.org/LICENSE_1_0.txt
@@ -182,6 +340,53 @@ endorses, sponsors, or certifies this program.
 The "HDR10 (PQ)" option is named for the profile it targets - 10-bit BT.2020
 with the ST 2084 transfer and static ST 2086 metadata. HDR10 is an open profile
 with no certification mark; nothing here claims conformance testing.
+
+Additional implementation locations: src/rff2/video/ZoomOverlay.cpp uses
+sRGB/PQ/HLG encode/decode and the BT.709-to-BT.2020 matrix;
+shdsrc/vk_color.frag and shdsrc/vk_stripe.frag use the sRGB transfer;
+shdsrc/palette_sampling.glsl supplies shared palette transfer helpers;
+shdsrc/vk_slope.frag uses sRGB conversion for Oklab shading/tint;
+shdsrc/mfr_display.glsl uses BT.2020 luminance and the inverse gamut matrix.
+PQ/HLG parameter reference: https://www.itu.int/rec/R-REC-BT.2100
+
+================================================================================
+Project procedural effects, Chaos blur, and supplied MFR display equations
+================================================================================
+
+shdsrc/effects.glsl and shdsrc/dark_finish.glsl identify their integer mixer
+as original project code. It combines cell/seed values with 197, 1999, 101
+and 17, then uses shifts 11 and 7 and multipliers 7919 and 104729. Lattice
+values are blended with cubic smoothstep. This is separate from the credited
+lowbias32 routine. No external implementation source has been established
+for this mixer; the source's originality statement is retained, not treated
+as an independently verified reconstruction of its creation history.
+
+Chaos blur in shdsrc/vk_fog.frag is the project-labelled circular-aperture
+gather: texture samples placed on a per-pixel rotated golden-angle spiral are
+weighted by radial smoothstep and normalized by their weight sum, and its
+region mask is feathered over the same spiral with Gaussian weights. With
+Average in Gamma Space the samples are averaged after a 1/2.2 power and the
+mean is raised back by 2.2; Average in Linear Space averages them as they are.
+This generic display-gamma round trip is written here, not taken from a
+source. The name does not identify a third-party library or a claim to
+implement a particular published chaos algorithm.
+
+The golden-angle spiral is related to the point arrangement published by H. Vogel,
+"A better way to construct the sunflower head", Mathematical Biosciences 44
+(1979) 179-189. The local radius is sqrt((i + 0.5)/n), and the angle is i
+times the golden angle. The half-offset is the midpoint of each equal-area
+annulus, as derived in the entry below; it is not attributed to Vogel's paper.
+Similar short shader expressions alone do not establish a historical donor.
+
+shdsrc/mfr_display.glsl and documentation/notes/mfr-hdr-preview.md identify the supplied
+MFR-HDR 1.0 specification dated 2026-09-16 as the display equation source.
+The tracked preview document records the shoulder/log/linear equations,
+luminance coefficients, gamut compression and project-authored false-color
+legend. The source labels this an independent implementation. The original
+supplied specification's separate authorship/license has not been established
+by this review; the preview is an implementation record, not a new license
+grant for that specification. Existing color-standard references above apply
+to the reused transforms. No reference HTML renderer is bundled by this entry.
 
 ================================================================================
 Boost C++ Libraries - hash_combine - Boost Software License 1.0
@@ -267,6 +472,10 @@ Sean Barrett and contributors.  http://nothings.org/stb_image.c
 
 Redistributed in this repository as extern/stb_image.c and extern/stb_image.h.
 Declared public domain by its author. No warranty implied; use at your own risk.
+Local fixes by GPT-6 on 2026-09-29 correct buffered file positioning, JPEG edge
+interpolation, PNG interlace input strides, BMP masks and offsets, PSD alpha,
+GIF palette transparency, PIC metadata probing, BMP metadata, and TGA
+orientation, packed color decoding and palette origins.
 
 The JPEG integer inverse-DCT is identified in the source as derived from IJG's
 jidctint / DCT_ISLOW. This portion is covered by the IJG terms, retained in
@@ -292,7 +501,8 @@ copy of the license is available at:
 against OpenCV 4.13, resolved by find_package, and uses only the core,
 imgcodecs, and imgproc modules.)
 
-The attribution notices below are reproduced from the OpenCV distribution:
+The attribution notices below are reproduced from opencv-4.13.0/COPYRIGHT in the
+OpenCV source archive (third-party/sources/mingw-w64-opencv-4.13.0-3):
 
     Copyright (C) 2000-2022, Intel Corporation, all rights reserved.
     Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
@@ -303,6 +513,7 @@ The attribution notices below are reproduced from the OpenCV distribution:
     Copyright (C) 2019-2023, Xperience AI, all rights reserved.
     Copyright (C) 2019-2022, Shenzhen Institute of Artificial Intelligence and Robotics for Society, all rights reserved.
     Copyright (C) 2022-2023, Southern University of Science And Technology, all rights reserved.
+    Copyright (C) 2023-2025, OpenCV AI, all rights reserved.
 
     Third party copyrights are property of their respective owners.
 
@@ -345,16 +556,32 @@ Vulkan-Headers and Vulkan-Loader - Apache License, Version 2.0
 
 The Khronos Group.  https://www.vulkan.org/
 
-documentation/BUILDING.md builds against the MSYS2 mingw-w64-x86_64-vulkan-devel package.
+documentation/BUILDING.md installs the MSYS2 mingw-w64-x86_64-vulkan-headers
+and mingw-w64-x86_64-vulkan-loader packages.
 CMake's find_package(Vulkan) accepts whichever install it finds, however, so on a
 machine that has the LunarG Vulkan SDK the headers and the vulkan-1 import
 library may come from there instead. Either way the headers and loader are the
-Khronos Apache-2.0 sources, no part of them is redistributed here, and the
-program loads the system vulkan-1.dll at run time.
+Khronos Apache-2.0 sources. The program loads the system vulkan-1.dll at run
+time; the loader binary is not included. Inline header implementations may be
+incorporated into the executable, including the utility helper below.
 
 The LunarG SDK as a whole is a bundle of many components under several different
 open-source licenses. Nothing here should be read as a statement about that
-bundle beyond the headers and loader named above.
+bundle beyond the explicitly identified components.
+
+Vulkan Utility Libraries - Apache License, Version 2.0
+
+src/vulkan_helper/impl/LogicalDevice.hpp, impl/Fence.hpp, util/SwapchainUtils.hpp,
+executor/ScopedCommandBufferExecutor.cpp and executor/ScopedNewCommandBufferExecutor.cpp
+use string_VkResult from vulkan/vk_enum_string_helper.h. The inspected Vulkan SDK 1.4.335.0 header says:
+Copyright 2023-2025 The Khronos Group Inc.
+Copyright 2023-2025 Valve Corporation
+Copyright 2023-2025 LunarG, Inc.
+SPDX-License-Identifier: Apache-2.0
+https://github.com/KhronosGroup/Vulkan-Utility-Libraries
+The full Apache 2.0 license is in LICENSE. This identifies the inspected
+header, not the licenses of the entire SDK. A build using another SDK must
+retain its applicable notices and identify that version's helper source.
 
 ================================================================================
 shaderc (glslc) - Apache License, Version 2.0
@@ -373,8 +600,11 @@ FFmpeg - not linked, not distributed
 ================================================================================
 
 Video export launches ffmpeg.exe as a separate process and streams raw frames to
-it over a pipe; see src/rff2/ui/VideoWindow.cpp. FFmpeg is neither linked into
-nor distributed with this program, and the user supplies the binary.
+it over a pipe; see src/rff2/ui/VideoWindow.cpp. AudioPreview.hpp under
+src/rff2/video/ also launches FFmpeg for PCM decoding/mixing, AudioExport.hpp
+constructs audio filter commands, and AudioSourceInfo.hpp launches ffprobe
+for media metadata. FFmpeg and ffprobe are separate user-supplied executables,
+neither linked into nor included in the program's release staging rules.
 
 The license of that binary, and of any codecs it was built with, is a matter
 between the user and its distributor. Note that the encoders this program asks
@@ -441,6 +671,9 @@ extern/nlohmann/json.hpp is the unmodified v3.12.0 single header by Niels Lohman
 and contributors, licensed MIT. Original source:
 https://github.com/nlohmann/json/tree/v3.12.0
 The license is retained in extern/licenses/nlohmann-json-MIT.txt and the header.
+The local fixes of 2026-09-29 and subsequent JSON replacements were removed
+when the original header was restored on 2026-10-04. The dated JSON repair
+entries below describe history, not the current file. Upstream notices remain.
 
 Embedded components retained in that header include:
 - UTF-8 decoder: Copyright (c) 2008-2009 Björn Hoehrmann, MIT.
@@ -451,24 +684,367 @@ Embedded components retained in that header include:
   Apache-2.0; the full license is reproduced in the root LICENSE.
   https://github.com/abseil/abseil-cpp/blob/10cb35e459f5ecca5b2ff107635da0bfa41011b4/absl/utility/utility.h
 - boost::hash_combine: see the Boost attribution and license above.
+- Upstream source references restored with the original header: the
+  is_detected/detector block cites cppreference (line 279), the std/ADL
+  begin/end return-type helpers cite Stack Overflow answer 26745591 (line 2907),
+  and little_endianness cites answer 1001328 (line 9830). These sites publish
+  contributions under CC BY-SA terms; no separate code grant is asserted here.
+  The earlier replacements of these parts were removed by the restoration; see
+  documentation/license-owner-disposition-2026-10-04.md.
+  https://en.cppreference.com/w/cpp/experimental/is_detected
+  https://stackoverflow.com/a/26745591
+  https://stackoverflow.com/a/1001328
+- range-v3 priority_tag/static_const helpers: the bundled header explicitly
+  identifies range-v3 as their source. Upstream identifies:
+  Copyright Eric Niebler 2013-present
+  Boost Software License, Version 1.0; full text is reproduced above.
+  https://github.com/ericniebler/range-v3/blob/0.12.0/include/range/v3/range_fwd.hpp
+  https://github.com/ericniebler/range-v3/blob/master/include/range/v3/utility/static_const.hpp
+  These references corroborate author and terms, not the exact historical
+  donor revision; the bundled upstream attribution remains unchanged.
 - Hedley by Evan Nemerson: upstream CC0-1.0; original copyright markers
   are retained in the bundled header.
+- RFC 7049 Appendix D Figure 3 half-precision decoder: Copyright (c) 2013
+  IETF Trust and the persons identified as authors of the code. Document
+  authors: C. Bormann and P. Hoffman. Full IETF BSD terms are retained in
+  extern/licenses/IETF-RFC7049-BSD.txt and third-party/licenses/bundled/.
+  The RFC's "Simplified BSD" name was corrected by the IETF Trust to
+  "Revised BSD" without changing the license text. This notice covers the
+  extracted decoder code; it does not relicense the RFC's explanatory prose.
+  https://www.rfc-editor.org/rfc/rfc7049.html#appendix-D
+  https://trustee.ietf.org/documents/trust-legal-provisions/tlp-5/
 Version-specific upstream component license record:
 https://github.com/nlohmann/json/blob/v3.12.0/docs/mkdocs/docs/home/license.md
 
 ================================================================================
-Bonsai 2 vision runtime - Apache License 2.0
+Optional AI servers and models - supplied separately
 ================================================================================
 
-Optional local inference data, not linked into or included with RFF_Super source:
-PrismML Ternary-Bonsai-2-27B-mmproj-BF16.gguf, Apache-2.0, from
-https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/tree/6ed5e12
-The projector is downloaded into gitignored debug/local_ai/models/.
+RFF_Super sends requests to a configured compatible AI server. The optional
+launcher can start a separately installed server using user-supplied paths.
+Server executables, model weights and vision projectors are not linked into
+RFF_Super or included by tools/release_stage.py.
+
+tools/use-rff-local-ai-model.ps1 selects optional local profiles under the
+gitignored debug/local_ai/profiles/, which is not part of the source
+distribution. These profiles do not identify bundled dependencies
+or a required model. A vision projector is model data, not the inference
+runtime. Local installation examples are described in guide/local-ai.md.
+
+The applicable terms depend on the separately obtained server build, model,
+projector and any accompanying dependencies. A model's license must not be
+applied to its server, another model, or RFF_Super. No single third-party
+license is assigned here to these optional installations. If they are ever
+bundled, inventory the exact files, revisions, hashes, notices and terms first.
 
 ================================================================================
 2026-09-25 shader corrections - GPL-3.0-only
 ================================================================================
 The MFR SDR finish routing in shdsrc/vk_linear_interpolation.frag and fractional
-Repeat U continuity in shdsrc/palette_sampling.glsl are original project changes.
+Repeat U continuity in shdsrc/palette_sampling.glsl and
+shdsrc/vk_2_map_iter_stripe.comp are original project changes.
 They reuse the existing attributed transforms and add no third-party formula,
 constant set, or source code. Existing algorithm acknowledgements remain above.
+
+Original project corrections by GPT-6 on 2026-09-29 make zero stripe intervals
+leave the input color unchanged in vk_stripe.frag and vk_2_map_iter_stripe.comp.
+These GPL-3.0-only changes add no third-party implementation or constants.
+
+Original camera orientation correction by GPT-6 on 2026-10-02 in
+shdsrc/vk_static_2_image.frag and shdsrc/vk_2_map_iter_stripe.comp keeps
+planar video rotation consistent with the existing 360 camera heading. This is independent
+project GPLv3 code using elementary rotation identities, with no adapted
+third-party implementation or constants.
+
+================================================================================
+Licensing remediation and owner clarification - 2026-10-03
+================================================================================
+
+This dated entry records replacements and additional provenance as of
+2026-10-03. Its JSON changes were reversed on 2026-10-04; the other listed
+replacement grants remain applicable as described in their entries.
+The publication-grant limits above remain statements about those publications;
+they do not describe the grants of the replacement sources identified here.
+Licensed counterparts do not establish the project's historical donor or clear
+unknown earlier inputs. No retrospective permission is asserted.
+
+Historical JSON detection replacement - Boost Software License 1.0
+
+The former detector replacement in extern/nlohmann/json.hpp was adapted from Boost.TypeTraits
+1.88.0, Copyright 2017-2018 Glen Joseph Fernandes. Local std::true_type,
+std::false_type and make_void substitute for the Boost namespace equivalents;
+the existing JSON aliases remain. The cppreference link was retained as an
+upstream historical reference, not the source of this replacement. Since the
+2026-10-04 restoration the header again contains the upstream detector.
+https://github.com/boostorg/type_traits/blob/cc6fc3daa8e20c4a70b563d67ceb4c34d8c1c4d7/include/boost/type_traits/detail/detector.hpp
+Full notice and grant: extern/licenses/boost-type-traits-BSL.txt.
+
+Other former JSON changes removed the unused Stack Overflow-derived ADL
+fallback/tag probe, preserved ordinary std/ADL begin/end return-type lookup,
+and replaced the byte-pointer endian helper with C++20 std::bit_cast of the
+supplied integer. Both quoted RFC7049 explanatory-prose extracts were removed.
+These changes are absent from the restored upstream header. Binary16 decoder
+operations and their IETF BSD notice were unchanged. The upstream source
+references are preserved to record history; removal does not clear prior uses.
+The ObjectType template-template parameter remains a C++ language technique
+with JSON's own types and allocator/comparator parameters. Its upstream link
+to Lol4t0's answer 9860911, edited by strcat, remains. The answer has CC BY-SA
+3.0 terms; those terms are not asserted to be a blanket grant over this header.
+https://stackoverflow.com/a/9860911
+
+Interleaved Gradient Noise - licensed replacement expression
+
+The IGN expressions in shdsrc/vk_fog.frag, shdsrc/vk_linear_interpolation.frag
+and shdsrc/vk_2_map_iter_stripe.comp are adapted anew from Alan Wolfe's IGNLDS
+main.py, MIT, Copyright (c) 2021 Alan Wolfe. The GLSL adaptation keeps fract,
+the project's seed parameter and the prior arithmetic order. Coefficient names
+are explicit; no output policy or dither amplitude changes. Jimenez remains
+credited as the technique's origin; Wolfe's grant is not assigned to Jimenez's
+2014 presentation or used to prove its earlier acquisition chain.
+https://github.com/Atrix256/IGNLDS/blob/a9f3ab9b5f4edfd0e3e186f1192dca747e7ef3bc/main.py
+Full notice and grant: extern/licenses/alan-wolfe-ign-MIT.txt.
+
+Hable curve - licensed replacement implementation
+
+filmic_curve in shdsrc/vk_linear_interpolation.frag is adapted anew from
+Uncharted2Tonemap in Sascha Willems's Vulkan-glTF-PBR, MIT, source-file
+Copyright (c) 2018-2024, Sascha Willems; repository license Copyright (c) 2018
+Sascha Willems. The project changes the function/argument names, uses const
+coefficients and omits the unused W variable. It retains the same six values,
+arithmetic order and local headroom normalization; the donor's exposure,
+fixed 11.2 normalization and gamma wrapper are not imported. Hable's original
+article remains acknowledged without assigning it Willems's license.
+https://github.com/SaschaWillems/Vulkan-glTF-PBR/blob/128db90d18c9a68294ee845f9d7e779fbba8dc74/data/shaders/includes/tonemapping.glsl
+Full notice and grant: extern/licenses/sascha-willems-tonemapping-MIT.txt.
+
+Frozen palette equations and tables - additional licensed counterparts
+
+RandomSmooth, RandomSmoothShort and GlossySunset in
+src/rff2/preset/shader/palette/ShdPalettePresets.cpp now identify the MIT cosine
+equation counterpart by Eric Arneback (Eric Arnebäck), glsl-cos-palette. The
+upstream MIT text has no copyright line; none is invented. Quilez's known
+technique origin remains acknowledged. Local randomized generators, constants,
+RNG order and saved recipe ids are unchanged.
+https://github.com/Erkaman/glsl-cos-palette/tree/2183c2352891f08afe6b7f27e29119a6e9ca78ec
+Full grant: extern/licenses/erkaman-cos-palette-MIT.txt.
+
+LongRainbow7 and Rainbow retain their inherited RFF-2.0 GPL palette table and
+identify the matching ordered seven-color table in ChrisBuilds's
+terminaltexteffects, MIT, Copyright (c) [2023] [ChrisBuilds]. The grant's
+copyright text is retained exactly. The local truncated floating-point stops
+are not regenerated from hex values, so existing recipe output stays fixed.
+This counterpart is not asserted to be the first creator or historical donor.
+https://github.com/ChrisBuilds/terminaltexteffects/blob/14d34ec1a4ca0273bd2c30ad86c2e5562af6cc44/terminaltexteffects/effects/effect_bubbles.py
+Full notice and grant: extern/licenses/terminaltexteffects-rainbow-MIT.txt.
+
+Each of the five full grants above also appears in third-party/licenses/bundled
+and third-party/SHA256SUMS.json. tools/release_stage.py copies all files from
+extern/licenses into the binary bundle's licenses/bundled directory.
+
+Inherited mathematics and conventional API operations
+
+The norm approximation max + 0.428 * min / max * min in rff_math.h matches
+Merutilm's original RFF-2.0 GPL source; dex_trigonometric.h retains its extended
+precision form. The source grant is retained in LICENSE. The earlier selection
+of 0.428 is undocumented; neither numerical behavior nor precision is changed.
+https://github.com/Merutilm/RFF-2.0/blob/cc0fe08c63236af48f4e761f7f87d8a77963c4be/src/rff2/calc/rff_math.h
+
+For vogel_disc in vk_fog.frag, the angular arrangement is attributed to Vogel
+above. Independently, annulus i has squared-radius bounds i/n and (i+1)/n;
+its midpoint is (i+0.5)/n, giving radius sqrt((i+0.5)/n). This explains the
+mathematical half-offset without attributing it to the 1979 paper or asserting
+an unknown historical source grant. The expression and point layout are unchanged.
+
+BufferImageUtils.hpp identifies the conventional memory-type selection reference
+in Alexander Overvoorde's Vulkan Tutorial. The repository expressly places code
+directory listings under CC0 1.0, separately from CC BY-SA 4.0 tutorial prose.
+The project's inherited memory loop is unchanged, and no tutorial prose is
+copied. Its actual earlier acquisition/revision is not established by similarity.
+https://github.com/Overv/VulkanTutorial#license
+
+Asset creator statements and requested exclusions
+
+On 2026-10-03 the project owner states that the original project author created
+the res assets, and that guide/README images outside res are AI-generated.
+res/icon.ico and res/icon.png are byte-identical to the original RFF-2.0 GPL
+repository at cc0fe08c63236af48f4e761f7f87d8a77963c4be. Their original GPL source
+and current owner statement provide a recorded provenance chain.
+https://github.com/Merutilm/RFF-2.0/tree/cc0fe08c63236af48f4e761f7f87d8a77963c4be/res
+On 2026-10-04 the project owner clarifies that they created
+res/readme-showcase.jpg themselves. This supersedes the earlier tentative
+statement that it was copied for README use and resolves the unidentified
+third-party creator/source concern for this image on the owner's statement.
+The image is unchanged; no separate third-party license is assigned to it.
+
+At the owner's request, MFR-HDR and commissioned AI material, including the
+Lustre guide/material and AI guide/README images, are excluded from this repair.
+Those files and assets are unchanged. The owner statement records creation
+history; it is not a third-party license or a guarantee about all generation inputs.
+See documentation/license-remediation-2026-10-03.md for the bounded repair record.
+
+================================================================================
+Additional source-history evidence - 2026-10-04
+================================================================================
+
+The ObjectType technique is explicitly credited in Niels Lohmann's JSON commit
+befd90dead2f9ce42b5c7fdd7cf2e0e0db2dd226, January 31, 2015. Lol4t0's 2012
+answer supplies the template-parameter technique, not JSON's complete object
+implementation. The answer's CC BY-SA 3.0 record and the absence of established
+separate MIT permission remain distinct from JSON's offered MIT license.
+https://github.com/nlohmann/json/commit/befd90dead2f9ce42b5c7fdd7cf2e0e0db2dd226
+https://stackoverflow.com/a/9860911
+https://creativecommons.org/licenses/by-sa/3.0/
+
+The exact seven-stop rainbow table already appears in ChrisBuilds's
+terminaltexteffects at b3b3d9f9dc81e57decfb97c197e38f99fcbbf5d3, October 6,
+2023, with an actual MIT license at that same commit. Its copyright text matches
+the grant already retained in terminaltexteffects-rainbow-MIT.txt. Original RFF
+adds the palette file with the rounded table in c0633b288c64d1dec0cee8343d79474f96450f24,
+May 27, 2025 UTC. This replaces reliance solely on the later 2026 comparison
+snapshot; first creator and actual acquisition are still not established.
+https://github.com/ChrisBuilds/terminaltexteffects/blob/b3b3d9f9dc81e57decfb97c197e38f99fcbbf5d3/terminaltexteffects/effects/effect_bubbles.py
+https://github.com/ChrisBuilds/terminaltexteffects/blob/b3b3d9f9dc81e57decfb97c197e38f99fcbbf5d3/LICENSE
+
+The matching 0.428 quadratic norm formula is published by Edgar Bonet in
+Stack Overflow answer 26607206, October 28, 2014. Its May 25, 2017 revision
+adds an explanation of scaling by the longer side and manual parameter tuning.
+The answer/revisions are recorded as CC BY-SA 3.0. This is a mathematical
+publication reference, not a separate MIT permission or proof of RFF's donor.
+No answer prose or full example implementation is added to the program.
+https://stackoverflow.com/questions/3506404/fast-hypotenuse-algorithm-for-embedded-processor/26607206#26607206
+https://creativecommons.org/licenses/by-sa/3.0/
+Original RFF adds ApproxMath.h with the exact inherited expression in commit
+959b66b049d06638553a16a40e229c102ca8fcef, May 12, 2025 UTC; the retained creation
+comment states May 9, 2025. Subsequent changes rename the file through
+approx_math.h and rff_math.h to the present path. The earlier local selection
+and acquisition remain undocumented, but a matching published origin and
+derivation are now known. Both arithmetic and the coefficient remain unchanged.
+https://github.com/Merutilm/RFF-2.0/blob/959b66b049d06638553a16a40e229c102ca8fcef/src/merutilm/rff/approx/ApproxMath.h
+
+The current GMP check distinguishes the prepared verified package library from
+the differing installed default library. A new clean tagged distribution build
+with recorded exact dependencies and corresponding sources can establish the
+new binary's source correspondence; it does not establish older EXE provenance.
+See documentation/license-history-followup-2026-10-04.md for the file hashes,
+source history, existing build selection and remaining limitations.
+
+================================================================================
+Archive permission findings and owner clarification - 2026-10-04
+================================================================================
+
+The following findings qualify the earlier dated history statements above.
+Iñigo Quilez's Palettes shader ll2GD3, under the author's iq account, contains
+an express full MIT grant in the archived Shadertoy API response of November 11,
+2019. The header states Copyright © 2015 Inigo Quilez. The author's palette
+article already embeds this exact shader in its July 5, 2015 capture, and the
+shader response links the same article. The response reports June 2, 2015 as
+its shader date; this does not prove the grant was present at first publication.
+This establishes original-author permission for the captured cosine function
+and seven example parameter sets, resolving that specific earlier grant question.
+It does not license every article, shader, or external demonstration texture,
+and does not establish the actual local acquisition route. No implementation,
+numeric parameter, palette recipe, or random draw order is changed.
+https://www.shadertoy.com/view/ll2GD3
+https://web.archive.org/web/20191111072843id_/https://www.shadertoy.com/api/v1/shaders/ll2GD3?key=NtrtMH
+Full original-author notice and grant: extern/licenses/iquilez-palettes-MIT.txt.
+An identical copy is in third-party/licenses/bundled, with its hash added to
+third-party/SHA256SUMS.json. The prior Erkaman counterpart grant is retained.
+
+The exact ordered rainbow stops occur in PaletteMaker's October 1, 2023
+capture, five days before the inspected TerminalTextEffects MIT addition.
+This earlier publication does not prove either repository's donor, the first
+creator, or a separate permission grant. The inspected archived website has
+no MIT grant. The known MIT counterpart is not asserted to clear unknown
+earlier third-party rights. Original RFF GPL inheritance and all local floats
+remain unchanged.
+https://web.archive.org/web/20231001022153/https://palettemaker.com/rainbow-colors
+
+Lol4t0 directly replies to Niels Lohmann about the template technique on
+January 25, 2015, preceding the credited JSON introduction by six days.
+Lohmann confirms the ObjectType connection in March 2024. The public comments
+document acquisition and technical help; they contain no express MIT grant.
+Three inspected archived author profiles and targeted upstream issue searches
+establish no separate author grant. This is not proof that private permission
+never existed or that the standard language mechanism is protected expression.
+https://stackoverflow.com/a/9860911
+
+On 2026-10-04 the project owner reports that the original author says 0.428
+was discovered coincidentally. This records an owner-relayed explanation of
+independent discovery and qualifies the earlier statement of undocumented
+selection. Bonet's earlier mathematical counterpart remains a comparison
+reference, not an asserted donor or evidence of copied code/prose. No separate
+third-party permission problem is demonstrated by that match alone. The source
+inheritance is still Merutilm's RFF-2.0 GPL implementation, and arithmetic is
+unchanged. No contemporaneous private author record is inspected in this pass.
+
+See documentation/license-archive-investigation-2026-10-04.md for the detailed
+timeline, original-author grant, actual-donor limits and preserved archive data.
+
+================================================================================
+Historical ObjectType standard-based replacement - 2026-10-04
+================================================================================
+
+This replacement was reverted later on 2026-10-04 when the original header was
+restored; see the final section below. The current header again uses the
+upstream ObjectType declarations. The rest of this section records history.
+
+At the owner's request, GPT-6 replaced the ObjectType parameter declarations
+in extern/nlohmann/json.hpp with a single type parameter pack, keeping the
+forward declaration and definition macro consistent. The former pattern with
+two leading type parameters and a trailing pack was then no longer used for
+ObjectType in either declaration. This was a structural change to parameter
+matching, not a change of variable names or removal of historical credit.
+
+The design follows the C++ template-template argument matching rules in
+[temp.arg.template]: a type parameter pack can match the argument template's
+type parameters. JSON's existing object_t instantiation supplies the same key,
+JSON value, comparator and allocator types. No standard example, answer prose,
+recursive smart-pointer demonstration, or new third-party implementation is
+copied into this replacement. The broader parameter form does not make a
+container usable unless it meets JSON's existing construction/operation needs.
+https://eel.is/c++draft/temp.arg.template
+
+Existing nlohmann MIT notices and the historical Lol4t0/strcat attribution
+remain. The dated source clarification distinguishes that historical reference
+from the current declarations. No author-specific MIT grant is newly obtained;
+this replacement does not assert a clean-room process, erase earlier usage,
+or provide a blanket legal clearance. The replacement has a documented
+standard-language basis and a recorded modification date.
+
+The original and replacement headers pass the same focused C++20 syntax-only
+check with six supported container forms and JSON object operations. No
+application implementation is run and no release binary is rebuilt. Rainbow
+history, GMP and release source/binary correspondence findings remain
+separate.
+
+================================================================================
+Owner disposition and original JSON restoration - 2026-10-04
+================================================================================
+
+The owner directs restoring the complete original extern/nlohmann/json.hpp
+and setting aside Rainbow and historical ObjectType permission concerns.
+Those two questions are closed for further action within this task by the
+owner's decision. This is a recorded disposition, not a newly obtained
+original-author permission grant. Existing source/author acknowledgements
+and full license texts outside the restored header remain available.
+
+The header is byte-identical to nlohmann/json v3.12.0, commit
+55f93686c01528224f448c19128836e7df245f72, at
+single_include/nlohmann/json.hpp, Git blob
+82d69f7c5d044c9887c96b90c97f5639083ecd14. Its SHA-256 is
+aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63.
+https://github.com/nlohmann/json/blob/v3.12.0/single_include/nlohmann/json.hpp
+
+All local changes to that header are removed, including the ObjectType
+rewrite, detector/ADL/endian changes, RFC prose edits, local attribution
+comments and earlier functional patches. The upstream copyright and license
+comments are preserved exactly. A local modification tag is not inserted
+because the owner expressly requests the original unmodified file; the
+dated restoration record is kept here and in the follow-up documentation.
+
+The earlier JSON mitigation and verification sections remain historical
+records. The retained Boost detector grant documents a previous replacement,
+not a detector currently added to the restored upstream header. Other
+application, shader and palette repairs and their grants are unaffected.
+Release source/binary correspondence and exact GMP distribution requirements
+remain separate. No executable, shader binary or release bundle is rebuilt.

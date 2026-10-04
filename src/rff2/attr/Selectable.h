@@ -6,6 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -15,6 +16,7 @@
 
 #include "ShdPalColorSmoothingMethod.h"
 #include "ShdPalColorInterpolationMethod.h"
+#include "ShdChaosBlurAverage.h"
 #include "ShdFogBlurQuality.h"
 #include "ShdToneMapMethod.h"
 #include "ShdSlopeGlossSource.h"
@@ -118,6 +120,13 @@ namespace merutilm::rff2 {
                 return {
                     SPEED,
                     APPEARANCE
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdChaosBlurAverage>) {
+                using enum ShdChaosBlurAverage;
+                return {
+                    GAMMA,
+                    LINEAR
                 };
             }
             if constexpr (std::is_same_v<E, ShdToneMapMethod>) {
@@ -450,6 +459,14 @@ namespace merutilm::rff2 {
                     using enum ShdFogBlurQuality;
                     case SPEED: return L"Speed";
                     case APPEARANCE: return L"Appearance";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdChaosBlurAverage>) {
+                switch (value) {
+                    using enum ShdChaosBlurAverage;
+                    case GAMMA: return L"Average in Gamma Space";
+                    case LINEAR: return L"Average in Linear Space";
                     default: break;
                 }
             }

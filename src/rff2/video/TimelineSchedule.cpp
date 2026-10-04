@@ -2,7 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
 // Modified by Opus 5 on 2026-08-25, 2026-08-31
-// Modified by GPT-6 on 2026-09-23, 2026-09-26
+// Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30
 //
 
 #include "TimelineSchedule.hpp"
@@ -22,6 +22,7 @@ namespace merutilm::rff2 {
 
         // Catmull-Rom through the two keys around the sample, with the keys outside them as the
         // tangents. It overshoots by nature, so the caller holds the result inside the key range.
+        // Catmull and Rom (1974), uniform cubic polynomial; project GPLv3 implementation and mathematical reference in NOTICE.
         float catmullRom(const float p0, const float p1, const float p2, const float p3, const float u) {
             const float u2 = u * u;
             const float u3 = u2 * u;
@@ -183,6 +184,7 @@ namespace merutilm::rff2 {
                 return difference == 0.0 ? width / highSpeed
                                          : width * std::log1p(difference / highSpeed) / difference;
             }
+            // Adaptive Simpson integration: textbook quadrature, DLMF 3.5; see NOTICE; project license unchanged.
             const auto simpson = [](double high, double low, double first, double middle, double last) {
                 return (high - low) * (first + 4.0 * middle + last) / 6.0;
             };

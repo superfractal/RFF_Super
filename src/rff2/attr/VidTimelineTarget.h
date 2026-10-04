@@ -3,7 +3,8 @@
 // Modified by GPT-5 on 2026-08-18
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-27, 2026-08-31
-// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -15,6 +16,10 @@ namespace merutilm::rff2 {
     // forever - the same rule the palette recipe presets carry (docs/palette-recipe-stability.md).
     enum class VidTimelineTarget : uint16_t {
         SPEED = 0,
+
+        // Retired overlay track IDs remain reserved for saved-file compatibility.
+        ZOOM_OVERLAY_VISIBLE = 1300,
+        MAX_ITERATION_OVERLAY_VISIBLE = 1301,
 
         CAMERA_ROTATION = 1100,
         CAMERA_PROJECTION = 1101,
@@ -105,7 +110,7 @@ namespace merutilm::rff2 {
         FOG_CHAOS_TRANSITION = 515,
         FOG_CHAOS_FEATHER = 516,
         FOG_CHAOS_BLUR = 517,
-        FOG_CHAOS_HIGHLIGHTS = 518,
+        // ID 518 belonged to the retired Chaos Highlight Detail track and must never be reused.
         FOG_CHAOS_SHADE = 519,
 
         BLOOM_THRESHOLD = 600,

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-09.
+// Modified by GPT-6 on 2026-09-29
 //
 
 #pragma once
@@ -169,7 +170,8 @@ namespace merutilm::rff2 {
     }
 
     inline uint64_t ArrayCompressor::containedIndex(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
-        return binarySearch(tools, index, 0, (tools.size() + 1) / 2, tools.size());
+        const uint64_t middle = tools.size() / 2;
+        return binarySearch(tools, index, middle, middle, tools.size() - middle);
     }
 
     inline uint64_t ArrayCompressor::compress(const std::vector<ArrayCompressionTool> &tools, const uint64_t index) {
@@ -180,7 +182,8 @@ namespace merutilm::rff2 {
     inline uint64_t ArrayCompressor::binarySearch(const std::vector<ArrayCompressionTool> &tools, const uint64_t index,
                                                   const uint64_t compIndex, uint64_t const indexGap,
                                                   const uint64_t lastIndexGap) {
-        if (compIndex >= tools.size() || tools.front().start > index) {
+        // The gaps delimit the remaining half-open interval around compIndex.
+        if (lastIndexGap == 0) {
             return UINT64_MAX;
         }
 
@@ -188,15 +191,14 @@ namespace merutilm::rff2 {
         const bool requiredSmallerIndex = current.start > index;
         const bool requiredLargerIndex = current.end < index;
 
-        if (indexGap == lastIndexGap && (requiredLargerIndex || requiredSmallerIndex)) {
-            return UINT64_MAX;
-        }
-
         if (requiredSmallerIndex) {
-            return binarySearch(tools, index, compIndex - indexGap, (indexGap + 1) / 2, indexGap);
+            const uint64_t half = indexGap / 2;
+            return binarySearch(tools, index, compIndex - indexGap + half, half, indexGap - half);
         }
         if (requiredLargerIndex) {
-            return binarySearch(tools, index, compIndex + indexGap, (indexGap + 1) / 2, indexGap);
+            const uint64_t remaining = lastIndexGap - 1;
+            const uint64_t half = remaining / 2;
+            return binarySearch(tools, index, compIndex + 1 + half, half, remaining - half);
         }
 
         return compIndex;

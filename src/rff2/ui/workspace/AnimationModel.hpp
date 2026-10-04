@@ -1,10 +1,13 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-23, 2026-09-24, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
 #include "AttributeFormModel.hpp"
 #include "FormValues.hpp"
+#include "AppearanceFormBehavior.hpp"
+#include "../PalettePreview.hpp"
 #include "../../attr/NumericSettingLimits.hpp"
 
 namespace merutilm::rff2::workspace {
@@ -47,6 +50,7 @@ namespace merutilm::rff2::workspace {
     }
 
     inline void addAnimationGuidance(WorkspaceForm &form) {
+        appearanceFormBehavior(form);
         form.inspect = [fields = form.fields](const FormDraft &draft) {
             FormFeedback feedback;
             const FormValues values(fields, draft);
@@ -69,8 +73,9 @@ namespace merutilm::rff2::workspace {
         };
     }
     inline std::shared_ptr<AttributeFormModel> animationModel(std::function<Attribute &()> getter,
-                                                              std::function<void()> changed) {
-        auto model = std::make_shared<AttributeFormModel>(std::move(getter), std::move(changed));
+                                                              std::function<void()> changed,
+                                                              std::function<COLORREF(double)> pickedColor = {}) {
+        auto model = std::make_shared<AttributeFormModel>(getter, std::move(changed));
         const float limit = std::numeric_limits<float>::max();
         model->numeric(
             "animation.speed", 0, L"Color Animation Speed",
@@ -110,9 +115,24 @@ namespace merutilm::rff2::workspace {
             [](auto &attributes) -> auto & { return attributes.shader.palette.staticColorTolerance; }, 0.f,
             1.f);
         model->text(
-            "animation.frozenIterations", 1, L"Frozen Iteration Values",
-            L"Up to 16 comma-separated iteration values. Empty removes all frozen colors.",
+            "animation.frozenIterations", 1, L"Frozen Colors",
+            L"Use Pick Color to Freeze to add a color. Click a swatch to remove it. ? means the picked screen color is unavailable in this session.",
             frozenIterationsText, setFrozenIterations);
+        model->swatches([getter, pickedColor](const std::wstring &text) {
+            auto candidate = getter();
+            std::vector<std::pair<std::wstring, uint32_t>> result;
+            if (setFrozenIterations(candidate, text)) {
+                for (const auto iteration : candidate.shader.palette.staticColorIterations)
+                    result.emplace_back(AttributeFormModel::number(iteration), pickedColor ? pickedColor(iteration) : CLR_INVALID);
+            }
+            return result;
+        }, [getter](const std::wstring &text, size_t index) {
+            auto candidate = getter();
+            if (!setFrozenIterations(candidate, text) || index >= candidate.shader.palette.staticColorIterations.size()) return text;
+            auto &iterations = candidate.shader.palette.staticColorIterations;
+            iterations.erase(iterations.begin() + index);
+            return frozenIterationsText(candidate);
+        });
         model->numeric(
             "animation.zoomSpeed", 2, L"Zoom Speed", L"Keyframes per second; greater than 0.",
             [](auto &attributes) -> auto & { return attributes.video.animation.mps; },
@@ -134,7 +154,7 @@ namespace merutilm::rff2::workspace {
             [](auto &attributes) -> auto & { return attributes.video.timeline.estimateKeyframes; },
             NumericSettingLimits::estimatedKeyframes.minimum, NumericSettingLimits::estimatedKeyframes.maximum);
         model->numeric(
-            "animation.keyframeStep", 4, L"Zoom Step per Keyframe", L"Logarithmic zoom step; greater than 1.",
+            "animation.keyframeStep", 4, L"Zoom Step per Keyframe", L"Magnification between neighboring keyframes; 2 means each is 2x deeper. Greater than 1.",
             [](auto &attributes) -> auto & { return attributes.video.data.defaultZoomIncrement; },
             std::nextafter(1.f, 2.f), limit);
         model->choice("animation.cameraPadding", 4, L"Rotation / 360 Padding",

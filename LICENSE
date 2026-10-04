@@ -14,8 +14,8 @@
                      PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 
                      Which third-party components are used, and which license each one is taken
-                     under, is recorded in NOTICE.  The full texts of the licenses of the components
-                     this program links are reproduced in this file, after the GPL.
+                     under, is recorded in NOTICE.  License texts for primary linked components
+                     follow the GPL; further terms are in NOTICE and third-party/licenses/.
 
 
                                         GNU GENERAL PUBLIC LICENSE
@@ -904,6 +904,10 @@
                                           GNU LESSER GENERAL PUBLIC LICENSE
                                                Version 3, 29 June 2007
 
+                        GMP is offered under the GNU LGPL v3 or later, reproduced here, or the GNU GPL
+                        v2 or later; this program's binary distribution takes it under GPL v3 (above).
+                        See NOTICE.
+
                          Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>
                          Everyone is permitted to copy and distribute verbatim copies
                          of this license document, but changing it is not allowed.
@@ -1158,17 +1162,22 @@
                         stbi-1.33 - public domain JPEG/PNG reader - http://nothings.org/stb_image.c
                         Sean Barrett and contributors.  Redistributed here as extern/stb_image.c and
                         extern/stb_image.h.  No warranty implied; use at your own risk.
+                        The IJG-derived JPEG inverse-DCT portion retains separate IJG terms;
+                        see NOTICE and extern/licenses/stb-image-IJG-README.txt.
 
                         ===============================================================================
 
                                                   Other third-party material
 
-                        NOTICE lists every remaining third-party component and every named algorithm
-                        implemented in this program, together with the license each one is taken under,
-                        and reproduces the MIT License of the Tailwind CSS color values the user
-                        interface uses.
+                        Notice summary revised by GPT-6 on 2026-09-30, 2026-10-04.
+                        Notice summary revised by Opus 5.5 on 2026-10-04.
+                        NOTICE records identified third-party components and named mathematical
+                        techniques, their sources, verified terms and unresolved provenance questions.
+                        It reproduces the MIT License for the Tailwind CSS color values used by the UI.
+                        A mathematical reference does not itself grant a license to copied source code.
+                        Original third-party license texts and copyright notices remain authoritative.
+                        The combined program is distributed under GPL version 3; broader options
+                        expressly offered for individual portions are preserved for those portions.
 
                         FFmpeg is neither linked into nor distributed with this program: video export
                         launches an ffmpeg.exe supplied by the user as a separate process. See NOTICE.
-
-

@@ -5,7 +5,7 @@
 // Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-09-02
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
-// Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-30
 //
 
 #version 450
@@ -730,6 +730,7 @@ void shade_surface() {
                 sin(specARad) * sin(specZRad),
                 cos(specZRad)
             ));
+            // Artistic Blinn-style half-vector highlight, not a full physical model; see NOTICE; project license unchanged.
             vec3 specHalf = specLightDir + viewDir;
             float specHalfLengthSquared = dot(specHalf, specHalf);
             vec3 specHalfDir = specHalfLengthSquared > 1.0e-12 ? specHalf * inversesqrt(specHalfLengthSquared) : vec3(0.0);

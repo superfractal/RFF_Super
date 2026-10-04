@@ -1,6 +1,7 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01
 // Modified by GPT-5 on 2026-09-17
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
 //
 
 #pragma once
@@ -16,6 +17,8 @@
 #include "WorkspaceEditDrawing.hpp"
 #include "FormLayout.hpp"
 #include "AccessibleControl.hpp"
+#include "ChoiceEditors.hpp"
+#include "ChoicePicker.hpp"
 #include <cwctype>
 #include <memory>
 #include <windowsx.h>
@@ -27,6 +30,10 @@ namespace merutilm::rff2::workspace {
             const FormField *field;
             HWND control;
             HWND picker = nullptr;
+            HWND slider = nullptr;
+            std::vector<HWND> swatches;
+            // The height of a choice picker in this row, measured with the row; 0 for other editors.
+            int pickerHeight = 0;
         };
         WorkspaceForm form;
         HWND window = nullptr, viewport = nullptr, groupControl = nullptr, applyControl = nullptr,
@@ -34,6 +41,10 @@ namespace merutilm::rff2::workspace {
         std::vector<Row> rows;
         std::vector<HWND> actionControls;
         FormDraft draft;
+        FormDraft sliderDraft;
+        bool sliding = false;
+        HWND editingControl = nullptr;
+        FormDraft beforeEditing;
         FormDraft errors;
         FormDraft hints;
         std::wstring feedbackSummary;
@@ -60,6 +71,46 @@ namespace merutilm::rff2::workspace {
 
         int px(int value) const {
             return int(value * scale + .5f);
+        }
+        static constexpr const wchar_t *checkedProperty = L"RFF.Form.Checked";
+        static constexpr const wchar_t *dimmedProperty = L"RFF.Form.Dimmed";
+        static bool checkbox(const FormField &field) {
+            return field.editor == FormField::Editor::CHECKBOX && field.choices.size() == 2;
+        }
+        // A field picked from a list: one with choices that is shown neither as a checkbox nor as a picker.
+        static bool dropDown(const FormField &field) {
+            return !field.choices.empty() && !checkbox(field) && !ChoicePicker::handles(field);
+        }
+        static bool checked(HWND control) {
+            return GetPropW(control, checkedProperty) != nullptr;
+        }
+        static void setFlag(HWND control, const wchar_t *property, bool on) {
+            if (on) {
+                SetPropW(control, property, reinterpret_cast<HANDLE>(1));
+            } else {
+                RemovePropW(control, property);
+            }
+        }
+        bool dimmed(const FormField &field) const {
+            return field.dimmed && field.dimmed(draft);
+        }
+        static constexpr const wchar_t *pickerClass = L"RFF.Workspace.Choice";
+        static constexpr const wchar_t *choiceProperty = L"RFF.Form.Choice";
+        static constexpr const wchar_t *hoverProperty = L"RFF.Form.Hover";
+        // A picker keeps the index of the choice it shows, and of the part under the pointer, plus one.
+        static int storedIndex(HWND control, const wchar_t *property) {
+            return int(reinterpret_cast<INT_PTR>(GetPropW(control, property))) - 1;
+        }
+        static void storeIndex(HWND control, const wchar_t *property, int index) {
+            SetPropW(control, property, reinterpret_cast<HANDLE>(INT_PTR(index + 1)));
+        }
+        static int choiceIndex(const FormField &field, const std::wstring &value) {
+            const auto found = std::find_if(field.choices.begin(), field.choices.end(),
+                                            [&](const auto &choice) { return choice.value == value; });
+            return found == field.choices.end() ? -1 : int(found - field.choices.begin());
+        }
+        ChoicePicker::Look pickerLook() const {
+            return {theme, font, scale};
         }
         static void positionControl(HWND control, int x, int y, int width, int height) {
             RECT previousBounds;
@@ -103,9 +154,10 @@ namespace merutilm::rff2::workspace {
             }
             return matchingFields;
         }
-        int inputWidth(int width, bool picker) const {
-            return std::max(1, width - px(2 * FormLayout::inset +
+        int inputWidth(int width, bool picker, bool colorSwatch = false) const {
+            const int available = std::max(1, width - px(2 * FormLayout::inset +
                                           (picker ? FormLayout::pickerWidth + FormLayout::pickerGap : 0)));
+            return colorSwatch ? std::min(available, px(56)) : available;
         }
         int pickerLeft(int width) const {
             return width - px(FormLayout::inset + FormLayout::pickerWidth);
@@ -119,7 +171,13 @@ namespace merutilm::rff2::workspace {
             static const std::wstring empty;
             return PreferencesIO::showSettingDescriptions() ? hintFor(field) : empty;
         }
+        bool waitingForSelection(const FormField &field) const {
+            return std::any_of(field.dependencies.begin(), field.dependencies.end(),
+                [&](const auto &id) { return draft.contains(id); });
+        }
         const std::wstring &hintFor(const FormField &field) const {
+            static const std::wstring waiting = L"Confirm the related selection with Enter or Apply & Render before editing this value.";
+            if (waitingForSelection(field)) return waiting;
             const auto hint = hints.find(field.id);
             return hint == hints.end() ? field.hint : hint->second;
         }
@@ -164,6 +222,7 @@ namespace merutilm::rff2::workspace {
                     message = L"Unable to check these values. Your changes have not been applied.";
                 }
             }
+            for (const auto &field : form.fields) if (waitingForSelection(field)) hints[field.id] = hintFor(field);
             return oldErrors != errors || oldHints != hints || oldSummary != feedbackSummary;
         }
         int footerTop() const {
@@ -178,6 +237,13 @@ namespace merutilm::rff2::workspace {
         int inputTop(int index) const {
             return rowTop(index) + (index < int(rowLayouts.size()) ? rowLayouts[index].inputOffset
                                                                    : px(FormLayout::inputOffset));
+        }
+        // A checkbox control spans its box plus the 2px focus ring above and below it.
+        int controlTop(int index, const FormField &field) const {
+            return inputTop(index) - (checkbox(field) ? px(2) : 0);
+        }
+        int controlHeight(const FormField &field) const {
+            return px(checkbox(field) ? FormLayout::checkboxHeight + 4 : dropDown(field) ? 260 : FormLayout::inputHeight);
         }
         static int wrappedHeight(HDC dc, std::wstring_view text, int width) {
             RECT measured{0, 0, std::max(1, width), 0};
@@ -200,12 +266,20 @@ namespace merutilm::rff2::workspace {
             rowOffsets.clear();
             rowLayouts.clear();
             int next = px(FormLayout::firstRow - FormLayout::headerHeight);
-            for (const auto &row : rows) {
+            for (auto &row : rows) {
                 const auto error = errors.find(row.field->id);
                 const auto &hint = error == errors.end() ? visibleHintFor(*row.field) : error->second;
-                const auto layout =
+                auto layout =
                     FormLayout::measuredRow(wrappedHeight(dc, row.field->label + L" *", width),
-                                            wrappedHeight(dc, hint, width), scale);
+                                            wrappedHeight(dc, hint, width), scale,
+                                            checkbox(*row.field) ? FormLayout::checkboxHeight : FormLayout::inputHeight);
+                row.pickerHeight =
+                    ChoicePicker::handles(*row.field) ? ChoicePicker::height(*row.field, width, dc, pickerLook()) : 0;
+                const int pickerExtra = std::max(0, row.pickerHeight - px(FormLayout::inputHeight));
+                const int extra = (row.slider ? px(32) : 0) + (row.field->previewColors ? px(28) : 0) + (row.field->swatches ? px(32) : 0) + pickerExtra;
+                layout.hintOffset += extra;
+                layout.height += extra;
+                if (row.field->divider && !rowOffsets.empty()) next += px(FormLayout::dividerSpace);
                 rowOffsets.push_back(next);
                 rowLayouts.push_back(layout);
                 next += layout.height;
@@ -241,11 +315,16 @@ namespace merutilm::rff2::workspace {
             for (size_t i = 0; i < rows.size(); ++i) {
                 const auto &row = rows[i];
                 const int y = inputTop(int(i));
-                positionControl(row.control, px(20), y, inputWidth(r.right, row.picker != nullptr),
-                                px(row.field->choices.empty() ? FormLayout::inputHeight : 260));
+                positionControl(row.control, px(20), controlTop(int(i), *row.field), inputWidth(r.right, row.picker != nullptr,
+                                    row.field->editor == FormField::Editor::COLOR || row.field->editor == FormField::Editor::RGB_COLOR),
+                                row.pickerHeight ? row.pickerHeight : controlHeight(*row.field));
                 if (row.picker) {
                     positionControl(row.picker, pickerLeft(r.right), y, px(FormLayout::pickerWidth), px(28));
                 }
+                if (row.slider) positionControl(row.slider, px(20), y + px(30), std::max(1L, r.right - px(40)), px(28));
+                const int cell = std::max(1L, (r.right - px(40)) / 8);
+                for (size_t j = 0; j < row.swatches.size(); ++j)
+                    positionControl(row.swatches[j], px(20) + int(j % 8) * cell, y + px(int(j / 8) * 30), std::max(1, cell - px(4)), px(26));
             }
             for (size_t i = 0; i < actionControls.size(); ++i) {
                 positionControl(actionControls[i], px(20),
@@ -277,7 +356,7 @@ namespace merutilm::rff2::workspace {
                 if (rows[i].control == control || rows[i].picker == control) {
                     // Native offscreen child coordinates saturate at 32767; scrolling uses logical content positions.
                     top = inputTop(int(i));
-                    bottom = top + px(FormLayout::inputHeight);
+                    bottom = top + (checkbox(*rows[i].field) ? px(FormLayout::checkboxHeight) : px(FormLayout::inputHeight));
                     if (height >= rowLayouts[i].height) {
                         top = rowTop(int(i));
                         bottom = top + rowLayouts[i].height;
@@ -334,7 +413,20 @@ namespace merutilm::rff2::workspace {
         }
         void updateEnabled() {
             const bool editable = !form.canEdit || form.canEdit();
-            EnableWindow(applyControl, editable && !draft.empty());
+            for (const auto &row : rows) {
+                const bool enabled = editable && !waitingForSelection(*row.field) && (!row.field->enabled || row.field->enabled(draft));
+                EnableWindow(row.control, enabled);
+                if (row.picker) EnableWindow(row.picker, enabled);
+                if (row.slider) EnableWindow(row.slider, enabled);
+                for (HWND swatch : row.swatches) EnableWindow(swatch, enabled);
+                const bool faded = dimmed(*row.field);
+                if (faded != (GetPropW(row.control, dimmedProperty) != nullptr)) {
+                    setFlag(row.control, dimmedProperty, faded);
+                    InvalidateRect(row.control, nullptr, FALSE);
+                    InvalidateRect(viewport, nullptr, FALSE);
+                }
+            }
+            EnableWindow(applyControl, editable && (!draft.empty() || sliding));
             EnableWindow(discardControl, !draft.empty());
             AccessibleControl::describe(applyControl, L"Apply and Render",
                                         message.empty() && errors.empty()
@@ -347,7 +439,7 @@ namespace merutilm::rff2::workspace {
             for (HWND control : actionControls) {
                 const auto &action = form.actions[size_t(GetDlgCtrlID(control) - 100)];
                 EnableWindow(control,
-                             (editable || action.allowDuringJob) && (draft.empty() || action.allowPending));
+                             !sliding && (editable || action.allowDuringJob) && (draft.empty() || action.allowPending));
             }
         }
         void invalidate(bool notify = true) {
@@ -459,13 +551,105 @@ namespace merutilm::rff2::workspace {
             }
             SetFocus(window);
         }
+        void finishSlider(bool commit) {
+            if (!sliding) return;
+            sliding = false;
+            auto values = std::move(sliderDraft);
+            sliderDraft.clear();
+            form.cancelPreview();
+            if (commit && (!form.canEdit || form.canEdit())) {
+                try { message = form.apply(values); }
+                catch (const std::exception &) { message = L"Unable to apply these values. Check the entered settings."; }
+                if (message.empty()) clearApplied(values);
+            }
+            syncing = true;
+            for (const auto &row : rows) {
+                const auto pending = draft.find(row.field->id);
+                setValue(row, pending == draft.end() ? row.field->read() : pending->second);
+            }
+            syncing = false;
+            updateValues(true);
+            invalidate();
+        }
+        void clearApplied(const FormDraft &values) {
+            for (const auto &[id, value] : values) {
+                draft.erase(id);
+                beforeEditing.erase(id);
+                errors.erase(id);
+            }
+        }
+        bool applyImmediate(const FormField &field, const std::wstring &value) {
+            if (form.canEdit && !form.canEdit()) return false;
+            if (waitingForSelection(field) || (field.enabled && !field.enabled(draft))) {
+                message = waitingForSelection(field) ? hintFor(field) : L"This setting is inactive.";
+                refreshErrors();
+                return true;
+            }
+            if (const auto error = validate(field, value); !error.empty()) {
+                errors[field.id] = error;
+                refreshErrors();
+                return false;
+            }
+            finishSlider(true);
+            FormDraft values{{field.id, value}};
+            if (form.updateDraft) form.updateDraft(values, field.id);
+            try { message = form.apply(values); }
+            catch (const std::exception &) { message = L"Unable to apply these values. Check the entered settings."; }
+            if (message.empty()) clearApplied(values);
+            updateValues(true);
+            refreshErrors();
+            return true;
+        }
+        void slide(HWND control, int notification) {
+            if (syncing || (form.canEdit && !form.canEdit())) return;
+            if (notification == TB_ENDTRACK) {
+                if (!sliding) return;
+                for (const auto &row : rows) if (row.slider == control && row.field->sliderReleased)
+                    row.field->sliderReleased(double(SendMessageW(control, TBM_GETPOS, 0, 0)) / 10000);
+                finishSlider(true);
+                return;
+            }
+            for (const auto &row : rows) {
+                if (row.slider != control || !IsWindowEnabled(control)) continue;
+                const auto value = row.field->sliderValue(double(SendMessageW(control, TBM_GETPOS, 0, 0)) / 10000);
+                if (!validate(*row.field, value).empty()) return;
+                FormDraft values{{row.field->id, value}};
+                if (form.updateDraft) form.updateDraft(values, row.field->id);
+                sliding = true;
+                try { message = form.preview(values); }
+                catch (const std::exception &) { message = L"Unable to apply these values. Check the entered settings."; }
+                if (!message.empty()) { finishSlider(false); return; }
+                sliderDraft = std::move(values);
+                updateEnabled();
+                syncing = true;
+                for (const auto &peer : rows) {
+                    const auto pending = draft.find(peer.field->id);
+                    setValue(peer, sliderDraft.contains(peer.field->id) || pending == draft.end() ? peer.field->read() : pending->second);
+                }
+                syncing = false;
+                InvalidateRect(viewport, nullptr, FALSE);
+                if (notification != TB_THUMBTRACK && notification != TB_THUMBPOSITION) {
+                    if (row.field->sliderReleased) row.field->sliderReleased(double(SendMessageW(control, TBM_GETPOS, 0, 0)) / 10000);
+                    finishSlider(true);
+                }
+                return;
+            }
+        }
         void capture(Row &row) {
             if (syncing) {
                 return;
             }
             const bool wasPending = draft.contains(row.field->id);
             std::wstring value;
-            if (row.field->choices.empty()) {
+            if (checkbox(*row.field)) {
+                value = row.field->choices[checked(row.control) ? 1 : 0].value;
+            } else if (ChoicePicker::handles(*row.field)) {
+                const int index = storedIndex(row.control, choiceProperty);
+                if (index < 0 || index >= int(row.field->choices.size())) {
+                    return;
+                }
+                value = row.field->choices[size_t(index)].value;
+            } else if (row.field->choices.empty()) {
                 const int n = GetWindowTextLengthW(row.control);
                 value.resize(n + 1);
                 GetWindowTextW(row.control, value.data(), n + 1);
@@ -482,6 +666,18 @@ namespace merutilm::rff2::workspace {
             } else {
                 draft[row.field->id] = std::move(value);
             }
+            if (form.updateDraft) {
+                form.updateDraft(draft, row.field->id);
+                syncing = true;
+                for (const auto &peer : rows) {
+                    if (peer.control == row.control) continue;
+                    const auto pending = draft.find(peer.field->id);
+                    setValue(peer, pending == draft.end() ? peer.field->read() : pending->second);
+                }
+                syncing = false;
+                invalidate();
+            }
+            updateSwatches(row, draft.contains(row.field->id) ? draft.at(row.field->id) : row.field->read());
             const bool hadError = errors.erase(row.field->id) > 0;
             message.clear();
             const bool feedbackChanged = updateFeedback();
@@ -499,8 +695,46 @@ namespace merutilm::rff2::workspace {
                 updateStatus();
             }
         }
+        void updateSwatches(const Row &row, const std::wstring &value) {
+            if (!row.field->swatches) return;
+            const auto colors = row.field->swatches(value);
+            for (size_t i = 0; i < row.swatches.size(); ++i) {
+                const HWND button = row.swatches[i];
+                if (i < colors.size()) {
+                    const auto label = UiLanguage::text(L"Remove Frozen Color") + L" " + std::to_wstring(i + 1) + L" (" + colors[i].first + L")";
+                    wchar_t previous[256]{};
+                    GetWindowTextW(button, previous, 256);
+                    if (label != previous) {
+                        SetWindowTextW(button, label.c_str());
+                        AccessibleControl::describe(button, label, row.field->hint,
+                            std::wstring(row.field->id.begin(), row.field->id.end()) + L".remove." + std::to_wstring(i));
+                    }
+                    const HANDLE color = HANDLE(UINT_PTR(colors[i].second) + 1);
+                    if (GetPropW(button, L"RFF.Swatch.Color") != color) {
+                        SetPropW(button, L"RFF.Swatch.Color", color);
+                        InvalidateRect(button, nullptr, FALSE);
+                    }
+                    ShowWindow(button, SW_SHOWNA);
+                } else ShowWindow(button, SW_HIDE);
+            }
+        }
         void setValue(const Row &row, const std::wstring &value) {
-            if (row.field->choices.empty()) {
+            updateSwatches(row, value);
+            if (row.slider && !sliding) SendMessageW(row.slider, TBM_SETPOS, TRUE,
+                LPARAM(std::lround(std::clamp(row.field->sliderPosition(value), 0.0, 1.0) * 10000)));
+            if (checkbox(*row.field)) {
+                const bool on = value == row.field->choices[1].value;
+                if (checked(row.control) != on) {
+                    setFlag(row.control, checkedProperty, on);
+                    InvalidateRect(row.control, nullptr, FALSE);
+                }
+            } else if (ChoicePicker::handles(*row.field)) {
+                const int index = choiceIndex(*row.field, value);
+                if (storedIndex(row.control, choiceProperty) != index) {
+                    storeIndex(row.control, choiceProperty, index);
+                    InvalidateRect(row.control, nullptr, FALSE);
+                }
+            } else if (row.field->choices.empty()) {
                 const int length = GetWindowTextLengthW(row.control);
                 std::wstring current(length + 1, L'\0');
                 GetWindowTextW(row.control, current.data(), length + 1);
@@ -514,6 +748,10 @@ namespace merutilm::rff2::workspace {
                 SendMessageW(row.control, CB_SETCURSEL,
                              found == row.field->choices.end() ? -1 : found - row.field->choices.begin(), 0);
             }
+        }
+        void toggle(Row &row) {
+            setValue(row, row.field->choices[checked(row.control) ? 0 : 1].value);
+            capture(row);
         }
         void pick(Row &row) {
             const auto pending = draft.find(row.field->id);
@@ -567,11 +805,22 @@ namespace merutilm::rff2::workspace {
         void updateValues(bool includeFocus = false) {
             syncing = true;
             for (const auto &row : rows) {
+                if (row.field->swatches) updateSwatches(row, draft.contains(row.field->id) ? draft.at(row.field->id) : row.field->read());
                 if (draft.contains(row.field->id) || (!includeFocus && GetFocus() == row.control)) {
                     continue;
                 }
                 const auto live = row.field->read();
-                if (row.field->choices.empty()) {
+                if (row.slider && !sliding) SendMessageW(row.slider, TBM_SETPOS, TRUE,
+                    LPARAM(std::lround(std::clamp(row.field->sliderPosition(live), 0.0, 1.0) * 10000)));
+                if (checkbox(*row.field)) {
+                    if (checked(row.control) != (live == row.field->choices[1].value)) {
+                        setValue(row, live);
+                    }
+                } else if (ChoicePicker::handles(*row.field)) {
+                    if (storedIndex(row.control, choiceProperty) != choiceIndex(*row.field, live)) {
+                        setValue(row, live);
+                    }
+                } else if (row.field->choices.empty()) {
                     const int n = GetWindowTextLengthW(row.control);
                     std::wstring text(n + 1, L'\0');
                     GetWindowTextW(row.control, text.data(), n + 1);
@@ -619,6 +868,7 @@ namespace merutilm::rff2::workspace {
             if (rebuilding || !discardControl) {
                 return;
             }
+            finishSlider(true);
             rebuilding = true;
             syncing = true;
             const bool visibleWindow = (GetWindowLongPtrW(window, GWL_STYLE) & WS_VISIBLE) != 0;
@@ -647,29 +897,36 @@ namespace merutilm::rff2::workspace {
             for (int i = 0; i < int(visible.size()); ++i) {
                 const auto *field = visible[i];
                 const int y = inputTop(i);
-                const bool combo = !field->choices.empty();
-                const bool pickable = field->editor != FormField::Editor::TEXT;
+                const bool combo = dropDown(*field);
+                const bool checkboxRow = checkbox(*field);
+                const bool colorButton = field->editor == FormField::Editor::COLOR || field->editor == FormField::Editor::RGB_COLOR;
+                const bool ownerDrawnButton = colorButton || checkboxRow;
+                const bool choicePicker = ChoicePicker::handles(*field);
+                const bool pickable = field->editor != FormField::Editor::TEXT && !checkboxRow && !choicePicker;
                 auto previous = std::find_if(previousRows.begin(), previousRows.end(),
                                              [field](const auto &row) { return row.field == field; });
                 HWND control =
-                    previous == previousRows.end()
-                        ? CreateWindowExW(
-                              combo ? 0 : WS_EX_CLIENTEDGE, combo ? L"COMBOBOX" : L"EDIT", L"",
+                    previous != previousRows.end() ? previous->control
+                    : choicePicker
+                        ? CreateWindowExW(0, pickerClass, L"", WS_CHILD | WS_TABSTOP, px(20), y,
+                                          inputWidth(r.right, false), px(FormLayout::inputHeight), viewport, nullptr,
+                                          GetModuleHandleW(nullptr), this)
+                        : CreateWindowExW(
+                              combo || ownerDrawnButton ? 0 : WS_EX_CLIENTEDGE, combo ? L"COMBOBOX" : ownerDrawnButton ? L"BUTTON" : L"EDIT", L"",
                               WS_CHILD | WS_TABSTOP |
                                   (combo ? CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL
-                                         : ES_AUTOHSCROLL),
-                              px(20), y, inputWidth(r.right, pickable),
+                                         : ownerDrawnButton ? BS_OWNERDRAW : ES_AUTOHSCROLL),
+                              px(20), y, inputWidth(r.right, pickable, colorButton),
                               px(combo ? 260 : FormLayout::inputHeight), viewport, nullptr,
-                              GetModuleHandleW(nullptr), nullptr)
-                        : previous->control;
-                SetWindowPos(control, nullptr, px(20), y, inputWidth(r.right, pickable),
-                             px(combo ? 260 : FormLayout::inputHeight), SWP_NOZORDER | SWP_NOACTIVATE);
+                              GetModuleHandleW(nullptr), nullptr);
+                SetWindowPos(control, nullptr, px(20), controlTop(i, *field), inputWidth(r.right, pickable, colorButton),
+                             controlHeight(*field), SWP_NOZORDER | SWP_NOACTIVATE);
                 SetPropW(control, L"RFF.Form.Field", const_cast<FormField *>(field));
                 SetPropW(control, L"RFF.Form.Row", reinterpret_cast<HANDLE>(INT_PTR(i + 1)));
                 AccessibleControl::describe(control, field->label, field->hint,
                                             std::wstring(field->id.begin(), field->id.end()));
                 SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-                if (!field->choices.empty()) {
+                if (combo) {
                     WorkspaceComboDrawing::applyMetrics(control, comboContext, px(FormLayout::inputHeight));
                 }
                 if (combo && previous == previousRows.end()) {
@@ -678,12 +935,22 @@ namespace merutilm::rff2::workspace {
                                      reinterpret_cast<LPARAM>(UiLanguage::text(choice.label).c_str()));
                     }
                     WorkspaceComboDrawing::attach(control, comboContext);
-                } else if (!combo) {
+                } else if (!combo && !ownerDrawnButton && !choicePicker) {
                     SendMessageW(control, EM_SETLIMITTEXT, 16 * 1024 * 1024, 0);
                     WorkspaceEditDrawing::attach(control, comboContext);
                 }
                 SetWindowSubclass(control, controlProcedure, 2, reinterpret_cast<DWORD_PTR>(this));
                 rows.push_back({field, control});
+                if (field->swatches) {
+                    if (previous != previousRows.end()) rows.back().swatches = previous->swatches;
+                    else for (int j = 0; j < 16; ++j) {
+                        const HWND button = CreateWindowExW(0, L"BUTTON", L"", WS_CHILD | WS_TABSTOP | BS_OWNERDRAW,
+                            0, 0, 1, 1, viewport, nullptr, GetModuleHandleW(nullptr), nullptr);
+                        SetPropW(button, L"RFF.Swatch.Index", HANDLE(INT_PTR(j + 1)));
+                        SetWindowSubclass(button, controlProcedure, 2, reinterpret_cast<DWORD_PTR>(this));
+                        rows.back().swatches.push_back(button);
+                    }
+                }
                 if (pickable) {
                     auto &picker = rows.back().picker;
                     picker = previous == previousRows.end()
@@ -715,6 +982,8 @@ namespace merutilm::rff2::workspace {
                 applyDarkThemeClass(control, combo);
             }
             for (const auto &row : previousRows) {
+                for (HWND swatch : row.swatches) DestroyWindow(swatch);
+                if (row.slider) DestroyWindow(row.slider);
                 DestroyWindow(row.control);
                 if (row.picker) {
                     DestroyWindow(row.picker);
@@ -766,7 +1035,8 @@ namespace merutilm::rff2::workspace {
                 }
             }
             for (const auto &row : rows) {
-                ShowWindow(row.control, SW_SHOWNA);
+                if (row.slider) ShowWindow(row.slider, SW_SHOWNA);
+                ShowWindow(row.control, row.field->swatches ? SW_HIDE : SW_SHOWNA);
                 if (row.picker) {
                     ShowWindow(row.picker, SW_SHOWNA);
                 }
@@ -788,6 +1058,7 @@ namespace merutilm::rff2::workspace {
             }
         }
         void apply() {
+            finishSlider(true);
             if (draft.empty()) {
                 return;
             }
@@ -828,6 +1099,8 @@ namespace merutilm::rff2::workspace {
             }
             for (const auto &row : rows) {
                 controls.push_back(row.control);
+                controls.insert(controls.end(), row.swatches.begin(), row.swatches.end());
+                if (row.slider) controls.push_back(row.slider);
                 if (row.picker) {
                     controls.push_back(row.picker);
                 }
@@ -879,6 +1152,10 @@ namespace merutilm::rff2::workspace {
             for (size_t i = 0; i < rows.size(); ++i) {
                 const auto &layout = rowLayouts[i];
                 const int y = rowTop(int(i));
+                if (i > 0 && rows[i].field->divider) {
+                    const int rule = y - px(FormLayout::dividerSpace / 2);
+                    PanelDrawing::fill(dc, {px(20), rule, r.right - px(20), rule + 1}, theme.track);
+                }
                 if (y + layout.height <= 0 || y >= r.bottom) {
                     continue;
                 }
@@ -890,7 +1167,8 @@ namespace merutilm::rff2::workspace {
                 try {
                     SelectObject(dc, font);
                     SetBkMode(dc, TRANSPARENT);
-                    SetTextColor(dc, theme.foreground);
+                    SetTextColor(dc, IsWindowEnabled(rows[i].control) && !dimmed(field) ? theme.foreground
+                                                                                       : theme.secondary);
                     const auto label = field.label + (draft.contains(field.id) ? L" *" : L"");
                     RECT labelRect{px(20), y, r.right - px(20), y + layout.labelHeight};
                     UiLanguage::drawText(dc, label.c_str(), int(label.size()), &labelRect,
@@ -901,6 +1179,16 @@ namespace merutilm::rff2::workspace {
                     SetTextColor(dc, invalid ? theme.error : theme.secondary);
                     RECT hint{px(20), y + layout.hintOffset, r.right - px(20), y + layout.height - px(12)};
                     UiLanguage::drawText(dc, help.c_str(), int(help.size()), &hint, DT_WORDBREAK | DT_NOPREFIX);
+                    if (field.previewColors) {
+                        const int width = std::max(1L, r.right - px(40));
+                        const auto colors = field.previewColors(draft, width);
+                        const int top = inputTop(int(i)) + px(32) + (rows[i].slider ? px(32) : 0);
+                        for (int x = 0; x < int(colors.size()) && x < width; ++x) {
+                            SetDCBrushColor(dc, COLORREF(colors[x]));
+                            RECT column{px(20) + x, top, px(20) + x + 1, top + px(20)};
+                            FillRect(dc, &column, HBRUSH(GetStockObject(DC_BRUSH)));
+                        }
+                    }
                 } catch (...) {
                     RestoreDC(dc, saved);
                     throw;
@@ -915,6 +1203,40 @@ namespace merutilm::rff2::workspace {
             if (flowingFooter) {
                 paintFooter(dc, footerTop());
             }
+        }
+        void drawCheckbox(const DRAWITEMSTRUCT &item, const FormField &field) const {
+            const bool on = checked(item.hwndItem);
+            const bool focused = (item.itemState & ODS_FOCUS) != 0;
+            const bool faded = !IsWindowEnabled(item.hwndItem) || dimmed(field);
+            PanelDrawing::fill(item.hDC, item.rcItem, theme.background);
+            const int size = px(16);
+            const int top = int(item.rcItem.top + item.rcItem.bottom - size) / 2;
+            const RECT box{item.rcItem.left + px(2), top, item.rcItem.left + px(2) + size, top + size};
+            PanelDrawing::fill(item.hDC, box, on ? theme.accent : theme.field);
+            PanelDrawing::border(item.hDC, box, on || focused ? theme.accent : theme.track, px(1));
+            if (on) {
+                drawCheckMark(item.hDC, box, theme.background);
+            }
+            if (focused) {
+                RECT ring = box;
+                InflateRect(&ring, px(2), px(2));
+                PanelDrawing::border(item.hDC, ring, theme.accent, px(1));
+            }
+            // The box is followed by the state it stands for, so On and Off read the same as in a list.
+            const RECT text{box.right + px(8), item.rcItem.top, item.rcItem.right, item.rcItem.bottom};
+            PanelDrawing::text(item.hDC, field.choices[on ? 1 : 0].label, text,
+                               faded ? theme.secondary : theme.foreground, font);
+        }
+        void drawCheckMark(HDC dc, const RECT &box, COLORREF color) const {
+            const int size = box.right - box.left;
+            const POINT mark[3] = {{box.left + size * 4 / 16, box.top + size * 8 / 16},
+                                   {box.left + size * 7 / 16, box.top + size * 11 / 16},
+                                   {box.left + size * 12 / 16, box.top + size * 5 / 16}};
+            const HPEN pen = CreatePen(PS_SOLID, std::max(1, px(2)), color);
+            const HGDIOBJ previous = SelectObject(dc, pen);
+            Polyline(dc, mark, 3);
+            SelectObject(dc, previous);
+            DeleteObject(pen);
         }
         void paint(HDC dc) const {
             const auto r = bounds();
@@ -959,6 +1281,7 @@ namespace merutilm::rff2::workspace {
                 return 0;
             }
             case WM_COMMAND:
+            case WM_HSCROLL:
             case WM_DRAWITEM:
             case WM_MEASUREITEM:
             case WM_CTLCOLORSTATIC:
@@ -991,10 +1314,109 @@ namespace merutilm::rff2::workspace {
             }
             return DefWindowProcW(handle, message, w, l);
         }
+        // Shows a new choice in the picker and reports it the way a drop-down reports a selection.
+        void choose(HWND control, int choice) {
+            if (choice < 0 || choice == storedIndex(control, choiceProperty)) {
+                return;
+            }
+            storeIndex(control, choiceProperty, choice);
+            InvalidateRect(control, nullptr, FALSE);
+            SendMessageW(GetParent(control), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(control), CBN_SELCHANGE),
+                         reinterpret_cast<LPARAM>(control));
+        }
+        void paintPicker(HWND control, const FormField &field) const {
+            PAINTSTRUCT paintState;
+            const HDC target = BeginPaint(control, &paintState);
+            RECT client;
+            GetClientRect(control, &client);
+            // Drawn off screen first so a click never shows the parts half repainted.
+            const HDC dc = CreateCompatibleDC(target);
+            const HBITMAP bitmap = CreateCompatibleBitmap(target, std::max(1L, client.right), std::max(1L, client.bottom));
+            const HGDIOBJ previous = SelectObject(dc, bitmap);
+            ChoicePicker::paint(dc, field, client, storedIndex(control, choiceProperty),
+                                storedIndex(control, hoverProperty), GetFocus() == control, IsWindowEnabled(control),
+                                dimmed(field), pickerLook());
+            BitBlt(target, 0, 0, client.right, client.bottom, dc, 0, 0, SRCCOPY);
+            SelectObject(dc, previous);
+            DeleteObject(bitmap);
+            DeleteDC(dc);
+            EndPaint(control, &paintState);
+        }
+        static LRESULT CALLBACK pickerProcedure(HWND control, UINT message, WPARAM w, LPARAM l) {
+            auto *self = reinterpret_cast<FormWorkspace *>(GetWindowLongPtrW(control, GWLP_USERDATA));
+            if (message == WM_NCCREATE) {
+                self = static_cast<FormWorkspace *>(reinterpret_cast<CREATESTRUCTW *>(l)->lpCreateParams);
+                SetWindowLongPtrW(control, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            }
+            const auto *field = reinterpret_cast<const FormField *>(GetPropW(control, L"RFF.Form.Field"));
+            if (message == WM_NCDESTROY) {
+                RemovePropW(control, choiceProperty);
+                RemovePropW(control, hoverProperty);
+            }
+            if (!self || !field) {
+                return DefWindowProcW(control, message, w, l);
+            }
+            const auto partAt = [&](LPARAM point) {
+                RECT client;
+                GetClientRect(control, &client);
+                const auto parts =
+                    ChoicePicker::parts(*field, client, storedIndex(control, choiceProperty), self->pickerLook());
+                const int index = ChoicePicker::hit(parts, {GET_X_LPARAM(point), GET_Y_LPARAM(point)});
+                return std::make_pair(index, index < 0 ? -1 : parts[size_t(index)].choice);
+            };
+            switch (message) {
+            case WM_ERASEBKGND:
+                return 1;
+            case WM_PAINT:
+                self->paintPicker(control, *field);
+                return 0;
+            case WM_GETDLGCODE:
+                return DLGC_WANTARROWS | DLGC_WANTCHARS;
+            case WM_SETFOCUS:
+            case WM_KILLFOCUS:
+            case WM_ENABLE:
+                InvalidateRect(control, nullptr, FALSE);
+                break;
+            case WM_MOUSEMOVE: {
+                const int hovered = partAt(l).first;
+                if (hovered != storedIndex(control, hoverProperty)) {
+                    storeIndex(control, hoverProperty, hovered);
+                    InvalidateRect(control, nullptr, FALSE);
+                }
+                TRACKMOUSEEVENT leave{sizeof(leave), TME_LEAVE, control, 0};
+                TrackMouseEvent(&leave);
+                return 0;
+            }
+            case WM_MOUSELEAVE:
+                storeIndex(control, hoverProperty, -1);
+                InvalidateRect(control, nullptr, FALSE);
+                return 0;
+            case WM_LBUTTONDOWN:
+                SetFocus(control);
+                self->choose(control, partAt(l).second);
+                return 0;
+            case WM_KEYDOWN: {
+                const int current = storedIndex(control, choiceProperty);
+                if (field->editor == FormField::Editor::STYLE_TOGGLES && (w == 'B' || w == 'I')) {
+                    self->choose(control, std::max(current, 0) ^ (w == 'B' ? 1 : 2));
+                    return 0;
+                }
+                const int next = ChoicePicker::step(*field, current, w);
+                if (next != current) {
+                    self->choose(control, next);
+                    return 0;
+                }
+                break;
+            }
+            }
+            return DefWindowProcW(control, message, w, l);
+        }
         static LRESULT CALLBACK controlProcedure(HWND control, UINT message, WPARAM w, LPARAM l, UINT_PTR id,
                                                  DWORD_PTR data) {
             auto &self = *reinterpret_cast<FormWorkspace *>(data);
             if (message == WM_SETFOCUS) {
+                self.editingControl = control;
+                self.beforeEditing = self.draft;
                 self.reveal(control);
                 const auto result = DefSubclassProc(control, message, w, l);
                 wchar_t type[32];
@@ -1015,29 +1437,85 @@ namespace merutilm::rff2::workspace {
                 }
             }
             if (message == WM_KEYDOWN && w == VK_TAB) {
+                self.finishSlider(true);
                 self.moveFocus(control, (GetKeyState(VK_SHIFT) & 0x8000) ? -1 : 1);
                 return 0;
+            }
+            if (message == WM_KEYDOWN && w == VK_ESCAPE) {
+                if (self.sliding) { self.finishSlider(false); ReleaseCapture(); }
+                else for (auto &row : self.rows) {
+                    if (row.control != control) continue;
+                    self.syncing = true;
+                    if (self.editingControl == control) self.draft = self.beforeEditing;
+                    self.draft.erase(row.field->id);
+                    std::erase_if(self.errors, [&](const auto &entry) { return !self.draft.contains(entry.first); });
+                    self.message.clear();
+                    for (const auto &peer : self.rows) {
+                        const auto pending = self.draft.find(peer.field->id);
+                        self.setValue(peer, pending == self.draft.end() ? peer.field->read() : pending->second);
+                    }
+                    self.syncing = false;
+                    self.updateFeedback();
+                    self.refreshErrors();
+                    break;
+                }
+                return 0;
+            }
+            if (message == WM_KILLFOCUS) self.finishSlider(true);
+            if (message == WM_KEYDOWN && (w == VK_LEFT || w == VK_RIGHT || w == VK_UP || w == VK_DOWN || w == VK_PRIOR || w == VK_NEXT)) {
+                for (const auto &row : self.rows) if (row.slider == control && row.field->nudge) {
+                    const int direction = w == VK_LEFT || w == VK_DOWN || w == VK_NEXT ? -1 : 1;
+                    self.applyImmediate(*row.field, row.field->nudge(row.field->read(), direction,
+                        w == VK_PRIOR || w == VK_NEXT || (GetKeyState(VK_SHIFT) & 0x8000)));
+                    return 0;
+                }
+            }
+            if (message == WM_KEYDOWN && (w == VK_UP || w == VK_DOWN)) {
+                for (const auto &row : self.rows) {
+                    if (row.control != control || !row.field->nudge) continue;
+                    const int length = GetWindowTextLengthW(control);
+                    std::wstring current(length + 1, L'\0');
+                    GetWindowTextW(control, current.data(), length + 1);
+                    current.resize(length);
+                    const auto next = row.field->nudge(current, w == VK_UP ? 1 : -1,
+                                                       (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+                    if (next != current && self.validate(*row.field, next).empty()) {
+                        if (!self.applyImmediate(*row.field, next)) SetWindowTextW(control, next.c_str());
+                        SendMessageW(control, EM_SETSEL, 0, -1);
+                    }
+                    return 0;
+                }
             }
             if (message == WM_KEYDOWN && w == VK_RETURN) {
                 wchar_t type[32];
                 GetClassNameW(control, type, 32);
-                if (std::wstring_view(type) == L"Button") {
+                // Enter applies a checkbox's pending value like a list's, rather than flipping it again.
+                const bool checkboxControl = std::any_of(self.rows.begin(), self.rows.end(), [&](const auto &row) {
+                    return row.control == control && checkbox(*row.field);
+                });
+                if (std::wstring_view(type) == L"Button" && !checkboxControl) {
                     SendMessageW(control, BM_CLICK, 0, 0);
                 } else if (std::wstring_view(type) != L"ComboBox" ||
                            !SendMessageW(control, CB_GETDROPPEDSTATE, 0, 0)) {
-                    self.apply();
+                    for (const auto &row : self.rows) if (row.control == control) {
+                        const auto pending = self.draft.find(row.field->id);
+                        if (pending != self.draft.end()) self.applyImmediate(*row.field, pending->second);
+                        break;
+                    }
                 } else {
                     return DefSubclassProc(control, message, w, l);
                 }
                 return 0;
             }
-            if (message == WM_CHAR && (w == VK_TAB || w == VK_RETURN)) {
+            if (message == WM_CHAR && (w == VK_TAB || w == VK_RETURN || w == VK_ESCAPE)) {
                 return 0;
             }
             if (message == WM_GETDLGCODE) {
                 return DefSubclassProc(control, message, w, l) | DLGC_WANTTAB;
             }
             if (message == WM_NCDESTROY) {
+                RemovePropW(control, checkedProperty);
+                RemovePropW(control, dimmedProperty);
                 RemoveWindowSubclass(control, controlProcedure, id);
             }
             return DefSubclassProc(control, message, w, l);
@@ -1059,6 +1537,7 @@ namespace merutilm::rff2::workspace {
                 self->moveFocus(nullptr, 1);
                 return 0;
             case WM_TIMER:
+                if (self->sliding) return 0;
                 if (IsWindowVisible(handle)) {
                     if (self->descriptionsShown != PreferencesIO::showSettingDescriptions()) {
                         self->descriptionsShown = PreferencesIO::showSettingDescriptions();
@@ -1079,8 +1558,45 @@ namespace merutilm::rff2::workspace {
                 return TRUE;
             case WM_DRAWITEM: {
                 const auto *item = reinterpret_cast<DRAWITEMSTRUCT *>(l);
+                const auto *colorField = reinterpret_cast<FormField *>(GetPropW(item->hwndItem, L"RFF.Form.Field"));
+                if (item->CtlType == ODT_BUTTON && colorField && checkbox(*colorField)) {
+                    self->drawCheckbox(*item, *colorField);
+                    return TRUE;
+                }
+                if (item->CtlType == ODT_BUTTON && colorField &&
+                    (colorField->editor == FormField::Editor::COLOR || colorField->editor == FormField::Editor::RGB_COLOR)) {
+                    const auto pending = self->draft.find(colorField->id);
+                    const auto value = pending == self->draft.end() ? colorField->read() : pending->second;
+                    glm::vec4 color(1);
+                    const bool valid = colorField->editor == FormField::Editor::RGB_COLOR
+                        ? AttributeFormModel::parseColorRgb(value, color) : AttributeFormModel::parseColor(value, color);
+                    PanelDrawing::fill(item->hDC, item->rcItem, self->theme.field);
+                    RECT inner = item->rcItem;
+                    PanelDrawing::border(item->hDC, inner, item->itemState & (ODS_FOCUS | ODS_SELECTED) ? self->theme.accent : self->theme.track, self->px(1));
+                    InflateRect(&inner, -self->px(4), -self->px(4));
+                    if (valid) PanelDrawing::fill(item->hDC, inner,
+                        RGB(BYTE(std::clamp(color.r, 0.f, 1.f) * 255 + .5f), BYTE(std::clamp(color.g, 0.f, 1.f) * 255 + .5f), BYTE(std::clamp(color.b, 0.f, 1.f) * 255 + .5f)));
+                    return TRUE;
+                }
                 if (item->CtlType == ODT_COMBOBOX) {
                     WorkspaceComboDrawing::draw(*item, self->comboContext, self->px(6));
+                    return TRUE;
+                }
+                if (item->CtlType == ODT_BUTTON && GetPropW(item->hwndItem, L"RFF.Swatch.Index")) {
+                    PanelDrawing::fill(item->hDC, item->rcItem, self->theme.field);
+                    RECT edge = item->rcItem;
+                    PanelDrawing::border(item->hDC, edge, item->itemState & (ODS_FOCUS | ODS_SELECTED) ? self->theme.accent : self->theme.track, self->px(1));
+                    RECT color = item->rcItem;
+                    InflateRect(&color, -self->px(5), -self->px(5));
+                    const COLORREF sampled = COLORREF(UINT_PTR(GetPropW(item->hwndItem, L"RFF.Swatch.Color")) - 1);
+                    const COLORREF rgb = sampled == CLR_INVALID ? self->theme.field : sampled;
+                    PanelDrawing::fill(item->hDC, color, rgb);
+                    const auto label = sampled == CLR_INVALID ? L"?" : L"";
+                    SetBkMode(item->hDC, TRANSPARENT);
+                    SetTextColor(item->hDC, int(GetRValue(rgb)) + GetGValue(rgb) + GetBValue(rgb) > 384 ? RGB(0, 0, 0) : RGB(255, 255, 255));
+                    const auto oldFont = SelectObject(item->hDC, self->font);
+                    DrawTextW(item->hDC, label, -1, &color, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    SelectObject(item->hDC, oldFont);
                     return TRUE;
                 }
                 if (item->CtlType == ODT_BUTTON) {
@@ -1092,9 +1608,12 @@ namespace merutilm::rff2::workspace {
             case WM_CTLCOLORSTATIC:
             case WM_CTLCOLORLISTBOX:
             case WM_CTLCOLOREDIT:
-                SetTextColor(reinterpret_cast<HDC>(w), self->theme.foreground);
+                SetTextColor(reinterpret_cast<HDC>(w), IsWindowEnabled(reinterpret_cast<HWND>(l)) ? self->theme.foreground : self->theme.secondary);
                 SetBkColor(reinterpret_cast<HDC>(w), self->theme.field);
                 return reinterpret_cast<LRESULT>(self->brush);
+            case WM_HSCROLL:
+                self->slide(reinterpret_cast<HWND>(l), LOWORD(w));
+                return 0;
             case WM_COMMAND:
                 if (self->syncing) {
                     return 0;
@@ -1112,6 +1631,23 @@ namespace merutilm::rff2::workspace {
                     return 0;
                 }
                 for (auto &row : self->rows) {
+                    if (row.control == reinterpret_cast<HWND>(l) && HIWORD(w) == BN_CLICKED && checkbox(*row.field)) {
+                        self->toggle(row);
+                        return 0;
+                    }
+                    if (row.control == reinterpret_cast<HWND>(l) && HIWORD(w) == BN_CLICKED &&
+                        (row.field->editor == FormField::Editor::COLOR || row.field->editor == FormField::Editor::RGB_COLOR)) {
+                        self->pick(row);
+                        return 0;
+                    }
+                    const auto swatch = std::find(row.swatches.begin(), row.swatches.end(), reinterpret_cast<HWND>(l));
+                    if (swatch != row.swatches.end() && HIWORD(w) == BN_CLICKED) {
+                        const auto pending = self->draft.find(row.field->id);
+                        const auto value = pending == self->draft.end() ? row.field->read() : pending->second;
+                        self->applyImmediate(*row.field, row.field->removeSwatch(value, size_t(swatch - row.swatches.begin())));
+                        if (!(GetWindowLongPtrW(*swatch, GWL_STYLE) & WS_VISIBLE)) self->moveFocus(*swatch, 1);
+                        return 0;
+                    }
                     if (row.picker && row.picker == reinterpret_cast<HWND>(l) && HIWORD(w) == BN_CLICKED) {
                         self->pick(row);
                         return 0;
@@ -1189,6 +1725,13 @@ namespace merutilm::rff2::workspace {
               brush(CreateSolidBrush(theme.field)), comboContext{&theme, font, scale},
               changed(std::move(changed)), leaveFocus(std::move(leaveFocus)),
               resetSearch(std::move(resetSearch)) {
+            ChoiceEditors::assign(form.fields);
+            WNDCLASSW pickerWindow{};
+            pickerWindow.lpfnWndProc = pickerProcedure;
+            pickerWindow.hInstance = GetModuleHandleW(nullptr);
+            pickerWindow.lpszClassName = pickerClass;
+            pickerWindow.hCursor = LoadCursor(nullptr, IDC_HAND);
+            RegisterClassW(&pickerWindow);
             WNDCLASSW cls{};
             cls.lpfnWndProc = procedure;
             cls.hInstance = GetModuleHandleW(nullptr);
@@ -1233,6 +1776,7 @@ namespace merutilm::rff2::workspace {
             SetTimer(window, 1, 500, nullptr);
         }
         ~FormWorkspace() {
+            finishSlider(false);
             if (IsWindow(window)) {
                 DestroyWindow(window);
             }
@@ -1340,6 +1884,7 @@ namespace merutilm::rff2::workspace {
             layoutAt(0, 0, width, height, narrow);
         }
         void show(bool visible) {
+            if (!visible) finishSlider(true);
             ShowWindow(window, visible ? SW_SHOWNA : SW_HIDE);
             if (visible) {
                 updateValues();
@@ -1356,14 +1901,16 @@ namespace merutilm::rff2::workspace {
             return draft.empty();
         }
         bool hasPending() const {
-            return !draft.empty();
+            return sliding || !draft.empty();
         }
         bool hasDocumentPending() const {
+            if (sliding) return true;
             return std::any_of(form.fields.begin(), form.fields.end(), [this](const auto &field) {
                 return field.persisted && draft.contains(field.id);
             });
         }
         void discardPending() {
+            finishSlider(false);
             draft.clear();
             errors.clear();
             message.clear();
@@ -1376,10 +1923,10 @@ namespace merutilm::rff2::workspace {
             return callback && (redo ? canRedo() : canUndo()) ? callback() : 0;
         }
         bool canUndo() const {
-            return (!form.canEdit || form.canEdit()) && draft.empty() && form.canUndo();
+            return !sliding && (!form.canEdit || form.canEdit()) && draft.empty() && form.canUndo();
         }
         bool canRedo() const {
-            return (!form.canEdit || form.canEdit()) && draft.empty() && form.canRedo();
+            return !sliding && (!form.canEdit || form.canEdit()) && draft.empty() && form.canRedo();
         }
         bool undo() {
             if (!canUndo()) {
@@ -1428,7 +1975,7 @@ namespace merutilm::rff2::workspace {
             WorkspaceComboDrawing::applyMetrics(groupControl, comboContext);
             for (const auto &row : rows) {
                 SendMessageW(row.control, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-                if (!row.field->choices.empty()) {
+                if (dropDown(*row.field)) {
                     WorkspaceComboDrawing::applyMetrics(row.control, comboContext);
                 }
                 if (row.picker) {

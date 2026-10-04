@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-18, 2026-09-19, 2026-09-23
+// Modified by GPT-6 on 2026-09-18, 2026-09-19, 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-01
 //
 
 #include "TimelineWindow.hpp"
@@ -9,15 +9,22 @@
 #include <commdlg.h>
 
 namespace merutilm::rff2 {
+    VidZoomOverlayAttribute &TimelineWindow::selectedOverlay() {
+        return editingIterationOverlay ? attribute.video.timeline.maxIterationOverlay : attribute.video.timeline.zoomOverlay;
+    }
+
     void TimelineWindow::refreshOverlaySettings() {
         refreshInspector();
     }
 
     void TimelineWindow::commitOverlay() {
+        attribute.video.timeline.zoomOverlay.showMaxIteration = attribute.video.timeline.maxIterationOverlay.visible;
         attribute.video.animation.showText = attribute.video.timeline.zoomOverlay.visible;
         recordUndoStep();
         if (sourceAttribute) {
             sourceAttribute->video.timeline.zoomOverlay = attribute.video.timeline.zoomOverlay;
+            sourceAttribute->video.timeline.maxIterationOverlay = attribute.video.timeline.maxIterationOverlay;
+            sourceAttribute->video.timeline.interpolateMaxIteration = attribute.video.timeline.interpolateMaxIteration;
             sourceAttribute->video.animation.showText = attribute.video.animation.showText;
             rememberWorkspaceSource();
         }
@@ -30,11 +37,12 @@ namespace merutilm::rff2 {
         showInspectorSection(2);
     }
 
-    void TimelineWindow::chooseOverlayFont() {
+    void TimelineWindow::chooseOverlayFont(bool iteration) {
+        editingIterationOverlay = iteration;
         if (exporting) {
             return;
         }
-        const auto &current = attribute.video.timeline.zoomOverlay;
+        const auto &current = selectedOverlay();
         LOGFONTW font{};
         const auto name = workspace::overlayFontName(current.family);
         wcsncpy_s(font.lfFaceName, name.c_str(), _TRUNCATE);
@@ -50,7 +58,7 @@ namespace merutilm::rff2 {
         if (!ChooseFontW(&dialog)) {
             return;
         }
-        auto &value = attribute.video.timeline.zoomOverlay;
+        auto &value = selectedOverlay();
         const auto family = workspace::overlayFontName(std::wstring(font.lfFaceName));
         if (family.empty()) {
             return;
@@ -62,19 +70,21 @@ namespace merutilm::rff2 {
         commitOverlay();
     }
 
-    void TimelineWindow::fitOverlayInsideFrame() {
-        if (exporting || !overlayRenderer || IsRectEmpty(&overlayImageRect)) {
+    void TimelineWindow::fitOverlayInsideFrame(bool iteration) {
+        editingIterationOverlay = iteration;
+        auto &renderer = iteration ? iterationOverlayRenderer : overlayRenderer;
+        if (exporting || !renderer || IsRectEmpty(&overlayImageRect)) {
             return;
         }
-        auto &value = attribute.video.timeline.zoomOverlay;
+        auto &value = selectedOverlay();
+        if (!value.visibleAt(publishedPreviewSeconds)) {
+            NativeDialogs::message(window, L"Move the playhead into the display interval before fitting the position.", L"Zoom Overlay", MB_OK);
+            return;
+        }
         const bool wasCustom = value.custom;
-        if (!value.visible) {
-            NativeDialogs::message(window, L"Enable Show Zoom Ratio before fitting its position.", L"Zoom Overlay", MB_OK);
-            return;
-        }
         value.custom = true;
         RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
-        const auto bounds = overlayRenderer->bounds();
+        const auto bounds = renderer->bounds();
         const float width = float(overlayImageRect.right - overlayImageRect.left);
         const float height = float(overlayImageRect.bottom - overlayImageRect.top);
         if (bounds.width > width || bounds.height > height) {
@@ -91,13 +101,18 @@ namespace merutilm::rff2 {
         commitOverlay();
     }
 
-    void TimelineWindow::resetOverlayAppearance() {
+    void TimelineWindow::resetOverlayAppearance(bool iteration) {
+        editingIterationOverlay = iteration;
         if (exporting) {
             return;
         }
-        auto &value = attribute.video.timeline.zoomOverlay;
+        auto &value = selectedOverlay();
         VidZoomOverlayAttribute defaults;
         defaults.visible = value.visible;
+        defaults.limitDisplayTime = value.limitDisplayTime;
+        defaults.displayStart = value.displayStart;
+        defaults.displayEnd = value.displayEnd;
+        defaults.showMaxIteration = value.showMaxIteration;
         defaults.anchor = value.anchor;
         defaults.x = value.x;
         defaults.y = value.y;
@@ -107,13 +122,15 @@ namespace merutilm::rff2 {
         commitOverlay();
     }
 
-    void TimelineWindow::resetOverlayPosition() {
+    void TimelineWindow::resetOverlayPosition(bool iteration) {
+        editingIterationOverlay = iteration;
         if (exporting) {
             return;
         }
-        auto &value = attribute.video.timeline.zoomOverlay;
+        auto &value = selectedOverlay();
         value.anchor = 0;
-        value.x = value.y = .02f;
+        value.x = .02f;
+        value.y = iteration ? .065f : .02f;
         value.custom = true;
         lastUndoStep = 0;
         commitOverlay();

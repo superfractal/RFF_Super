@@ -1,6 +1,6 @@
 //
 // Modified by Opus 5 on 2026-08-24
-// Modified by GPT-6 on 2026-09-08, 2026-09-17, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-17, 2026-09-23, 2026-10-02
 //
 
 #version 450
@@ -50,7 +50,8 @@ vec2 camera_offset(vec2 p, vec2 size, out bool sky) {
     float scale = max(video_attr.coverage.x, 1.0);
     float yaw = radians(video_attr.camera.x);
     if (video_attr.camera.y < 0.5) {
-        return mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw)) * p / scale;
+        // Original project GPLv3 correction (NOTICE): preserve the existing 360 camera's heading in planar mode.
+        return mat2(cos(yaw), sin(yaw), -sin(yaw), cos(yaw)) * p / scale;
     }
     vec3 direction;
     if (video_attr.camera.y < 1.5) {

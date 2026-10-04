@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-07.
 // Modified by Opus 5 on 2026-08-05
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "GraphicsContextWindow.hpp"
@@ -81,8 +82,9 @@ namespace merutilm::vkh {
             // Sub-millisecond comparison. Truncating to whole milliseconds turned a 60 FPS request
             // into roughly 57, which beats against a 60 Hz display: with MAILBOX presentation a
             // vblank then finds no new image and repeats the previous one, showing up as periodic
-            // judder in anything that animates.
-            if (const duration<float> elapsed = now - started; elapsed.count() * framerate >= 1.0f) {
+            // judder in anything that animates. A framerate of 0 removes the cap.
+            if (const duration<float> elapsed = now - started;
+                framerate <= 0.0f || elapsed.count() * framerate >= 1.0f) {
                 started = now;
                 for (const auto &renderer: renderers) {
                     renderer();

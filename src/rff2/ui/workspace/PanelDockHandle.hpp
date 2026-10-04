@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-18, 2026-09-19, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -8,6 +9,7 @@
 #include "WorkspaceTheme.hpp"
 #include "AccessibleControl.hpp"
 #include <algorithm>
+#include <commctrl.h>
 #include <cstdlib>
 #include <functional>
 #include <string>
@@ -24,6 +26,7 @@ namespace merutilm::rff2::workspace {
 
         HWND window = nullptr;
         HWND preview = nullptr;
+        HWND tooltip = nullptr;
         HFONT font = nullptr;
         float scale = 1;
         std::wstring label;
@@ -99,14 +102,15 @@ namespace merutilm::rff2::workspace {
                 }
                 PanelDrawing::text(dc, hint, bounds, theme.selectedForeground, font, DT_CENTER);
             } else {
-                for (int y : {10, 15, 20}) {
-                    for (int x : {10, 15}) {
-                        PanelDrawing::fill(dc, {px(x), px(y), px(x + 2), px(y + 2)}, theme.secondary);
+                // A centred grip of 2 x 4 dots; the label is shown as a tooltip instead.
+                const int dot = px(2), pitch = px(5);
+                const int left = (bounds.right - (3 * pitch + dot)) / 2, top = (bounds.bottom - (pitch + dot)) / 2;
+                for (int row = 0; row < 2; ++row) {
+                    for (int column = 0; column < 4; ++column) {
+                        const int x = left + column * pitch, y = top + row * pitch;
+                        PanelDrawing::fill(dc, {x, y, x + dot, y + dot}, theme.secondary);
                     }
                 }
-                bounds.left = px(26);
-                bounds.right -= px(6);
-                PanelDrawing::text(dc, label, bounds, theme.foreground, font);
                 if (GetFocus() == window) {
                     GetClientRect(handle, &bounds);
                     PanelDrawing::border(dc, bounds, theme.accent, std::max(1, px(1)));
@@ -211,6 +215,9 @@ namespace merutilm::rff2::workspace {
         }
 
       public:
+        // Height of the drag strip above each panel, in unscaled pixels.
+        static constexpr int height = 16;
+
         static int dropSide(RECT bounds, POINT point, int maximumWidth) {
             if (!PtInRect(&bounds, point)) {
                 return noTarget;
@@ -275,9 +282,21 @@ namespace merutilm::rff2::workspace {
             AccessibleControl::describe(window, label,
                                         L"Drag to an edge or either half of the other panel. Escape cancels. "
                                         L"Left and Right dock outside; Shift docks inside.");
+            tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, parent, nullptr,
+                                      cls.hInstance, nullptr);
+            const std::wstring tip = UiLanguage::text(label);
+            TTTOOLINFOW tool{};
+            tool.cbSize = sizeof(tool);
+            tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+            tool.hwnd = parent;
+            tool.uId = reinterpret_cast<UINT_PTR>(window);
+            tool.lpszText = const_cast<LPWSTR>(tip.c_str());
+            SendMessageW(tooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
         }
         ~PanelDockHandle() {
             finish(false);
+            DestroyWindow(tooltip);
             DestroyWindow(preview);
             DestroyWindow(window);
         }

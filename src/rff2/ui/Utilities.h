@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-05-10.
 // Modified by GPT-5 on 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-09-03
-// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-29
 //
 
 #pragma once
@@ -13,6 +13,7 @@
 #include <string_view>
 #include <ctime>
 #include <filesystem>
+#include <limits>
 #include <system_error>
 
 #include "../constants/Constants.hpp"
@@ -54,6 +55,22 @@ namespace merutilm::rff2 {
                 }
                 buffer.resize(std::min(buffer.size() * 2, MAX_MODULE_PATH_CHARS), L'\0');
             }
+        }
+
+        // Settings files live in config/; one an older build left at the root is moved there on first use.
+        static std::filesystem::path getConfigFile(const std::filesystem::path &name) {
+            const auto root = getDefaultPath();
+            const auto file = root / L"config" / name;
+            const auto legacy = root / name;
+            std::error_code error;
+            std::filesystem::create_directories(file.parent_path(), error);
+            if (!std::filesystem::exists(file, error) && std::filesystem::exists(legacy, error)) {
+                std::filesystem::rename(legacy, file, error);
+                if (error) {
+                    return legacy;
+                }
+            }
+            return file;
         }
 
         static bool endsWith(const std::wstring &str, const std::wstring &suffix) {
@@ -120,7 +137,12 @@ namespace merutilm::rff2 {
         }
 
         static int getRefreshInterval(const float logZoom) {
-            return std::max(1, static_cast<int>(100000.0 / logZoom));
+            constexpr int maximum = std::numeric_limits<int>::max();
+            if (!(logZoom > 0)) {
+                return logZoom == 0 ? maximum : 1;
+            }
+            return static_cast<int>(std::clamp(100000.0 / logZoom, 1.0,
+                                               static_cast<double>(maximum)));
         };
     };
 }

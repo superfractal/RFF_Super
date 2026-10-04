@@ -3,9 +3,10 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-13, 2026-08-16, 2026-08-31, 2026-09-04
 // Modified by GPT-5 on 2026-08-21
-// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30
 //
 
+// Burning Ship and log-log smoothing descriptions share the mathematical references in NOTICE; project license unchanged.
 #include "NativeDialogs.hpp"
 #include "CallbackFractal.hpp"
 
@@ -28,7 +29,7 @@ namespace merutilm::rff2 {
         // Which of the three the user actually typed in. The panel opens on a copy while the canvas
         // keeps moving under it, so writing all of them back would put the zoom and the rotation the
         // view had when the panel opened over the ones it has now. Only what was typed goes back.
-        auto centerEdited = std::make_shared<bool>(false);
+        auto centerEdited = std::make_shared<std::array<bool, 2>>();
         auto zoomEdited = std::make_shared<bool>(false);
         auto rotationEdited = std::make_shared<bool>(false);
         const auto angleUnparser = [](const float &value) {
@@ -48,7 +49,7 @@ namespace merutilm::rff2 {
                 mpf_clear(t);
                 return valid;
             },
-            [centerPtr, centerEdited] { *centerEdited = true; }, L"Real",
+            [centerPtr, centerEdited] { (*centerEdited)[0] = true; }, L"Real",
             L"Real coordinate of the view center.");
         window->registerTextInput<std::string>(
             L"Imag", &(*centerPtr)[1], Unparser::STRING, Parser::STRING,
@@ -58,12 +59,12 @@ namespace merutilm::rff2 {
                 mpf_clear(t);
                 return valid;
             },
-            [centerPtr, centerEdited] { *centerEdited = true; }, L"Imag",
+            [centerPtr, centerEdited] { (*centerEdited)[1] = true; }, L"Imag",
             L"Imaginary coordinate of the view center.");
         window->registerTextInput<float>(
-            L"Log Zoom (e)", zoomPtr.get(), Unparser::floatTrim(3), Parser::FLOAT,
-            NumericSettingLimits::logZoom, [zoomPtr, zoomEdited] { *zoomEdited = true; }, L"Log zoom (e)",
-            L"Zoom magnification on a natural-log scale (e). Higher = deeper zoom.");
+            L"Log Zoom (10)", zoomPtr.get(), Unparser::floatTrim(3), Parser::FLOAT,
+            NumericSettingLimits::logZoom, [zoomPtr, zoomEdited] { *zoomEdited = true; }, L"Log Zoom (10)",
+            L"Base-10 logarithm of zoom magnification: 3 means 1000 times. Higher = deeper zoom.");
         window->registerTextInput<float>(
             L"Rotation", rotationPtr.get(), angleUnparser, angleParser, [](const float &) { return true; },
             [rotationPtr, rotationEdited] { *rotationEdited = true; }, L"Rotation",
@@ -102,18 +103,23 @@ namespace merutilm::rff2 {
             });
         window->setWindowCloseFunction([centerPtr, zoomPtr, rotationPtr, centerEdited, zoomEdited,
                                         rotationEdited, &settingsMenu, &scene, &calc] {
-            if (*centerEdited || *zoomEdited || *rotationEdited) {
+            if ((*centerEdited)[0] || (*centerEdited)[1] || *zoomEdited || *rotationEdited) {
                 if (*zoomEdited) {
                     calc.logZoom = *zoomPtr;
                 }
                 if (*rotationEdited) {
                     calc.rotation = *rotationPtr;
                 }
-                if (*centerEdited) {
+                if ((*centerEdited)[0] || (*centerEdited)[1]) {
                     // Read at the precision the zoom now asks for: the one just typed when it
                     // was typed, and the one the canvas is at when it was not.
-                    calc.center = fp_complex((*centerPtr)[0], (*centerPtr)[1],
-                                             Perturbator::logZoomToExp10(calc.logZoom));
+                    const int precision = Perturbator::logZoomToExp10(calc.logZoom);
+                    if ((*centerEdited)[0]) {
+                        calc.center.real = fp_decimal((*centerPtr)[0], precision);
+                    }
+                    if ((*centerEdited)[1]) {
+                        calc.center.imag = fp_decimal((*centerPtr)[1], precision);
+                    }
                 }
                 scene.getRequests().requestRecompute();
             }
@@ -176,7 +182,7 @@ namespace merutilm::rff2 {
             L"Set minimum skipping reference iteration when creating a table.");
         window->registerTextInput<uint8_t>(
             L"Max Multiplier Between Levels", &maxMultiplierBetweenLevel, Unparser::U_CHAR, Parser::U_CHAR,
-            ValidCondition::POSITIVE_U_CHAR, Callback::NOTHING, L"Max Multiplier Between Levels",
+            [](const uint8_t &v) { return v >= 2; }, Callback::NOTHING, L"Max Multiplier Between Levels",
             L"The maximum ratio between two adjacent periods for the new period inserted between them.\n"
             L"The worst-case ratio between two periods may be the square of this value.");
         window->registerTextInput<float>(

@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-26
 //
 
 #include "ZoomOverlay.hpp"
@@ -81,7 +81,7 @@ namespace merutilm::rff2 {
                     w * (.0690970 * v[0] + .9195406 * v[1] + .0113624 * v[2]),
                     w * (.0163916 * v[0] + .0880132 * v[1] + .8955952 * v[2])};
         }
-        void drawLegacyOverlay(cv::Mat &out, double zoom, VidHdrTransfer hdrTransfer, uint32_t decimalPlaces);
+        void drawLegacyOverlay(cv::Mat &out, const std::string &label, VidHdrTransfer hdrTransfer, int row);
     } // namespace
 
     struct ZoomOverlay::Impl {
@@ -123,16 +123,56 @@ namespace merutilm::rff2 {
             Gdiplus::GraphicsPath path;
             Gdiplus::StringFormat format(Gdiplus::StringFormat::GenericTypographic());
             format.SetFormatFlags(format.GetFormatFlags() | Gdiplus::StringFormatFlagsNoWrap);
-            if (path.AddString(label.c_str(), int(label.size()), family, style, fontSize,
-                               Gdiplus::PointF(0, 0), &format) != Gdiplus::Ok) {
-                throw std::runtime_error("Cannot render the selected overlay font");
+            format.SetFormatFlags(format.GetFormatFlags() | Gdiplus::StringFormatFlagsMeasureTrailingSpaces);
+            Gdiplus::Bitmap measureBitmap(1, 1, PixelFormat32bppARGB);
+            Gdiplus::Graphics measureGraphics(&measureBitmap);
+            Gdiplus::Font font(family, fontSize, style, Gdiplus::UnitPixel);
+            auto advance = [&](const std::wstring &value) {
+                Gdiplus::RectF bounds;
+                if (measureGraphics.MeasureString(value.c_str(), int(value.size()), &font,
+                                                  Gdiplus::PointF(0, 0), &format, &bounds) != Gdiplus::Ok) {
+                    throw std::runtime_error("Cannot measure the selected overlay font");
+                }
+                return bounds.Width;
+            };
+            float digitWidth = 0;
+            for (wchar_t digit = L'0'; digit <= L'9'; ++digit) {
+                digitWidth = std::max(digitWidth, advance(std::wstring(1, digit)));
+            }
+            const float lineHeight =
+                fontSize * family->GetLineSpacing(style) / std::max<UINT16>(1, family->GetEmHeight(style));
+            std::wistringstream lines(label);
+            std::wstring line;
+            int row = 0;
+            while (std::getline(lines, line)) {
+                Gdiplus::GraphicsPath linePath;
+                float lineWidth = 0;
+                for (size_t start = 0; start < line.size();) {
+                    const bool digit = line[start] >= L'0' && line[start] <= L'9';
+                    size_t end = start + 1;
+                    while (!digit && end < line.size() && (line[end] < L'0' || line[end] > L'9')) ++end;
+                    const auto run = line.substr(start, end - start);
+                    const float runWidth = advance(run);
+                    const float offset = digit ? (digitWidth - runWidth) * .5f : 0;
+                    if (linePath.AddString(run.c_str(), int(run.size()), family, style, fontSize,
+                                           Gdiplus::PointF(lineWidth + offset, row * lineHeight), &format) != Gdiplus::Ok) {
+                        throw std::runtime_error("Cannot render the selected overlay font");
+                    }
+                    lineWidth += digit ? digitWidth : runWidth;
+                    start = end;
+                }
+                ++row;
+                Gdiplus::Matrix alignment;
+                // Anchor to text advances so changing glyph outlines cannot shift the entire label.
+                alignment.Translate(-float(settings.anchor % 3) * .5f * lineWidth, 0);
+                linePath.Transform(&alignment);
+                path.AddPath(&linePath, FALSE);
             }
             Gdiplus::RectF ink;
             path.GetBounds(&ink);
-            const float lineHeight =
-                fontSize * family->GetLineSpacing(style) / std::max<UINT16>(1, family->GetEmHeight(style));
-            const float left = settings.x * width - float(settings.anchor % 3) * .5f * ink.Width - ink.X;
-            const float top = settings.y * height - float(settings.anchor / 3) * .5f * lineHeight;
+            const float left = settings.x * width;
+            const float textHeight = lineHeight * (1 + std::count(text.begin(), text.end(), '\n'));
+            const float top = settings.y * height - float(settings.anchor / 3) * .5f * textHeight;
             Gdiplus::Matrix position;
             position.Translate(left, top);
             path.Transform(&position);
@@ -204,6 +244,16 @@ namespace merutilm::rff2 {
         }
         return std::format("Zoom : {:.{}f}E{}", mantissa, decimalPlaces, static_cast<int64_t>(exponent));
     }
+    std::string ZoomOverlay::label(double zoom, const VidZoomOverlayAttribute &settings,
+                                   std::optional<uint64_t> maxIteration) {
+        std::string text = settings.visible ? format(zoom, settings.decimalPlaces) : "";
+        if (settings.showMaxIteration) {
+            if (!text.empty()) text += '\n';
+            text += "Max Iterations : " + (maxIteration ? std::to_string(*maxIteration) : "N/A");
+        }
+        return text;
+    }
+
     std::wstring ZoomOverlay::status() const {
         return impl->warning;
     }
@@ -212,20 +262,23 @@ namespace merutilm::rff2 {
     }
 
     void ZoomOverlay::apply(cv::Mat &image, double zoom, const VidZoomOverlayAttribute &settings,
-                            VidHdrTransfer transfer) {
-        if (!settings.visible) {
+                            VidHdrTransfer transfer, std::optional<uint64_t> maxIteration) {
+        if (!settings.visible && !settings.showMaxIteration) {
             impl->warning.clear();
             return;
         }
         if (!settings.custom) {
-            drawLegacyOverlay(image, zoom, transfer, settings.decimalPlaces);
+            std::istringstream lines(label(zoom, settings, maxIteration));
+            std::string line;
+            int row = 0;
+            while (std::getline(lines, line)) drawLegacyOverlay(image, line, transfer, row++);
             impl->warning.clear();
             return;
         }
         if (image.type() != CV_8UC3 && image.type() != CV_8UC4 && image.type() != CV_16UC4) {
             throw std::runtime_error("Unsupported zoom overlay image format");
         }
-        impl->layout(image.cols, image.rows, format(zoom, settings.decimalPlaces), settings);
+        impl->layout(image.cols, image.rows, label(zoom, settings, maxIteration), settings);
         const std::array<glm::vec4, LayerCount> colors{
             settings.shadowColor, settings.outlineColor, settings.color};
         const bool hdr = image.depth() == CV_16U;
@@ -264,10 +317,11 @@ namespace merutilm::rff2 {
         }
     }
 
-    void ZoomOverlay::paint(HDC dc, RECT image, double zoom, const VidZoomOverlayAttribute &s) {
+    void ZoomOverlay::paint(HDC dc, RECT image, double zoom, const VidZoomOverlayAttribute &s,
+                            std::optional<uint64_t> maxIteration) {
         const int w = image.right - image.left;
         const int h = image.bottom - image.top;
-        if (w <= 0 || h <= 0 || !s.visible) {
+        if (w <= 0 || h <= 0 || (!s.visible && !s.showMaxIteration)) {
             return;
         }
         BITMAPINFO info{};
@@ -289,7 +343,7 @@ namespace merutilm::rff2 {
         GdiFlush();
         try {
             cv::Mat pixels(h, w, CV_8UC4, bits);
-            apply(pixels, zoom, s);
+            apply(pixels, zoom, s, VidHdrTransfer::SDR, maxIteration);
             BitBlt(dc, image.left, image.top, w, h, memory, 0, 0, SRCCOPY);
         } catch (const std::exception &) {
             impl->warning = L"Cannot render zoom overlay; check the font and zoom value.";
@@ -302,8 +356,8 @@ namespace merutilm::rff2 {
 
 namespace merutilm::rff2 {
     namespace {
-        void drawLegacyOverlay(cv::Mat &out, double zoom, VidHdrTransfer hdrTransfer,
-                               uint32_t decimalPlaces) {
+        void drawLegacyOverlay(cv::Mat &out, const std::string &label, VidHdrTransfer hdrTransfer,
+                               int row) {
             const int imageWidth = out.cols;
             // The zoom overlay is drawn at diffuse white rather than at the peak the format reaches,
             // which on an HDR display would be painful to look at next to the picture.
@@ -331,12 +385,11 @@ namespace merutilm::rff2 {
             }(hdrTransfer);
 
             const int leftMargin = std::max(1, imageWidth / 72);
-            const int topMargin = std::max(1, imageWidth / 192);
+            const int topMargin = std::max(1, imageWidth / 192) + row * std::max(18, imageWidth / 30);
             const int baselineOffset = std::max(1, imageWidth / 40);
             const float size = std::max(1.0f, static_cast<float>(imageWidth) / 800);
             const int shadowOffset = std::max(1, baselineOffset / 15);
             const int strokeWidth = std::max(1, shadowOffset / 2);
-            const std::string label = ZoomOverlay::format(zoom, decimalPlaces);
             if (out.depth() == CV_8U) {
                 cv::putText(out, label,
                             cv::Point(leftMargin + shadowOffset, baselineOffset + topMargin + shadowOffset),

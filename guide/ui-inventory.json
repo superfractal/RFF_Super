@@ -3448,17 +3448,20 @@
       {
         "choices": [],
         "group": 4,
-        "hint": "Retains a little of the original bright detail over the lens blur. Zero gives a pure circular blur.",
-        "id": "fog.chaosHighlights",
-        "label": "Chaos Highlight Detail",
-        "value": "0.2"
-      },
-      {
-        "choices": [],
-        "group": 4,
-        "hint": "Darkens intricate defocused regions to separate them from smooth foreground surfaces.",
+        "hint": "Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, fully selected regions turn black whatever Chaos Amount is.",
         "id": "fog.chaosShade",
         "label": "Chaos Shade",
+        "value": "0"
+      },
+      {
+        "choices": [
+          "Average in Gamma Space",
+          "Average in Linear Space"
+        ],
+        "group": 4,
+        "hint": "Gamma Space keeps the dark gaps between bright details dark. Linear Space averages light physically, so bright detail spreads and blurred regions come out brighter.",
+        "id": "fog.chaosBlurAverage",
+        "label": "Chaos Blur Averaging",
         "value": "0"
       }
     ],

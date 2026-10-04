@@ -3,7 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
+// Modified by Opus 5.5 on 2026-09-29
 //
 
 #include "NativeDialogs.hpp"
@@ -19,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <windows.h>
+#include <shellapi.h>
 #include <unordered_map>
 
 #include "../constants/Constants.hpp"
@@ -313,7 +315,8 @@ namespace merutilm::rff2 {
             // Windows adds the check-mark bitmap width minus its shared edge to an owner-drawn item.
             const int systemAddedWidth =
                 std::max(0, UiDpi::metric(SM_CXMENUCHECK, UiDpi::forWindow(layout.owner)) - 1);
-            measure->itemWidth = std::max<int>(1, finalWidth - systemAddedWidth);
+            const int edgePadding = entry->rightJustified ? UiDpi::pixels(32, layout.dpi) : 0;
+            measure->itemWidth = std::max<int>(1, finalWidth + edgePadding - systemAddedWidth);
             measure->itemHeight =
                 entry->nativeHeight > 0
                     ? std::max<int>(MulDiv(entry->nativeHeight, layout.dpi, entry->nativeDpi),
@@ -427,6 +430,7 @@ namespace merutilm::rff2 {
         HMENU currentMenu = nullptr;
         HMENU subMenu1 = nullptr;
         HMENU subMenu2 = nullptr;
+        const auto visibilityStatus = MenuVisibilityIO::load(menuVisibility);
 
         currentMenu = addChildMenu(menubar, "File");
         addChildItem(currentMenu, "New Document", CallbackFile::NEW_CONFIG);
@@ -437,9 +441,11 @@ namespace merutilm::rff2 {
         addChildItem(currentMenu, "Save Map", CallbackFile::SAVE_MAP);
         addChildItem(currentMenu, "Save Image", CallbackFile::SAVE_IMAGE);
         addChildItem(currentMenu, "Save Location / Settings", CallbackFile::SAVE_CONFIG);
+        addChildItem(currentMenu, "Save Appearance Settings", CallbackShader::SAVE_PRESET);
         addChildItem(currentMenu, "Load Map", CallbackFile::LOAD_MAP);
         addChildItem(currentMenu, "Load Image", CallbackFile::LOAD_IMAGE);
         addChildItem(currentMenu, "Load Location / Settings", CallbackFile::LOAD_CONFIG);
+        addChildItem(currentMenu, "Load Appearance Settings", CallbackShader::LOAD_PRESET);
 
         currentMenu = addChildMenu(menubar, "Fractal");
         addWorkspaceItem(currentMenu, "Reference", 0, 2, CallbackFractal::REFERENCE);
@@ -478,8 +484,6 @@ namespace merutilm::rff2 {
         addWorkspaceItem(currentMenu, "Import Color", 16, 5, CallbackShader::IMPORT_COLOR);
         addChildItem(currentMenu, "Local AI appearance",
                      [](SettingsMenu &menu, RenderScene &scene) { LocalAiWindow::open(menu, scene); });
-        addChildItem(currentMenu, "Save Shader Preset", CallbackShader::SAVE_PRESET);
-        addChildItem(currentMenu, "Load Shader Preset", CallbackShader::LOAD_PRESET);
 
         currentMenu = addChildMenu(menubar, "Preset");
         subMenu1 = addChildMenu(currentMenu, "Calculation");
@@ -509,6 +513,7 @@ namespace merutilm::rff2 {
         subMenu2 = addChildMenu(subMenu1, "Palette");
         addPresetExecutor(subMenu2, ShdPalettePresets::LongRandom64());
         addPresetExecutor(subMenu2, ShdPalettePresets::RandomSmooth());
+        addPresetExecutor(subMenu2, ShdPalettePresets::RandomSmoothShort());
         addPresetExecutor(subMenu2, ShdPalettePresets::Classic1());
         addPresetExecutor(subMenu2, ShdPalettePresets::Classic2());
         addPresetExecutor(subMenu2, ShdPalettePresets::ArcticAurora());
@@ -640,6 +645,25 @@ namespace merutilm::rff2 {
         // Added last and pushed to the right edge of the bar, where a help mark has sat since the
         // menu bar was invented, so it is found without crowding the groups that are worked in.
         currentMenu = addChildMenu(menubar, "?");
+        addChildItem(currentMenu, "Open Guide", [](SettingsMenu &, RenderScene &) {
+            constexpr auto url = L"https://github.com/superfractal/RFF_Super/blob/master/guide/user-manual.md";
+            const bool japanese = UiLanguage::current() == Language::Japanese;
+            const std::wstring notice = std::wstring(japanese
+                ? L"リンクを開きます。\n既定のブラウザーでガイドを表示します。\n\n"
+                : L"This will open a link.\nThe guide will open in your default browser.\n\n") + url;
+            const auto owner = NativeDialogs::owner();
+            if (NativeDialogs::message(owner, notice.c_str(), UiLanguage::label(L"Open Guide"),
+                                       MB_OKCANCEL | MB_ICONINFORMATION) != IDOK) {
+                return;
+            }
+            const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(owner, L"open", url, nullptr, nullptr, SW_SHOWNORMAL));
+            if (result <= 32) {
+                NativeDialogs::message(owner, japanese
+                    ? L"リンクを開けませんでした。既定のブラウザーの設定を確認してください。"
+                    : L"The link could not be opened. Please check your default browser settings.",
+                    UiLanguage::label(L"Open Guide"), MB_OK | MB_ICONERROR);
+            }
+        });
         addChildItem(currentMenu, "Version", [](const SettingsMenu &, const RenderScene &) {
             NativeDialogs::message(
                 nullptr, std::string("RFF_Super ").append(Constants::Win32::APPLICATION_VERSION).c_str(),
@@ -652,13 +676,23 @@ namespace merutilm::rff2 {
         rightJustified.fMask = MIIM_FTYPE;
         rightJustified.fType = MFT_STRING | MFT_RIGHTJUSTIFY;
         const auto lastPosition = static_cast<UINT>(GetMenuItemCount(menubar) - 1);
-        SetMenuItemInfoW(menubar, lastPosition, TRUE, &rightJustified);
         // Remembered, because applyMenuTheme rewrites this item's type whole every time the theme
         // changes and would otherwise drop it back among the menus on the left.
         for (MenuEntry &entry : menuEntries) {
-            if (entry.parent == menubar && entry.position == lastPosition) {
+            // Only the ? menu itself, which menu-visibility.json may have left off the bar.
+            if (entry.parent == menubar && entry.position == lastPosition && entry.text == "?") {
+                SetMenuItemInfoW(menubar, lastPosition, TRUE, &rightJustified);
                 entry.rightJustified = true;
             }
+        }
+        // The Timeline Editor's AI Edit button is not a menu item, so its switch is listed by hand.
+        menuVisibilityTemplate[AI_EDIT_FEATURE[0]][AI_EDIT_FEATURE[1]] = false;
+        if (visibilityStatus == MenuVisibilityIO::Status::MISSING) {
+            MenuVisibilityIO::saveTemplate(menuVisibilityTemplate);
+        } else if (visibilityStatus == MenuVisibilityIO::Status::UNREADABLE) {
+            NativeDialogs::message(nullptr,
+                                   UiLanguage::utf8("menu-visibility.json could not be read, so every menu item is shown.").c_str(),
+                                   UiLanguage::utf8("Menu Visibility").c_str(), MB_OK | MB_ICONWARNING);
         }
     }
 
@@ -690,6 +724,30 @@ namespace merutilm::rff2 {
         // which is what a custom MIM_BACKGROUND brush switches the whole menu over to. The popup
         // then came up the right size and completely empty.
         const HMENU hmenu = hasChild ? CreatePopupMenu() : nullptr;
+
+        std::vector<std::string> captions;
+        if (const auto parentPath = menuCaptionPaths.find(target); parentPath != menuCaptionPaths.end()) {
+            captions = parentPath->second;
+        }
+        captions.emplace_back(child);
+        MenuVisibilityIO::Json *slot = &menuVisibilityTemplate;
+        for (size_t i = 0; i + 1 < captions.size(); ++i) {
+            slot = &(*slot)[captions[i]];
+        }
+        const bool shownByDefault = captions != LOCAL_AI_FEATURE;
+        (*slot)[captions.back()] =
+            hasChild ? MenuVisibilityIO::Json::object() : MenuVisibilityIO::Json(shownByDefault);
+        const bool visible = MenuVisibilityIO::visible(menuVisibility, captions, shownByDefault);
+        if (hmenu != nullptr) {
+            menuCaptionPaths[hmenu] = std::move(captions);
+        }
+        // A hidden popup is still built, detached, so the items added into it are dropped with it.
+        if (!visible) {
+            if (hmenu != nullptr) {
+                childMenus.push_back(hmenu);
+            }
+            return hmenu;
+        }
 
         if (hasChild) {
             AppendMenuW(target, MF_POPUP, reinterpret_cast<UINT_PTR>(hmenu), UiLanguage::utf8(child).c_str());
@@ -751,8 +809,10 @@ namespace merutilm::rff2 {
                 node.command = info.wID;
                 const int index = getIndex(info.wID);
                 node.enabled = node.enabled && !scene.isLongJobBusy() && checkIndex(index);
-                node.checkable = checkIndex(index) && hasCheckboxes[index];
-                if (node.checkable && !scene.isLongJobBusy()) {
+                const bool hasCheckbox = checkIndex(index) && hasCheckboxes[index];
+                node.checked = (info.fState & MFS_CHECKED) != 0;
+                node.checkable = hasCheckbox || (info.fType & MFT_RADIOCHECK) != 0 || node.checked;
+                if (hasCheckbox && !scene.isLongJobBusy()) {
                     if (const bool *value = getBool(scene, info.wID, false)) {
                         node.checked = *value;
                     }
@@ -793,6 +853,10 @@ namespace merutilm::rff2 {
         if (const auto id = getIndex(menuID); checkIndex(id)) {
             callbacks[id](*this, scene);
         }
+    }
+
+    bool SettingsMenu::featureShown(const std::vector<std::string> &captions) const {
+        return MenuVisibilityIO::visible(menuVisibility, captions, false);
     }
 
     bool SettingsMenu::hasCheckbox(const int menuID) {

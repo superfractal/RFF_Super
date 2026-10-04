@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-17.
 // Modified by Opus 5 on 2026-08-08
+// Modified by GPT-6 on 2026-09-29
 //
 
 #pragma once
@@ -407,8 +408,13 @@ namespace merutilm::rff2 {
     }
 
     inline void dex::sqrt(dex *result, const dex &v) {
-        result->exp2 = v.exp2 >> 1;
-        result->mantissa = v.sgn() * std::sqrt(std::abs(v.mantissa));
+        int mantissaExponent = 0;
+        const double fraction = std::frexp(v.mantissa, &mantissaExponent);
+        const int64_t exponent = static_cast<int64_t>(v.exp2) + mantissaExponent;
+        const int64_t half = exponent / 2 - (exponent < 0 && exponent % 2 != 0);
+        const double root = v.sgn() * std::sqrt(std::ldexp(std::abs(fraction), static_cast<int>(exponent - 2 * half)));
+        result->exp2 = static_cast<int>(half);
+        result->mantissa = root;
     }
 
     inline void dex::mul_2exp(dex *result, const dex &v, const int exp2) {
@@ -447,7 +453,7 @@ namespace merutilm::rff2 {
             return;
         }
         if (target->isinf()) {
-            cpy(target, target->sgn() ? PINF : NINF);
+            cpy(target, target->sgn() > 0 ? PINF : NINF);
             return;
         }
         if (target->isnan()) {
@@ -456,6 +462,12 @@ namespace merutilm::rff2 {
         }
 
         const auto mts_bits = std::bit_cast<uint64_t>(target->mantissa);
+        if ((mts_bits & 0x7ff0000000000000ULL) == 0) {
+            int exponent = 0;
+            target->mantissa = std::frexp(target->mantissa, &exponent);
+            target->exp2 += exponent;
+            return;
+        }
         target->mantissa = std::bit_cast<double>(mts_bits & 0x800fffffffffffffULL | 0x3fe0000000000000ULL);
         target->exp2 += static_cast<int>((mts_bits & 0x7ff0000000000000ULL) >> 52) - 0x03fe;
     }

@@ -3,7 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-23, 2026-08-26, 2026-08-31, 2026-09-01
 // Modified by GPT-5 on 2026-08-21, 2026-08-26
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -23,6 +24,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "../attr/Selectable.h"
 
@@ -49,6 +51,7 @@ namespace merutilm::rff2 {
         void captureDpiLayout();
         void applyDpi(UINT targetDpi, const RECT* suggested = nullptr);
         HWND window;
+        DWORD extendedStyle = Constants::Win32::STYLE_EX_SETTINGS_WINDOW;
         int count = 0;
         int yCursor = 0;
         std::vector<std::any> references;
@@ -127,6 +130,9 @@ namespace merutilm::rff2 {
         std::unordered_map<HWND, std::function<void(HDC, const RECT &)>> cardPainters;
         // Buttons painted as a filled blue accent button instead of the soft near-white face.
         std::unordered_set<HWND> primaryButtons;
+        // Radio choices laid side by side in one row, and those of them drawn as numbered tabs.
+        std::unordered_set<HWND> segmentButtons;
+        std::unordered_set<HWND> tabButtons;
         // Dropdowns the panel paints itself: their closed face and their dropped rows.
         std::unordered_set<HWND> selectionBoxes;
         std::unordered_map<int, double> textFieldArrowSteps;
@@ -161,7 +167,8 @@ namespace merutilm::rff2 {
         explicit SettingsWindow(const std::wstring &name,
                                 int width = Constants::Win32::INIT_SETTINGS_WINDOW_WIDTH,
                                 int labelWidth = -1,
-                                int inputHeight = Constants::Win32::SETTINGS_INPUT_HEIGHT);
+                                int inputHeight = Constants::Win32::SETTINGS_INPUT_HEIGHT,
+                                bool allowWindowCapture = false);
 
         ~SettingsWindow();
 
@@ -194,7 +201,8 @@ namespace merutilm::rff2 {
         std::vector<HWND> registerRadioButtonInput(const std::wstring &settingsName, T *defaultValue,
                                                    std::function<void()> &&callback,
                                                    const std::wstring &descriptionTitle,
-                                                   const std::wstring &descriptionDetail);
+                                                   const std::wstring &descriptionDetail,
+                                                   bool allowSideBySide = true);
 
         HWND registerCheckboxInput(const std::wstring &settingsName, bool *defaultValue,
                                             std::function<void()> &&callback, const std::wstring &descriptionTitle,
@@ -340,6 +348,8 @@ namespace merutilm::rff2 {
         // handler can point dis->hDC at a memory bitmap for the length of the call. Returns false
         // when the item is none of ours and the default handling should run.
         static bool drawOwnerDrawnItem(SettingsWindow &wnd, const DRAWITEMSTRUCT *dis);
+        static void drawRadioSegment(const DRAWITEMSTRUCT *dis, const std::wstring &text, bool selected, bool enabled,
+                                     bool tab, HFONT font);
 
         // Repaint the panel's own surface (background + section frames) and bring every row paint
         // still pending into the same frame. See the definition for why it takes two passes.
@@ -403,6 +413,15 @@ namespace merutilm::rff2 {
         [[nodiscard]] int rowBoxSize() const;
 
         [[nodiscard]] int getRadioButtonWidth(const std::wstring &text, int maxWidth) const;
+
+        // Where each choice of a radio row goes: side by side when every label fits, else one per row.
+        struct RadioLayout {
+            bool sideBySide = false;
+            bool tabs = false;
+            std::vector<std::pair<int, int>> spans; // left offset within the value column, and width
+        };
+        [[nodiscard]] RadioLayout arrangeRadioChoices(const std::vector<std::wstring> &labels, int valueWidth,
+                                                      bool allowSideBySide) const;
 
         [[nodiscard]] bool checkIndex(int index) const;
 
@@ -570,7 +589,8 @@ namespace merutilm::rff2 {
     std::vector<HWND> SettingsWindow::registerRadioButtonInput(const std::wstring &settingsName, T *defaultValue,
                                                                std::function<void()> &&callback,
                                                                const std::wstring &descriptionTitle,
-                                                               const std::wstring &descriptionDetail) {
+                                                               const std::wstring &descriptionDetail,
+                                                               const bool allowSideBySide) {
         const auto dpiScope=scopedDpi(this);
         const int nw = getFixedNameWidth();
         const int vw = getFixedValueWidth();
@@ -580,13 +600,20 @@ namespace merutilm::rff2 {
         auto createdItem = std::vector<HWND>();
         createdItem.reserve(values.size());
         std::vector<HWND> rowControls = {label};
+        std::vector<std::wstring> labels;
+        for (const T value : values) {
+            labels.push_back(Selectable::toString(value));
+        }
+        const RadioLayout layout = arrangeRadioChoices(labels, vw, allowSideBySide);
 
         for (int i = 0; i < values.size(); ++i) {
-            const std::wstring text = Selectable::toString(values[i]);
+            const std::wstring &text = labels[i];
+            const int left = layout.sideBySide ? nw + layout.spans[i].first : nw;
+            const int width = layout.sideBySide ? layout.spans[i].second : getRadioButtonWidth(text, vw);
             const HWND item = CreateWindowExW(0, WC_BUTTONW,
                                               text.data(),
-                                              Constants::Win32::STYLE_RADIOBUTTON | (i == 0 ? WS_GROUP : 0), nw,
-                                              getYOffset(), getRadioButtonWidth(text, vw),
+                                              Constants::Win32::STYLE_RADIOBUTTON | (i == 0 ? WS_GROUP : 0), left,
+                                              getYOffset(), width,
                                               inputHeight, window,
                                               reinterpret_cast<HMENU>(
                                                   Constants::Win32::ID_OPTIONS + i *
@@ -599,6 +626,16 @@ namespace merutilm::rff2 {
             createdItem.push_back(item);
             createdChildWindows.push_back(item);
             rowControls.push_back(item);
+            if (layout.sideBySide) {
+                segmentButtons.insert(item);
+                if (layout.tabs) {
+                    tabButtons.insert(item);
+                }
+            } else {
+                advanceRow();
+            }
+        }
+        if (layout.sideBySide) {
             advanceRow();
         }
         auto unparser = [](T v) { return Selectable::toString(v); };

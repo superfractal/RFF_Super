@@ -1,5 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -14,6 +15,19 @@
 #include "../../video/VideoFrameSource.hpp"
 
 namespace merutilm::rff2::workspace {
+    inline void exportEncodingBehavior(WorkspaceForm &form) {
+        const auto encodingFields = form.fields;
+        for (auto &entry : form.fields) {
+            if (entry.id == "export.bitrate") entry.enabled = [encodingFields](const FormDraft &draft) {
+                const FormValues values(encodingFields, draft);
+                return !values.number<int>("export.lossless").value_or(0) ||
+                    (values.number<int>("export.hdr").value_or(0) && values.number<int>("export.transfer").value_or(0) != int(VidHdrTransfer::SDR));
+            };
+            if (entry.id == "export.peak") entry.enabled = [encodingFields](const FormDraft &draft) {
+                return FormValues(encodingFields, draft).number<int>("export.transfer").value_or(0) == int(VidHdrTransfer::PQ);
+            };
+        }
+    }
     class ExportWorkspace : public std::enable_shared_from_this<ExportWorkspace> {
         RenderScene &scene;
         HWND owner;
@@ -308,6 +322,11 @@ namespace merutilm::rff2::workspace {
                           L"Shows the video while exporting. Turn off to reduce display work; progress and "
                           L"cancellation remain available.",
                           [](auto &a) -> auto & { return a.video.exportation.showExportPreview; });
+            model->numeric(
+                "export.gpuSplit", 5, L"GPU Work Split",
+                L"0 = off, 1 = per pass, 2 to 64 = also fractal bands. Prevents VK_ERROR_DEVICE_LOST "
+                L"on long, high-resolution exports.",
+                [](auto &a) -> auto & { return a.video.exportation.gpuSubmitSplit; }, uint32_t(0), uint32_t(64));
             model->choice("export.pauseVideo", 5, L"Pause Preview During Export",
                           L"Reserves the GPU for the video export.",
                           [](auto &a) -> auto & { return a.video.exportation.pauseMainPreview; });
@@ -433,8 +452,10 @@ namespace merutilm::rff2::workspace {
             for (auto &entry : result.fields) {
                 if (entry.id == "export.width" || entry.id == "export.height") {
                     entry.validate = AttributeFormModel::rangeValidation<uint16_t>(64, 16384);
+                    entry.nudge = numericAdjustment(uint16_t(64), uint16_t(16384));
                 }
             }
+            exportEncodingBehavior(result);
             std::stable_sort(result.fields.begin(), result.fields.end(), [](const auto &a, const auto &b) {
                 if (a.group != b.group) {
                     return a.group < b.group;

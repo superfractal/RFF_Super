@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-21, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "PreferencesIO.h"
@@ -19,8 +20,7 @@
 namespace merutilm::rff2 {
     namespace {
         std::filesystem::path preferencesFile() {
-            return Utilities::getDefaultPath() /
-                   std::format(L"preferences.{}", Constants::Extension::PREFERENCES);
+            return Utilities::getConfigFile(std::format(L"preferences.{}", Constants::Extension::PREFERENCES));
         }
 
         bool hasMoreBytes(std::ifstream &in) {

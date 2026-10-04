@@ -2,10 +2,12 @@
 // Created by Merutilm on 2025-05-04.
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
 // Modified by GPT-6 on 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
 
+#include "ShdChaosBlurAverage.h"
 #include "ShdFogBlurQuality.h"
 
 namespace merutilm::rff2 {
@@ -47,7 +49,7 @@ namespace merutilm::rff2 {
         float chaosTransition = 0.5f;
         float chaosFeather = 6.0f;
         float chaosBlur = 4.0f;
-        float chaosHighlights = 0.2f;
         float chaosShade = 0.0f;
+        ShdChaosBlurAverage chaosBlurAverage = ShdChaosBlurAverage::GAMMA;
     };
 }

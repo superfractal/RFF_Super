@@ -2,7 +2,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-21, 2026-08-24, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
-// Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23, 2026-09-25
+// Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23, 2026-09-25, 2026-09-30, 2026-10-03
 //
 
 #version 450
@@ -78,8 +78,13 @@ vec3 linear_to_srgb(vec3 c) {
 
 // Interleaved Gradient Noise: one evenly spread value per pixel, standing in for a blue-noise texture.
 // Constants from Jorge Jimenez, "Next Generation Post Processing in Call of Duty: Advanced Warfare", SIGGRAPH 2014.
+// Limited formula/constant use; no express source-code license established for the cited presentation, see NOTICE.
+// Adapted from Alan Wolfe, IGNLDS main.py at a9f3ab9, MIT; GLSL fract and the project seed are retained, see NOTICE.
 float ign(vec2 p, float seed) {
-    return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y + seed));
+    const float ignScale = 52.9829189;
+    const float ignX = 0.06711056;
+    const float ignY = 0.00583715;
+    return fract(ignScale * fract(ignX * p.x + ignY * p.y + seed));
 }
 
 // Half a step of noise before the 8-bit rounding, which scatters a slow gradient's crossings into a grain instead of bands.
@@ -98,19 +103,22 @@ vec4 safeTexelFetch(sampler2D tex, ivec2 coord, ivec2 texSize) {
 }
 
 // Krzysztof Narkowicz's 2015 curve fit to the ACES RRT+ODT, not the ACES transform itself.
+// The author's 2016 publication offers CC0 or MIT; this project selects CC0 for the fit, see NOTICE.
 vec3 aces_curve(vec3 x) {
     return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
 }
 
 // John Hable's Uncharted 2 filmic curve, presented at GDC 2010.
+// Published curve/constant reference; no express source-code license established for the cited article, see NOTICE.
+// Adapted from Sascha Willems, Vulkan-glTF-PBR at 128db90, Copyright (c) 2018-2024, MIT; see NOTICE.
 vec3 filmic_curve(vec3 x) {
-    const float a = 0.15;
-    const float b = 0.50;
-    const float c = 0.10;
-    const float d = 0.20;
-    const float e = 0.02;
-    const float f = 0.30;
-    return ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f;
+    const float A = 0.15;
+    const float B = 0.50;
+    const float C = 0.10;
+    const float D = 0.20;
+    const float E = 0.02;
+    const float F = 0.30;
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 }
 
 // Every curve is normalized so the headroom value lands exactly on display white.

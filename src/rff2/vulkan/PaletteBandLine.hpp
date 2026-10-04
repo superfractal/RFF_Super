@@ -1,7 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-20.
 // Modified by Opus 5 on 2026-08-22
-// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-23
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-29
 //
 
 #pragma once
@@ -35,9 +35,9 @@ namespace merutilm::rff2 {
         // A hard line only has to land on an entry; a feathered one is a ramp, and a ramp drawn
         // over a handful of entries comes out as steps, so softness asks for far more of them.
         const float span = palette.bandLineSoftness > 0.0f ? 64.0f : 4.0f;
-        const auto perBand = std::clamp(
-            static_cast<uint64_t>(std::ceil(span / palette.bandLineWidth)),
-            BAND_LINE_MIN_ENTRIES, BAND_LINE_MAX_ENTRIES);
+        const auto perBand = static_cast<uint64_t>(std::clamp(
+            std::ceil(span / palette.bandLineWidth),
+            static_cast<float>(BAND_LINE_MIN_ENTRIES), static_cast<float>(BAND_LINE_MAX_ENTRIES)));
         const uint64_t target = std::min(count * perBand, BAND_LINE_MAX_TOTAL);
 
         // A palette too coarse to hold the line is interpolated up first, in the space the shader

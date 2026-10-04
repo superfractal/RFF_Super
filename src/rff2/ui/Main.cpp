@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-23, 2026-09-01
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include <chrono>
@@ -160,7 +161,7 @@ static std::string activeExceptionText() {
     const std::string text = activeExceptionText();
     const std::string message = text.empty() ? "The program stopped on an unexpected error." : text;
     try {
-        const std::filesystem::path path = merutilm::rff2::Utilities::getDefaultPath() / L"crash-report.log";
+        const std::filesystem::path path = merutilm::rff2::Utilities::getDefaultPath() / L"recovery" / L"crash-report.log";
         std::filesystem::create_directories(path.parent_path());
         std::ofstream out(path, std::ios::app);
         if (out) {

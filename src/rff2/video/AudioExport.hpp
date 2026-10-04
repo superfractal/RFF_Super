@@ -1,4 +1,7 @@
+//
 // Modified by GPT-6 on 2026-09-25, 2026-09-26
+//
+
 #pragma once
 #include "../attr/VidAudioAttribute.h"
 #include <filesystem>

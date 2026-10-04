@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-06-23.
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-31
-// Modified by GPT-6 on 2026-09-22, 2026-09-25
+// Modified by GPT-6 on 2026-09-22, 2026-09-25, 2026-09-26
 //
 
 #include "RFFStaticMapBinary.h"
@@ -27,7 +27,7 @@ namespace merutilm::rff2 {
 
     const RFFStaticMapBinary RFFStaticMapBinary::DEFAULT = RFFStaticMapBinary(0, 0, 0);
 
-    RFFStaticMapBinary::RFFStaticMapBinary(const float logZoom, const uint32_t width, const uint32_t height) : RFFBinary(logZoom), width(width), height(height) {
+    RFFStaticMapBinary::RFFStaticMapBinary(const float logZoom, const uint32_t width, const uint32_t height, std::optional<uint64_t> maxIteration) : RFFBinary(logZoom), width(width), height(height), maxIteration(maxIteration) {
 
     }
 
@@ -55,7 +55,14 @@ namespace merutilm::rff2 {
         if (!in || !std::isfinite(lz) || w == 0 || h == 0 || static_cast<uint64_t>(w) * h > MAX_MAP_PIXELS) {
             return DEFAULT;
         }
-        return RFFStaticMapBinary(lz, w, h);
+        std::optional<uint64_t> maxIteration;
+        if (in.peek() != std::char_traits<char>::eof()) {
+            uint64_t value = 0;
+            IOUtilities::readAndDecode(in, &value);
+            if (!in) return DEFAULT;
+            maxIteration = value;
+        }
+        return RFFStaticMapBinary(lz, w, h, maxIteration);
     }
 
     RFFStaticMapBinary RFFStaticMapBinary::readByID(const std::filesystem::path& dir, const uint32_t id) {
@@ -81,6 +88,7 @@ namespace merutilm::rff2 {
             IOUtilities::encodeAndWrite(out, getLogZoom());
             IOUtilities::encodeAndWrite(out, getWidth());
             IOUtilities::encodeAndWrite(out, getHeight());
+            if (maxIteration) IOUtilities::encodeAndWrite(out, *maxIteration);
             out.close();
             if (out.fail() || !IOUtilities::commitTemporaryFile(temporary, path)) {
                 IOUtilities::discardTemporaryFile(temporary);

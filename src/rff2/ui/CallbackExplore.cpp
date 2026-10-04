@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-14, 2026-08-26
 // Modified by GPT-5 on 2026-08-21
-// Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-22, 2026-09-25
+// Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-22, 2026-09-25, 2026-09-29
 //
 
 #include "NativeDialogs.hpp"
@@ -81,8 +81,11 @@ namespace merutilm::rff2 {
 
             scene.getState().cancel();
             const MandelbrotPerturbator *perturbator = scene.getCurrentPerturbator();
-            if (perturbator == nullptr) {
-                throw vkh::exception_invalid_state("Perturbator cannot be null");
+            if (perturbator == nullptr || perturbator->getReference() == nullptr) {
+                NativeDialogs::message(nullptr,
+                                       "The reference is not ready. Let the calculation finish, then try Locate Minibrot again.",
+                                       "Locate Minibrot Unavailable", MB_OK | MB_ICONWARNING);
+                return;
             }
 
             scene.getState().createThread([&scene, logZoom = settings.fractal.logZoom, perturbator,

@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-31.
 // Modified by Opus 5 on 2026-09-01
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -34,7 +35,9 @@ namespace merutilm::rff2::ShdExamplePresets {
     // The folder the examples are read from, beside the shaders the program loads the same way. It
     // is located from the running program rather than from the folder it happens to be started in,
     // since the shaders beside it are found that way too and a launcher is free to start anywhere.
-    constexpr auto EXAMPLE_FOLDER_NAME = L"shader_example";
+    constexpr auto EXAMPLE_FOLDER_NAME = L"example/shader";
+    // Where older builds kept the examples; moved into EXAMPLE_FOLDER_NAME on first use.
+    constexpr auto LEGACY_EXAMPLE_FOLDER_NAME = L"shader_example";
 
     // Every file in the example folder whose own header says it carries a shader, by name. The
     // files are only identified here; each one is read for its settings when it is picked.

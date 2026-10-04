@@ -1,5 +1,6 @@
 # Prerequisites
 # Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+# Modified by Opus 5.5 on 2026-10-04
 *.d
 
 # Compiled Object files
@@ -52,10 +53,10 @@ __pycache__/
 /.claude/
 /.codex/
 /debug/
-/docs/*
-!/docs/mfr-hdr-preview.md
-!/docs/timeline-ai-exchange.md
-!/docs/numeric-input-ranges.md
+/documentation/notes/*
+!/documentation/notes/mfr-hdr-preview.md
+!/documentation/notes/timeline-ai-exchange.md
+!/documentation/notes/numeric-input-ranges.md
 /include/
 
 # Written by the Vulkan layers that run_with_validation.bat enables
@@ -70,7 +71,11 @@ __pycache__/
 /tools/diagnostics/*.log
 /tools/diagnostics/20??-??-??-??????/
 
-# Local settings and machine-specific launch configuration
+# Local settings and machine-specific launch configuration (config/; root copies come from older builds)
+/config/preferences.rfp
+/config/timeline-layout.txt
+/config/workspace-favorites.txt
+/config/local-ai-server.json
 /preferences.rfp
 /timeline-layout.txt
 /workspace-favorites.txt

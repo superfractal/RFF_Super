@@ -1,4 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Visual settings comparisons
 
 [24 additional shader comparisons](shader-comparisons.md) · [Back to the guide](SETTINGS_GUIDE.md) · [Field reference](settings-reference.md) · [Validation](validation.md)
@@ -393,6 +394,8 @@ Intricate structure softens while broad smooth regions retain their form.
 | ![Chaos before](images/chaos-before.png) | ![Chaos after](images/chaos-after.png) |
 
 [Before settings](examples/chaos-before.rfc) · [After settings](examples/chaos-after.rfc)
+
+This pair was rendered on September 24, before the October 2–3 Chaos Blur changes. The current version keeps blurred holes round, keeps the dark color between bright details instead of washing them to grey, and no longer adds Chaos Highlight Detail, so the after settings now render a darker, cleaner blur than this picture.
 
 </details>
 

@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-23
+// Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-23, 2026-09-30
 //
 
 // Original RFF_Super procedural effects, GPL-3.0-or-later; provenance is recorded in NOTICE.
@@ -332,6 +332,7 @@ vec3 surface_effect_relief(vec3 base, vec3 before, vec3 after) {
 vec3 surface_effect_finish(vec3 base, SurfaceEffects effects, vec3 normal, bool linear) {
     vec3 light = vec3(sin(radians(slope_attr.zenith)) * cos(radians(slope_attr.azimuth)),
                       sin(radians(slope_attr.zenith)) * sin(radians(slope_attr.azimuth)), cos(radians(slope_attr.zenith)));
+    // Blinn (1977) half-vector power highlight; mathematical background in NOTICE; project license unchanged.
     vec3 halfDirection = normalize(light + vec3(0.0, 0.0, 1.0));
     float reflected = pow(max(dot(normal, halfDirection), 0.0), 64.0) * effects.wetness * 0.35;
     vec3 emission = linear ? srgb_to_linear(clamp(effects.emission, 0.0, 1.0)) * max(1.0, max(effects.emission.r, max(effects.emission.g, effects.emission.b))) : effects.emission;

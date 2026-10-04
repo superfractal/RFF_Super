@@ -1,4 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Shader documentation coverage
 
 [Shader overview](shader-overview.md) · [Main guide](SETTINGS_GUIDE.md) · [Field reference](settings-reference.md)
@@ -7,7 +8,7 @@ Checked against the workspace source on **September 24, 2026**. This is a docume
 
 ## Scope
 
-- All **17 Shader menu entries** have a destination and explanation in the overview.
+- All **15 Shader menu entries** have a destination and explanation in the overview. Save and Load Appearance Settings moved to the File menu on October 1.
 - All **29 shader layer slots** are named and described, with shared Texture/Pattern/Effect slots grouped as 1–4.
 - The seven appearance/palette forms are checked against their captured field inventory; current AppearanceForms source labels are also checked directly.
 - Surface numeric/color registries and display-name overrides are checked against both the overview and the field reference. Identical names and repeated layer fields are not separate feature claims.

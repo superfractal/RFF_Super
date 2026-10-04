@@ -1,9 +1,11 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
 //
 
 #include "AppearanceForms.hpp"
 #include "AttributeFormSection.hpp"
+#include "AppearanceFormBehavior.hpp"
 #include "../../attr/NumericSettingLimits.hpp"
 #include <thread>
 
@@ -13,8 +15,9 @@ namespace merutilm::rff2::workspace {
         using Settings = RenderAttribute;
         AttributeFormSection section(
             model, [](auto &attributes) -> auto & { return attributes.render; }, "render.");
-        section.number("fps", &Settings::fps, L"Rendering FPS", NumericSettingLimits::minimumFps, NumericSettingLimits::maximumFps,
-                       L"Live rendering limit: 1 to 1000 frames per second. Lower values reduce rendering load. "
+        section.number("fps", &Settings::fps, L"Rendering FPS", NumericSettingLimits::minimumRenderFps,
+                       NumericSettingLimits::maximumFps,
+                       L"Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. "
                        L"Video export has a separate FPS setting.");
         section.number("threads", &Settings::threads, L"Calculation Threads", uint32_t(1),
                        std::max(uint32_t(1), std::thread::hardware_concurrency()),
@@ -126,10 +129,25 @@ namespace merutilm::rff2::workspace {
                 slope.reliefZoomReference = after.fractal.logZoom;
             }
         });
+        AttributeFormSection studio(model, [](auto &a) -> auto & { return a.shader.slope.studio; }, "studio.", 9);
+        studio.choice("use", &ShdStudioAttribute::use, L"Studio");
+        studio.number("roughness", &ShdStudioAttribute::roughness, L"Roughness", .04f, 1.f);
+        studio.number("metalness", &ShdStudioAttribute::metalness, L"Metalness", 0.f, 1.f);
+        studio.number("clearcoat", &ShdStudioAttribute::clearcoat, L"Clearcoat", 0.f, 1.f);
+        studio.number("clearcoatRoughness", &ShdStudioAttribute::clearcoatRoughness, L"Coat Roughness", .04f, 1.f);
+        section.group = 9;
+        section.number("iridescence", &Settings::iridescence, L"Iridescence", 0.f, 1.f);
+        section.number("filmThickness", &Settings::filmThickness, L"Film Thickness (nm)", 0.f, 2000.f);
         auto form =
             model->form(L"Lighting & Relief",
                         {L"Slope Shading", L"Light Direction", L"Specular", L"Relief Detail",
-                         L"Lit / Shadow Tint", L"Tone Mapping", L"Rim Light", L"Gloss", L"Lustre Relief"});
+                         L"Lit / Shadow Tint", L"Tone Mapping", L"Rim Light", L"Gloss", L"Lustre Relief", L"Material Presets"});
+        constexpr const wchar_t *presets[] = {L"Bronze", L"Pearl", L"Obsidian", L"Ceramic"};
+        for (int i = 0; i < 4; ++i) form.actions.push_back({9, presets[i], [model, i] {
+            model->edit([i](Attribute &a) { applyStudioPreset(a.shader.slope, i); });
+        }});
+        appearanceFormBehavior(form);
+        form.addDividers({"specularIndependent", "reliefWaves", "iridescence"});
         form.actions.push_back({8, L"Use Current Zoom", [model, attribute] {
                                     model->apply(
                                         {{"slope.reliefZoomReference",
@@ -161,6 +179,19 @@ namespace merutilm::rff2::workspace {
             section.number("scrollV", &Settings::scrollV, L"Scroll V", -2.0f, 2.0f);
         }
         auto form = model->form(L"Textures", {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        model->setNormalizer([](const Attribute &, Attribute &after, const FormDraft &draft) {
+            for (int i = 0; i < 4; ++i) if (draft.contains("texture." + std::to_string(i) + ".path") &&
+                !draft.contains("texture." + std::to_string(i) + ".enabled"))
+                after.shader.textures[i].enabled = !after.shader.textures[i].path.empty();
+        });
+        form.updateDraft = [](FormDraft &draft, const std::string &id) {
+            if (id.ends_with(".path") && draft.contains(id)) draft[id.substr(0, id.size() - 4) + "enabled"] = draft.at(id).empty() ? L"0" : L"1";
+        };
+        for (int i = 0; i < 4; ++i) form.actions.push_back({i, L"Clear Image", [model, i] {
+            model->edit([i](Attribute &a) { a.shader.textures[i].path.clear(); a.shader.textures[i].enabled = false; });
+        }});
+        appearanceFormBehavior(form);
+        form.addDividers({"paletteFollow"});
         addLayerGuidance(form, "texture.");
         addLayerActions(form, model,
                         [](Attribute &attributes) -> auto & { return attributes.shader.textures; }, onMove);
@@ -197,6 +228,8 @@ namespace merutilm::rff2::workspace {
             section.choice("edgeRelative", &Settings::edgeRelative, L"Relative Edge Width");
         }
         auto form = model->form(L"Patterns", {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        appearanceFormBehavior(form);
+        form.addDividers({"paletteFollow", "edgeEnabled"});
         addLayerGuidance(form, "pattern.");
         addLayerActions(form, model,
                         [](Attribute &attributes) -> auto & { return attributes.shader.patterns; }, onMove);
@@ -235,6 +268,7 @@ namespace merutilm::rff2::workspace {
                            formMaximum, L"Signed speed; 0 stops stripe motion.");
         }
         auto form = model->form(L"Warp & Stripe", {L"Domain Warp", L"Stripe"});
+        appearanceFormBehavior(form);
         return form;
     }
     WorkspaceForm finishingForm(AttributeGetter attribute, std::function<void()> changed) {
@@ -302,16 +336,18 @@ namespace merutilm::rff2::workspace {
             section.number("chaosBlur", &Settings::chaosBlur, L"Chaos Blur Radius", 0.0f, 32.0f,
                            L"Circular aperture radius in pixels at 1280 width. Scales with output size; Blur "
                            L"Quality controls sampling.");
-            section.number("chaosHighlights", &Settings::chaosHighlights, L"Chaos Highlight Detail", 0.0f,
-                           1.0f,
-                           L"Retains a little of the original bright detail over the lens blur. Zero gives a "
-                           L"pure circular blur.");
             section.number(
-                "chaosShade", &Settings::chaosShade, L"Chaos Shade", 0.0f, 0.5f,
-                L"Darkens intricate defocused regions to separate them from smooth foreground surfaces.");
+                "chaosShade", &Settings::chaosShade, L"Chaos Shade", 0.0f, 1.0f,
+                L"Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, "
+                L"fully selected regions turn black whatever Chaos Amount is.");
+            section.choice("chaosBlurAverage", &Settings::chaosBlurAverage, L"Chaos Blur Averaging",
+                           L"Gamma Space keeps the dark gaps between bright details dark. Linear Space averages "
+                           L"light physically, so bright detail spreads and blurred regions come out brighter.");
         }
         auto form =
             model->form(L"Finishing", {L"Color Correction", L"Bloom", L"Fog", L"Focus Band", L"Chaos Blur"});
+        appearanceFormBehavior(form);
+        form.addDividers({"rimMask"});
         return form;
     }
     WorkspaceForm materialEffectsForm(AttributeGetter attribute, std::function<void()> changed, LayerMove onMove) {
@@ -340,12 +376,14 @@ namespace merutilm::rff2::workspace {
             section.number("evolution", &Settings::evolution, L"Evolution", -10.0f, 10.0f);
             section.number("direction", &Settings::direction, L"Flow Bend", -180.0f, 180.0f);
             section.number("seed", &Settings::seed, L"Seed", 0.0f, 65535.0f);
-            section.number("period", &Settings::period, L"Band Period", 1.0f, 1000000.0f);
+            section.number("period", &Settings::period, L"Band Period", 1.0f, 1e9f);
             section.color("color", &Settings::color, L"Primary Color");
             section.color("secondary", &Settings::secondary, L"Secondary Color");
         }
         auto form = model->form(L"Animated Materials",
                                 {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        appearanceFormBehavior(form);
+        form.addDividers({"syncColorAnimation", "color"});
         addLayerGuidance(form, "effect.");
         addLayerActions(form, model,
                         [](Attribute &attributes) -> auto & { return attributes.shader.effects; }, onMove);

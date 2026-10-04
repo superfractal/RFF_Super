@@ -6,7 +6,8 @@
 // Modified by GPT-5 on 2026-08-16, 2026-08-21, 2026-08-23, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
-// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
@@ -19,6 +20,7 @@
 #include "ShaderLayerWindow.hpp"
 #include "../attr/SurfaceControlRouting.h"
 #include "PaletteStopEditor.hpp"
+#include "PalettePreview.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -39,93 +41,6 @@
 #include "../constants/ExtensionConstants.hpp"
 
 namespace merutilm::rff2 {
-
-    static void drawPalettePreview(const HDC hdc, const RECT &rc, const ShdPaletteAttribute &pal,
-                                   const ShdPalColorSmoothingMethod method,
-                                   const ShdPalColorInterpolationMethod interp) {
-        const int w = rc.right - rc.left;
-        const int h = rc.bottom - rc.top;
-        if (w <= 0 || h <= 0) {
-            return;
-        }
-        const int n = static_cast<int>(pal.colors.size());
-        if (n == 0) {
-            FillRect(hdc, &rc, static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
-            return;
-        }
-        // Stock DC_BRUSH + SetDCBrushColor lets us fill one 1px column per color without
-        // allocating a brush per pixel.
-        const auto oldBrush = SelectObject(hdc, GetStockObject(DC_BRUSH));
-        for (int x = 0; x < w; ++x) {
-            const float t = w == 1 ? 0.0f : static_cast<float>(x) / static_cast<float>(w - 1); // 0..1
-            glm::vec4 c;
-            switch (method) {
-            case ShdPalColorSmoothingMethod::NONE: {
-                const int bands = std::max(1, std::min(n, w / 10));
-                const int band = std::min(static_cast<int>(t * static_cast<float>(bands)), bands - 1);
-                const int i = std::min(band * n / bands, n - 1);
-                c = pal.colors[i];
-                break;
-            }
-            case ShdPalColorSmoothingMethod::REVERSED: {
-                const int bands = std::max(1, std::min(n, w / 10));
-                const float scaled = t * static_cast<float>(bands);
-                const int band = std::min(static_cast<int>(scaled), bands - 1);
-                const float local = scaled - static_cast<float>(band); // 0..1 within the band
-                const float p = (static_cast<float>(band) + (1.0f - local)) / static_cast<float>(bands);
-                const float f = p * static_cast<float>(n);
-                const int i0 = static_cast<int>(f) % n;
-                const int i1 = (i0 + 1) % n;
-                const float d = f - std::floor(f);
-                c = blendPaletteColors(pal.colors[i0], pal.colors[i1], d, interp);
-                break;
-            }
-            case ShdPalColorSmoothingMethod::NORMAL: {
-                const float f = t * static_cast<float>(n);
-                const int i0 = static_cast<int>(f) % n;
-                const int i1 = (i0 + 1) % n;
-                const float d = f - std::floor(f);
-                c = blendPaletteColors(pal.colors[i0], pal.colors[i1], d, interp);
-                break;
-            }
-            }
-            // Drawn over the blend, as the palette upload lays it over the colors it sends.
-            if (const float lineCoverage = pal.bandLineCoverage(t); lineCoverage > 0.0f) {
-                c = glm::mix(c, pal.bandLineColor, lineCoverage);
-            }
-            const COLORREF rgb = RGB(static_cast<BYTE>(std::round(std::clamp(c.r, 0.0f, 1.0f) * 255.0f)),
-                                     static_cast<BYTE>(std::round(std::clamp(c.g, 0.0f, 1.0f) * 255.0f)),
-                                     static_cast<BYTE>(std::round(std::clamp(c.b, 0.0f, 1.0f) * 255.0f)));
-            SetDCBrushColor(hdc, rgb);
-            RECT col = {rc.left + x, rc.top, rc.left + x + 1, rc.bottom};
-            FillRect(hdc, &col, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
-        }
-        SelectObject(hdc, oldBrush);
-    }
-
-    // Approximate display color of a frozen iteration value. Computed in double precision so a
-    // large iteration value keeps the correct cycle phase (float getMidColor would lose it).
-    static COLORREF freezeSwatchColor(const ShdPaletteAttribute &pal, const double iter) {
-        const int n = static_cast<int>(pal.colors.size());
-        if (n == 0) {
-            return RGB(0, 0, 0);
-        }
-        auto chan = [&](const int ch, const float interval) -> float {
-            double ratio = std::fmod(iter / static_cast<double>(interval) + pal.offsetRatio, 1.0);
-            if (ratio < 0.0) {
-                ratio += 1.0;
-            }
-            const double f = ratio * static_cast<double>(n);
-            const int i0 = static_cast<int>(f) % n;
-            const int i1 = (i0 + 1) % n;
-            const float d = static_cast<float>(f - std::floor(f));
-            return std::lerp(pal.colors[i0][ch], pal.colors[i1][ch], d);
-        };
-        return RGB(
-            static_cast<BYTE>(std::round(std::clamp(chan(0, pal.iterationInterval.r), 0.0f, 1.0f) * 255.0f)),
-            static_cast<BYTE>(std::round(std::clamp(chan(1, pal.iterationInterval.g), 0.0f, 1.0f) * 255.0f)),
-            static_cast<BYTE>(std::round(std::clamp(chan(2, pal.iterationInterval.b), 0.0f, 1.0f) * 255.0f)));
-    }
 
     static constexpr int FREEZE_SWATCH_SIZE = 22;
     static constexpr int FREEZE_SWATCH_GAP = 5;
@@ -397,7 +312,7 @@ namespace merutilm::rff2 {
 
         window->registerSectionHeader(L"Freeze Colors (Eyedropper)");
         const HWND freezePanel = window->registerOwnerDrawnPanel(
-            Constants::Win32::settingsScaled(64), [&palette](const HDC hdc, const RECT &rc) {
+            Constants::Win32::settingsScaled(64), [&palette, &scene](const HDC hdc, const RECT &rc) {
                 const HBRUSH bg = CreateSolidBrush(settingsTheme().textFieldBackground);
                 FillRect(hdc, &rc, bg);
                 DeleteObject(bg);
@@ -418,8 +333,15 @@ namespace merutilm::rff2 {
                 const auto oldBrush = SelectObject(hdc, GetStockObject(DC_BRUSH));
                 for (int i = 0; i < static_cast<int>(iters.size()); ++i) {
                     const RECT s = freezeSwatchRect(rc, i);
-                    SetDCBrushColor(hdc, freezeSwatchColor(palette, iters[i]));
+                    const COLORREF picked = scene.pickedFreezeColor(iters[i]);
+                    SetDCBrushColor(hdc, picked == CLR_INVALID ? settingsTheme().textFieldBackground : picked);
                     Rectangle(hdc, s.left, s.top, s.right, s.bottom);
+                    if (picked == CLR_INVALID) {
+                        RECT label = s;
+                        SetBkMode(hdc, TRANSPARENT);
+                        SetTextColor(hdc, settingsTheme().text);
+                        DrawTextW(hdc, L"?", -1, &label, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    }
                 }
                 SelectObject(hdc, oldBrush);
                 SelectObject(hdc, oldPen);
@@ -476,7 +398,7 @@ namespace merutilm::rff2 {
                 scene.getRequests().requestShader();
                 repaintPreviews(colorInterpolationRadio);
             },
-            L"Color Smoothing", L"Color Smoothing method");
+            L"Color Smoothing", L"Color Smoothing method", false);
         {
             const auto smoothingValues = Selectable::values<ShdPalColorSmoothingMethod>();
             for (size_t i = 0; i < colorSmoothingRadio->size() && i < smoothingValues.size(); ++i) {
@@ -499,7 +421,7 @@ namespace merutilm::rff2 {
             L"Color Interpolation",
             L"Color space the blend between two palette colors runs in.\nRGB mixes encoded channels "
             L"directly. OKLab blends in a perceptual color space. Linear RGB decodes sRGB before blending "
-            L"light, then encodes the result; dark-to-bright transitions are brighter than RGB.");
+            L"light, then encodes the result; dark-to-bright transitions are brighter than RGB.", false);
         {
             const auto interpolationValues = Selectable::values<ShdPalColorInterpolationMethod>();
             for (size_t i = 0; i < colorInterpolationRadio->size() && i < interpolationValues.size(); ++i) {
@@ -2819,7 +2741,7 @@ namespace merutilm::rff2 {
         auto &fog_attr = scene.getAttribute().shader.fog;
         auto &[radius, opacity, centerStart, centerInvert, rimMask, rimMaskBoost, rimBlur, focusAmount,
                focusRatio, focusRange, focusFalloff, focusBlur, blurQuality, chaosAmount, chaosScale,
-               chaosThreshold, chaosTransition, chaosFeather, chaosBlur, chaosHighlights, chaosShade] =
+               chaosThreshold, chaosTransition, chaosFeather, chaosBlur, chaosShade, chaosBlurAverage] =
             fog_attr;
         auto window = std::make_unique<SettingsWindow>(L"Fog");
         window->registerTextInput<float>(
@@ -2978,16 +2900,16 @@ namespace merutilm::rff2 {
             L"Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality "
             L"controls sampling.");
         window->registerSliderInput(
-            L"Chaos Highlight Detail", &fog_attr.chaosHighlights, 0.0f, 1.0f, Unparser::floatFixed(2),
-            Parser::FLOAT, ValidCondition::floatInRange(0.0f, 1.0f),
-            [&scene] { scene.getRequests().requestShader(); }, L"Chaos Highlight Detail",
-            L"Retains a little of the original bright detail over the lens blur. Zero gives a pure circular "
-            L"blur.");
-        window->registerSliderInput(
-            L"Chaos Shade", &fog_attr.chaosShade, 0.0f, 0.5f, Unparser::floatFixed(2), Parser::FLOAT,
-            ValidCondition::floatInRange(0.0f, 0.5f), [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Shade", &fog_attr.chaosShade, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(0.0f, 1.0f), [&scene] { scene.getRequests().requestShader(); },
             L"Chaos Shade",
-            L"Darkens intricate defocused regions to separate them from smooth foreground surfaces.");
+            L"Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, "
+            L"fully selected regions turn black whatever Chaos Amount is.");
+        window->registerRadioButtonInput<ShdChaosBlurAverage>(
+            L"Chaos Blur Averaging", &fog_attr.chaosBlurAverage, [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Blur Averaging",
+            L"Gamma Space keeps the dark gaps between bright details dark. Linear Space averages light "
+            L"physically, so bright detail spreads and blurred regions come out brighter.");
 
         *updateEnabled = [winPtr = window.get(), controls, &fog_attr] {
             const bool focusActive = fog_attr.focusAmount > 0.0f;
@@ -3183,7 +3105,7 @@ namespace merutilm::rff2 {
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::SAVE_PRESET =
         [](SettingsMenu &, RenderScene &scene) {
             const auto path =
-                IOUtilities::ioFileDialog(L"Save Shader Preset", Constants::Extension::DESC_SHADER_PRESET,
+                IOUtilities::ioFileDialog(L"Save Appearance Settings", Constants::Extension::DESC_SHADER_PRESET,
                                           IOUtilities::SAVE_FILE, Constants::Extension::SHADER_PRESET);
             if (path == nullptr) {
                 return;
@@ -3198,7 +3120,7 @@ namespace merutilm::rff2 {
             // Every shader panel is bound to the values this replaces, so none of them can stay open.
             settingsMenu.closeShaderSettingsWindows();
             const auto path =
-                IOUtilities::ioFileDialog(L"Load Shader Preset", Constants::Extension::DESC_SHADER_PRESET,
+                IOUtilities::ioFileDialog(L"Load Appearance Settings", Constants::Extension::DESC_SHADER_PRESET,
                                           IOUtilities::OPEN_FILE, Constants::Extension::SHADER_PRESET);
             if (path == nullptr) {
                 return;

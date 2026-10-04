@@ -1,6 +1,6 @@
 # RFF_Super 配布準備
 
-Modified by GPT-6 on 2026-09-24, 2026-09-25.
+Modified by GPT-6 on 2026-09-24, 2026-09-25, 2026-10-01.
 
 ## GitHubリポジトリ内で公開する資料
 

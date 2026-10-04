@@ -5,7 +5,8 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-24, 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
-// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-16, 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-16, 2026-09-23, 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03
 //
 
 #version 450
@@ -534,6 +535,17 @@ dvec4 g_inv_interval = dvec4(1.0);
 dvec2 g_stripe = dvec2(1.0);
 dvec2 g_inv_stripe = dvec2(1.0);
 
+// Dispatch-wide values, each computed by one invocation per workgroup in main() and read by the rest after a barrier.
+shared double s_inv_interval[4];
+shared double s_inv_stripe[2];
+// 1 / the cycle length each decor layer rides: texture layers 0-3, pattern layers 4-7, then the warp.
+#define DECOR_SLOT_PATTERN TEXTURE_LAYERS
+#define DECOR_SLOT_WARP (TEXTURE_LAYERS + PATTERN_LAYERS)
+shared double s_decor_inv_interval[TEXTURE_LAYERS + PATTERN_LAYERS + 1];
+shared bool s_any_texture;
+shared bool s_any_pattern;
+shared bool s_needs_band;
+
 // The two-FMA correction is Markstein's (IBM J. Res. Dev. 34(1), 1990); see NOTICE.
 // a / b, rebuilt from the hoisted reciprocal r = 1/b. q = a*r lands within an ulp; the residual
 // a - b*q is exact in an FMA, and folding it back lands on the correctly rounded quotient - the
@@ -565,6 +577,11 @@ double stripe_remainder(double value, double period, double reciprocal) {
     return value < 0.0 && remaining > 0.0 ? period - remaining : remaining;
 }
 
+
+// Bitwise equality, so -0.0 and 0.0 count as different inputs and a NaN matches only itself.
+bool same_bits(double a, double b) {
+    return unpackDouble2x32(a) == unpackDouble2x32(b);
+}
 
 // mod(x, 1) without the FP64 division GLSL's mod() expands to; exactly equivalent when the divisor is 1.
 double fract_d(double x) {
@@ -635,6 +652,7 @@ double cbrt_d(double x) {
 }
 
 // Smoothstep and Smootherstep ease the count inside each cycle rather than compress the count itself: the whole part is kept, so every cycle boundary lands exactly where Linear puts it.
+// Quintic interpolation documented by Ken Perlin, Improving Noise (2002); formula-only reference, see NOTICE for scope.
 double eased_cycle(double ratio, const bool smoother) {
     double whole = floor(ratio);
     double u = ratio - whole;
@@ -686,8 +704,13 @@ double biased_ratio(double ratio) {
 
 // Interleaved Gradient Noise, matching vk_linear_interpolation.frag. The seed separates the two stages' grain.
 // Constants from Jorge Jimenez, "Next Generation Post Processing in Call of Duty: Advanced Warfare", SIGGRAPH 2014.
+// Limited formula/constant use; no express source-code license established for the cited presentation, see NOTICE.
+// Adapted from Alan Wolfe, IGNLDS main.py at a9f3ab9, MIT; GLSL fract and the project seed are retained, see NOTICE.
 float ign(vec2 p, float seed) {
-    return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y + seed));
+    const float ignScale = 52.9829189;
+    const float ignX = 0.06711056;
+    const float ignY = 0.00583715;
+    return fract(ignScale * fract(ignX * p.x + ignY * p.y + seed));
 }
 
 // The sRGB transfer function itself, not the 2.2 power that stands in for it. Duplicated from
@@ -757,15 +780,19 @@ float freeze_weight(double iteration) {
     if (!SPEC_FREEZE || palette_attr.static_color_count == 0u || tol <= 0.0) {
         return 0.0;
     }
+    // Channels sharing the red interval's bits share its ratio, and so its distance to every frozen color.
+    bool g_is_r = same_bits(g_interval.g, g_interval.r);
+    bool b_is_r = same_bits(g_interval.b, g_interval.r);
     double ir = static_ratio(iteration, g_interval.r, g_inv_interval.r);
-    double ig = static_ratio(iteration, g_interval.g, g_inv_interval.g);
-    double ib = static_ratio(iteration, g_interval.b, g_inv_interval.b);
+    double ig = g_is_r ? ir : static_ratio(iteration, g_interval.g, g_inv_interval.g);
+    double ib = b_is_r ? ir : static_ratio(iteration, g_interval.b, g_inv_interval.b);
     float w = 0.0;
     for (uint i = 0; i < palette_attr.static_color_count && i < MAX_STATIC_COLORS; i++) {
         double t = palette_attr.static_color_iterations[i];
-        float md = max(cycle_dist(ir, static_ratio(t, g_interval.r, g_inv_interval.r)),
-                   max(cycle_dist(ig, static_ratio(t, g_interval.g, g_inv_interval.g)),
-                       cycle_dist(ib, static_ratio(t, g_interval.b, g_inv_interval.b))));
+        float dr = cycle_dist(ir, static_ratio(t, g_interval.r, g_inv_interval.r));
+        float dg = g_is_r ? dr : cycle_dist(ig, static_ratio(t, g_interval.g, g_inv_interval.g));
+        float db = b_is_r ? dr : cycle_dist(ib, static_ratio(t, g_interval.b, g_inv_interval.b));
+        float md = max(dr, max(dg, db));
         w = max(w, 1.0 - smoothstep(0.0, tol, md));
     }
     return w;
@@ -863,11 +890,31 @@ dvec4 timed_offset_ratios(bool animate, double anim_offset, double extra_iters) 
                                               div_r(n.w, g_interval.w, g_inv_interval.w));
 }
 
+// A channel whose interval and offset bits match an earlier one reuses that channel's lookup: identical inputs, identical result.
+bool same_channel(int a, int b, dvec4 timed_offset) {
+    return same_bits(g_interval[a], g_interval[b]) && same_bits(timed_offset[a], timed_offset[b]);
+}
+
 vec4 assemble_color(double iteration, dvec4 timed_offset) {
     vec4 cr = get_color_channel(iteration, g_interval.r, g_inv_interval.r, timed_offset.r);
-    vec4 cg = get_color_channel(iteration, g_interval.g, g_inv_interval.g, timed_offset.g);
-    vec4 cb = get_color_channel(iteration, g_interval.b, g_inv_interval.b, timed_offset.b);
-    vec4 ca = get_color_channel(iteration, g_interval.a, g_inv_interval.a, timed_offset.a);
+    vec4 cg = cr;
+    if (!same_channel(1, 0, timed_offset)) {
+        cg = get_color_channel(iteration, g_interval.g, g_inv_interval.g, timed_offset.g);
+    }
+    vec4 cb = cr;
+    if (same_channel(2, 1, timed_offset)) {
+        cb = cg;
+    } else if (!same_channel(2, 0, timed_offset)) {
+        cb = get_color_channel(iteration, g_interval.b, g_inv_interval.b, timed_offset.b);
+    }
+    vec4 ca = cr;
+    if (same_channel(3, 2, timed_offset)) {
+        ca = cb;
+    } else if (same_channel(3, 1, timed_offset)) {
+        ca = cg;
+    } else if (!same_channel(3, 0, timed_offset)) {
+        ca = get_color_channel(iteration, g_interval.a, g_inv_interval.a, timed_offset.a);
+    }
     return vec4(cr.r, cg.g, cb.b, ca.a);
 }
 
@@ -879,14 +926,15 @@ vec4 assemble_color(double iteration, dvec4 timed_offset) {
 // warp_iters bends the band this rides exactly as it bends the coloring, so a warped view carries
 // the layer along with the bands instead of leaving it on straight ones they no longer follow.
 float decor_cycle_ratio(double iteration, double anim_offset, float scale, float period, float palette_follow,
-                        double warp_iters) {
+                        double warp_iters, double inv_interval) {
     float interval = period > 0.0 ? period : palette_attr.interval.r;
     // The layer's own interval, so this reciprocal is not g_inv_interval's; taking it once still
     // turns the two divisions below into one.
     double ivd = double(interval);
-    double inv_interval = 1.0 / ivd;
     double time_term = div_r(anim_offset, ivd, inv_interval);
-    double raw = biased_ratio(fract_d(coloring_curve(div_r(smooth_iteration(iteration), ivd, inv_interval))))
+    // Original fractional-repeat continuity correction, GPL-3.0-only; see NOTICE.
+    double cycle = coloring_curve(div_r(smooth_iteration(iteration), ivd, inv_interval));
+    double raw = floor(cycle) + biased_ratio(fract_d(cycle))
                + palette_attr.offset - time_term * double(palette_follow)
                + div_r(warp_iters, ivd, inv_interval);
     return float(fract_d(raw * double(scale)));
@@ -939,18 +987,19 @@ vec2 pattern_scroll(int i) {
 // scroll is the accumulated offset the layer has already scrolled to, not a speed: the phase is
 // added up on the host so that editing the speed does not move what is already drawn.
 vec2 decor_uv(double iteration, vec2 coord, vec2 band_grad, double anim_offset, double warp_iters,
-              uint uv_mode, float su, float sv, float period, float palette_follow, vec2 scroll) {
+              uint uv_mode, float su, float sv, float period, float palette_follow, vec2 scroll, uint decor_slot) {
     vec2 extent = vec2(iteration_output_info_attr.extent);
     vec2 screen = extent.x > 0.0 && extent.y > 0.0 ? coord / extent : vec2(0.0);
+    double inv_period = s_decor_inv_interval[decor_slot];
     vec2 base;
     switch (uv_mode) {
         case TEXTURE_UV_CYCLE_BAND: {
-            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters),
+            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters, inv_period),
                         band_ratio(band_grad, sv));
             break;
         }
         case TEXTURE_UV_CYCLE_SCREEN: {
-            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters),
+            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters, inv_period),
                         screen.y * sv);
             break;
         }
@@ -960,7 +1009,7 @@ vec2 decor_uv(double iteration, vec2 coord, vec2 band_grad, double anim_offset, 
         }
         default: {
             vec2 p = screen - 0.5;
-            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters),
+            base = vec2(decor_cycle_ratio(iteration, anim_offset, su, period, palette_follow, warp_iters, inv_period),
                         ((p.x == 0.0 && p.y == 0.0 ? 0.0 : atan(p.y, p.x)) / float(DOUBLE_PI) + 0.5) * angular_repeats(sv));
             break;
         }
@@ -1123,7 +1172,7 @@ double warp_offset(double iteration, vec2 coord, vec2 band_grad, double anim_off
     vec2 uv = decor_uv(iteration, coord, band_grad, anim_offset, 0.0, texture_attr.warp_uv_mode,
                        texture_attr.warp_scale_u, texture_attr.warp_scale_v,
                        texture_attr.warp_period, texture_attr.warp_palette_follow,
-                       vec2(time_attr.warp_scroll_u, time_attr.warp_scroll_v));
+                       vec2(time_attr.warp_scroll_u, time_attr.warp_scroll_v), DECOR_SLOT_WARP);
     float field;
     if (texture_attr.warp_source == uint(WARP_SOURCE_NOISE)) {
         int octaves = clamp(int(texture_attr.warp_octaves + 0.5), 1, WARP_MAX_OCTAVES);
@@ -1152,7 +1201,7 @@ vec4 apply_texture(vec4 base, double iteration, vec2 coord, vec2 band_grad, doub
             continue;
         }
         vec2 uv = decor_uv(iteration, coord, band_grad, anim_offset, warp_iters, layer.uv_mode, layer.scale_u,
-                           layer.scale_v, layer.period, layer.palette_follow, texture_scroll(i));
+                           layer.scale_v, layer.period, layer.palette_follow, texture_scroll(i), uint(i));
         // Size is how much of the cell one repeat spans the image fills, centred in it, so it is drawn larger or smaller without changing how many of it there are.
         vec2 fitted_size = vec2(layer.size);
         if (layer.keep_aspect != 0u) {
@@ -1193,7 +1242,7 @@ vec4 apply_pattern(vec4 base, double iteration, vec2 coord, vec2 band_grad, doub
         }
         vec2 uv = decor_uv(iteration, coord, band_grad, anim_offset, warp_iters,
                            pattern.uv_mode, pattern.scale_u, pattern.scale_v,
-                           pattern.period, pattern.palette_follow, pattern_scroll(i));
+                           pattern.period, pattern.palette_follow, pattern_scroll(i), uint(DECOR_SLOT_PATTERN + i));
         float field = pattern_field(uv, pattern.type);
         float coverage = pattern_coverage(field, pattern.sharpness);
         vec3 ink = vec3(pattern.color_r, pattern.color_g, pattern.color_b);
@@ -1355,7 +1404,8 @@ float get_stripe_mul(double iteration) {
         return 1.0;
     }
     // Interior pixels carry no meaningful iteration count, so they keep the palette's Mandelbrot color.
-    if (stripe_type() == STRIPE_NONE || iteration == 0 || iteration >= iteration_output_info_attr.max_value) {
+    if (stripe_type() == STRIPE_NONE || stripe_attr.first_interval <= 0 || stripe_attr.second_interval <= 0 ||
+        iteration == 0 || iteration >= iteration_output_info_attr.max_value) {
         return 1;
     }
 
@@ -1410,7 +1460,8 @@ vec2 camera_offset(vec2 p, vec2 size, out bool sky) {
     float scale = max(video_attr.coverage.x, 1.0);
     float yaw = radians(video_attr.camera.x);
     if (video_attr.camera.y < 0.5) {
-        return mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw)) * p / scale;
+        // Original project GPLv3 correction (NOTICE): preserve the existing 360 camera's heading in planar mode.
+        return mat2(cos(yaw), sin(yaw), -sin(yaw), cos(yaw)) * p / scale;
     }
     vec3 direction;
     if (video_attr.camera.y < 1.5) {
@@ -1511,26 +1562,52 @@ vec3 shade_sample(HeightSample sample_value, vec2 out_coord, vec2 band_grad, dou
 
 void main() {
 
+    g_interval = dvec4(palette_attr.interval);
+    g_stripe = max(dvec2(stripe_attr.first_interval, stripe_attr.second_interval), dvec2(1e-45));
+
+    // Each value is the same expression the invocation used to evaluate for itself, so the result is bit for bit unchanged.
+    uint lane = gl_LocalInvocationIndex;
+    if (lane < 4u) {
+        s_inv_interval[lane] = 1.0 / g_interval[lane];
+    } else if (lane < 6u) {
+        s_inv_stripe[lane - 4u] = 1.0 / g_stripe[lane - 4u];
+    } else if (lane < 6u + uint(DECOR_SLOT_WARP + 1)) {
+        int slot = int(lane - 6u);
+        float period = slot < DECOR_SLOT_PATTERN ? texture_layer(slot).period
+                     : slot < DECOR_SLOT_WARP ? pattern_layer(slot - DECOR_SLOT_PATTERN).period
+                     : texture_attr.warp_period;
+        float interval = period > 0.0 ? period : palette_attr.interval.r;
+        s_decor_inv_interval[slot] = 1.0 / double(interval);
+    } else if (lane == 6u + uint(DECOR_SLOT_WARP + 1)) {
+        bool any_texture = false;
+        bool any_pattern = false;
+        if (SPEC_DECOR && !ordered_layers()) {
+            for (int i = 0; i < TEXTURE_LAYERS; i++) {
+                DecorLayer l = texture_layer(i);
+                any_texture = any_texture || (l.enabled != 0u && l.opacity > 0.0);
+            }
+            for (int i = 0; i < PATTERN_LAYERS; i++) {
+                PatternLayer p = pattern_layer(i);
+                any_pattern = any_pattern || (p.enabled != 0u && p.opacity > 0.0);
+            }
+        }
+        s_any_texture = any_texture;
+        s_any_pattern = any_pattern;
+        s_needs_band = SPEC_DECOR && (any_texture_needs_band() || any_pattern_needs_band() ||
+            (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND));
+    }
+    memoryBarrierShared();
+    barrier();
+
     uvec2 output_size = uvec2(imageSize(merged_image_output));
     if (any(greaterThanEqual(gl_GlobalInvocationID.xy, output_size))) {
         return;
     }
 
-    g_interval = dvec4(palette_attr.interval);
-    g_inv_interval = 1.0 / g_interval;
-    g_stripe = max(dvec2(stripe_attr.first_interval, stripe_attr.second_interval), dvec2(1e-45));
-    g_inv_stripe = 1.0 / g_stripe;
-
-    if (SPEC_DECOR && !ordered_layers()) {
-        for (int i = 0; i < TEXTURE_LAYERS; i++) {
-            DecorLayer l = texture_layer(i);
-            g_any_texture = g_any_texture || (l.enabled != 0u && l.opacity > 0.0);
-        }
-        for (int i = 0; i < PATTERN_LAYERS; i++) {
-            PatternLayer p = pattern_layer(i);
-            g_any_pattern = g_any_pattern || (p.enabled != 0u && p.opacity > 0.0);
-        }
-    }
+    g_inv_interval = dvec4(s_inv_interval[0], s_inv_interval[1], s_inv_interval[2], s_inv_interval[3]);
+    g_inv_stripe = dvec2(s_inv_stripe[0], s_inv_stripe[1]);
+    g_any_texture = s_any_texture;
+    g_any_pattern = s_any_pattern;
 
     vec2 center = vec2(iteration_output_info_attr.extent) / 2.0;
     vec2 coord = vec2(gl_GlobalInvocationID.xy) - center + video_attr.sample_jitter;
@@ -1565,8 +1642,7 @@ void main() {
     // color path calls get_color 32 times per pixel, so deriving it per call is not affordable.
     // Any decor layer can ask for it, so all of them are checked before paying for the four taps.
     vec2 band_grad = vec2(0);
-    if (SPEC_DECOR && (any_texture_needs_band() || any_pattern_needs_band() ||
-        (texture_attr.warp_enabled != 0u && texture_attr.warp_uv_mode == TEXTURE_UV_CYCLE_BAND))) {
+    if (s_needs_band) {
         double mv = iteration_output_info_attr.max_value;
         HeightWindow none = window_none();
         double hl = sample_height(coord + vec2(-1, 0), nsr, zsr, r, none, none);

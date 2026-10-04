@@ -1,12 +1,22 @@
 # Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-24
+# Modified by Opus 5.5 on 2026-10-04
 param(
-    [string]$ServerConfig = (Join-Path (Split-Path $PSScriptRoot -Parent) 'local-ai-server.json'),
+    [string]$ServerConfig = (Join-Path (Split-Path $PSScriptRoot -Parent) 'config/local-ai-server.json'),
     [string]$ApplicationPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bin/RFF_Super.exe')
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $serverProcess = $null
+# Settings live in config/; move any copy an older build left at the root.
+$configDirectory = Join-Path $projectRoot 'config'
+$null = New-Item -ItemType Directory -Force -Path $configDirectory
+foreach ($name in @('local-ai.json', 'local-ai-server.json')) {
+    $legacy = Join-Path $projectRoot $name
+    if ((Test-Path -LiteralPath $legacy) -and -not (Test-Path -LiteralPath (Join-Path $configDirectory $name))) {
+        Move-Item -LiteralPath $legacy -Destination $configDirectory
+    }
+}
 
 try {
     $config = Get-Content -LiteralPath $ServerConfig -Raw | ConvertFrom-Json
@@ -17,7 +27,7 @@ try {
             throw "File not found: $file"
         }
     }
-    $connection = Get-Content -LiteralPath (Join-Path $projectRoot 'local-ai.json') -Raw | ConvertFrom-Json
+    $connection = Get-Content -LiteralPath (Join-Path $configDirectory 'local-ai.json') -Raw | ConvertFrom-Json
     $endpoint = [Uri]$connection.endpoint
     if ($endpoint.Host -ne '127.0.0.1' -or $endpoint.Port -ne $config.port) {
         throw 'local-ai.json must point to 127.0.0.1 and the port in local-ai-server.json.'
@@ -46,11 +56,11 @@ try {
     ) + @($config.arguments)
     if ($connection.vision) {
         if (-not $config.mmproj) {
-            throw 'Vision requires mmproj in local-ai-server.json. See docs/local-ai.md.'
+            throw 'Vision requires mmproj in local-ai-server.json. See documentation/notes/local-ai.md.'
         }
         $projectorPath = [IO.Path]::GetFullPath((Join-Path $projectRoot $config.mmproj))
         if (-not (Test-Path -LiteralPath $projectorPath -PathType Leaf)) {
-            throw "Vision projector not found: $projectorPath. See docs/local-ai.md."
+            throw "Vision projector not found: $projectorPath. See documentation/notes/local-ai.md."
         }
         $serverArguments += @('--mmproj', ('"' + $projectorPath + '"'))
     }

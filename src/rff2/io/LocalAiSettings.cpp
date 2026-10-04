@@ -1,42 +1,33 @@
 //
-// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-27, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "LocalAiSettings.hpp"
+#include "Utf8Prefix.hpp"
+#include "LocalAiVideoOptions.hpp"
+#include "../preset/shader/palette/ShdPalettePresets.h"
 #include "ShaderPresetIO.h"
 #include "../video/TimelineParams.hpp"
 #include "../ui/workspace/SurfaceColorRegistry.hpp"
 #include "../attr/SurfaceStyleRecipe.hpp"
+#include "../ui/Utilities.h"
 #include <windows.h>
 #include <winhttp.h>
 #include <fstream>
 #include <iterator>
+#include <cctype>
 #include <set>
 #include <chrono>
 #include <thread>
+#include <random>
 #include <iphlpapi.h>
 
 namespace merutilm::rff2 {
     namespace {
         using Json = LocalAiSettings::Json;
         std::filesystem::path resolveConfigPath(const std::filesystem::path &path) {
-            if (path.is_absolute() || std::filesystem::exists(path)) {
-                return std::filesystem::absolute(path);
-            }
-
-            std::wstring executable(32768, L'\0');
-            const auto length = GetModuleFileNameW(nullptr, executable.data(), DWORD(executable.size()));
-            if (length && length < executable.size()) {
-                executable.resize(length);
-                const auto folder = std::filesystem::path(executable).parent_path();
-                for (const auto &base : {folder, folder.parent_path()}) {
-                    if (std::filesystem::exists(base / path)) {
-                        return base / path;
-                    }
-                }
-            }
-
-            return std::filesystem::absolute(path);
+            return path.is_absolute() ? path : Utilities::getConfigFile(path);
         }
 
         std::string toUtf8(std::wstring_view text) {
@@ -502,7 +493,20 @@ namespace merutilm::rff2 {
         return prompt;
     }
 
-    ShaderAttribute LocalAiSettings::apply(const ShaderAttribute &original, const Json &patch) {
+    ShaderAttribute LocalAiSettings::randomSmoothColors(const ShaderAttribute &original, bool shortCycle) {
+        auto result = original;
+        const auto palette = shortCycle ? ShdPalettePresets::RandomSmoothShort().genPalette()
+                                        : ShdPalettePresets::RandomSmooth().genPalette();
+        result.palette.colors = palette.colors;
+        if (shortCycle) result.palette.iterationInterval = palette.iterationInterval;
+        result.palette.stops.clear();
+        result.palette.recipePresetId = -1;
+        result.palette.recipeSeed = 0;
+        return result;
+    }
+
+    ShaderAttribute LocalAiSettings::apply(const ShaderAttribute &original, const Json &patch,
+                                         bool paletteOnly, bool preserveAnimation) {
         if (!patch.is_object() || !patch.contains("summary") || !patch["summary"].is_string() ||
             !patch.contains("changes") || !patch["changes"].is_object()) {
             throw std::runtime_error("Expected {summary: string, changes: object}");
@@ -514,7 +518,16 @@ namespace merutilm::rff2 {
             }
         }
 
+
         const auto &changes = patch["changes"];
+        if (paletteOnly) {
+            for (const auto &[key, value] : changes.items()) {
+                if (key != "palette.colors" && key != "palette.stops")
+                    throw std::runtime_error("Palette-only mode permits palette.colors or palette.stops; shading, effects and animation are fixed.");
+            }
+            if (changes.contains("palette.colors") && changes.contains("palette.stops"))
+                throw std::runtime_error("Use palette.colors or palette.stops, not both.");
+        }
         if (changes.empty() || changes.size() > shaderFields().size()) {
             throw std::runtime_error("changes must contain one or more catalog settings");
         }
@@ -559,6 +572,14 @@ namespace merutilm::rff2 {
             bakePaletteStops(result.palette);
         }
 
+        if (preserveAnimation) {
+            result.palette.animationSpeed = original.palette.animationSpeed;
+            result.palette.animationMode = original.palette.animationMode;
+            result.palette.animationFlowAmount = original.palette.animationFlowAmount;
+            result.palette.animationFlowScale = original.palette.animationFlowScale;
+            result.palette.animationFlowSpeed = original.palette.animationFlowSpeed;
+            result.palette.animationFlowSwirl = original.palette.animationFlowSwirl;
+        }
         if (!ShaderPresetIO::validate(result)) {
             throw std::runtime_error("Combined shader settings failed ShaderPresetIO validation; use "
                                      "conservative values and check enum/integer constraints");
@@ -568,7 +589,7 @@ namespace merutilm::rff2 {
     }
 
     int LocalAiSettings::errorLimit(const Json &connection) {
-        const auto value = connection.value("max_errors", Json(3));
+        const auto value = connection.value("max_errors", Json(5));
         if (!value.is_number_integer() || value < Json(1) || value > Json(100)) {
             throw std::runtime_error("max_errors must be an integer from 1 to 100");
         }
@@ -607,11 +628,8 @@ namespace merutilm::rff2 {
         return image ? -1 : int64_t((bytes + 3) / 4);
     }
 
-    void LocalAiSettings::saveErrorLimit(int limit, const std::filesystem::path &path) {
-        errorLimit(Json{{"max_errors", limit}});
-        const auto resolved = resolveConfigPath(path);
-        auto connection = readConnection(resolved);
-        connection["max_errors"] = limit;
+    static void saveLocalAiConnection(const std::filesystem::path &resolved,
+                                     const LocalAiSettings::Json &connection) {
         auto temporary = resolved;
         temporary += L".tmp";
         {
@@ -619,7 +637,7 @@ namespace merutilm::rff2 {
             out << connection.dump(2) << '\n';
             out.close();
             if (!out) {
-                throw std::runtime_error("Cannot save Local LLM error limit");
+                throw std::runtime_error("Cannot save Local LLM settings");
             }
         }
 
@@ -627,6 +645,30 @@ namespace merutilm::rff2 {
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
             throw std::runtime_error("Cannot replace Local LLM connection settings");
         }
+    }
+    void LocalAiSettings::saveErrorLimit(int limit, const std::filesystem::path &path) {
+        errorLimit(Json{{"max_errors", limit}});
+        const auto resolved = resolveConfigPath(path);
+        auto connection = readConnection(resolved);
+        connection["max_errors"] = limit;
+        saveLocalAiConnection(resolved, connection);
+    }
+    void LocalAiSettings::saveAppearanceOptions(bool paletteOnly, int limit, const std::filesystem::path &path) {
+        errorLimit(Json{{"max_errors", limit}});
+        const auto resolved = resolveConfigPath(path);
+        auto connection = readConnection(resolved);
+        connection["appearance_palette_only"] = paletteOnly;
+        connection["max_errors"] = limit;
+        saveLocalAiConnection(resolved, connection);
+    }
+    void LocalAiSettings::saveVideoOptions(const Json &options, int limit, const std::filesystem::path &path) {
+        const auto validated = LocalAiVideoOptions::read(options);
+        errorLimit(Json{{"max_errors", limit}});
+        const auto resolved = resolveConfigPath(path);
+        auto connection = readConnection(resolved);
+        connection["automatic_video"] = validated.json();
+        connection["max_errors"] = limit;
+        saveLocalAiConnection(resolved, connection);
     }
     LocalAiSettings::Json LocalAiSettings::readConnection(const std::filesystem::path &path) {
         const auto resolved = resolveConfigPath(path);
@@ -691,7 +733,7 @@ namespace merutilm::rff2 {
             return;
         }
 
-        const auto expected = std::filesystem::weakly_canonical(serverPath.parent_path() /
+        const auto expected = std::filesystem::weakly_canonical(Utilities::getDefaultPath() /
                                                                 server.at("executable").get<std::string>());
         if (_wcsicmp(expected.filename().c_str(), L"llama-server.exe") != 0) {
             return;
@@ -979,7 +1021,7 @@ namespace merutilm::rff2 {
 
         } while (received && !streamComplete);
         if (status < 200 || status >= 300) {
-            throw std::runtime_error("HTTP " + std::to_string(status) + ": " + response.substr(0, 1500));
+            throw std::runtime_error("HTTP " + std::to_string(status) + ": " + utf8Prefix(response, 1500));
         }
 
         if (streaming) {
@@ -1118,8 +1160,10 @@ namespace merutilm::rff2 {
         std::vector<Candidate> rankedCandidates;
         const int radiusX = std::max(2, width / 10);
         const int radiusY = std::max(2, height / 10);
-        for (int centerY = radiusY; centerY < height - radiusY; centerY += radiusY) {
-            for (int centerX = radiusX; centerX < width - radiusX; centerX += radiusX) {
+        for (int gridY = 1; gridY < 10; ++gridY) {
+            const int centerY = int(std::lround(double(gridY) * (height - 1) / 10));
+            for (int gridX = 1; gridX < 10; ++gridX) {
+                const int centerX = int(std::lround(double(gridX) * (width - 1) / 10));
                 int featureSamples = 0;
                 int validSamples = 0;
                 int unescapedSamples = 0;
@@ -1155,8 +1199,7 @@ namespace merutilm::rff2 {
                     }
                 }
 
-                if (featureSamples < 8 || validSamples == 0 || double(featureSamples) / validSamples < 0.02 ||
-                    candidateX < 0) {
+                if (featureSamples < 8 || validSamples == 0 || candidateX < 0) {
                     continue;
                 }
 
@@ -1172,25 +1215,36 @@ namespace merutilm::rff2 {
             }
         }
 
-        std::stable_sort(rankedCandidates.begin(), rankedCandidates.end(), [](const auto &a, const auto &b) {
-            return a.score > b.score;
-        });
+        // Exploration randomness is independent of saved palette recipes.
+        static thread_local std::mt19937 explorationRandom(std::random_device{}());
+        std::shuffle(rankedCandidates.begin(), rankedCandidates.end(), explorationRandom);
         Json candidates = Json::array();
-        for (const auto &candidate : rankedCandidates) {
-            const double x = double(candidate.x) / (width - 1), y = double(candidate.y) / (height - 1);
-            bool nearby = false;
-            for (const auto &kept : candidates) {
-                const double dx = x - kept["x"].get<double>(), dy = y - kept["y"].get<double>();
-                if (dx * dx + dy * dy < 0.0225) {
-                    nearby = true;
-                    break;
+        while (candidates.size() < 6) {
+            const Candidate *selected = nullptr;
+            double bestPriority = -1;
+            for (const auto &candidate : rankedCandidates) {
+                const double x = double(candidate.x) / (width - 1), y = double(candidate.y) / (height - 1);
+                double separation = 2;
+                for (const auto &kept : candidates) {
+                    const double dx = x - kept["x"].get<double>(), dy = y - kept["y"].get<double>();
+                    separation = std::min(separation, dx * dx + dy * dy);
+                }
+                if (separation < 0.0225) {
+                    continue;
+                }
+                // Reserve dense and sparse detail, then spread the remaining targets across the view.
+                const double priority = candidates.empty() ? candidate.score :
+                    candidates.size() == 1 ? 1.0 - candidate.score : separation;
+                if (priority > bestPriority) {
+                    selected = &candidate;
+                    bestPriority = priority;
                 }
             }
-
-            if (nearby) {
-                continue;
+            if (!selected) {
+                break;
             }
-
+            const auto &candidate = *selected;
+            const double x = double(candidate.x) / (width - 1), y = double(candidate.y) / (height - 1);
             auto data = candidate.data;
             data["id"] = candidates.size();
             data["x"] = x;
@@ -1198,9 +1252,10 @@ namespace merutilm::rff2 {
             data["crop"] = Json::array({std::max(0.0, x - 0.12), std::max(0.0, y - 0.12),
                                         std::min(1.0, x + 0.12), std::min(1.0, y + 0.12)});
             candidates.push_back(data);
-            if (candidates.size() == 6) {
-                break;
-            }
+        }
+        std::shuffle(candidates.begin(), candidates.end(), explorationRandom);
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            candidates[i]["id"] = i;
         }
 
         return {{"sample_width", width},
@@ -1214,6 +1269,60 @@ namespace merutilm::rff2 {
                 {"note", "Sampled numerical candidates, not a spiral classifier. Unescaped at the limit does "
                          "not prove set membership. Zero/nonfinite samples are unknown. Crop boxes use "
                          "full-image normalized coordinates."}};
+    }
+
+    namespace {
+        bool contextOverflow(std::string error) {
+            std::transform(error.begin(), error.end(), error.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+            return error.find("context_length_exceeded") != std::string::npos ||
+                error.find("exceed_context_size") != std::string::npos ||
+                error.find("context window") != std::string::npos ||
+                error.find("maximum context length") != std::string::npos ||
+                error.find("exceeds the available context") != std::string::npos ||
+                error.find("prompt is too long") != std::string::npos ||
+                error.find("too many tokens") != std::string::npos;
+        }
+        LocalAiSettings::Json contextRequest(const LocalAiSettings::Json &connection,
+            LocalAiSettings::Json &messages, const LocalAiSettings::Json &fresh,
+            LocalAiSettings::Json request, const std::atomic_bool &cancelled,
+            const LocalAiSettings::Transport &transport, const LocalAiSettings::Progress &progress = {},
+            const LocalAiSettings::Progress &onToken = {}, const LocalAiSettings::Progress &onReasoning = {},
+            const LocalAiSettings::OnStatistics &onStatistics = {}) {
+            const auto reset = [&] {
+                messages = fresh;
+                request["messages"] = messages;
+                if (progress) progress("[Context reset] Continuing in a fresh chat with the current goal, settings and images.");
+            };
+            const auto capacity = connection.value("runtime_context", int64_t(-1));
+            const auto reserve = request.value("max_completion_tokens", request.value("max_tokens", int64_t(2048)));
+            auto textOnly = messages;
+            int64_t imageBudget = 0;
+            for (auto &message : textOnly) {
+                if (!message["content"].is_array()) continue;
+                for (auto &part : message["content"]) {
+                    if (part.value("type", std::string()) != "image_url") continue;
+                    part = {{"type", "text"}, {"text", ""}};
+                    imageBudget += 4096;
+                }
+            }
+            if (capacity > 0 && messages != fresh &&
+                LocalAiSettings::estimatePrompt(textOnly) + imageBudget + std::max<int64_t>(reserve, 512) >= capacity * 9 / 10)
+                reset();
+            for (int pass = 0; pass < 2; ++pass) {
+                if (cancelled) throw std::runtime_error("Cancelled");
+                try {
+                    request["messages"] = messages;
+                    return transport ? transport(request) : LocalAiSettings::post(connection, request, cancelled,
+                        onToken, onReasoning, onStatistics);
+                } catch (const std::exception &e) {
+                    if (cancelled || !contextOverflow(e.what())) throw;
+                    if (pass == 1) throw std::runtime_error(
+                        "Context capacity is too small even for a fresh chat. Increase the model context size or reduce image/request size.");
+                    reset();
+                }
+            }
+            throw std::runtime_error("Context recovery failed");
+        }
     }
 
     LocalAiSettings::ZoomTarget LocalAiSettings::chooseZoomTarget(
@@ -1235,8 +1344,11 @@ namespace merutilm::rff2 {
                "You select the next zoom destination in a Mandelbrot image. Return one JSON object only: "
                "{\"x\":0.5,\"y\":0.5,\"stop\":false,\"summary\":\"brief Japanese explanation\"}. x and y are "
                "normalized image coordinates, 0 at left/top, 1 at right/bottom. Select a clearly visible "
-               "interesting detail matching the user's goal, preferably a small minibrot or structured "
-               "boundary. Avoid flat interiors and featureless backgrounds. The application centers exactly "
+               "interesting detail matching the user's goal. Consider thin needles, filaments, narrow "
+               "valleys (including Elephant Valley when visible), spirals, minibrots and bulb boundaries "
+               "on equal terms; no shape is the default favorite. Sparse fine detail is not featureless. "
+               "Do not prefer either image half or a direction unless requested. Avoid flat interiors and "
+               "featureless backgrounds. The application centers exactly "
                "on this point and controls zoom strength separately. You cannot change settings, choose a "
                "zoom factor, or produce complex-plane coordinates. Set stop=true if no useful destination is "
                "visible. Do not claim a minibrot is mathematically confirmed."}},
@@ -1256,8 +1368,14 @@ namespace merutilm::rff2 {
                 "Japanese explanation\"}. Select only an available candidate ID; never invent coordinates. "
                 "The first image is the full view, subsequent labeled images are crops. This is a multi-step "
                 "SEARCH, not a test requiring the goal to be visible already. Prefer a candidate visibly "
-                "matching the requested shape. If that shape is not yet resolved, choose the most promising "
-                "available structured boundary, branching detail, or bulb junction for closer inspection and "
+                "matching the requested shape. Compare all crops before choosing. Candidate IDs and image "
+                "order are randomized, not quality ranks. Numerical structure density is not an aesthetic "
+                "score; sparse needles, filaments and narrow valleys can be as useful as dense boundaries. "
+                "Consider needles, filaments, valleys (including Elephant Valley when visible), spirals, "
+                "minibrots and bulb junctions on equal terms, guided by the user's goal. Do not default to "
+                "round bulbs or branching clusters, and do not prefer either image half or direction. "
+                "If that shape is not yet resolved, choose a candidate with visible evidence suggesting "
+                "a route toward the requested shape for closer inspection and "
                 "continue with stop=false. Absence of a visible spiral at the current scale is not by itself "
                 "a reason to stop. Explain in Japanese whether the choice is an exploratory hypothesis or a "
                 "visually observed match; never claim a spiral was found without visual evidence. Large "
@@ -1280,6 +1398,7 @@ namespace merutilm::rff2 {
             }
         }
 
+        const auto freshMessages = messages;
         const auto limit = errorLimit(connection);
         std::string error;
         for (int attempt = 1; attempt <= limit; ++attempt) {
@@ -1309,15 +1428,11 @@ namespace merutilm::rff2 {
                 onStatistics(stats);
             }
 
-            const auto response =
-                transport ? transport(request)
-                          : post(connection, request, cancelled, onToken, onReasoning, onStatistics);
-            if (cancelled) {
-                throw std::runtime_error("Cancelled");
-            }
-
             std::string content;
             try {
+                const auto response = contextRequest(connection, messages, freshMessages, request, cancelled,
+                    transport, progress, onToken, onReasoning, onStatistics);
+                if (cancelled) throw std::runtime_error("Cancelled");
                 const auto &choice = response.at("choices").at(0);
                 if (choice.value("finish_reason", std::string()) == "length") {
                     throw std::runtime_error("Truncated answer");
@@ -1380,11 +1495,13 @@ namespace merutilm::rff2 {
                 error = e.what();
             }
 
-            progress("Invalid destination: " + error);
-            if (!content.empty()) {
-                messages.push_back({{"role", "assistant"}, {"content", content.substr(0, 32000)}});
+            if (cancelled) throw std::runtime_error("Cancelled");
+            progress("Zoom request failed: " + error);
+            if (content.empty()) {
+                messages = freshMessages;
+                continue;
             }
-
+            messages.push_back({{"role", "assistant"}, {"content", utf8Prefix(content, 32000)}});
             messages.push_back(
                 {{"role", "user"},
                  {"content", "No movement occurred. Return a corrected JSON object. Error: " + error}});
@@ -1393,12 +1510,71 @@ namespace merutilm::rff2 {
         throw std::runtime_error("No valid zoom destination: " + error);
     }
 
+    LocalAiSettings::Json LocalAiSettings::proposeVideo(
+        const Json &connection, const std::atomic_bool &cancelled,
+        const std::string &previous, const Transport &transport, const Progress &progress) {
+        size_t contextLength = std::min<size_t>(previous.size(), 6000);
+        while (contextLength < previous.size() && contextLength > 0 &&
+               (static_cast<unsigned char>(previous[contextLength]) & 0xc0) == 0x80)
+            --contextLength;
+        auto messages = Json::array({
+            {{"role", "system"}, {"content",
+                "Invent an original abstract Mandelbrot zoom video concept. Use only generic geometry, "
+                "natural materials, colors and lighting. Do not reference artists, brands, characters, "
+                "franchises, existing works, external images or music. Do not claim copyright clearance. "
+                "Return exactly a JSON object with three nonempty strings: title, exploration, appearance. "
+                "Exploration describes visible geometric features worth exploring. Appearance describes "
+                "a coherent palette and shading readable at both wide and deep zoom. No file paths or "
+                "application settings. Keep each prompt under 2000 UTF-8 bytes."}},
+            {{"role", "user"}, {"content", "Suggest a fresh concept. Prior concepts / failure context:\n" + previous.substr(0, contextLength)}}});
+        auto freshMessages = messages;
+        freshMessages[1]["content"] = "Suggest a fresh original concept, different from the preceding attempt.";
+        std::string lastError;
+        for (int attempt = 0; attempt < errorLimit(connection); ++attempt) {
+            if (cancelled) throw std::runtime_error("Cancelled");
+            if (progress) progress("Generating video concept (" + std::to_string(attempt + 1) + "/" +
+                std::to_string(errorLimit(connection)) + ")...");
+            Json request = connection.value("request", Json::object());
+            request["model"] = connection.at("model");
+            request["messages"] = messages;
+            request["stream"] = false;
+            request["response_format"] = {{"type", "json_object"}};
+            try {
+                const auto response = contextRequest(connection, messages, freshMessages, request, cancelled, transport, progress);
+                if (cancelled) throw std::runtime_error("Cancelled");
+                const auto &choice = response.at("choices").at(0);
+                if (choice.value("finish_reason", std::string()) == "length")
+                    throw std::runtime_error("Concept response was truncated; increase the output token limit or shorten model reasoning.");
+                const auto text = choice.at("message").at("content").get<std::string>();
+                const auto begin = text.find('{'), end = text.rfind('}');
+                if (begin == std::string::npos || end == std::string::npos) throw std::runtime_error("Missing JSON");
+                const auto plan = Json::parse(text.substr(begin, end - begin + 1));
+                if (!plan.is_object() || plan.size() != 3) throw std::runtime_error("Expected three fields");
+                for (const auto key : {"title", "exploration", "appearance"}) {
+                    const auto value = plan.at(key).get<std::string>();
+                    if (value.empty() || value.size() > 2000 || value.find_first_not_of(" \r\n\t") == std::string::npos)
+                        throw std::runtime_error("Empty or oversized concept field");
+                }
+                return plan;
+            } catch (const std::exception &e) {
+                if (cancelled) throw;
+                lastError = e.what();
+                if (progress) progress("Video concept failed: " + lastError);
+                if (lastError.starts_with("Context capacity is too small")) throw;
+                messages.push_back({{"role", "user"}, {"content", std::string("Invalid concept: ") + e.what() +
+                    ". Return title, exploration and appearance as nonempty JSON strings only."}});
+            }
+        }
+        throw std::runtime_error("Concept generation reached the error limit: " + lastError);
+    }
+
     LocalAiSettings::Result
     LocalAiSettings::generate(const ShaderAttribute &original, const std::string &instruction,
                               const Json &connection, const std::atomic_bool &cancelled,
                               const Progress &progress, const Transport &transport, const Progress &onToken,
                               const Progress &onReasoning, const OnStatistics &onStatistics,
-                              const std::string &imageDataUrl, const std::string &history) {
+                              const std::string &imageDataUrl, const std::string &history,
+                              const std::string &overviewImage) {
         if (instruction.empty() || instruction.size() > 16000) {
             throw std::runtime_error("Instruction must contain 1 to 16000 UTF-8 bytes");
         }
@@ -1406,6 +1582,37 @@ namespace merutilm::rff2 {
         const bool isVisionRequest = !imageDataUrl.empty();
         auto messages = Json::array({{{"role", "system"}, {"content", systemPrompt(original)}},
                                      {{"role", "user"}, {"content", instruction}}});
+        messages[0]["content"] = messages[0]["content"].get<std::string>() +
+            (isVisionRequest
+                ? " APPLICATION RESPONSE MODE: VISION. This mode remains fixed for ALL correction requests, even when the latest message is text-only. Return exactly summary, changes, numeric score (0-100), and boolean satisfied. Evaluate the attached images earlier in this request. This explicit mode overrides image detection in the latest message."
+                : " APPLICATION RESPONSE MODE: TEXT ONLY. Return exactly summary and changes; omit score and satisfied. This mode remains fixed for ALL correction requests.");
+        auto responseFormat = connection.value("request", Json::object()).value("response_format", Json{{"type", "json_object"}});
+        const auto selectSchema = [&](Json &schema) {
+            for (const auto *key : {"oneOf", "anyOf"}) {
+                if (!schema.contains(key) || !schema[key].is_array()) continue;
+                for (const auto &branch : schema[key]) {
+                    const auto required = branch.value("required", Json::array());
+                    if (!required.is_array()) continue;
+                    const bool scored = std::find(required.begin(), required.end(), Json("score")) != required.end();
+                    const bool satisfied = std::find(required.begin(), required.end(), Json("satisfied")) != required.end();
+                    if (scored == isVisionRequest && satisfied == isVisionRequest) {
+                        const auto selected = branch;
+                        schema.erase(key);
+                        schema["allOf"].push_back(selected);
+                        return;
+                    }
+                }
+            }
+        };
+        if (responseFormat.contains("schema")) selectSchema(responseFormat["schema"]);
+        if (responseFormat.contains("json_schema") && responseFormat["json_schema"].contains("schema"))
+            selectSchema(responseFormat["json_schema"]["schema"]);
+        if (connection.value("preserve_color_animation", false))
+            messages[0]["content"] = messages[0]["content"].get<std::string>() +
+                " Color animation mode, speed and flow settings are fixed by the user. Never propose changes to those fields.";
+        if (connection.value("palette_only", false))
+            messages[0]["content"] = messages[0]["content"].get<std::string>() +
+                " PALETTE COLORS ONLY: changes may contain palette.colors OR palette.stops, never both. All shading, lighting, effects, palette mapping and animation settings are fixed. Do not change any other catalog field.";
         if (isVisionRequest) {
             if (!imageDataUrl.starts_with("data:image/png;base64,") ||
                 imageDataUrl.size() > 32 * 1024 * 1024) {
@@ -1426,6 +1633,34 @@ namespace merutilm::rff2 {
                  {{"type", "image_url"}, {"image_url", {{"url", imageDataUrl}}}}});
         }
 
+        if (!overviewImage.empty()) {
+            if (!isVisionRequest || !overviewImage.starts_with("data:image/png;base64,") ||
+                overviewImage.size() > 32 * 1024 * 1024) {
+                throw std::runtime_error("Invalid or oversized overview PNG");
+            }
+            auto &content = messages[1]["content"];
+            content.insert(content.begin() + 1, Json{{"type", "text"}, {"text",
+                "Two views of the SAME current appearance follow. Image 1: overview at Real -0.85, "
+                "Imag 0, Log Zoom 2. Image 2: original zoomed location. Evaluate BOTH images; "
+                "score the worse view, and mark satisfied only if BOTH satisfy the goal. Propose "
+                "one shared appearance patch that preserves fine detail and readability at both scales."}});
+            content.insert(content.begin() + 2,
+                Json{{"type", "image_url"}, {"image_url", {{"url", overviewImage}}}});
+        }
+
+        const bool evaluationOnly = isVisionRequest && connection.value("evaluation_only", false);
+        if (evaluationOnly)
+            messages[0]["content"] = messages[0]["content"].get<std::string>() +
+                " FINAL EVALUATION ONLY: the change budget is exhausted. Return summary, score, satisfied and empty changes {}. Do not propose more settings.";
+        auto freshMessages = messages;
+        if (isVisionRequest) {
+            auto &text = freshMessages[1]["content"][0]["text"];
+            auto value = text.get<std::string>();
+            const auto begin = value.find("\nPrior evaluations and applied changes (context only):\n");
+            if (begin != std::string::npos)
+                value.erase(begin, std::string("\nPrior evaluations and applied changes (context only):\n").size() + history.size());
+            text = value;
+        }
         const int limit = errorLimit(connection);
         std::string lastError;
         for (int attempt = 1; attempt <= limit; ++attempt) {
@@ -1453,19 +1688,13 @@ namespace merutilm::rff2 {
                 onStatistics(stats);
             }
 
-            if (!request.contains("response_format")) {
-                request["response_format"] = {{"type", "json_object"}};
-            }
-
-            const auto response =
-                transport ? transport(request)
-                          : post(connection, request, cancelled, onToken, onReasoning, onStatistics);
-            if (cancelled) {
-                throw std::runtime_error("Cancelled");
-            }
+            request["response_format"] = responseFormat;
 
             std::string content;
             try {
+                const auto response = contextRequest(connection, messages, freshMessages, request, cancelled,
+                    transport, progress, onToken, onReasoning, onStatistics);
+                if (cancelled) throw std::runtime_error("Cancelled");
                 const auto &choice = response.at("choices").at(0);
                 content = choice.at("message").at("content").get<std::string>();
                 if (choice.value("finish_reason", std::string()) == "length") {
@@ -1509,13 +1738,15 @@ namespace merutilm::rff2 {
                             "Vision result requires summary and changes only, alongside score and satisfied");
                     }
 
+                    if (evaluationOnly) patch["changes"] = Json::object();
                     if (satisfied && !patch["changes"].empty()) {
                         throw std::runtime_error("Return empty changes when satisfied");
                     }
                 }
 
                 if (!isVisionRequest || !patch.at("changes").empty()) {
-                    apply(original, patch);
+                    apply(original, patch, connection.value("palette_only", false),
+                          connection.value("preserve_color_animation", false));
                 }
 
                 return {patch, patch.at("summary").get<std::string>(), attempt, score, satisfied};
@@ -1523,17 +1754,19 @@ namespace merutilm::rff2 {
                 lastError = e.what();
             }
 
-            progress("Validation error (" + std::to_string(attempt) + "/" + std::to_string(limit) +
+            if (cancelled) throw std::runtime_error("Cancelled");
+            progress("Generation error (" + std::to_string(attempt) + "/" + std::to_string(limit) +
                      "): " + lastError);
             if (!content.empty()) {
-                messages.push_back({{"role", "assistant"}, {"content", content.substr(0, 32000)}});
+                messages.push_back({{"role", "assistant"}, {"content", utf8Prefix(content, 32000)}});
             }
 
             messages.push_back(
                 {{"role", "user"},
                  {"content",
                   "RFF_Super rejected the settings. Nothing was applied. Error: " + lastError +
-                      "\nReturn a complete corrected JSON patch using only the catalog and valid ranges."}});
+                      (isVisionRequest ? "\nReturn summary, numeric score (0-100), boolean satisfied, and changes as one complete JSON object. " : "\nReturn summary and changes as one complete JSON object. ") +
+                      (evaluationOnly ? "Use empty changes {}: evaluation only." : "Use only the catalog and valid ranges.")}});
         }
 
         throw std::runtime_error("Stopped after " + std::to_string(limit) +

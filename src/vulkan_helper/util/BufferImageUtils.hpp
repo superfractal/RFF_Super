@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-07-10.
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-5 on 2026-09-01
-// Modified by GPT-6 on 2026-09-22
+// Modified by GPT-6 on 2026-09-22, 2026-10-03
 //
 
 #pragma once
@@ -258,6 +258,7 @@ namespace merutilm::vkh {
         }
 
 
+        // Conventional Vulkan memory selection; Alexander Overvoorde Vulkan Tutorial code is CC0, prose is CC BY-SA 4.0; see NOTICE.
         static uint32_t findMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties &memProperties,
                                             const uint32_t memoryTypeBits,
                                             const VkMemoryPropertyFlags properties) {

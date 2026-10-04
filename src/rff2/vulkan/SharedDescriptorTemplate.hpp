@@ -7,6 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -631,8 +632,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_FOG_CHAOS_TRANSITION = 16;
         static constexpr uint32_t TARGET_FOG_CHAOS_FEATHER = 17;
         static constexpr uint32_t TARGET_FOG_CHAOS_BLUR = 18;
-        static constexpr uint32_t TARGET_FOG_CHAOS_HIGHLIGHTS = 19;
-        static constexpr uint32_t TARGET_FOG_CHAOS_SHADE = 20;
+        static constexpr uint32_t TARGET_FOG_CHAOS_SHADE = 19;
+        static constexpr uint32_t TARGET_FOG_CHAOS_LINEAR = 20;
 
 
         void configure(const vkh::CoreRef core,
@@ -659,8 +660,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_TRANSITION);
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_FEATHER);
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_BLUR);
-            bufferManager->reserve<float>(TARGET_FOG_CHAOS_HIGHLIGHTS);
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_SHADE);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_LINEAR);
 
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
             descManager->appendUBO(BINDING_UBO_FOG, STAGE, std::move(ubo));

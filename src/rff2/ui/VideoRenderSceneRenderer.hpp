@@ -3,11 +3,13 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
 #include "../vulkan/OrderedShaderLayers.hpp"
 #include "GpuPassTimer.hpp"
+#include "GpuSubmitTimer.hpp"
 #include "../../vulkan_helper/configurator/PipelineConfigurator.hpp"
 #include "../../vulkan_helper/core/vkh.hpp"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
@@ -56,12 +58,17 @@ namespace merutilm::rff2 {
         bool hdrChain = false;
         double currentSec = 0.0f;
         float currentFrame = 0.0f;
+        // 0 sends a frame in one submission; 1 sends each pass on its own; N >= 2 also splits the fractal pass into N bands.
+        uint32_t submitSplit = 0;
         GpuPassTimer passTimer;
+        GpuSubmitTimer submitTimer;
 
         explicit VideoRenderSceneRenderer(vkh::EngineRef engine, const uint32_t windowContextIndex,
                                           const bool hdrChain, const std::function<void()>& beforeWait = {},
                                           const ShaderAttribute* shader = nullptr, const bool dither = false) : RendererAbstract(
-            engine, windowContextIndex), hdrChain(hdrChain), passTimer(engine.getCore()) {
+            engine, windowContextIndex), hdrChain(hdrChain), passTimer(engine.getCore()), submitTimer(engine.getCore()),
+            dispatchBaseSupported(engine.getCore().getPhysicalDevice().getPhysicalDeviceProperties().apiVersion >=
+                                  VK_API_VERSION_1_1) {
             initialize(beforeWait, shader, dither);
         }
 
@@ -78,6 +85,45 @@ namespace merutilm::rff2 {
         VideoRenderSceneRenderer &operator=(VideoRenderSceneRenderer &&) = delete;
 
     private:
+        const bool dispatchBaseSupported;
+
+        // Ends the submission at a pass boundary when splitting is on, so no submission outlasts the driver's GPU watchdog.
+        void splitPoint(const VkCommandBuffer cbh, std::string segmentLabel) {
+            if (submitSplit > 0) {
+                splitHere(cbh, std::move(segmentLabel));
+            }
+        }
+
+        void splitHere(const VkCommandBuffer cbh, std::string segmentLabel) {
+            submitTimer.cmdEndSegment(cbh, std::move(segmentLabel));
+            splitSubmission();
+            submitTimer.cmdBeginSegment(cbh);
+        }
+
+        void passDone(const VkCommandBuffer cbh, const std::string &label, const std::string &segmentLabel = {}) {
+            passTimer.cmdMark(cbh, label);
+            splitPoint(cbh, segmentLabel.empty() ? label : segmentLabel);
+        }
+
+        // The fractal pass is the one that grows with Supersampling, so it alone is cut further into row bands.
+        // Returns the name of the submission the caller closes after it.
+        std::string cmd2MapIterationStripe(const VkCommandBuffer cbh) {
+            const uint32_t rows = renderer2MapIterationStripe->getWorkGroupRows();
+            const uint32_t bands = dispatchBaseSupported ? std::min(submitSplit, rows) : 1u;
+            if (bands <= 1) {
+                renderer2MapIterationStripe->cmdRender(cbh, frameIndex, {});
+                return "2map_iter_stripe";
+            }
+            for (uint32_t band = 0; band < bands; ++band) {
+                if (band > 0) {
+                    splitHere(cbh, std::format("2map band {}/{}", band, bands));
+                }
+                const uint32_t first = static_cast<uint32_t>(uint64_t(rows) * band / bands);
+                const uint32_t last = static_cast<uint32_t>(uint64_t(rows) * (band + 1) / bands);
+                renderer2MapIterationStripe->cmdRenderRows(cbh, frameIndex, {}, first, last - first);
+            }
+            return std::format("2map band {}/{}", bands, bands);
+        }
 
         void setLayerStage(int stage) {
             for (auto* pipeline : std::array<vkh::PipelineConfiguratorAbstract*, 7>{renderer2MapIterationStripe, rendererStripe, rendererSlope, rendererColor, rendererFog, rendererBloom, rendererLinearInterpolation})
@@ -111,7 +157,7 @@ namespace merutilm::rff2 {
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
                 rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG);
-                passTimer.cmdMark(cbh, "downsample+blur fog");
+                passDone(cbh, "downsample+blur fog");
 
                 vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
                     cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
@@ -125,7 +171,7 @@ namespace merutilm::rff2 {
 
                 vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC2Vid>(
                     wc, frameIndex, {rendererFog, rendererBloomThreshold}, {{}, {}});
-                passTimer.cmdMark(cbh, "fog+bloomThreshold");
+                passDone(cbh, "fog+bloomThreshold");
 
                 vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
                     cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
@@ -142,7 +188,7 @@ namespace merutilm::rff2 {
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
                 rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM);
-                passTimer.cmdMark(cbh, "downsample+blur bloom");
+                passDone(cbh, "downsample+blur bloom");
 
                 vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
                     cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY),
@@ -156,7 +202,7 @@ namespace merutilm::rff2 {
 
                 vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC3Vid>(
                     wc, frameIndex, {rendererBloom}, {{}});
-                passTimer.cmdMark(cbh, "bloom");
+                passDone(cbh, "bloom");
 
                 vkh::BarrierUtils::cmdSynchronizeImageWriteToRead(
                     cbh, mfg(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY),
@@ -165,6 +211,7 @@ namespace merutilm::rff2 {
             };
             setLayerStage(ShaderLayerControl::INITIALIZE);
             surfacePass();
+            splitPoint(cbh, "layer surface");
             for (const auto layer : layerShader.layerOrder.layers) {
                 if (!shaderLayerActive(layerShader, layer)) {
                     continue;
@@ -190,6 +237,7 @@ namespace merutilm::rff2 {
                     cbh, primary.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                splitPoint(cbh, std::format("layer {}", uint32_t(layer)));
             }
             setLayerStage(ShaderLayerControl::FINALIZE);
         }
@@ -289,7 +337,7 @@ namespace merutilm::rff2 {
                     rendererSlope,
                     rendererColor
                 }, {{}, {}});
-            passTimer.cmdMark(cbh, "slope+color");
+            passDone(cbh, "slope+color");
 
             // [IN] SSBO (Iteration Buffer)
             // [IN] SECONDARY
@@ -328,7 +376,7 @@ namespace merutilm::rff2 {
             // [BARRIER] DOWNSAMPLED_PRIMARY
 
             rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_FOG);
-            passTimer.cmdMark(cbh, "downsample+blur fog");
+            passDone(cbh, "downsample+blur fog");
 
             // [IN] DOWNSAMPLED_PRIMARY
             // [OUT] DOWNSAMPLED_SECONDARY
@@ -352,7 +400,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC2Vid>(
                 wc, frameIndex, {rendererFog, rendererBloomThreshold}, {{}, {}});
-            passTimer.cmdMark(cbh, "fog+bloomThreshold");
+            passDone(cbh, "fog+bloomThreshold");
 
             // [IN] PRIMARY
             // [IN] DOWNSAMPLED_SECONDARY
@@ -387,7 +435,7 @@ namespace merutilm::rff2 {
             // [BARRIER] DOWNSAMPLED_PRIMARY
 
             rendererBoxBlur->cmdGaussianBlur(frameIndex, CPCBoxBlur::DESC_INDEX_BLUR_TARGET_BLOOM);
-            passTimer.cmdMark(cbh, "downsample+blur bloom");
+            passDone(cbh, "downsample+blur bloom");
 
             // [IN] DOWNSAMPLED_PRIMARY
             // [OUT] DOWNSAMPLED_SECONDARY
@@ -413,7 +461,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC3Vid>(
                 wc, frameIndex, {rendererBloom}, {{}});
-            passTimer.cmdMark(cbh, "bloom");
+            passDone(cbh, "bloom");
 
             // [IN] SECONDARY
             // [IN] DOWNSAMPLED_SECONDARY
@@ -434,6 +482,7 @@ namespace merutilm::rff2 {
             };
             passTimer.cmdReset(cbh);
             passTimer.cmdMark(cbh, "start");
+            submitTimer.cmdBeginFrame(cbh);
             if (isStaticImages) {
                 vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCCStatic2Image>(
                     wc, frameIndex, {
@@ -447,7 +496,7 @@ namespace merutilm::rff2 {
                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, 1,
                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-                passTimer.cmdMark(cbh, "static image");
+                passDone(cbh, "static image");
                 cmdGradeChain();
             } else {
                 vkh::BarrierUtils::cmdImageMemoryBarrier(
@@ -459,8 +508,8 @@ namespace merutilm::rff2 {
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
                 // [BARRIER] Init image
 
-                renderer2MapIterationStripe->cmdRender(cbh, frameIndex, {});
-                passTimer.cmdMark(cbh, "2map_iter_stripe");
+                const std::string fractalSegment = cmd2MapIterationStripe(cbh);
+                passDone(cbh, "2map_iter_stripe", fractalSegment);
 
                 // [IN] EXTERNAL
                 // [OUT] SSBO (Iteration Buffer)
@@ -493,7 +542,7 @@ namespace merutilm::rff2 {
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC4Vid>(
                 wc, frameIndex, {rendererLinearInterpolation}, {{}});
-            passTimer.cmdMark(cbh, "linearInterpolation");
+            passDone(cbh, "linearInterpolation");
 
             // [IN] PRIMARY
             // [OUT] SECONDARY
@@ -518,6 +567,8 @@ namespace merutilm::rff2 {
                     wc, frameIndex, swapchainImageIndex, {rendererPresent}, {{}});
                 passTimer.cmdMark(cbh, "present (preview)");
             }
+            submitTimer.cmdEndSegment(cbh, submitSplit == 0 ? "whole frame"
+                                           : offscreenPass ? "rgba2bgr+downsample" : "rgba2bgr+present");
 
 
 

@@ -4,9 +4,11 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
 // Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
+#include <chrono>
 #include <functional>
 #include <queue>
 
@@ -34,6 +36,9 @@ namespace merutilm::rff2 {
         std::unique_ptr<TimelineAnimationPhases> animationIntegrator;
         std::array<double, 3> animationScheduleKey{};
         bool animationInputsChanged = true;
+        bool submitTimingLog = false;
+        double gpuTimeoutMs = 2000.0;
+        std::chrono::steady_clock::time_point lastSubmitLog{};
         std::unique_ptr<VideoRenderSceneRenderer> renderer = nullptr;
 
         std::mutex bufferCachedMutex;
@@ -131,6 +136,11 @@ namespace merutilm::rff2 {
         [[nodiscard]] std::wstring getPassTimingReport() const {
             return renderer->passTimer.report();
         }
+
+        // Prints each frame's longest GPU submission to the console during an export, about every two seconds.
+        void setSubmitTimingLog(bool on);
+
+        void logSubmitTimingSummary() const;
 
 
         void init() override;

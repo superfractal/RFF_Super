@@ -1,14 +1,15 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
 # Actual UI gallery and form inventory
 
 [Manual](user-manual.md) · [Explanations and dependencies](settings-reference.md)
 
-These are actual production Windows form controls rendered offscreen, not redrawn mockups. Settings use controlled default/example state. The panels are widened and made taller for legibility; the application normally scrolls them. Click an image to inspect it at its original size. Individual field explanations remain in the linked manual/reference.
+These are actual production Windows form controls captured on **September 24, 2026**, rendered offscreen rather than redrawn mockups. They are a dated visual inventory; later controls, such as Max Iterations Display and Automatic video, are described in the current workflow chapters. Settings use controlled default/example state. The panels are widened and made taller for legibility; the application normally scrolls them. Click an image to inspect it at its original size. Individual field explanations remain in the linked manual/reference.
 
 The standalone form images omit application-wired transport/exploration actions where these are attached by the enclosing workspace. The full timeline image includes its real editor shell; no source folder is loaded. Local AI requests and timers are disabled for its two images. No model output is simulated.
 
-Some current UI text is imperfect: Location calls base-10 zoom natural-log; Reference hints can ambiguously describe zero compression threshold; old boolean selectors show O/X. Use the corrected explanations in the manual. Two Local AI zoom section headings remain Japanese in the English UI: they mean Exploration settings and After exploration.
+Some captured UI text is imperfect: Location calls base-10 zoom natural-log; Reference hints can ambiguously describe zero compression threshold; old boolean selectors show O/X. The current Location control is corrected to **Log Zoom (10)**, and Max Multiplier Between Levels now accepts **2–255**. Animated Materials Band Period now accepts up to **1,000,000,000**. Use the current ranges in the [field reference](settings-reference.md). Two Local AI zoom section headings in the captures are Japanese: they mean Exploration settings and After exploration.
 
 ## Contents
 
@@ -46,7 +47,7 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 | --- | --- |
 | Real | High-precision center coordinate. |
 | Imaginary | High-precision center coordinate. |
-| Log Zoom (e) | Base-10 zoom. Adding 1 gives 10× magnification at fixed canvas size; current UI hint is incorrect. |
+| Log Zoom (e) | Captured older label; now Log Zoom (10). Adding 1 gives 10× magnification at fixed canvas size. |
 | Rotation | Degrees. Also controls panorama yaw. |
 
 ### Iterations
@@ -95,7 +96,7 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 | Control | Available choices / input guidance |
 | --- | --- |
 | Min Skip Reference | MPA follows periodic structure; minimum 4. |
-| Max Multiplier Between Levels | Ratio between adjacent period levels, 1 to 255. |
+| Max Multiplier Between Levels | Current range: 2 to 255. The capture retains the older 1-to-255 hint. |
 | Precision Level | -15 to -3. Lower values favor accuracy. |
 | Selection Method | Lowest, Highest |
 | Compression Method | No compression, Little compression, Strongest |
@@ -137,6 +138,8 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 
 ### Color Motion
 
+Captured section name; the section is now Color Animation.
+
 <details>
 <summary>Show actual Animation / Color Motion panel</summary>
 
@@ -167,7 +170,7 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 | Control | Available choices / input guidance |
 | --- | --- |
 | Freeze Match Tolerance | Fraction of one color cycle, 0 to 1. Lower values freeze a narrower band. |
-| Frozen Iteration Values | Up to 16 comma-separated iteration values. Empty removes all frozen colors. |
+| Frozen Iteration Values | Captured older field; now Frozen Colors, which shows up to 16 frozen bands as swatches. Pick Color to Freeze adds one and clicking a swatch removes it. |
 
 ### Zoom Motion
 
@@ -200,6 +203,8 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 
 ### Keyframe Generation
 
+Captured section name; the section is now Keyframes, and it also has a Generate Keyframes button.
+
 <details>
 <summary>Show actual Animation / Keyframe Generation panel</summary>
 
@@ -209,12 +214,14 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Zoom Step per Keyframe | Logarithmic zoom step; greater than 1. |
+| Zoom Step per Keyframe | Captured older hint (Logarithmic zoom step); the value is the magnification between neighboring keyframes, so 2 means each is 2x deeper. Greater than 1. |
 | Rotation / 360 Padding | On, Off |
 | Camera Padding Scale | 2 to 64. Memory and disk use grow with the square of this value. |
 | Render from PNG Images | On, Off |
 
 ### Camera
+
+Captured section name; the section is now Video Camera, and it also has a Match Planar Framing button.
 
 <details>
 <summary>Show actual Animation / Camera panel</summary>
@@ -251,7 +258,7 @@ Some current UI text is imperfect: Location calls base-10 zoom natural-log; Refe
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Rendering FPS | Live rendering limit: 1 to 1000 frames per second. Lower values reduce rendering load. Video export has a separate FPS setting. |
+| Rendering FPS | Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. Video export has a separate FPS setting. |
 | Calculation Threads | 1 up to this computer's logical core count. Applied to the next calculation. |
 
 ### Calculation Preview
@@ -456,7 +463,7 @@ Actions: **Use Current Zoom**.
 | Cycle Length (R) | 1 to 1e18 iterations per channel cycle. |
 | Cycle Length (G) | 1 to 1e18 iterations per channel cycle. |
 | Cycle Length (B) | 1 to 1e18 iterations per channel cycle. |
-| Iteration Coloring | Linear, Square root, Cube root, Log, LogLog, Smoothstep, Smootherstep |
+| Iteration Coloring | Linear, Square root, Cube root, Log, LogLog, Smoothstep, Smootherstep. Captured list; the workspace now shows the first six as curve tiles and no longer offers Smootherstep. |
 | Color Smoothing | None, Normal, Reversed |
 | Color Interpolation | RGB, OKLab, Linear RGB |
 | Start Offset | 0 to 1 |
@@ -951,8 +958,8 @@ Actions: **Reset Layer**, **Move Toward Bottom**.
 | Chaos Transition | Smooth transition from sharp through medium blur to full blur as local irregularity increases. |
 | Chaos Feather | Softens the detected region boundary, in pixels at 1280 width. Detection follows the current zoom and location. |
 | Chaos Blur Radius | Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality controls sampling. |
-| Chaos Highlight Detail | Retains a little of the original bright detail over the lens blur. Zero gives a pure circular blur. |
-| Chaos Shade | Darkens intricate defocused regions to separate them from smooth foreground surfaces. |
+| Chaos Shade | Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, fully selected regions turn black whatever Chaos Amount is. |
+| Chaos Blur Averaging | Average in Gamma Space, Average in Linear Space |
 
 ## Animated Materials
 
@@ -987,7 +994,7 @@ Actions: **Reset Layer**, **Move Toward Bottom**.
 | Evolution | -10 to 10 |
 | Flow Bend | -180 to 180 |
 | Seed | 0 to 65535 |
-| Band Period | 1 to 1e+06 |
+| Band Period | Current range: 1 to 1e+09; the capture predates the raised maximum. |
 | Primary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Secondary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 
@@ -1022,7 +1029,7 @@ Actions: **Reset Layer**, **Copy to Next Layer**, **Move Toward Top**.
 | Evolution | -10 to 10 |
 | Flow Bend | -180 to 180 |
 | Seed | 0 to 65535 |
-| Band Period | 1 to 1e+06 |
+| Band Period | Current range: 1 to 1e+09; the capture predates the raised maximum. |
 | Primary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Secondary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 
@@ -1057,7 +1064,7 @@ Actions: **Reset Layer**, **Copy to Next Layer**, **Move Toward Bottom**, **Move
 | Evolution | -10 to 10 |
 | Flow Bend | -180 to 180 |
 | Seed | 0 to 65535 |
-| Band Period | 1 to 1e+06 |
+| Band Period | Current range: 1 to 1e+09; the capture predates the raised maximum. |
 | Primary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Secondary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 
@@ -1092,7 +1099,7 @@ Actions: **Reset Layer**, **Copy to Next Layer**, **Move Toward Bottom**, **Move
 | Evolution | -10 to 10 |
 | Flow Bend | -180 to 180 |
 | Seed | 0 to 65535 |
-| Band Period | 1 to 1e+06 |
+| Band Period | Current range: 1 to 1e+09; the capture predates the raised maximum. |
 | Primary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Secondary Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 

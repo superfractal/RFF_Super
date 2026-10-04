@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-15, 2026-08-31
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-14, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
@@ -75,9 +76,9 @@ namespace merutilm::rff2 {
             L"export (image & video) for anti-aliasing. Output size is unchanged. 1 = off.");
         window->registerSectionHeader(L"Performance");
         window->registerTextInput<float>(
-            L"Rendering FPS", &fps, Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::acceptsFps,
+            L"Rendering FPS", &fps, Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::acceptsRenderFps,
             [&scene] { scene.wndRequestFPS(); }, L"Rendering FPS",
-            L"Limits live rendering to 1 to 1000 frames per second. Lower this to reduce rendering load. Video export uses a separate frame rate.");
+            L"Limits live rendering to 0 to 1000 frames per second; 0 means no limit. Lower this to reduce rendering load. Video export uses a separate frame rate.");
         window->registerTextInput<uint32_t>(L"Threads", &threads, Unparser::U_LONG, Parser::U_LONG,
                                             [](const uint32_t &v) { return v >= 1 && v <= std::max(1u, std::thread::hardware_concurrency()); }, Callback::NOTHING, L"Threads",
                                             L"Sets the number of threads when calculating.");

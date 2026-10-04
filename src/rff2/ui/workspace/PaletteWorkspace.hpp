@@ -1,11 +1,14 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21
+// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
 #include "AppearanceForms.hpp"
 #include "AttributeFormSection.hpp"
 #include "PaletteSources.hpp"
+#include "AppearanceFormBehavior.hpp"
+#include "../PalettePreview.hpp"
 #include "../../preset/shader/palette/ShdPalettePresets.h"
 
 namespace merutilm::rff2::workspace {
@@ -61,6 +64,8 @@ namespace merutilm::rff2::workspace {
         uint32_t librarySeed = 1;
         std::wstring sourcePath, sourceMessage;
         bool importCorrection = false;
+        bool linkRgb = true;
+        std::optional<ShdPaletteAttribute> stopPreviewBefore;
         std::optional<ShaderAttribute> imported;
         ShdPaletteAttribute &palette() const {
             return attribute().shader.palette;
@@ -159,6 +164,11 @@ namespace merutilm::rff2::workspace {
             auto nextSeed = librarySeed;
             auto nextPath = sourcePath;
             auto nextCorrection = importCorrection;
+            bool nextLink = linkRgb;
+            if (const auto found = draft.find("palette.linkRgb"); found != draft.end()) {
+                if (found->second != L"0" && found->second != L"1") return L"Choose On or Off.";
+                nextLink = found->second == L"1";
+            }
             if (const auto found = draft.find("palette.selectedStop"); found != draft.end()) {
                 size_t value;
                 if (!AttributeFormModel::parse(found->second, value) || value < 1 || value > stops.size()) {
@@ -171,7 +181,7 @@ namespace merutilm::rff2::workspace {
                 }
             }
             for (const auto &[id, value] : draft) {
-                if (id == "palette.selectedStop") {
+                if (id == "palette.selectedStop" || id == "palette.linkRgb") {
                     continue;
                 }
                 if (id == "source.preset") {
@@ -221,6 +231,13 @@ namespace merutilm::rff2::workspace {
             auto before = values();
             Source source(palette());
             const auto backup = attribute().shader;
+            if (nextLink && (draft.contains("palette.cycle0") || (!linkRgb && nextLink))) {
+                const auto red = settings.contains("palette.cycle0")
+                                     ? settings.at("palette.cycle0")
+                                     : AttributeFormModel::number(palette().iterationInterval.r);
+                settings["palette.cycle1"] = red;
+                settings["palette.cycle2"] = red;
+            }
             try {
                 const auto error = basic.apply(settings);
                 if (!error.empty()) {
@@ -244,6 +261,7 @@ namespace merutilm::rff2::workspace {
             libraryIndex = nextLibrary;
             librarySeed = nextSeed;
             importCorrection = nextCorrection;
+            linkRgb = nextLink;
             selected = nextSelected;
             record(std::move(before), std::move(source));
             return L"";
@@ -432,6 +450,7 @@ namespace merutilm::rff2::workspace {
             glow.color("color", &ShdSlopeAttribute::styleRimColor, L"Glow Color");
             basic = model->form(L"Palette", {L"Color Cycle", L"Band Line", L"Color Stops", L"Arrange Stops",
                                              L"Preset Library", L"Import Colors"});
+            basic.addDividers({"iterationColoring", "offsetRatio", "enableGloss", "bandLineGroove", "bandSpineAmount", "strength"});
         }
         void usePreset(size_t index, uint32_t seed) {
             auto next = paletteFromLibrary(index, seed);
@@ -472,7 +491,53 @@ namespace merutilm::rff2::workspace {
         WorkspaceForm form() {
             auto self = shared_from_this();
             auto form = basic;
+            form.preview = [self](const FormDraft &draft) {
+                if (const auto found = draft.find("palette.stopPosition"); found != draft.end()) {
+                    if (self->palette().stops.empty()) return std::wstring(L"Create color stops, then enter a valid position.");
+                    auto candidate = self->palette();
+                    self->clampSelection();
+                    if (!AttributeFormModel::parse(found->second, candidate.stops[self->selected].position) || !validPaletteStops(candidate))
+                        return std::wstring(L"Stop positions must stay distinct and ordered from 0 up to, but excluding, 1.");
+                    if (!self->stopPreviewBefore) self->stopPreviewBefore = self->palette();
+                    bakePaletteStops(candidate);
+                    self->palette() = std::move(candidate);
+                    self->changed();
+                    return std::wstring{};
+                }
+                const bool bake = draft.contains("palette.stopEasing") && !self->palette().stops.empty();
+                if (bake && !self->stopPreviewBefore) self->stopPreviewBefore = self->palette();
+                const auto result = self->basic.preview(draft);
+                if (bake && result.empty()) bakePaletteStops(self->palette());
+                self->changed();
+                return result;
+            };
+            form.cancelPreview = [self] {
+                self->basic.cancelPreview();
+                if (self->stopPreviewBefore) {
+                    self->palette() = std::move(*self->stopPreviewBefore);
+                    self->stopPreviewBefore.reset();
+                }
+                self->changed();
+            };
             std::erase_if(form.fields, [](const auto &field) { return field.group < 0; });
+            form.fields.insert(form.fields.begin(), {"palette.linkRgb", 0, L"Link G & B to R",
+                L"When checked, the Green and Blue iteration intervals follow the Red interval.",
+                [self] { return self->linkRgb ? L"1" : L"0"; },
+                {{L"0", L"Off"}, {L"1", L"On"}}, FormField::Editor::TEXT, false});
+            form.updateDraft = [self](FormDraft &draft, const std::string &changedId) {
+                const bool linked = draft.contains("palette.linkRgb")
+                                        ? draft.at("palette.linkRgb") == L"1" : self->linkRgb;
+                if (!linked || (changedId != "palette.cycle0" && changedId != "palette.linkRgb")) return;
+                const auto red = draft.contains("palette.cycle0") ? draft.at("palette.cycle0")
+                    : AttributeFormModel::number(self->palette().iterationInterval.r);
+                float value;
+                if (!AttributeFormModel::parse(red, value) || value < 1.f || value > 1e18f) return;
+                for (int channel = 1; channel < 3; ++channel) {
+                    const auto id = "palette.cycle" + std::to_string(channel);
+                    if (value == self->palette().iterationInterval[channel]) draft.erase(id);
+                    else draft[id] = red;
+                }
+            };
             form.fields.push_back({"palette.selectedStop",
                                    2,
                                    L"Selected Stop",
@@ -536,10 +601,15 @@ namespace merutilm::rff2::workspace {
                                    {{L"0", L"Off"}, {L"1", L"On"}}});
             for (auto &field : form.fields) {
                 if (field.id == "source.seed") {
+                    field.nudge = numericAdjustment(uint32_t(0), std::numeric_limits<uint32_t>::max());
                     field.validate = AttributeFormModel::rangeValidation<uint32_t>(
                         0, std::numeric_limits<uint32_t>::max());
                 }
                 if (field.id == "palette.selectedStop") {
+                    field.nudge = [self](const std::wstring &text, int direction, bool coarse) {
+                        return numericAdjustment(size_t(1), std::max(size_t(1), self->palette().stops.size()))(
+                            text, direction, coarse);
+                    };
                     field.validate = [self](const std::wstring &text) -> std::wstring {
                         size_t value{};
                         return AttributeFormModel::parse(text, value) && value > 0 &&
@@ -549,6 +619,19 @@ namespace merutilm::rff2::workspace {
                     };
                 }
                 if (field.id == "palette.stopPosition") {
+                    field.nudge = numericAdjustment(0.f, std::nextafter(1.f, 0.f));
+                    field.enabled = [self](const FormDraft &) { return !self->palette().stops.empty(); };
+                    field.sliderValue = [self](double fraction) {
+                        if (self->palette().stops.empty()) return std::wstring(L"0");
+                        self->clampSelection();
+                        const auto &stops = self->palette().stops;
+                        const float low = self->selected == 0 ? 0.f : std::nextafter(stops[self->selected - 1].position, 1.f);
+                        const float high = std::nextafter(self->selected + 1 == stops.size() ? 1.f : stops[self->selected + 1].position, 0.f);
+                        return AttributeFormModel::number(std::clamp(float(fraction), low, high));
+                    };
+                    field.sliderPosition = [](const std::wstring &text) {
+                        float value{}; AttributeFormModel::parse(text, value); return double(value);
+                    };
                     field.validate = [](const std::wstring &text) -> std::wstring {
                         float value{};
                         return AttributeFormModel::parse(text, value) && value >= 0 && value < 1
@@ -558,10 +641,65 @@ namespace merutilm::rff2::workspace {
                 }
             }
             for (auto &field : form.fields) {
+                if (field.id == "palette.selectedStop") field.dependencies = {"palette.stopColor", "palette.stopPosition"};
+                if (field.id == "palette.cycle0" || field.id == "palette.cycle1" || field.id == "palette.cycle2")
+                    field.dependencies.push_back("palette.linkRgb");
+                if (field.id == "palette.selectedStop" || field.id == "palette.stopColor" || field.id == "palette.stopEasing")
+                    field.enabled = [self](const FormDraft &) { return !self->palette().stops.empty(); };
+                if (field.id == "palette.stopPosition" || field.id == "palette.stopColor" || field.id == "palette.stopEasing")
+                    field.dependencies.push_back("palette.selectedStop");
                 if (field.id.starts_with("source.") || field.id == "palette.selectedStop") {
                     field.persisted = false;
                 }
             }
+            const auto previewFields = form.fields;
+            const auto preview = [self, previewFields](const FormDraft &draft, int width,
+                    std::optional<ShdPalColorSmoothingMethod> smoothing = {},
+                    std::optional<ShdPalColorInterpolationMethod> interpolation = {}, bool imported = false) {
+                if (imported && !self->imported) return std::vector<uint32_t>{};
+                const auto &palette = imported ? self->imported->palette : self->palette();
+                const FormValues values(previewFields, draft);
+                const auto method = smoothing.value_or(imported ? palette.colorSmoothing :
+                    ShdPalColorSmoothingMethod(values.number<int>("palette.colorSmoothing").value_or(int(palette.colorSmoothing))));
+                const auto blend = interpolation.value_or(imported ? palette.colorInterpolation :
+                    ShdPalColorInterpolationMethod(values.number<int>("palette.colorInterpolation").value_or(int(palette.colorInterpolation))));
+                if (!imported && !palette.stops.empty()) {
+                    auto candidate = palette;
+                    const auto index = std::min(self->selected, candidate.stops.size() - 1);
+                    if (const auto found = draft.find("palette.stopPosition"); found != draft.end())
+                        AttributeFormModel::parse(found->second, candidate.stops[index].position);
+                    if (const auto found = draft.find("palette.stopColor"); found != draft.end())
+                        AttributeFormModel::parseColor(found->second, candidate.stops[index].color);
+                    candidate.stopEasing = values.number<uint32_t>("palette.stopEasing").value_or(candidate.stopEasing);
+                    candidate.colorInterpolation = blend;
+                    if (candidate.stopEasing <= 2 && validPaletteStops(candidate)) bakePaletteStops(candidate);
+                    return palettePreviewPixels(candidate, width, method, blend);
+                }
+                return palettePreviewPixels(palette, width, method, blend);
+            };
+            for (auto &field : form.fields) {
+                if (field.id == "source.path") field.previewColors = [preview](const FormDraft &draft, int width) {
+                    return preview(draft, width, {}, {}, true);
+                };
+            }
+            form.groups.push_back(L"Palette Preview");
+            for (auto method : Selectable::values<ShdPalColorSmoothingMethod>()) {
+                FormField field{"preview.smoothing." + std::to_string(int(method)), 6, L"Color Smoothing",
+                    L"Palette before color correction.", [method] { return Selectable::toString(method); }, {}};
+                field.persisted = false;
+                field.enabled = [](const FormDraft &) { return false; };
+                field.previewColors = [preview, method](const FormDraft &draft, int width) { return preview(draft, width, method); };
+                form.fields.push_back(std::move(field));
+            }
+            for (auto method : Selectable::values<ShdPalColorInterpolationMethod>()) {
+                FormField field{"preview.interpolation." + std::to_string(int(method)), 6, L"Color Interpolation",
+                    L"Palette before color correction.", [method] { return Selectable::toString(method); }, {}};
+                field.persisted = false;
+                field.enabled = [](const FormDraft &) { return false; };
+                field.previewColors = [preview, method](const FormDraft &draft, int width) { return preview(draft, width, {}, method); };
+                form.fields.push_back(std::move(field));
+            }
+            appearanceFormBehavior(form);
             form.apply = [self](const auto &draft) { return self->apply(draft); };
             form.canUndo = [self] { return !self->undoEntries.empty(); };
             form.canRedo = [self] { return self->order.validRedo() && !self->redoEntries.empty(); };

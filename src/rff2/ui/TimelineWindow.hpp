@@ -1,7 +1,8 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-08-24, 2026-08-26, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -101,6 +102,9 @@ namespace merutilm::rff2 {
         AudioPreview audioPreview;
         void restartAudioPreview();
         uint64_t selectedAudioClip = 0;
+        int selectedZoomHold = -1;
+        void addZoomHold();
+        void removeZoomHold();
         void addAudioClip();
         void removeAudioClip();
         static constexpr UINT inspectorToggleId = 0x7830;
@@ -134,17 +138,23 @@ namespace merutilm::rff2 {
         static LRESULT CALLBACK dockToggleProc(HWND, UINT, WPARAM, LPARAM, UINT_PTR, DWORD_PTR);
         std::string workspaceSource;
         std::unique_ptr<ZoomOverlay> overlayRenderer;
+        std::unique_ptr<ZoomOverlay> iterationOverlayRenderer;
+        bool editingIterationOverlay = false;
+        VidZoomOverlayAttribute &selectedOverlay();
         RECT overlayButton{}, overlayImageRect{};
         workspace::ShortsGuide shortsGuide;
         bool overlayPositionMode = false, draggingOverlay = false;
         POINT overlayDragStart{};
         VidZoomOverlayAttribute overlayDragBefore;
         float publishedPreviewZoom = 0;
+        double publishedPreviewSeconds = 0;
+        std::optional<uint64_t> publishedPreviewMaxIteration;
+        std::optional<uint64_t> publishedPreviewInterpolatedMaxIteration;
         void openOverlaySettings();
-        void chooseOverlayFont();
-        void fitOverlayInsideFrame();
-        void resetOverlayAppearance();
-        void resetOverlayPosition();
+        void chooseOverlayFont(bool iteration = false);
+        void fitOverlayInsideFrame(bool iteration = false);
+        void resetOverlayAppearance(bool iteration = false);
+        void resetOverlayPosition(bool iteration = false);
         void refreshOverlaySettings();
         void commitOverlay();
         HBITMAP previewBitmap = nullptr;
@@ -189,11 +199,14 @@ namespace merutilm::rff2 {
         RECT aiButton = {};
         RECT themeButton = {};
         RECT fullscreenButton = {};
+        // Plays while stopped or paused, and pauses while playing.
         RECT playButton = {};
-        RECT pauseButton = {};
         RECT stopButton = {};
         RECT loopButton = {};
         RECT zoomPresetButton = {};
+        // The folder picker the empty preview offers while no keyframes are loaded.
+        RECT emptyFramesButton = {};
+        bool hoverEmptyFrames = false;
         RECT controlsButton = {};
         bool hoverControls = false;
         std::unique_ptr<SettingsWindow> controlsGuide;
@@ -239,7 +252,6 @@ namespace merutilm::rff2 {
         bool hoverTheme = false;
         bool hoverFullscreen = false;
         bool hoverPlay = false;
-        bool hoverPause = false;
         bool hoverStop = false;
         bool hoverLoop = false;
         bool hoverZoomPreset = false;
@@ -297,7 +309,8 @@ namespace merutilm::rff2 {
         float previewDepth = 0.0f;
         // The zoom each keyframe records in its own header, read once the playhead first reaches it.
         std::vector<std::optional<float>> keyframeLogZooms;
-        std::wstring previewMessage = L"Select a keyframe folder to enable scrubbing";
+        static constexpr const wchar_t *noKeyframesMessage = L"Select a keyframe folder to enable scrubbing";
+        std::wstring previewMessage = noKeyframesMessage;
         // A preview is outstanding, and whether it has lasted long enough to be worth saying so.
         bool previewPending = false;
         bool previewBusy = false;
@@ -567,6 +580,7 @@ namespace merutilm::rff2 {
         static void bindWorkspaceHistory(HWND handle, std::shared_ptr<workspace::HistoryDomain> domain,
                                          std::function<void(bool)> request);
         static void workspaceAction(HWND handle, int action);
+        static void matchCameraToPlanar(HWND handle);
         static bool loadWorkspaceKeyframes(HWND handle, const std::filesystem::path &directory);
         static bool workspacePreviewReady(HWND handle);
         static std::wstring workspaceStatus(HWND handle);

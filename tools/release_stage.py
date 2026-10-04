@@ -1,4 +1,4 @@
-# Modified by GPT-6 on 2026-09-24
+# Modified by GPT-6 on 2026-09-24, 2026-09-30
 """Stage an allowlisted release candidate, with exact third-party sources and notices."""
 import argparse
 import json
@@ -18,6 +18,12 @@ def copy_checked(source, target, expected=None):
     shutil.copy2(source, target)
     if sha256(source) != sha256(target):
         raise ValueError(f'Copy verification failed: {target}')
+
+
+def is_notice_file(name):
+    if Path(name).suffix.lower() in {'.jpg', '.jpeg', '.png', '.gif', '.ico', '.webp', '.svg'}:
+        return False
+    return re.match(r'^(?:LICEN[CS]ES?|COPYING|NOTICE|PATENTS)(?:$|[._ -]|v?\d)', Path(name).name, re.I) is not None
 
 
 def main():
@@ -111,9 +117,7 @@ def main():
                     for item in upstream:
                         if not item.isfile() or item.size > 2 * 1024 * 1024:
                             continue
-                        if not re.match(
-                            r'^(?:LICEN[CS]E|COPYING|NOTICE|PATENTS).*$', Path(item.name).name, re.I
-                        ):
+                        if not is_notice_file(item.name):
                             continue
                         parts = Path(item.name).parts
                         if '..' in parts or Path(item.name).drive or Path(item.name).is_absolute():

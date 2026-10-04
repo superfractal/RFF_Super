@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -20,6 +21,8 @@ namespace merutilm::rff2::workspace {
         bool rightEdge = false;
         bool hovered = false;
         bool horizontal = false;
+        // A short bar in the middle that marks the divider as something to drag.
+        bool grip = false;
         enum class Interaction { NONE, POINTER, KEYBOARD };
         Interaction interaction = Interaction::NONE;
         int anchor = 0;
@@ -67,6 +70,20 @@ namespace merutilm::rff2::workspace {
                 line.right = thickness;
             }
             PanelDrawing::fill(dc, line, thickness > 1 ? theme.accent : settingsTheme().sectionFrame);
+            if (grip) {
+                paintGrip(dc, bounds, thickness > 1 ? theme.accent : theme.track);
+            }
+        }
+        void paintGrip(HDC dc, const RECT &bounds, COLORREF color) const {
+            const int length = int(std::lround(36 * scale));
+            const int width = std::max(2, int(std::lround(3 * scale)));
+            const int middleX = int(bounds.left + bounds.right) / 2;
+            const int middleY = int(bounds.top + bounds.bottom) / 2;
+            const RECT bar = horizontal ? RECT{middleX - length / 2, middleY - width / 2, middleX + length / 2,
+                                               middleY - width / 2 + width}
+                                        : RECT{middleX - width / 2, middleY - length / 2, middleX - width / 2 + width,
+                                               middleY + length / 2};
+            PanelDrawing::rounded(dc, bar, color, color, width);
         }
         static LRESULT CALLBACK procedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
             auto *self = reinterpret_cast<PaneSplitter *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -220,6 +237,12 @@ namespace merutilm::rff2::workspace {
         PaneSplitter &operator=(const PaneSplitter &) = delete;
         HWND handle() const {
             return window;
+        }
+        void showGrip(bool visible) {
+            if (grip != visible) {
+                grip = visible;
+                InvalidateRect(window, nullptr, FALSE);
+            }
         }
         static bool handleCapturedShortcut(const MSG &message) {
             if (message.message != WM_KEYDOWN || message.wParam != VK_ESCAPE) {

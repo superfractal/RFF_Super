@@ -1,14 +1,15 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
 # RFF_Super settings guide
 
-Learn what each group of settings changes, see before-and-after renders, and understand calculation settings. This guide describes the source tree on **September 24, 2026**.
+Learn what each group of settings changes, see before-and-after renders, and understand calculation settings. The instructions are reviewed against the **October 4, 2026** source tree. Images and their recorded measurements retain their original capture dates; see [validation](validation.md).
 
 For detailed workflows beyond shaders, open the **[complete user manual](user-manual.md)**. It covers files, workspace layout, comparison, calculation, Local AI, timeline AI exchange, animation, export, presets, recovery, and diagnostics, with **[actual UI images](ui-gallery.md)** and diagrams. The **[feature coverage map](feature-coverage.md)** locates every top-level menu action.
 
 Start with the illustrated sections below. Use the **[complete field reference](settings-reference.md)** to look up individual controls, choices, and fresh-session defaults. Saved files and presets can have different defaults.
 
-For every shader feature, including advanced Surface controls and names that differ between panels, use the **[shader feature overview](shader-overview.md)**. Its [menu map](shader-overview.md#find-a-feature-from-the-shader-menu) covers all 17 Shader menu entries, and its [coverage checklist](shader-coverage.md) maps the source groups to their descriptions. The main guide below is the illustrated introduction, not the sole description of every field.
+For every shader feature, including advanced Surface controls and names that differ between panels, use the **[shader feature overview](shader-overview.md)**. Its [menu map](shader-overview.md#find-a-feature-from-the-shader-menu) covers all 15 Shader menu entries, and its [coverage checklist](shader-coverage.md) maps the source groups to their descriptions. The main guide below is the illustrated introduction, not the sole description of every field.
 
 The overview now includes more images alongside the explanations. The **[24 additional shader comparisons](shader-comparisons.md)** cover grooves, ornaments, lighting, materials, emission, print colors, pixelation, outlines, layer order, and HDR, with before/after settings to download. Together with the original examples, there are **54 render comparisons**.
 
@@ -55,7 +56,7 @@ The comparisons use the second location and a controlled baseline: animation is 
 | Setting | What changes and when to use it |
 | --- | --- |
 | Real / Imaginary | Moves the center in the complex plane. Keep the complete decimal coordinates when copying deep locations. |
-| Log Zoom (e) | Controls the scale. Despite the label's `e`, the renderer uses **base 10**: adding 1 magnifies by 10 at the same canvas size. This is not a natural-log control. |
+| Log Zoom (10) | Controls the base-10 scale: adding 1 magnifies by 10 at the same canvas size. Older UI captures retain the incorrect Log Zoom (e) label. |
 | Rotation | Rotates the calculated view; also supplies yaw in panorama projections. This requires recalculation. Video Camera Rotation transforms saved source maps separately. |
 | Automatic Iterations | For Mandelbrot, derives the iteration limit from the detected period and Auto Iteration Multiplier. Fast-period-guessing stays automatic. |
 | Max Iteration | Manual escape-iteration limit when Automatic Iterations is off. Raising 1000 to 2000 permits twice as many iterations for difficult pixels; it does not double the work of pixels that already escape early. |
@@ -129,13 +130,13 @@ Some Surface controls use shorter displayed names: for example **Prism Width** i
 
 ## Palette and band lines
 
-**Cycle Length (R/G/B)** determines how many iterations span a color cycle. Halving all three makes the colors repeat more frequently. **Start Offset** moves the color cycle without moving the fractal. **Iteration Coloring** bends the iteration-to-color mapping; **Cycle Bias** and **Cycle Curve** redistribute color within each cycle.
+**Cycle Length (R/G/B)** determines how many iterations span a color cycle. Halving all three makes the colors repeat more frequently. In the Palette workspace, **Link G & B to R** starts On: changing Cycle Length (R) also sets G and B to the same value. Turn it off to give the channels different lengths. **Start Offset** moves the color cycle without moving the fractal. **Iteration Coloring** bends the iteration-to-color mapping; **Cycle Bias** and **Cycle Curve** redistribute color within each cycle.
 
 | Saved cycle lengths | Half the cycle lengths |
 | --- | --- |
 | ![Original palette cycle lengths](images/palette-interval-before.png) | ![More frequent colors after halving cycle lengths](images/palette-interval-after.png) |
 
-**Color Smoothing** controls interpolation through colors; **Color Interpolation** selects RGB, OKLab, or Linear RGB blending. **Seamless (Mirror)** changes how the palette repeats. **Palette Gloss** adds palette-linked highlights; its bands can move with the color animation. **Mandelbrot Color** is the interior color and will be invisible in an entirely exterior view.
+The Palette workspace's **Palette Preview** shows the current palette under every Color Smoothing and Color Interpolation choice, so they can be compared before applying one. **Color Smoothing** controls interpolation through colors; **Color Interpolation** selects RGB, OKLab, or Linear RGB blending. **Seamless (Mirror)** changes how the palette repeats. **Palette Gloss** adds palette-linked highlights; its bands can move with the color animation. **Mandelbrot Color** is the interior color and will be invisible in an entirely exterior view.
 
 **Band Lines** outline regular positions in each palette cycle. Lines per Cycle, Line Width, Opacity, Softness, and Color shape them. Recessed Grooves adds relief; Spine and Ornament controls decorate the lines. Line Glow has its own width and color.
 
@@ -168,6 +169,8 @@ Light Direction rotates illumination around the relief; Light Zenith changes its
 ### Studio materials and surface styles
 
 Enable **Studio** for material controls. Roughness spreads reflections; Metalness changes the metallic response; Index of Refraction controls dielectric reflection; Clearcoat adds a separate coating with its own roughness. Direct Light and Studio Reflections control different light contributions.
+
+**Material Presets** in Lighting & Relief offers **Bronze**, **Pearl**, **Obsidian**, and **Ceramic**. Each turns Studio on and sets Roughness, Metalness, Clearcoat, Coat Roughness, Specular Intensity, Specular Anisotropy, Iridescence, and Film Thickness (nm) together; adjust any of them afterward. Undo restores the previous values.
 
 | Roughness 0.1 | Roughness 0.8 |
 | --- | --- |
@@ -232,11 +235,13 @@ The **shader layer workspace** controls ordering and visibility when the ordered
 
 **Focus Band** uses iteration depth rather than physical camera distance. Focus Depth selects the sharp band, Focus Range widens it, Focus Falloff shapes the transition, and Focus Blur sets the out-of-focus radius. Focus Amount 0 disables this contribution.
 
-**Chaos Blur** detects locally intricate iteration structure. Amount controls strength; Detail Scale and Threshold determine what is selected; Transition and Feather soften the selection; Blur Radius sets the blur; Highlight Detail restores some bright detail; Shade darkens the selected regions.
+**Chaos Blur** detects locally intricate iteration structure. Amount controls strength; Detail Scale and Threshold determine what is selected; Transition and Feather soften the selection; Blur Radius sets the blur; Shade darkens the selected regions, down to black; Blur Averaging chooses whether the blur averages in gamma space or in linear space.
 
 | Chaos Blur off | Amount 1, Threshold 0.15, Blur Radius 12 |
 | --- | --- |
 | ![Fine fractal detail without chaos blur](images/chaos-before.png) | ![Intricate areas selectively softened by chaos blur](images/chaos-after.png) |
+
+This pair was rendered on September 24, before the October 2–3 Chaos Blur changes. The current version keeps blurred holes round, keeps the dark color between bright details instead of washing them to grey, and no longer adds Chaos Highlight Detail, so opening the after settings now gives a darker, cleaner blur than the picture shows.
 
 **Blur Quality: Speed** caps the relevant full-resolution blur radius at 16 texels. **Appearance** preserves larger requested radii, up to the shader's 4096-texel safety limit, and allows a denser sampling grid. For ordinary local blur below the 16-texel cap, the two modes can use the same samples. Chaos Blur uses a denser circular sampling grid in Appearance even below that cap, so its image and cost can still change. These are sampling differences, not measured speed ratios.
 
@@ -250,7 +255,7 @@ There are three separate rates: **Rendering FPS** for the live display, **Video 
 | --- | --- |
 | Color Animation Speed | Iterations per second of palette drift. Negative reverses direction; 0 stops that drift. |
 | Animation Mode | Linear uses simple drift. Breathing, Turbulence, and Psychedelic add different flow. Flow Amount, Scale, and Speed shape it; Swirl is used by Psychedelic. |
-| Frozen colors | Frozen Iteration Values and Freeze Match Tolerance hold selected palette bands still. A larger tolerance freezes a wider band. |
+| Frozen colors | Pick Color to Freeze adds a band to the Frozen Colors swatches; Freeze Match Tolerance sets how wide each held band is. A larger tolerance freezes a wider band. Click a swatch to release it. |
 | Zoom Speed / Extra Final Zoom-in | Sets progression in keyframes per second and extra zoom beyond the final saved stage. For pauses, add a timeline hold rather than setting a speed key to zero. |
 | Zoom Step per Keyframe | The saved-map magnification ratio: 2 means neighboring maps differ by a factor of 2. Wider spacing requires fewer maps but puts more demand on transitions. |
 | Rotation / 360 Padding | Calculates a larger source area for rotation/projection. Camera Padding Scale 2 → 4 multiplies padded pixel count by 4. Existing unpadded maps do not gain missing detail when this switch changes. |
@@ -289,7 +294,7 @@ Try the same two key values with **Step**, **Linear**, and **Smooth**. Step prod
 
 #### Change speed or add a pause
 
-Holds are stored in the timeline; this version has no hold-entry inspector. Edit `timeline.holds` in an exported JSON document and reload it, as explained in the [detailed timeline chapter](animation-and-export.md#speed-and-holds).
+Holds are stored in the timeline. Open **Zoom Holds** in Timeline Settings, move the playhead to the depth, and choose **Add Zoom Hold at Playhead**; then edit **Hold Keyframe** and **Hold Duration (s)** and Apply. `timeline.holds` in timeline JSON holds the same data. See the [detailed timeline chapter](animation-and-export.md#speed-and-holds).
 
 ![Depth 10 to 0 takes 10 seconds at speed 1, 5 seconds at speed 2, and 12 seconds at speed 1 with a two-second hold](diagrams/timeline-speed-hold.png)
 
@@ -306,6 +311,8 @@ Open Audio in the settings inspector or choose Parameters → Audio from the tra
 For this example, use a source at least 20 seconds long. Keep **source In 12 s / Out 20 s**, set the clip's **timeline start to 3 s**, and set **fade-in and fade-out to 1 s** each. The eight-second selection plays from video time **3 s to 11 s**, fading in from 3–4 s and out from 10–11 s. The shaded shape shows a volume envelope, not a waveform. The two fades together cannot exceed the clip duration. Place another clip at 11 s or later to avoid overlap. Keep Export Audio on, the clip unmuted, and both master and clip gain above zero to hear it in the exported video.
 
 **Show Zoom Ratio** adds the overlay to preview and exported video. Decimal Places controls its precision. Custom Appearance enables font, style, size, alignment, position, text color/opacity, outline, and shadow. Position is a percentage of the frame, font size a percentage of height, and outline/shadow sizes percentages of the font. **YouTube Shorts Guide** is a preview composition guide and is never exported. Panel docking and width settings only rearrange the editor.
+
+**Max Iterations Display** provides an independent source-map iteration-limit overlay with its own styling and position. **Interpolate per Frame** interpolates the displayed count without changing rendering limits. See [both overlay workflows](animation-and-export.md#zoom-overlay-and-preview-guides).
 
 #### Prepare maps for camera movement
 
@@ -325,7 +332,7 @@ Keep duration and resolution fixed when comparing these controls. A **10-second*
 | Video Bitrate 20000 → 40000 kbps | Approximately twice the target video data rate, not twice the detail. Actual file size depends on the encoder. Ignored for lossless SDR. |
 | Lossless Video | Uses RGB lossless SDR in MKV. It avoids lossy video compression but does not restore detail missing from the rendered source. HDR uses its selected HDR transfer path. |
 | Keyframe Transition Samples 1 → 2 | Uses a 2 × 2 spatial grid near saved-map transitions, increasing spatial samples from 1 to 4 there. |
-| Color Animation Samples 1 → 2 | Uses 2 temporal samples within a frame. Near transitions, the renderer uses the larger of the spatial sample count and temporal sample count; it does not multiply the two. Elsewhere it uses the temporal count. These controls do not change output resolution, and the PNG-source path uses one sample. |
+| Color Animation Samples 1 → 2 | Uses 2 temporal samples within a frame. Near transitions, the combined count is the least common multiple of the spatial count K² and temporal count T: K=2 and T=3 gives 12 samples. Elsewhere it uses T. These controls do not change output resolution, and the PNG-source path uses one sample. |
 | Compress Keyframes | Writes lossless `.rfmz` maps. File size and compression time depend on the data. Recoloring remains possible. |
 | Create Video After Keyframes | Starts video export after keyframe generation completes. |
 | Show Video Export Preview | Displays the export while it runs. Turning it off reduces display work while retaining progress/cancellation. |
@@ -346,12 +353,14 @@ FFmpeg is needed for video/audio export. See [BUILDING.md](../documentation/BUIL
 | Video Transfer | SDR, HDR10 (PQ), or HLG. PQ/HLG export requires HDR Rendering. |
 | HDR Peak Brightness (nits) | Sets peak brightness for PQ output, independently of MFR Mastering Peak. |
 
-The MFR choices are MFR Shoulder, MFR Log View, MFR Linear Clip, and MFR False Color. False Color is a diagnostic: −16 EV is navy, −8 blue, 0 gray, +8 yellow, and +16 red; zero light is black. It is not a natural-color render. See the [MFR preview notes](../docs/mfr-hdr-preview.md) for the complete behavior.
+The MFR choices are MFR Shoulder, MFR Log View, MFR Linear Clip, and MFR False Color. False Color is a diagnostic: −16 EV is navy, −8 blue, 0 gray, +8 yellow, and +16 red; zero light is black. It is not a natural-color render. See the [MFR preview notes](../documentation/notes/mfr-hdr-preview.md) for the complete behavior.
 
 ## Exploration tools and workspace preferences
 
 
 **Local LLM** is a separate optional workflow using the configured model server. Desired Appearance describes the requested look. Generate Settings produces a result; Apply Settings applies it; Undo AI Changes reverses an applied change. Automatically Apply and Refine and Max Changes control bounded refinement; Error Limit controls retries. AI Zoom Exploration has Features to Explore, Zoom per AI Step, Exploration Steps, and its own Error Limit. The optional minibrot search can lower log zoom and retry on failure, and repeat exploration until canceled. Connection Information reports the configured connection. These features were documented from their controls, not exercised during this guide's image tests.
+
+The Local AI menu entry and Timeline AI Edit button are hidden by default; [enable them in menu-visibility.json](workspace-and-files.md#menu-visibility-and-optional-ai-entry-points). The [Local AI chapter](local-ai.md#create-automatic-videos) also explains automatic video setup, exploration routes, appearance ordering, output folders and cancellation.
 
 Language, light/dark appearance, panel placement, search, favorites, recent settings, and comparison layouts change the workspace. They do not change the mathematical location. The comparison workspace lets you examine saved appearances side by side. Save a full `.rfc` for portable artwork settings, and keep external texture/audio assets alongside your project.
 
@@ -378,4 +387,4 @@ The first draft of this guide's images had a narrow erroneous strip at the right
 
 Keep this file and the **entire `guide/` folder** together in the repository. All embedded images and example downloads use relative paths, so GitHub renders them without a website, local drive, or image-hosting service. The companion pages use ordinary Markdown tables and GitHub-supported collapsible sections.
 
-Open `SETTINGS_GUIDE.md` on the repository's **Code** tab to read it. If copying it into a GitHub Wiki, copy the assets and adjust the relative paths for the Wiki's separate repository. This change prepares the files locally; it does not publish or push them to GitHub.
+Open `guide/SETTINGS_GUIDE.md` on the repository's **Code** tab to read it. If copying it into a GitHub Wiki, copy the assets and adjust the relative paths for the Wiki's separate repository.

@@ -2,12 +2,13 @@
 // Created by Merutilm on 2025-07-09.
 // Modified by Opus 5 on 2026-08-09, 2026-08-23
 // Modified by GPT-5 on 2026-08-23
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-30
 //
 
 #pragma once
 #include <mutex>
 
+// Vulkan Utility Libraries enum helper: Khronos, Valve and LunarG, Apache-2.0; see NOTICE.
 #include <vulkan/vk_enum_string_helper.h>
 
 #include "Instance.hpp"

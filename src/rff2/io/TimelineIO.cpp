@@ -2,7 +2,8 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31, 2026-09-01
 // Modified by Opus 5 on 2026-08-25, 2026-08-26
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #include "TimelineIO.h"
@@ -167,7 +168,8 @@ namespace merutilm::rff2 {
                     }
                 }
             }
-            if (track.targetId < 1202 || track.targetId > 1221) {
+            // Retired Chaos Highlight Detail (518) and Softbox (1202-1221) tracks are read and dropped.
+            if (track.targetId != 518 && (track.targetId < 1202 || track.targetId > 1221)) {
                 loadedTimeline.tracks.push_back(std::move(track));
             }
         }
@@ -315,6 +317,108 @@ namespace merutilm::rff2 {
         return true;
     }
 
+    void TimelineIO::writeIterationAppearance(std::ostream &out, const VidTimelineAttribute &timeline) {
+        IOUtilities::encodeAndWrite(out, uint32_t{0x314f494d});
+        writeOverlay(out, timeline.maxIterationOverlay);
+        IOUtilities::encodeAndWrite(out, uint32_t(timeline.interpolateMaxIteration));
+    }
+
+    void TimelineIO::readIterationAppearance(std::ifstream &in, VidTimelineAttribute &timeline) {
+        timeline.interpolateMaxIteration = false;
+        timeline.maxIterationOverlay = timeline.zoomOverlay;
+        auto &value = timeline.maxIterationOverlay;
+        value.visible = timeline.zoomOverlay.showMaxIteration;
+        value.showMaxIteration = false;
+        value.custom = true;
+        value.y = std::clamp(value.y + value.size * 1.5f, 0.f, 1.f);
+        if (in.fail() || !hasMore(in)) return;
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != 0x314f494d || !readOverlay(in, value)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        timeline.zoomOverlay.showMaxIteration = value.visible;
+        if (!hasMore(in)) return;
+        uint32_t interpolate = 0;
+        IOUtilities::readAndDecode(in, &interpolate);
+        if (in.fail() || interpolate > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        timeline.interpolateMaxIteration = interpolate != 0;
+    }
+
+    void TimelineIO::writeOverlayTiming(std::ostream &out, const VidTimelineAttribute &timeline) {
+        IOUtilities::encodeAndWrite(out, uint32_t{0x31544f56});
+        for (const auto *value : {&timeline.zoomOverlay, &timeline.maxIterationOverlay}) {
+            IOUtilities::encodeAndWrite(out, uint32_t(value->limitDisplayTime));
+            IOUtilities::encodeAndWrite(out, value->displayStart);
+            IOUtilities::encodeAndWrite(out, value->displayEnd);
+        }
+    }
+
+    void TimelineIO::readOverlayTiming(std::ifstream &in, VidTimelineAttribute &timeline) {
+        for (auto *value : {&timeline.zoomOverlay, &timeline.maxIterationOverlay}) {
+            value->limitDisplayTime = false;
+            value->displayStart = 0;
+            value->displayEnd = 0;
+        }
+        if (in.fail() || !hasMore(in)) return;
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != 0x31544f56) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        for (auto *value : {&timeline.zoomOverlay, &timeline.maxIterationOverlay}) {
+            if (!hasMore(in)) return;
+            uint32_t limited = 0;
+            IOUtilities::readAndDecode(in, &limited);
+            if (in.fail() || limited > 1) {
+                in.setstate(std::ios::failbit);
+                return;
+            }
+            value->limitDisplayTime = limited != 0;
+            if (!hasMore(in)) return;
+            IOUtilities::readAndDecode(in, &value->displayStart);
+            if (in.fail() || !value->validDisplayTime()) {
+                in.setstate(std::ios::failbit);
+                return;
+            }
+            if (!hasMore(in)) return;
+            IOUtilities::readAndDecode(in, &value->displayEnd);
+            if (in.fail() || !value->validDisplayTime()) {
+                in.setstate(std::ios::failbit);
+                return;
+            }
+        }
+    }
+
+    void TimelineIO::writeOverlayIterations(std::ostream &out, const VidZoomOverlayAttribute &overlay) {
+        IOUtilities::encodeAndWrite(out, uint32_t{0x31494d5a});
+        IOUtilities::encodeAndWrite(out, uint32_t(overlay.showMaxIteration));
+    }
+
+    void TimelineIO::readOverlayIterations(std::ifstream &in, VidZoomOverlayAttribute &overlay) {
+        overlay.showMaxIteration = false;
+        if (in.fail() || !hasMore(in)) return;
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != 0x31494d5a) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        if (!hasMore(in)) return;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        overlay.showMaxIteration = enabled != 0;
+    }
+
     void TimelineIO::writeOverlayPrecision(std::ostream &out, const VidZoomOverlayAttribute &overlay) {
         IOUtilities::encodeAndWrite(out, uint32_t{0x3150445a});
         IOUtilities::encodeAndWrite(out, overlay.decimalPlaces);
@@ -409,6 +513,7 @@ namespace merutilm::rff2 {
     }
 
     bool TimelineIO::save(const std::filesystem::path &path, const VidTimelineAttribute &timeline) {
+        if (!timeline.zoomOverlay.validDisplayTime() || !timeline.maxIterationOverlay.validDisplayTime()) return false;
         auto audio = timeline.audio;
         try {
             AudioTimelineIO::relativePaths(audio, path);
@@ -429,6 +534,9 @@ namespace merutilm::rff2 {
         writeTimeline(out, timeline);
         AudioTimelineIO::write(out, audio);
         writeOverlayPrecision(out, timeline.zoomOverlay);
+        writeOverlayIterations(out, timeline.legacyOverlay());
+        writeIterationAppearance(out, timeline);
+        writeOverlayTiming(out, timeline);
         out.close();
         if (out.fail() || !IOUtilities::commitTemporaryFile(temporary, path)) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -463,6 +571,9 @@ namespace merutilm::rff2 {
             return false;
         }
         readOverlayPrecision(in, loadedTimeline.zoomOverlay);
+        readOverlayIterations(in, loadedTimeline.zoomOverlay);
+        readIterationAppearance(in, loadedTimeline);
+        readOverlayTiming(in, loadedTimeline);
         try {
             AudioTimelineIO::resolvePaths(loadedTimeline.audio, path);
         } catch (const std::filesystem::filesystem_error &) {

@@ -1,5 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
 # Presets, recovery, and diagnostics
 
 [Manual](user-manual.md) · [Calculation explanation](exploration-and-calculation.md)
@@ -46,7 +46,7 @@ The Shader preset menu groups **Palette**, **Stripe**, **Slope**, **Color**, **F
 
 Palette choices include classic/rainbow, random smooth, cinematic, natural, and glossy families. The visual and numerical behavior of palette interval, smoothing, phase, random recipes, import, and layer blending is covered in the [shader overview](shader-overview.md). Recipe-based palettes retain their preset ID and seed; use the same recipe/seed for reproducibility rather than manually recreating its displayed colors.
 
-**Load KFR Color** imports compatible KFR color information. **Import Color** provides color import through the palette module. These are color workflows, not general import of another renderer's entire calculation project. **Save Shader Preset** and **Load Shader Preset** provide `.rfsp` reuse within RFF_Super. Keep external texture images available when transferring an appearance.
+**Load KFR Color** imports compatible KFR color information. **Import Color** provides color import through the palette module. These are color workflows, not general import of another renderer's entire calculation project. **Save Appearance Settings** and **Load Appearance Settings** provide `.rfsp` reuse within RFF_Super. Keep external texture images available when transferring an appearance.
 
 Example menu entries are collected from available files. Their count and names can differ between installations; an absent example file is not a missing rendering feature. See the [source menu mapping](feature-coverage.md) and [full shader fields](settings-reference.md).
 
@@ -80,6 +80,10 @@ flowchart TD
 If an image is unchanged, inspect dependencies before repeatedly increasing a value. Roughness needs an active reflection/specular contribution; camera padding only affects newly generated maps; PNG sources do not contain iteration values; linear color motion does not use every flow control. See the [specific dependency checklist](SETTINGS_GUIDE.md#when-a-setting-seems-to-do-nothing).
 
 For an unexpected border, inspect the full image and an enlarged edge. Do not crop it away and declare the issue solved. Compare a fresh render using the same inputs. During this guide's preparation, an incorrect inner/outer map pairing in the documentation renderer caused an edge artifact; the pairing was corrected and the final images regenerated. See [validation corrections](validation.md#corrections-during-preparation).
+
+## Open the guide
+
+Choose **? → Open Guide** to open the online user manual. RFF_Super shows the destination link first; **OK** opens it in the default browser and **Cancel** leaves the browser closed. The entry uses `? → Open Guide` in `menu-visibility.json` and is visible by default. See [menu visibility](workspace-and-files.md#menu-visibility-and-optional-ai-entry-points) to hide or restore it.
 
 ## Debug-build tools and version
 

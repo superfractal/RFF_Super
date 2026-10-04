@@ -4,9 +4,12 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-25, 2026-08-26, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "VideoRenderScene.hpp"
+#include "../io/RFFStaticMapBinary.h"
+#include "../video/IterationOverlayValue.hpp"
 
 #include "../../vulkan_helper/util/BufferImageContextUtils.hpp"
 #include "../../vulkan_helper/util/BarrierUtils.hpp"
@@ -26,6 +29,7 @@
 #include <cstdlib>
 #include <exception>
 #include <stdexcept>
+#include <windows.h>
 
 namespace merutilm::rff2 {
     namespace {
@@ -36,6 +40,17 @@ namespace merutilm::rff2 {
                 return v == nullptr || (v[0] != '0' || v[1] != '\0');
             }();
             return enabled;
+        }
+
+        // TdrDelay in seconds when the user has set it, otherwise the Windows default of 2.
+        double windowsGpuTimeoutSeconds() {
+            DWORD value = 0;
+            DWORD size = sizeof(value);
+            if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", L"TdrDelay",
+                             RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS && value > 0) {
+                return static_cast<double>(value);
+            }
+            return 2.0;
         }
 
         // Texture layers the timeline can still call for: one a track turns on, and one a track can
@@ -385,6 +400,8 @@ namespace merutilm::rff2 {
                                                              baseAttribute.shader.hdr.use || baseAttribute.shader.sceneLinear(), preparationHook,
                                                              &baseAttribute.shader, baseAttribute.render.dither);
         preparationHook = {};
+        renderer->submitSplit = baseAttribute.video.exportation.gpuSubmitSplit;
+        renderer->submitTimer.setEnabled(submitTimingLog);
         applySize();
         applyShaderStatic();
     }
@@ -532,6 +549,19 @@ namespace merutilm::rff2 {
         const uint32_t frameIndex = renderer->getFrameIndex();
         wc.getSyncObject().getFence(frameIndex).wait();
         renderer->passTimer.collect();
+        renderer->submitTimer.collect();
+        if (submitTimingLog && renderer->submitTimer.isEnabled()) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now - lastSubmitLog >= std::chrono::seconds(2)) {
+                lastSubmitLog = now;
+                const auto &s = renderer->submitTimer.getStats();
+                const double share = s.lastLongestMs / gpuTimeoutMs * 100.0;
+                vkh::logger::log("[GPU Work Split {}] frame {}: {} submits, longest {:.1f} ms ({}) = {:.0f}% of {:.0f} ms limit{}, frame GPU {:.1f} ms | worst {:.1f} ms ({}) at frame {}",
+                                 renderer->submitSplit, s.frames, s.lastSegments, s.lastLongestMs, s.lastLongestLabel,
+                                 share, gpuTimeoutMs, share >= 50.0 ? " NEAR LIMIT" : "", s.lastFrameMs,
+                                 s.worstMs, s.worstLabel, s.worstFrame);
+            }
+        }
 
         const vkh::BufferContext &srcBuffer = renderer->rendererImageRGBA2BGR->getBufferContext(frameIndex);
         vkh::BufferContext dstBuffer = vkh::BufferContext::createContext(wc.core, {
@@ -583,6 +613,19 @@ namespace merutilm::rff2 {
                                                                        baseAttribute.video.data.defaultZoomIncrement,
                                                                        renderer->currentFrame),
                                                                    subsampleCount);
+            if (normal && zoomed) {
+                if (renderer->isStaticImages) {
+                    const auto a = static_cast<const RFFStaticMapBinary *>(normal)->getMaxIteration();
+                    const auto b = static_cast<const RFFStaticMapBinary *>(zoomed)->getMaxIteration();
+                    cachedBuffer->maxIteration = iterationOverlayValue(a, b, renderer->currentFrame, false);
+                    cachedBuffer->interpolatedMaxIteration = iterationOverlayValue(a, b, renderer->currentFrame, true);
+                } else {
+                    const auto a = static_cast<const RFFDynamicMapBinary *>(normal)->getMaxIteration();
+                    const auto b = static_cast<const RFFDynamicMapBinary *>(zoomed)->getMaxIteration();
+                    cachedBuffer->maxIteration = iterationOverlayValue(a, b, renderer->currentFrame, false);
+                    cachedBuffer->interpolatedMaxIteration = iterationOverlayValue(a, b, renderer->currentFrame, true);
+                }
+            }
             bufferTransferred = true;
             queuedVbc.push(std::move(cachedBuffer));
         } catch (...) {
@@ -597,6 +640,36 @@ namespace merutilm::rff2 {
             }
             throw;
         }
+    }
+
+    void VideoRenderScene::setSubmitTimingLog(const bool on) {
+        submitTimingLog = on;
+        renderer->submitTimer.setEnabled(on);
+        if (!on) {
+            return;
+        }
+        gpuTimeoutMs = windowsGpuTimeoutSeconds() * 1000.0;
+        lastSubmitLog = {};
+        if (!renderer->submitTimer.isSupported()) {
+            vkh::logger::log("[GPU Work Split {}] this GPU has no timestamp queries; submission times cannot be shown",
+                             renderer->submitSplit);
+            return;
+        }
+        vkh::logger::log("[GPU Work Split {}] logging GPU time per submission; Windows resets the GPU after {:.0f} ms in one submission",
+                         renderer->submitSplit, gpuTimeoutMs);
+    }
+
+    void VideoRenderScene::logSubmitTimingSummary() const {
+        if (!submitTimingLog || !renderer->submitTimer.isEnabled()) {
+            return;
+        }
+        const auto &s = renderer->submitTimer.getStats();
+        if (s.frames == 0) {
+            return;
+        }
+        vkh::logger::log("[GPU Work Split {}] summary: {} frames, {} submits per frame, worst submission {:.1f} ms ({}) at frame {} = {:.0f}% of {:.0f} ms limit, average longest {:.1f} ms",
+                         renderer->submitSplit, s.frames, s.lastSegments, s.worstMs, s.worstLabel, s.worstFrame,
+                         s.worstMs / gpuTimeoutMs * 100.0, gpuTimeoutMs, s.longestSumMs / static_cast<double>(s.frames));
     }
 
     void VideoRenderScene::init() {

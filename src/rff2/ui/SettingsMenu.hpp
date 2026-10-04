@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-27, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-26, 2026-08-27
 // Modified by GPT-6 on 2026-09-14, 2026-09-17, 2026-09-23
+// Modified by Opus 5.5 on 2026-09-29
 //
 
 #pragma once
@@ -16,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <windef.h>
@@ -23,6 +25,7 @@
 #include "RenderScene.hpp"
 #include "SettingsWindow.hpp"
 #include "../preset/shader/example/ShdExamplePresets.h"
+#include "../io/MenuVisibilityIO.hpp"
 
 namespace merutilm::rff2 {
     struct SettingsMenu {
@@ -76,6 +79,13 @@ namespace merutilm::rff2 {
         std::vector<std::function<void(SettingsMenu &, RenderScene &)>> callbacks = {};
         std::function<void(int, int)> workspaceNavigation;
         std::vector<bool> hasCheckboxes = {};
+        // The user's menu-visibility.json, every caption the menus offer, and the caption path of each popup.
+        MenuVisibilityIO::Json menuVisibility = MenuVisibilityIO::Json::object();
+        MenuVisibilityIO::Json menuVisibilityTemplate = MenuVisibilityIO::Json::object();
+        std::unordered_map<HMENU, std::vector<std::string>> menuCaptionPaths = {};
+        // AI features, left off until menu-visibility.json sets them to true.
+        inline static const std::vector<std::string> LOCAL_AI_FEATURE = {"Shader", "Local AI appearance"};
+        inline static const std::vector<std::string> AI_EDIT_FEATURE = {"Timeline Editor", "AI Edit"};
         std::vector<std::optional<std::function<bool*(RenderScene &, bool)>>> checkboxActions = {};
         // What part of the attribute a panel is bound to - all the closers below need to tell them
         // apart by. A shader preset replaces the whole shader, a KFR color file only its palette,
@@ -97,6 +107,9 @@ namespace merutilm::rff2 {
         ~SettingsMenu();
 
         bool hasCheckbox(int menuID);
+
+        // Whether menu-visibility.json leaves this menu item, and the feature behind it, available.
+        bool featureShown(const std::vector<std::string> &captions) const;
 
         SettingsMenu(const SettingsMenu &) = delete;
 

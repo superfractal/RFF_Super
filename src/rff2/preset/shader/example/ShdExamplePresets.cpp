@@ -2,6 +2,7 @@
 // Created by Opus 5 on 2026-08-31.
 // Modified by Opus 5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "ShdExamplePresets.h"
@@ -55,7 +56,16 @@ namespace merutilm::rff2 {
     std::vector<ShdExamplePresets::FromFile> ShdExamplePresets::collect() {
         std::vector<FromFile> presets = {};
         std::error_code error;
-        const std::filesystem::directory_iterator folder(Utilities::getDefaultPath() / EXAMPLE_FOLDER_NAME, error);
+        const auto root = Utilities::getDefaultPath();
+        auto path = root / EXAMPLE_FOLDER_NAME;
+        if (!std::filesystem::exists(path, error) && std::filesystem::exists(root / LEGACY_EXAMPLE_FOLDER_NAME, error)) {
+            std::filesystem::create_directories(path.parent_path(), error);
+            std::filesystem::rename(root / LEGACY_EXAMPLE_FOLDER_NAME, path, error);
+            if (error) {
+                path = root / LEGACY_EXAMPLE_FOLDER_NAME;
+            }
+        }
+        const std::filesystem::directory_iterator folder(path, error);
         if (error) {
             return presets;
         }

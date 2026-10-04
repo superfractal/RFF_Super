@@ -1,9 +1,10 @@
 //
-// Modified by GPT-6 on 2026-09-18, 2026-09-20, 2026-09-23
+// Modified by GPT-6 on 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-26, 2026-09-30
 //
 
 #pragma once
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <glm/glm.hpp>
 
@@ -11,6 +12,19 @@ namespace merutilm::rff2 {
     struct VidZoomOverlayAttribute {
         uint32_t decimalPlaces = 6;
         bool visible = true;
+        bool limitDisplayTime = false;
+        double displayStart = 0;
+        double displayEnd = 0;
+        bool validDisplayTime() const {
+            return std::isfinite(displayStart) && std::isfinite(displayEnd) &&
+                   displayStart >= 0 && displayStart <= 604800 && displayEnd >= 0 && displayEnd <= 604800 &&
+                   (displayEnd == 0 || displayEnd > displayStart);
+        }
+        bool visibleAt(double seconds) const {
+            return visible && (!limitDisplayTime ||
+                (seconds >= displayStart && (displayEnd == 0 || seconds < displayEnd)));
+        }
+        bool showMaxIteration = false;
         bool custom = false;
         uint32_t anchor = 0;
         float x = 0.02f;

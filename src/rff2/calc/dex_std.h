@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-18.
+// Modified by GPT-6 on 2026-09-29
 //
 
 #pragma once
@@ -73,8 +74,7 @@ namespace merutilm::rff2 {
 
     inline void dex_std::clamp(dex *result, const dex &target, const dex &mn,
                                const dex &mx) {
-        min(result, target, mx);
-        max(result, mn, target);
+        dex::cpy(result, target < mn ? mn : target > mx ? mx : target);
     }
 
     inline dex dex_std::clamp(const dex &target, const dex &mn, const dex &mx) {

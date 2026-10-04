@@ -3,8 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30
 //
 
 #include "NativeDialogs.hpp"
@@ -196,11 +196,17 @@ namespace merutilm::rff2 {
         smoothZoomGeneration = 0;
         smoothZoomCaptureWider = false;
         smoothZoomOriginal.reset();
+        // A draft whose full pass never came would leave its part-way percentage standing for good.
+        if (smoothZoomDraftPixels != 0) {
+            smoothZoomDraftPixels = 0;
+            if (idleCompute.load()) setStatusMessage(Constants::Status::RENDER_STATUS, L"Done");
+        }
     }
 
     void RenderScene::restoreSmoothZoomSource() {
         if (!smoothZoomActive || smoothZoomCaptureWider || !smoothZoomOriginal) return;
         state.cancel();
+        pendingIterationLimit = 0;
         waitFramesInFlight();
         attr.fractal = *smoothZoomOriginal;
         lastMaxIteration = smoothZoomOriginalMax;
@@ -469,6 +475,10 @@ namespace merutilm::rff2 {
             snapshotComputePreview(false);
         }
 
+        if (const auto limit = pendingIterationLimit.exchange(0); limit != 0) {
+            renderer->rendererIteration->setMaxIteration(static_cast<double>(limit));
+        }
+
         renderer->rendererSlope->setReliefZoom(attr.shader.slope,
             smoothZoomCaptureWider ? smoothZoomCandidateFractal->logZoom : attr.fractal.logZoom);
         if (idleCompute.load() && !smoothZoomActive) {
@@ -568,9 +578,13 @@ namespace merutilm::rff2 {
 
         if (isVideoGenerationActive) {
             switch (msg) {
+                case WM_MOUSEMOVE:
+                    if (idleCompute.load()) {
+                        updateIterationStatus();
+                    }
+                    return;
                 case WM_LBUTTONDOWN:
                 case WM_LBUTTONUP:
-                case WM_MOUSEMOVE:
                 case WM_MOUSEWHEEL:
                     return;
                 default:
@@ -594,6 +608,16 @@ namespace merutilm::rff2 {
                         auto &iters = attr.shader.palette.staticColorIterations;
                         // Skip the Mandelbrot interior (iteration 0) which never animates anyway.
                         if (it != 0 && iters.size() < ShdPaletteAttribute::MAX_STATIC_COLORS) {
+                            POINT point{};
+                            COLORREF picked = CLR_INVALID;
+                            if (GetCursorPos(&point)) {
+                                const HDC screen = GetDC(nullptr);
+                                if (screen) {
+                                    picked = GetPixel(screen, point.x, point.y);
+                                    ReleaseDC(nullptr, screen);
+                                }
+                            }
+                            pickedFreezeColors[it] = picked;
                             iters.push_back(it);
                             requests.requestShader();
                         }
@@ -1272,6 +1296,7 @@ namespace merutilm::rff2 {
 
 
     void RenderScene::applyLoadedConfig() {
+        pickedFreezeColors.clear();
         // The config restores the location, max-iteration and auto-iteration directly.
         if (attr.fractal.formulaType == FractalFormulaType::CUSTOM) {
             attr.fractal.autoMaxIteration = false;
@@ -1892,6 +1917,7 @@ namespace merutilm::rff2 {
         requests.recomputeRequested.exchange(false);
         state.cancel();
         previewUploadPending.exchange(false);
+        pendingIterationLimit = 0;
         idleCompute = true;
         backgroundThreads.notifyAll();
     }
@@ -2586,6 +2612,8 @@ namespace merutilm::rff2 {
         Attribute settings = overrideSettings ? *overrideSettings : attr; //clone the attr
         beforeCompute(settings);
         Attribute geometry = settings;
+        ComputeProgress progress;
+        const uint64_t fullPixels = static_cast<uint64_t>(getIterationBufferWidth(settings)) * getIterationBufferHeight(settings);
         smoothZoomPreviewMatrix.reset();
         if (lowResolution) {
             settings.render.ssaa = 1;
@@ -2595,11 +2623,20 @@ namespace merutilm::rff2 {
                 settings.render.clarityMultiplier = geometry.render.clarityMultiplier * geometry.render.ssaa;
             settings.render.coarsePreview = false;
             smoothZoomPreviewMatrix = std::make_unique<Matrix<double>>(getIterationBufferWidth(settings), getIterationBufferHeight(settings));
-        }
+            smoothZoomDraftPixels = smoothZoomPreviewMatrix->getLength();
+            smoothZoomDraftTicks = 0;
+            progress.total = smoothZoomDraftPixels + fullPixels;
+            progress.announceDone = false;
+        } else if (smoothZoomActive && smoothZoomDraftPixels != 0) {
+            progress.before = smoothZoomDraftPixels;
+            progress.total = smoothZoomDraftPixels + fullPixels;
+            progress.start -= std::chrono::high_resolution_clock::duration(smoothZoomDraftTicks.load());
+            smoothZoomDraftPixels = 0;
+        } else smoothZoomDraftPixels = 0;
         auto* output = lowResolution ? smoothZoomPreviewMatrix.get() : iterationMatrix.get();
-        state.createThread([this, generation, output, geometry = std::move(geometry), settings = std::move(settings)](const std::stop_token &) {
+        state.createThread([this, generation, output, progress, geometry = std::move(geometry), settings = std::move(settings)](const std::stop_token &) {
             try {
-                const bool success = compute(settings, output, &geometry);
+                const bool success = compute(settings, output, &geometry, &progress);
                 afterCompute(success, generation);
             } catch (const std::exception &error) {
                 afterCompute(false, generation);
@@ -2618,13 +2655,14 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::beforeCompute(Attribute &attr) const {
+        pendingIterationLimit = 0;
         attr.fractal.maxIteration = attr.fractal.autoMaxIteration
                                         ? NumericSettingLimits::automaticIterationLimit(lastPeriod, attr.fractal.autoIterationMultiplier)
                                         : this->attr.fractal.maxIteration;
         renderer->rendererIteration->setMaxIteration(static_cast<double>(attr.fractal.maxIteration));
     }
 
-    bool RenderScene::buildPerturbator(const Attribute &attr, const dex &dcMax,
+    bool RenderScene::buildPerturbator(Attribute &attr, const dex &dcMax,
                                        std::chrono::high_resolution_clock::time_point start) {
         auto &calc = attr.fractal;
         const float logZoom = calc.logZoom;
@@ -2720,6 +2758,17 @@ namespace merutilm::rff2 {
         if (reference == Constants::NullPointer::PROCESS_TERMINATED_REFERENCE || state.interruptRequested())
             return false;
 
+        if (calc.autoMaxIteration && calc.formulaType != FractalFormulaType::CUSTOM) {
+            calc.maxIteration = NumericSettingLimits::automaticIterationLimit(
+                reference->longestPeriod(), calc.autoIterationMultiplier);
+            if (auto* p = dynamic_cast<LightMandelbrotPerturbator*>(currentPerturbator.get())) {
+                currentPerturbator = p->reuse(calc, static_cast<double>(p->getDcMaxAsDoubleExp()), approxTableCache);
+            } else if (auto* p = dynamic_cast<DeepMandelbrotPerturbator*>(currentPerturbator.get())) {
+                currentPerturbator = p->reuse(calc, p->getDcMaxAsDoubleExp(), approxTableCache);
+            }
+            pendingIterationLimit = calc.maxIteration;
+        }
+
         lastLogZoom = calc.logZoom;
         lastMaxIteration = calc.maxIteration;
         lastPeriod = reference->longestPeriod();
@@ -2739,14 +2788,17 @@ namespace merutilm::rff2 {
         return true;
     }
 
-    bool RenderScene::compute(const Attribute &requestedAttr, Matrix<double>* output, const Attribute* samplingGeometry) {
-        const Attribute& attr = requestedAttr;
+    bool RenderScene::compute(const Attribute &requestedAttr, Matrix<double>* output, const Attribute* samplingGeometry,
+                              const ComputeProgress* requestedProgress) {
+        Attribute attr = requestedAttr;
         auto& matrix = output ? *output : *iterationMatrix;
         const auto& geometry = samplingGeometry ? *samplingGeometry : attr;
-        auto start = std::chrono::high_resolution_clock::now();
+        const ComputeProgress progress = requestedProgress ? *requestedProgress : ComputeProgress{};
+        auto start = progress.start;
         const uint16_t w = getIterationBufferWidth(attr);
         const uint16_t h = getIterationBufferHeight(attr);
         uint32_t len = uint32_t(w) * h;
+        const uint64_t progressTotal = progress.total != 0 ? progress.total : len;
         const double fullW = getIterationBufferWidth(geometry), fullH = getIterationBufferHeight(geometry);
         const auto coordinate = [this, &geometry, w, h, fullW, fullH](uint16_t x, uint16_t y, bool* sky) {
             return offsetConversion(geometry, SmoothZoomMotion::sourcePixel(x, static_cast<uint32_t>(fullW), w),
@@ -2776,9 +2828,9 @@ namespace merutilm::rff2 {
             matrix.storeRelaxed(i, 0);
         }
 
-        auto statusThread = std::jthread([&renderPixelsCount, len, this, &start](const std::stop_token &stop) {
+        auto statusThread = std::jthread([&renderPixelsCount, &progress, progressTotal, this, &start](const std::stop_token &stop) {
             while (!stop.stop_requested()) {
-                float ratio = static_cast<float>(renderPixelsCount.load()) / static_cast<float>(len) * 100;
+                float ratio = static_cast<float>(progress.before + renderPixelsCount.load()) / static_cast<float>(progressTotal) * 100;
                 setStatusMessage(Constants::Status::TIME_STATUS, Utilities::elapsed_time(start));
                 setStatusMessage(Constants::Status::RENDER_STATUS, std::format(L"C : {:.3f}%", ratio));
 
@@ -2788,6 +2840,7 @@ namespace merutilm::rff2 {
 
         // Boundary trace is only safe when "did not escape" is encoded as the
         // canonical maxIteration return value, i.e. the non-absolute mode.
+        // Fixed-tile boundary fill relates to Mariani-Silver, without recursive subdivision; see NOTICE; project license unchanged.
         const bool useBoundaryTrace = attr.render.boundaryTraceFill && !attr.fractal.absoluteIterationMode;
         // White-tile fill assumes a binary in/out classification (no gradient
         // detail in the exterior), so it is gated on the 2-color preview mode.
@@ -2961,9 +3014,30 @@ namespace merutilm::rff2 {
 
         // The exact map reaches the staging buffer through the render thread's completing snapshot,
         // so nothing here writes the buffer a transfer could be reading.
-        setStatusMessage(Constants::Status::RENDER_STATUS, L"Done");
+        if (progress.announceDone) {
+            setStatusMessage(Constants::Status::RENDER_STATUS, L"Done");
+        } else {
+            smoothZoomDraftTicks = (std::chrono::high_resolution_clock::now() - start).count();
+            setStatusMessage(Constants::Status::TIME_STATUS, Utilities::elapsed_time(start));
+            setStatusMessage(Constants::Status::RENDER_STATUS, std::format(L"C : {:.3f}%",
+                static_cast<float>(progress.before + len) / static_cast<float>(progressTotal) * 100));
+        }
 
         return true;
+    }
+
+    void RenderScene::updateIterationStatus() const {
+        if (!iterationMatrix || !iterationMatrix->getWidth() || !iterationMatrix->getHeight()) {
+            return;
+        }
+        const auto x = std::min<uint16_t>(getMouseXOnIterationBuffer(), iterationMatrix->getWidth() - 1);
+        const auto y = std::min<uint16_t>(getMouseYOnIterationBuffer(), iterationMatrix->getHeight() - 1);
+        const auto value = iterationMatrix->loadRelaxed(uint32_t(y) * iterationMatrix->getWidth() + x);
+        if (std::isfinite(value) && value >= 0 && value < std::ldexp(1.0, 64)) {
+            setStatusMessage(Constants::Status::ITERATION_STATUS,
+                             std::format(L"I : {} ({}, {})", StatusText::grouped(static_cast<uint64_t>(value)),
+                                         StatusText::grouped(x), StatusText::grouped(y)));
+        }
     }
 
     void RenderScene::afterCompute(const bool success, const uint64_t generation) {
@@ -2977,7 +3051,12 @@ namespace merutilm::rff2 {
         if (success && attr.fractal.reuseReferenceMethod == FrtReuseReferenceMethod::CENTERED_REFERENCE) {
             attr.fractal.reuseReferenceMethod = FrtReuseReferenceMethod::CURRENT_REFERENCE;
         }
-        if (success) completedComputeGeneration.store(generation);
+        if (success) {
+            if (isVideoGenerationActive) {
+                updateIterationStatus();
+            }
+            completedComputeGeneration.store(generation);
+        }
         idleCompute = true;
         backgroundThreads.notifyAll();
     }

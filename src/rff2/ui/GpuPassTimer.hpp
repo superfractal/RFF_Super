@@ -1,7 +1,8 @@
 //
 // Created by Opus 5 on 2026-08-10.
 // Modified by Opus 5 on 2026-08-26, 2026-08-31
-// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -25,6 +26,7 @@ namespace merutilm::rff2 {
         explicit GpuPassTimer(vkh::CoreRef core, const uint32_t slotCount = 1) : core(core) {
             slots = slotCount == 0 ? 1 : slotCount;
             pending.assign(slots, 0);
+            slotLabels.resize(slots);
             const auto &props = core.getPhysicalDevice().getPhysicalDeviceProperties();
             timestampPeriod = props.limits.timestampPeriod;
             const uint32_t validBits = queueTimestampValidBits(core);
@@ -79,10 +81,7 @@ namespace merutilm::rff2 {
             if (!supported || slot >= slots || pending[slot] >= MAX_MARKS) {
                 return;
             }
-            if (labels.size() < static_cast<size_t>(pending[slot]) + 1) {
-                labels.emplace_back(label);
-                totals.emplace_back(0.0);
-            }
+            slotLabels[slot][pending[slot]] = label;
             vkCmdWriteTimestamp(cbh, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, pool,
                                 slot * MAX_MARKS + pending[slot]);
             ++pending[slot];
@@ -102,12 +101,23 @@ namespace merutilm::rff2 {
                 return;
             }
             for (uint32_t i = 1; i < count; ++i) {
+                if (labels.empty()) {
+                    labels.emplace_back(slotLabels[slot][0]);
+                    totals.emplace_back(0.0);
+                }
+                const auto existing = std::find(labels.begin() + 1, labels.end(), slotLabels[slot][i]);
+                const size_t destination = static_cast<size_t>(existing - labels.begin());
+                if (existing == labels.end()) {
+                    labels.emplace_back(slotLabels[slot][i]);
+                    totals.emplace_back(0.0);
+                }
                 // Masked before and after the subtraction, so a counter that wrapped inside its own
                 // width still reads as the short interval it was rather than a whole period.
                 const uint64_t delta = (stamps[i] & timestampMask) - (stamps[i - 1] & timestampMask);
-                totals[i] += static_cast<double>(delta & timestampMask) * timestampPeriod / 1e6;
+                totals[destination] += static_cast<double>(delta & timestampMask) * timestampPeriod / 1e6;
             }
             ++frames;
+            pending[slot] = 0;
         }
 
         // Drops what has been gathered so far, so a measurement starts from the frames that follow
@@ -141,7 +151,6 @@ namespace merutilm::rff2 {
             return out;
         }
 
-    private:
         // Valid bits belong to the queue family the work is submitted on, not to the device.
         static uint32_t queueTimestampValidBits(vkh::CoreRef core) {
             const auto &indices = core.getPhysicalDevice().getQueueFamilyIndices();
@@ -160,6 +169,7 @@ namespace merutilm::rff2 {
             return family < count ? families[family].timestampValidBits : 0;
         }
 
+    private:
         vkh::CoreRef core;
         VkQueryPool pool = VK_NULL_HANDLE;
         uint64_t timestampMask = 0;
@@ -167,6 +177,7 @@ namespace merutilm::rff2 {
         bool supported = false;
         uint32_t slots = 1;
         std::vector<uint32_t> pending;
+        std::vector<std::array<std::string, MAX_MARKS>> slotLabels;
         uint64_t frames = 0;
         std::vector<std::string> labels;
         std::vector<double> totals;

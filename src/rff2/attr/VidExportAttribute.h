@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-19
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-18, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -43,5 +44,7 @@ namespace merutilm::rff2 {
         // The display brightness the HDR headroom lands on, in nits.
         float hdrPeakNits = 1000.0f;
         bool showExportPreview = true;
+        // GPU work split per frame: 0 = one submission, 1 = one per pass, 2..64 = also that many fractal-pass bands.
+        uint32_t gpuSubmitSplit = 0;
     };
 }

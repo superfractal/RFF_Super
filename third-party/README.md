@@ -1,4 +1,5 @@
-<!-- Modified by GPT-6 on 2026-09-24, 2026-09-25. -->
+<!-- Modified by GPT-6 on 2026-09-24, 2026-09-25, 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Third-party licenses and corresponding source
 
 This folder is tracked in Git for publication. When distributing RFF_Super binaries, also publish this folder and the root `LICENSE` and `NOTICE` files.
@@ -11,6 +12,7 @@ This folder is tracked in Git for publication. When distributing RFF_Super binar
 - `sources/archive-parts.json`: Part order and SHA-256 hashes, plus the size and SHA-256 hash of each restored archive.
 - `sources/*.sig` and `*.verification.txt`: Original archive signatures and records of earlier signature verification.
 - `restore-sources.ps1`: A script that restores split archives and verifies the hashes of all 23 packages.
+- `SHA256SUMS.json`: SHA-256 hashes for every file under `licenses/` and `sources/`, plus this `README.md` and `restore-sources.ps1`. The 2026-10-04 reconciliation adds the previously unlisted lowbias32 license; the license text itself is unchanged.
 
 The five archives larger than 24 MiB are split into `.part001`, `.part002`, etc., each no larger than 24 MiB. Publish every part. The original archives can be restored without Git LFS or external downloads.
 
@@ -43,7 +45,7 @@ The original notices for each component take precedence. References: [GMP](https
 
 ## Binary correspondence and updates
 
-On 2026-09-24, the 31 DLLs in the current `bin/` folder were verified to match the SHA-256 hashes from the recorded MSYS2 packages. See `licenses/review.json` for package versions.
+On 2026-09-24, the selected 31 DLLs in the then-current `bin/` folder were verified to match the SHA-256 hashes from the recorded MSYS2 packages. See `licenses/review.json` for package versions. This is a dated dependency inventory, not a guarantee that a later executable or every local build uses the same files.
 
 Publishing this material does not establish the provenance of RFF_Super.exe itself. Its correspondence to the application source, and the version and build of GMP actually linked statically, must be verified separately. When updating dependencies, update this folder to the corresponding versions as well.
 

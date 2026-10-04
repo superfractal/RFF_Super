@@ -1,7 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
 //
 
 #pragma once
@@ -43,6 +43,15 @@ namespace merutilm::rff2 {
 
         static void writeOverlayPrecision(std::ostream &out, const VidZoomOverlayAttribute &overlay);
         static void readOverlayPrecision(std::ifstream &in, VidZoomOverlayAttribute &overlay);
+
+        static void writeIterationAppearance(std::ostream &out, const VidTimelineAttribute &timeline);
+        static void readIterationAppearance(std::ifstream &in, VidTimelineAttribute &timeline);
+
+        static void writeOverlayTiming(std::ostream &out, const VidTimelineAttribute &timeline);
+        static void readOverlayTiming(std::ifstream &in, VidTimelineAttribute &timeline);
+
+        static void writeOverlayIterations(std::ostream &out, const VidZoomOverlayAttribute &overlay);
+        static void readOverlayIterations(std::ifstream &in, VidZoomOverlayAttribute &overlay);
 
         static void writeRotation(std::ostream &out, const VidTimelineAttribute &timeline);
         static void readRotation(std::ifstream &in, VidTimelineAttribute &out);

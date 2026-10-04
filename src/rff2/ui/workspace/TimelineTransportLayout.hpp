@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -10,7 +11,8 @@
 
 namespace merutilm::rff2::workspace {
     struct TimelineTransportLayout {
-        std::array<RECT, 4> buttons{};
+        // Play/Pause, Stop and Loop.
+        std::array<RECT, 3> buttons{};
         std::array<RECT, 4> fields{};
         RECT separator{};
         RECT status{};
@@ -28,7 +30,8 @@ namespace merutilm::rff2::workspace {
             for (size_t buttonIndex = 0; buttonIndex < result.buttons.size(); ++buttonIndex) {
                 result.buttons[buttonIndex] = {nextX, buttonTop, nextX + buttonSize,
                                                buttonTop + buttonSize};
-                nextX += buttonSize + (buttonIndex == 2 ? padding : gap);
+                const bool beforeLoop = buttonIndex + 2 == result.buttons.size();
+                nextX += buttonSize + (beforeLoop ? padding : gap);
             }
             const int separatorX = result.buttons.back().right + padding;
             result.separator = {separatorX, area.top + px(10), separatorX + 1,

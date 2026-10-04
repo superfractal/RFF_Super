@@ -3,12 +3,14 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
 #include "CallbackVideo.hpp"
 #include "../io/PreferencesIO.h"
+#include "../io/ConfigIO.h"
 
 #include <cwchar>
 #include <fstream>
@@ -90,11 +92,11 @@ namespace merutilm::rff2 {
         window->registerTextInput<float>(
             L"Zoom Step per Keyframe", &defaultZoomIncrement, Unparser::FLOAT, Parser::FLOAT,
             [](const float &v) { return std::isfinite(v) && v > 1; }, Callback::NOTHING, L"Set zoom step per keyframe",
-            L"How much the view zooms in between two adjacent keyframes (log scale).");
+            L"How many times the view is magnified from one keyframe to the next; 2 means 2x. Greater than 1.");
 
         window->registerCheckboxInput(
             L"Rotation / 360 padding", &cameraPadding, Callback::NOTHING, L"Rotation / 360 padding",
-            L"Generates larger planar keyframes at the same pixel density for the video Camera tracks. Regenerate existing keyframes to add coverage. The output keeps its original size. All-angle rotation needs a scale at least diagonal / shorter side; the value is raised automatically when necessary.");
+            L"Adds coverage to planar keyframes while preserving the current rotation. 360 projections keep their current framing without padding. Regenerate existing keyframes to add coverage. The output keeps its original size. All-angle rotation needs a scale at least diagonal / shorter side; the value is raised automatically when necessary.");
         window->registerTextInput<uint32_t>(
             L"Camera padding scale", &cameraScale, Unparser::U_LONG, Parser::U_LONG,
             [](const uint32_t &v) { return v >= 2 && v <= 64; }, Callback::NOTHING, L"Camera padding scale",
@@ -117,6 +119,11 @@ namespace merutilm::rff2 {
         auto &timeline = scene.getAttribute().video.timeline;
         auto window = std::make_unique<SettingsWindow>(L"Video Camera / Rotation / 360\u00B0");
         window->registerSectionHeader(L"Video Camera", false);
+        window->registerButton(L"Match Planar Framing", L"Match Planar Framing", [&scene] {
+            const HWND timeline = scene.getRequests().shaderEditListener.load(std::memory_order_acquire);
+            if (IsWindow(timeline)) TimelineWindow::matchCameraToPlanar(timeline);
+            else NativeDialogs::message(nullptr, L"Open the Timeline Editor and load keyframes before matching the camera framing.", L"Match Planar Framing", MB_OK | MB_ICONINFORMATION);
+        }, L"Match Planar Framing", L"At the playhead, match the planar scale using 360 Camera, Ground layout and Pitch -90. Rotation is preserved.");
         window->registerStaticText(L"Changes are recorded at the Timeline Editor playhead.");
         window->registerStaticText(
             L"Rotation and 360 modes require Rotation / 360 padding when generating keyframes.");
@@ -197,7 +204,7 @@ namespace merutilm::rff2 {
                                                                                                      &scene) {
         auto window = std::make_unique<SettingsWindow>(L"Set Export");
         auto &[fps, bitrate, lossless, keyframeAA, colorAA, autoCreateVideo, pauseMainPreview,
-               pauseKeyframePreview, compressKeyframes, hdrTransfer, hdrPeakNits, showExportPreview] =
+               pauseKeyframePreview, compressKeyframes, hdrTransfer, hdrPeakNits, showExportPreview, gpuSubmitSplit] =
             scene.getAttribute().video.exportation;
         window->registerSectionHeader(L"Video Output", false);
         window->registerTextInput<float>(
@@ -279,6 +286,14 @@ namespace merutilm::rff2 {
         window->registerCheckboxInput(
             L"Show Video Export Preview", &showExportPreview, Callback::NOTHING, L"Show Video Export Preview",
             L"Shows the video while exporting. Turn off to reduce display work; progress and cancellation remain available.");
+        window->registerTextInput<uint32_t>(
+            L"GPU Work Split", &gpuSubmitSplit, Unparser::U_LONG, Parser::U_LONG,
+            [](const uint32_t &v) { return v <= 64; }, Callback::NOTHING, L"GPU Work Split",
+            L"Sends each video frame to the GPU in smaller parts, so a long export at a high resolution "
+            L"or Supersampling is not stopped by VK_ERROR_DEVICE_LOST. Windows resets a GPU that is busy "
+            L"with one piece of work for about 2 seconds. 0 = off (one part per frame), 1 = one part per "
+            L"shader pass, 2..64 = also splits the fractal pass into that many horizontal bands. The "
+            L"video is identical either way; higher values export slightly slower.");
         window->registerCheckboxInput(
             L"Pause preview during video export", &pauseMainPreview, Callback::NOTHING,
             L"Pause preview during video export",
@@ -304,6 +319,342 @@ namespace merutilm::rff2 {
             [&settingsMenu] { settingsMenu.setCurrentActiveSettingsWindow(nullptr); });
         settingsMenu.setCurrentActiveSettingsWindow(std::move(window));
     };
+    static void generateVideoKeyframes(RenderScene &scene, BackgroundThread &thread,
+                                       const std::filesystem::path &directory = {},
+                                       const std::filesystem::path &output = {},
+                                       const std::shared_ptr<ExportProgress> &progress = {}, bool *keyframesReady = nullptr) {
+        const auto message = [&progress](HWND owner, const wchar_t *text, const wchar_t *title, UINT flags) {
+            if (progress) {
+                progress->report(ExportProgress::Phase::FAILED, text);
+                throw std::runtime_error("Keyframe generation failed; see progress log");
+            }
+            return NativeDialogs::message(owner, text, title, flags);
+        };
+        ScopedVideoLock lock(scene);
+        const auto &state = scene.getState();
+        const auto dirPtr = directory.empty() ? IOUtilities::ioDirectoryDialog(L"Folder to generate keyframes")
+                                                : std::make_unique<std::filesystem::path>(directory);
+
+        float &logZoom = scene.getAttribute().fractal.logZoom;
+        if (dirPtr == nullptr) {
+            return;
+        }
+
+        if (const HWND hwnd = scene.getWindowContext().getWindow().getWindowHandle();
+            !IsWindow(hwnd) || !IsWindowVisible(hwnd)) {
+            message(nullptr, L"Target Window already been destroyed", L"FATAL",
+                                   MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        const auto &dir = *dirPtr;
+        if (containsExistingVideoKeyframes(dir) &&
+            message(
+                scene.getWindowContext().getWindow().getWindowHandle(),
+                L"The selected folder already contains .rfmz, .rfm or .png files.\n\n"
+                L"Generating keyframes here may mix existing and newly generated files. Continue?",
+                L"Existing keyframes found", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
+            return;
+        }
+        if ((scene.getAttribute().video.data.cameraPadding ||
+             std::filesystem::exists(dir / "camera-source.txt")) &&
+            containsExistingVideoKeyframes(dir)) {
+            message(
+                nullptr,
+                L"Camera padding requires an empty keyframe folder. Select a new folder to avoid mixing different coverage.",
+                L"Camera keyframes", MB_OK | MB_ICONERROR);
+            return;
+        }
+        bool nextFrame = false;
+        Attribute &settings = scene.getAttribute();
+        const VideoAttribute &videoSettings = settings.video;
+        if (!MapLimits::valid(scene.getIterationBufferWidth(settings), scene.getIterationBufferHeight(settings))) {
+            message(nullptr, L"Keyframes require 1 to 100,000,000 pixels. Reduce resolution or internal scale.",
+                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
+            return;
+        }
+        const float increment = std::log10(videoSettings.data.defaultZoomIncrement);
+        const auto validNextZoom = [increment](const float zoom) {
+            const float next = zoom - increment;
+            return std::isfinite(zoom) && std::isfinite(increment) && increment > 0 &&
+                   std::isfinite(next) && next < zoom;
+        };
+        if (!validNextZoom(logZoom)) {
+            message(nullptr, L"Zoom step is invalid or too small at this depth. Increase Zoom Step per Keyframe.",
+                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
+            return;
+        }
+        struct RestoreEffects {
+            RenderScene &scene;
+            ShdStripeAttribute stripe;
+            ShdSlopeAttribute slope;
+            ShdFogAttribute fog;
+            ShdBloomAttribute bloom;
+            bool changed;
+            void restore() {
+                if (!changed) return;
+                auto &shader = scene.getAttribute().shader;
+                shader.stripe = stripe;
+                shader.slope = slope;
+                shader.fog = fog;
+                shader.bloom = bloom;
+                scene.getRequests().requestShader();
+                changed = false;
+            }
+            ~RestoreEffects() { restore(); }
+        } restoreEffects{scene, settings.shader.stripe, settings.shader.slope,
+                         settings.shader.fog, settings.shader.bloom, videoSettings.data.isStatic};
+
+        // Every wait here can also end because the thread was asked to stop, which is what
+        // a shutdown does: the render loop that would answer the request is already gone,
+        // so there is nothing left to wait for and the run leaves instead.
+        const auto idle = [&scene] {
+            return !scene.getRequests().recomputeRequested && scene.isIdleCompute();
+        };
+        if (videoSettings.data.isStatic) {
+            settings.shader.stripe = ShdStripePresets::Disabled().genStripe();
+            settings.shader.slope = ShdSlopePresets::Disabled().genSlope();
+            settings.shader.fog = ShdFogPresets::Disabled().genFog();
+            settings.shader.bloom = BloomPresets::Disabled().genBloom();
+            scene.getRequests().requestShader();
+            if (!thread.waitUntil([&scene] { return !scene.getRequests().shaderRequested; })) {
+                return;
+            }
+        }
+        if (!thread.waitUntil(idle)) {
+            return;
+        }
+        struct RestoreCameraSource {
+            RenderScene &scene;
+            uint32_t sourceScale;
+            bool changed = false;
+            void restore() {
+                if (!changed) {
+                    return;
+                }
+                auto &a = scene.getAttribute();
+                a.video.data.sourceScale = sourceScale;
+                scene.getRequests().requestResize();
+                scene.getRequests().requestRecompute();
+                changed = false;
+            }
+            ~RestoreCameraSource() {
+                restore();
+            }
+        } restore{scene, settings.video.data.sourceScale};
+        if (videoSettings.data.cameraPadding &&
+            effectiveProjection(settings.fractal.projectionMethod) == FrtProjectionMethod::PLANAR) {
+            const double w = scene.getIterationBufferWidth(settings);
+            const double h = scene.getIterationBufferHeight(settings);
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+            const auto scale =
+                std::max(videoSettings.data.cameraScale,
+                         static_cast<uint32_t>(std::ceil((std::hypot(w, h) + 8.0) / std::min(w, h))));
+            if (w <= 0 || h <= 0 || scale > 64 || w * scale > 65535 || h * scale > 65535 ||
+                !MapLimits::valid(static_cast<uint32_t>(w * scale), static_cast<uint32_t>(h * scale)) ||
+                settings.render.clarityMultiplier * settings.render.ssaa * scale >
+                    scene.getMaxInternalScale()) {
+                message(
+                    nullptr,
+                    L"Camera padding exceeds the GPU limit or keyframe limits (65535 per side, 100,000,000 pixels). Reduce resolution or padding scale.",
+                    L"Camera keyframes", MB_OK | MB_ICONERROR);
+                return;
+            }
+            std::ofstream metadata(dir / "camera-source.txt", std::ios::trunc);
+            metadata << "RFF_CAMERA_1 " << scale << '\n';
+            metadata.close();
+            if (metadata.fail()) {
+                message(nullptr, L"Cannot save camera-source.txt.",
+                                       L"Camera keyframes", MB_OK | MB_ICONERROR);
+                return;
+            }
+            restore.changed = true;
+            settings.video.data.sourceScale = scale;
+            scene.getRequests().requestResize();
+            nextFrame = true;
+        } else {
+            std::error_code metadataError;
+            std::filesystem::remove(dir / "camera-source.txt", metadataError);
+            if (metadataError) {
+                message(nullptr, L"Cannot remove stale camera-source.txt.",
+                                       L"Camera keyframes", MB_OK | MB_ICONERROR);
+                return;
+            }
+        }
+        while (logZoom > Constants::Fractal::ZOOM_MIN) {
+            if (thread.stopToken().stop_requested()) return;
+            if (progress) progress->report(ExportProgress::Phase::RENDERING,
+                L"Generating keyframes; log zoom " + std::to_wstring(logZoom));
+            if (state.interruptRequested() || nextFrame) {
+                //incomplete frame
+                scene.getRequests().requestRecompute();
+            }
+            // Waited on every pass, not only after a request of its own: a compute already
+            // running when generation started is still filling the map this would export.
+            if (!thread.waitUntil(idle)) {
+                return;
+            }
+            if (state.interruptRequested()) {
+                return;
+            }
+            if (!validNextZoom(logZoom)) {
+                message(nullptr, L"Zoom step no longer advances at this depth. Increase Zoom Step per Keyframe.",
+                                       L"Keyframe generation", MB_OK | MB_ICONERROR);
+                return;
+            }
+            scene.updateIterationStatus();
+            const uint32_t keyframeId = (videoSettings.data.isStatic
+                ? IOUtilities::fileNameCount(dir, Constants::Extension::IMAGE)
+                : RFFDynamicMapBinary::keyframeCount(dir)) + 1;
+            const auto configPath = dir / IOUtilities::fileNameFormat(keyframeId, Constants::Extension::CONFIG);
+            std::error_code configError;
+            if (std::filesystem::exists(configPath, configError) || configError) {
+                message(nullptr, L"Cannot save keyframe settings: the file already exists or the folder is inaccessible.",
+                                       L"Keyframe generation", MB_OK | MB_ICONERROR);
+                return;
+            }
+            auto frameSettings = settings;
+            frameSettings.fractal.maxIteration = scene.getMapMaxIteration();
+            if (restoreEffects.changed) {
+                frameSettings.shader.stripe = restoreEffects.stripe;
+                frameSettings.shader.slope = restoreEffects.slope;
+                frameSettings.shader.fog = restoreEffects.fog;
+                frameSettings.shader.bloom = restoreEffects.bloom;
+            }
+            if (restore.changed) {
+                frameSettings.video.data.sourceScale = restore.sourceScale;
+            }
+            const auto frameSize = scene.documentCanvasSize();
+            if (videoSettings.data.isStatic) {
+                const uint32_t imageCount = IOUtilities::fileNameCount(dir, Constants::Extension::IMAGE);
+                const uint32_t mapCount = IOUtilities::fileNameCount(dir, Constants::Extension::STATIC_MAP);
+                if (imageCount != mapCount) {
+                    message(nullptr, L"The keyframe folder has unmatched images and maps.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+                const auto imagePath = dir / IOUtilities::fileNameFormat(imageCount + 1, Constants::Extension::IMAGE);
+                const auto mapPath = dir / IOUtilities::fileNameFormat(mapCount + 1, Constants::Extension::STATIC_MAP);
+                auto progress = std::make_shared<ExportProgress>();
+                scene.getRequests().requestCreateImage(imagePath, false, progress);
+                if (!thread.waitUntil(
+                        [&scene] { return !scene.getRequests().createImageRequested; })) {
+                    return;
+                }
+                if (progress->snapshot().phase != ExportProgress::Phase::COMPLETED) {
+                    message(nullptr, L"Cannot save the keyframe image.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+                RFFStaticMapBinary(logZoom, scene.getIterationBufferWidth(settings),
+                                   scene.getIterationBufferHeight(settings), scene.getMapMaxIteration())
+                    .exportFile(mapPath);
+                std::error_code mapError;
+                if (!std::filesystem::is_regular_file(mapPath, mapError)) {
+                    std::error_code removeError;
+                    std::filesystem::remove(imagePath, removeError);
+                    message(nullptr, L"Cannot save the keyframe map.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+            } else {
+                const auto map = scene.generateMap();
+                const uint32_t id = keyframeId;
+                const bool compressed = videoSettings.exportation.compressKeyframes;
+                const auto path = dir / IOUtilities::fileNameFormat(
+                    id, compressed ? Constants::Extension::COMPRESSED_MAP : Constants::Extension::DYNAMIC_MAP);
+                std::error_code mapError;
+                const bool saved = compressed ? map.exportCompressedFile(path)
+                                              : (map.exportFile(path), std::filesystem::is_regular_file(path, mapError));
+                if (!saved) {
+                    message(nullptr, L"Cannot save the keyframe map.",
+                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
+                    return;
+                }
+            }
+            if (!ConfigIO::save(configPath, frameSettings, frameSize.cx, frameSize.cy)) {
+                message(nullptr, L"Cannot save the keyframe settings. Generation has stopped.",
+                                       L"Keyframe generation", MB_OK | MB_ICONERROR);
+                return;
+            }
+            logZoom -= increment;
+            nextFrame = true;
+        }
+
+        if (state.interruptRequested()) {
+            vkh::logger::w_log(L"Keyframe generation cancelled.");
+            return;
+        }
+
+        restore.restore();
+        restoreEffects.restore();
+        if (keyframesReady) *keyframesReady = true;
+        if (!progress && !videoSettings.exportation.autoCreateVideo) {
+            vkh::logger::w_log(L"Keyframe generation complete. Auto video creation is disabled.");
+            return;
+        }
+
+        // Timestamped file name so each auto-export is kept separately (rff_YYYYMMDD_HHMMSS.mp4).
+        SYSTEMTIME lt;
+        GetLocalTime(&lt);
+        wchar_t nameBuf[64];
+        swprintf(nameBuf, std::size(nameBuf), L"rff_%04u%02u%02u_%02u%02u%02u.%ls",
+                 static_cast<unsigned>(lt.wYear), static_cast<unsigned>(lt.wMonth),
+                 static_cast<unsigned>(lt.wDay), static_cast<unsigned>(lt.wHour),
+                 static_cast<unsigned>(lt.wMinute), static_cast<unsigned>(lt.wSecond),
+                 videoSettings.exportation.lossless ? Constants::Extension::VIDEO_LOSSLESS
+                                                    : Constants::Extension::VIDEO);
+        const auto saveFile = output.empty() ? dir / nameBuf : output;
+        ScopedVideoExport exportScope(scene);
+        VideoWindow::createVideo(scene.engine, scene.getAttribute(), dir, saveFile, progress, thread.stopToken());
+    }
+
+    void CallbackVideo::automaticVideo(RenderScene &scene, const std::filesystem::path &directory,
+                                      const std::filesystem::path &output,
+                                      const std::shared_ptr<AutomaticJob> &job, bool exportOnly) {
+        if (scene.getVideoGenerationActive() || scene.getVideoExportActive())
+            throw std::runtime_error("Another video operation is active");
+        if (directory.empty() || output.empty() || std::filesystem::exists(output))
+            throw std::runtime_error("Automatic video needs a new output path");
+        if (!exportOnly && containsExistingVideoKeyframes(directory))
+            throw std::runtime_error("Automatic keyframes require a fresh folder");
+        job->progress->report(ExportProgress::Phase::QUEUED, L"Starting automatic video...");
+        scene.setComputeHold(false);
+        scene.setVideoGenerationActive(true);
+        try {
+            scene.getBackgroundThreads().createThread([&scene, directory, output, job, exportOnly](BackgroundThread &thread) {
+                struct Done {
+                    RenderScene &scene;
+                    std::shared_ptr<AutomaticJob> job;
+                    ~Done() { scene.setVideoGenerationActive(false); job->done = true; }
+                } done{scene, job};
+                ExportCompletion completion{job->progress};
+                std::stop_callback onCancel(job->stop.get_token(), [&thread] { thread.requestStop(); });
+                try {
+                    if (thread.stopToken().stop_requested()) return;
+                    if (exportOnly) {
+                        job->keyframesReady = true;
+                        ScopedVideoExport exportScope(scene);
+                        VideoWindow::createVideo(scene.engine, scene.getAttribute(), directory, output,
+                                                 job->progress, thread.stopToken());
+                    } else {
+                        generateVideoKeyframes(scene, thread, directory, output, job->progress, &job->keyframesReady);
+                    }
+                } catch (const std::exception &e) {
+                    if (job->progress->snapshot().phase != ExportProgress::Phase::FAILED)
+                        job->progress->report(ExportProgress::Phase::FAILED, UiLanguage::utf8(e.what()));
+                } catch (...) {
+                    job->progress->report(ExportProgress::Phase::FAILED, L"Unexpected video failure.");
+                }
+            });
+        } catch (...) {
+            scene.setVideoGenerationActive(false);
+            throw;
+        }
+    }
+
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackVideo::GENERATE_VID_KEYFRAME =
         [](SettingsMenu &settingsMenu, RenderScene &scene) {
             // Generation writes the shader itself (a static video disables stripe/slope/fog/bloom), so
@@ -314,270 +665,7 @@ namespace merutilm::rff2 {
             // approval: held back, its first keyframe would never come.
             scene.setComputeHold(false);
             scene.getBackgroundThreads().createThread([&scene](BackgroundThread &thread) {
-                ScopedVideoLock lock(scene);
-                const auto &state = scene.getState();
-                const auto dirPtr = IOUtilities::ioDirectoryDialog(L"Folder to generate keyframes");
-
-                float &logZoom = scene.getAttribute().fractal.logZoom;
-                if (dirPtr == nullptr) {
-                    return;
-                }
-
-                if (const HWND hwnd = scene.getWindowContext().getWindow().getWindowHandle();
-                    !IsWindow(hwnd) || !IsWindowVisible(hwnd)) {
-                    NativeDialogs::message(nullptr, L"Target Window already been destroyed", L"FATAL",
-                                           MB_OK | MB_ICONERROR);
-                    return;
-                }
-
-                const auto &dir = *dirPtr;
-                if (containsExistingVideoKeyframes(dir) &&
-                    NativeDialogs::message(
-                        scene.getWindowContext().getWindow().getWindowHandle(),
-                        L"The selected folder already contains .rfmz, .rfm or .png files.\n\n"
-                        L"Generating keyframes here may mix existing and newly generated files. Continue?",
-                        L"Existing keyframes found", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) {
-                    return;
-                }
-                if ((scene.getAttribute().video.data.cameraPadding ||
-                     std::filesystem::exists(dir / "camera-source.txt")) &&
-                    containsExistingVideoKeyframes(dir)) {
-                    NativeDialogs::message(
-                        nullptr,
-                        L"Camera padding requires an empty keyframe folder. Select a new folder to avoid mixing different coverage.",
-                        L"Camera keyframes", MB_OK | MB_ICONERROR);
-                    return;
-                }
-                bool nextFrame = false;
-                Attribute &settings = scene.getAttribute();
-                const VideoAttribute &videoSettings = settings.video;
-                if (!MapLimits::valid(scene.getIterationBufferWidth(settings), scene.getIterationBufferHeight(settings))) {
-                    NativeDialogs::message(nullptr, L"Keyframes require 1 to 100,000,000 pixels. Reduce resolution or internal scale.",
-                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
-                    return;
-                }
-                const float increment = std::log10(videoSettings.data.defaultZoomIncrement);
-                const auto validNextZoom = [increment](const float zoom) {
-                    const float next = zoom - increment;
-                    return std::isfinite(zoom) && std::isfinite(increment) && increment > 0 &&
-                           std::isfinite(next) && next < zoom;
-                };
-                if (!validNextZoom(logZoom)) {
-                    NativeDialogs::message(nullptr, L"Zoom step is invalid or too small at this depth. Increase Zoom Step per Keyframe.",
-                                           L"Keyframe generation", MB_OK | MB_ICONERROR);
-                    return;
-                }
-                struct RestoreEffects {
-                    RenderScene &scene;
-                    ShdStripeAttribute stripe;
-                    ShdSlopeAttribute slope;
-                    ShdFogAttribute fog;
-                    ShdBloomAttribute bloom;
-                    bool changed;
-                    void restore() {
-                        if (!changed) return;
-                        auto &shader = scene.getAttribute().shader;
-                        shader.stripe = stripe;
-                        shader.slope = slope;
-                        shader.fog = fog;
-                        shader.bloom = bloom;
-                        scene.getRequests().requestShader();
-                        changed = false;
-                    }
-                    ~RestoreEffects() { restore(); }
-                } restoreEffects{scene, settings.shader.stripe, settings.shader.slope,
-                                 settings.shader.fog, settings.shader.bloom, videoSettings.data.isStatic};
-
-                // Every wait here can also end because the thread was asked to stop, which is what
-                // a shutdown does: the render loop that would answer the request is already gone,
-                // so there is nothing left to wait for and the run leaves instead.
-                const auto idle = [&scene] {
-                    return !scene.getRequests().recomputeRequested && scene.isIdleCompute();
-                };
-                if (videoSettings.data.isStatic) {
-                    settings.shader.stripe = ShdStripePresets::Disabled().genStripe();
-                    settings.shader.slope = ShdSlopePresets::Disabled().genSlope();
-                    settings.shader.fog = ShdFogPresets::Disabled().genFog();
-                    settings.shader.bloom = BloomPresets::Disabled().genBloom();
-                    scene.getRequests().requestShader();
-                    if (!thread.waitUntil([&scene] { return !scene.getRequests().shaderRequested; })) {
-                        return;
-                    }
-                }
-                if (!thread.waitUntil(idle)) {
-                    return;
-                }
-                struct RestoreCameraSource {
-                    RenderScene &scene;
-                    uint32_t sourceScale;
-                    float rotation;
-                    FrtProjectionMethod projection;
-                    bool changed = false;
-                    void restore() {
-                        if (!changed) {
-                            return;
-                        }
-                        auto &a = scene.getAttribute();
-                        a.video.data.sourceScale = sourceScale;
-                        a.fractal.rotation = rotation;
-                        a.fractal.projectionMethod = projection;
-                        scene.getRequests().requestResize();
-                        scene.getRequests().requestRecompute();
-                        changed = false;
-                    }
-                    ~RestoreCameraSource() {
-                        restore();
-                    }
-                } restore{scene, settings.video.data.sourceScale, settings.fractal.rotation,
-                          settings.fractal.projectionMethod};
-                if (videoSettings.data.cameraPadding) {
-                    const double w = scene.getIterationBufferWidth(settings);
-                    const double h = scene.getIterationBufferHeight(settings);
-                    if (w <= 0 || h <= 0) {
-                        return;
-                    }
-                    const auto scale =
-                        std::max(videoSettings.data.cameraScale,
-                                 static_cast<uint32_t>(std::ceil((std::hypot(w, h) + 8.0) / std::min(w, h))));
-                    if (w <= 0 || h <= 0 || scale > 64 || w * scale > 65535 || h * scale > 65535 ||
-                        !MapLimits::valid(static_cast<uint32_t>(w * scale), static_cast<uint32_t>(h * scale)) ||
-                        settings.render.clarityMultiplier * settings.render.ssaa * scale >
-                            scene.getMaxInternalScale()) {
-                        NativeDialogs::message(
-                            nullptr,
-                            L"Camera padding exceeds the GPU limit or keyframe limits (65535 per side, 100,000,000 pixels). Reduce resolution or padding scale.",
-                            L"Camera keyframes", MB_OK | MB_ICONERROR);
-                        return;
-                    }
-                    std::ofstream metadata(dir / "camera-source.txt", std::ios::trunc);
-                    metadata << "RFF_CAMERA_1 " << scale << '\n';
-                    metadata.close();
-                    if (metadata.fail()) {
-                        NativeDialogs::message(nullptr, L"Cannot save camera-source.txt.",
-                                               L"Camera keyframes", MB_OK | MB_ICONERROR);
-                        return;
-                    }
-                    settings.shader.camera = {
-                        settings.fractal.rotation,      settings.fractal.projectionMethod,
-                        settings.fractal.panoramaPitch, settings.fractal.panoramaFov,
-                        settings.fractal.panoramaRange, settings.fractal.panoramaLayout};
-                    restore.changed = true;
-                    settings.video.data.sourceScale = scale;
-                    settings.fractal.rotation = 0.0f;
-                    settings.fractal.projectionMethod = FrtProjectionMethod::PLANAR;
-                    scene.getRequests().requestResize();
-                    nextFrame = true;
-                } else {
-                    if (effectiveProjection(settings.fractal.projectionMethod) !=
-                        FrtProjectionMethod::PLANAR) {
-                        NativeDialogs::message(
-                            nullptr,
-                            L"Enable Rotation / 360 padding to generate planar keyframes for 360 video editing.",
-                            L"Camera keyframes", MB_OK | MB_ICONERROR);
-                        return;
-                    }
-                    std::error_code metadataError;
-                    std::filesystem::remove(dir / "camera-source.txt", metadataError);
-                    if (metadataError) {
-                        NativeDialogs::message(nullptr, L"Cannot remove stale camera-source.txt.",
-                                               L"Camera keyframes", MB_OK | MB_ICONERROR);
-                        return;
-                    }
-                }
-                while (logZoom > Constants::Fractal::ZOOM_MIN) {
-                    if (state.interruptRequested() || nextFrame) {
-                        //incomplete frame
-                        scene.getRequests().requestRecompute();
-                    }
-                    // Waited on every pass, not only after a request of its own: a compute already
-                    // running when generation started is still filling the map this would export.
-                    if (!thread.waitUntil(idle)) {
-                        return;
-                    }
-                    if (state.interruptRequested()) {
-                        return;
-                    }
-                    if (!validNextZoom(logZoom)) {
-                        NativeDialogs::message(nullptr, L"Zoom step no longer advances at this depth. Increase Zoom Step per Keyframe.",
-                                               L"Keyframe generation", MB_OK | MB_ICONERROR);
-                        return;
-                    }
-                    if (videoSettings.data.isStatic) {
-                        const uint32_t imageCount = IOUtilities::fileNameCount(dir, Constants::Extension::IMAGE);
-                        const uint32_t mapCount = IOUtilities::fileNameCount(dir, Constants::Extension::STATIC_MAP);
-                        if (imageCount != mapCount) {
-                            NativeDialogs::message(nullptr, L"The keyframe folder has unmatched images and maps.",
-                                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
-                            return;
-                        }
-                        const auto imagePath = dir / IOUtilities::fileNameFormat(imageCount + 1, Constants::Extension::IMAGE);
-                        const auto mapPath = dir / IOUtilities::fileNameFormat(mapCount + 1, Constants::Extension::STATIC_MAP);
-                        auto progress = std::make_shared<ExportProgress>();
-                        scene.getRequests().requestCreateImage(imagePath, false, progress);
-                        if (!thread.waitUntil(
-                                [&scene] { return !scene.getRequests().createImageRequested; })) {
-                            return;
-                        }
-                        if (progress->snapshot().phase != ExportProgress::Phase::COMPLETED) {
-                            NativeDialogs::message(nullptr, L"Cannot save the keyframe image.",
-                                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
-                            return;
-                        }
-                        RFFStaticMapBinary(logZoom, scene.getIterationBufferWidth(settings),
-                                           scene.getIterationBufferHeight(settings))
-                            .exportFile(mapPath);
-                        std::error_code mapError;
-                        if (!std::filesystem::is_regular_file(mapPath, mapError)) {
-                            std::error_code removeError;
-                            std::filesystem::remove(imagePath, removeError);
-                            NativeDialogs::message(nullptr, L"Cannot save the keyframe map.",
-                                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
-                            return;
-                        }
-                    } else {
-                        const auto map = scene.generateMap();
-                        const uint32_t id = RFFDynamicMapBinary::keyframeCount(dir) + 1;
-                        const bool compressed = videoSettings.exportation.compressKeyframes;
-                        const auto path = dir / IOUtilities::fileNameFormat(
-                            id, compressed ? Constants::Extension::COMPRESSED_MAP : Constants::Extension::DYNAMIC_MAP);
-                        std::error_code mapError;
-                        const bool saved = compressed ? map.exportCompressedFile(path)
-                                                      : (map.exportFile(path), std::filesystem::is_regular_file(path, mapError));
-                        if (!saved) {
-                            NativeDialogs::message(nullptr, L"Cannot save the keyframe map.",
-                                                   L"Keyframe generation", MB_OK | MB_ICONERROR);
-                            return;
-                        }
-                    }
-                    logZoom -= increment;
-                    nextFrame = true;
-                }
-
-                if (state.interruptRequested()) {
-                    vkh::logger::w_log(L"Keyframe generation cancelled.");
-                    return;
-                }
-
-                restore.restore();
-                restoreEffects.restore();
-                if (!videoSettings.exportation.autoCreateVideo) {
-                    vkh::logger::w_log(L"Keyframe generation complete. Auto video creation is disabled.");
-                    return;
-                }
-
-                // Timestamped file name so each auto-export is kept separately (rff_YYYYMMDD_HHMMSS.mp4).
-                SYSTEMTIME lt;
-                GetLocalTime(&lt);
-                wchar_t nameBuf[64];
-                swprintf(nameBuf, std::size(nameBuf), L"rff_%04u%02u%02u_%02u%02u%02u.%ls",
-                         static_cast<unsigned>(lt.wYear), static_cast<unsigned>(lt.wMonth),
-                         static_cast<unsigned>(lt.wDay), static_cast<unsigned>(lt.wHour),
-                         static_cast<unsigned>(lt.wMinute), static_cast<unsigned>(lt.wSecond),
-                         videoSettings.exportation.lossless ? Constants::Extension::VIDEO_LOSSLESS
-                                                            : Constants::Extension::VIDEO);
-                const auto saveFile = dir / nameBuf;
-                ScopedVideoExport exportScope(scene);
-                VideoWindow::createVideo(scene.engine, scene.getAttribute(), dir, saveFile, {}, thread.stopToken());
+                generateVideoKeyframes(scene, thread);
             });
         };
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackVideo::EXPORT_ZOOM_VID =

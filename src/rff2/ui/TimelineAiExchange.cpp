@@ -1,8 +1,10 @@
 //
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-29
 //
 
 #include "TimelineWindow.hpp"
+#include "SettingsMenu.hpp"
 #include "IOUtilities.h"
 #include "NativeDialogs.hpp"
 #include "UiLanguage.hpp"
@@ -114,7 +116,8 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::openAiExchangeMenu() {
-        if (exporting || !commitFieldEdit()) return;
+        if (exporting || (settingsMenu && !settingsMenu->featureShown(SettingsMenu::AI_EDIT_FEATURE)) ||
+            !commitFieldEdit()) return;
         for (;;) {
             const bool busy = aiImagesBusy.load();
             const bool ready = frameSource && previewScene && previewWorker.joinable();

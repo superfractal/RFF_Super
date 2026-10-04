@@ -4,7 +4,8 @@
 // Modified by Fable 5 on 2026-07-06
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01, 2026-09-02
 // Modified by Opus 5 on 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-21, 2026-08-25
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
@@ -1033,6 +1034,8 @@ namespace merutilm::rff2 {
         const auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale] = attr.video.data;
         const auto &[overZoom, showText, mps] = attr.video.animation;
         const auto overlaySettings = attr.video.timeline.zoomOverlay;
+        const auto iterationSettings = attr.video.timeline.maxIterationOverlay;
+        const bool interpolateIterations = attr.video.timeline.interpolateMaxIteration;
         const float fps = attr.video.exportation.fps;
         const uint32_t bitrate = attr.video.exportation.bitrate;
         const uint32_t keyframeAA = attr.video.exportation.keyframeAA;
@@ -1077,6 +1080,7 @@ namespace merutilm::rff2 {
         // Set before the first frame is queued: it decides how wide the readback buffer is packed.
         scene.setStatic(isStatic);
         scene.setHdrOutput(hdrTransfer, hdrPeakNits);
+        scene.setSubmitTimingLog(true);
 
         FFmpegPipe writer(temporaryOutput, outW, outH, fps, bitrate, lossless, hdrTransfer, hdrPeakNits, attr.video.timeline.audio,
                           &window->closeRequested, &pipeAbort);
@@ -1102,8 +1106,10 @@ namespace merutilm::rff2 {
                 std::unique_ptr<VideoBufferCache> buffer = nullptr;
 
             ZoomOverlay zoomOverlay;
+            ZoomOverlay iterationOverlay;
+            uint64_t outputFrameIndex = 0;
             // Draw text + encode one finished output frame. Rescales only when the GPU path is off.
-            const auto processAndWrite = [&](const cv::Mat &img, const float zoom) {
+            const auto processAndWrite = [&](const cv::Mat &img, const float zoom, std::optional<uint64_t> maxIteration) {
                 if (img.empty() || img.type() != (hdrOut ? CV_16UC4 : CV_8UC3)) {
                     throw std::runtime_error("Video frame format does not match the encoder input");
                 }
@@ -1113,7 +1119,9 @@ namespace merutilm::rff2 {
                 } else {
                     out = img;
                 }
-                zoomOverlay.apply(out, zoom, overlaySettings, hdrTransfer);
+                const double seconds = TimelineTime::frameSeconds(outputFrameIndex++, fps);
+                zoomOverlay.apply(out, zoom, ZoomOverlay::zoomStyle(overlaySettings, seconds), hdrTransfer, maxIteration);
+                iterationOverlay.apply(out, zoom, ZoomOverlay::iterationStyle(iterationSettings, seconds), hdrTransfer, maxIteration);
                 if (!out.isContinuous()) out = out.clone();
                 // out is a continuous BGR24 buffer, or rgba64le once the export runs in HDR.
                 if (!writer.write(out.data, out.total() * out.elemSize())) {
@@ -1125,6 +1133,7 @@ namespace merutilm::rff2 {
             int accumHave = 0;
             int accumNeed = 0;
             float accumZoom = 0.0f;
+            std::optional<uint64_t> accumMaxIteration;
 
             while (true) {
                 //MUTEX LOCK SCOPE BEGIN
@@ -1149,12 +1158,13 @@ namespace merutilm::rff2 {
                 const int n = std::max(1, buffer->subsampleCount);
                 if (n <= 1 && accumHave == 0) {
                     // Ordinary single-sample frame: encode directly (no extra copy).
-                    processAndWrite(buffer->image, buffer->zoom);
+                    processAndWrite(buffer->image, buffer->zoom, (interpolateIterations ? buffer->interpolatedMaxIteration : buffer->maxIteration));
                 } else {
                     if (accumHave == 0) {
                         accum = cv::Mat::zeros(buffer->image.size(), hdrOut ? CV_32FC4 : CV_32FC3);
                         accumNeed = n;
                         accumZoom = buffer->zoom;
+                        accumMaxIteration = (interpolateIterations ? buffer->interpolatedMaxIteration : buffer->maxIteration);
                     }
                     if (hdrOut) {
                         cv::Mat linear;
@@ -1174,7 +1184,7 @@ namespace merutilm::rff2 {
                         }
                     }
                     if (complete) {
-                        processAndWrite(avg, accumZoom);
+                        processAndWrite(avg, accumZoom, accumMaxIteration);
                         accumHave = 0;
                     }
                 }
@@ -1187,7 +1197,7 @@ namespace merutilm::rff2 {
                 } else {
                     accum.convertTo(avg, CV_8UC3, 1.0 / static_cast<double>(accumHave));
                 }
-                processAndWrite(avg, accumZoom);
+                processAndWrite(avg, accumZoom, accumMaxIteration);
             }
                 engine.getCore().getLogicalDevice().waitDeviceIdle();
             } catch (const std::exception &error) {
@@ -1455,6 +1465,10 @@ namespace merutilm::rff2 {
                     } catch (...) {
                     }
                     failVideo(L"The video render worker failed.");
+                }
+                try {
+                    scene.logSubmitTimingSummary();
+                } catch (...) {
                 }
 
             windowRef->updateProgressText(L"Writing video...");

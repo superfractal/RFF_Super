@@ -4,7 +4,8 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
-// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25, 2026-09-30
+// Modified by Opus 5.5 on 2026-09-29
 //
 
 #define NONE 0
@@ -511,6 +512,11 @@ uint animation_mode() {
 // a - b*q is exact in an FMA, and folding it back lands on the correctly rounded quotient - the
 // same double OpFDiv returns, without OpFDiv's cost. precise keeps the compiler from unfusing the
 // two FMAs, which is what the identity rests on.
+// Bitwise equality, so -0.0 and 0.0 count as different inputs and a NaN matches only itself.
+bool same_bits(double a, double b) {
+    return unpackDouble2x32(a) == unpackDouble2x32(b);
+}
+
 double div_r(double a, double b, double r) {
     precise double q = a * r;
     precise double e = fma(-b, q, a);
@@ -592,6 +598,7 @@ double cbrt_d(double x) {
 }
 
 // Smoothstep and Smootherstep ease the count inside each cycle rather than compress the count itself: the whole part is kept, so every cycle boundary lands exactly where Linear puts it.
+// Quintic interpolation documented by Ken Perlin, Improving Noise (2002); formula-only reference, see NOTICE for scope.
 double eased_cycle(double ratio, const bool smoother) {
     double whole = floor(ratio);
     double u = ratio - whole;
@@ -714,16 +721,19 @@ float freeze_weight(double iteration) {
     }
     // The pixel's own three ratios do not depend on which frozen colour is being tested, so they
     // come out of the loop instead of being rebuilt once per frozen colour.
+    // Channels sharing the red interval's bits share its ratio, and so its distance to every frozen color.
+    bool g_is_r = same_bits(g_interval.g, g_interval.r);
+    bool b_is_r = same_bits(g_interval.b, g_interval.r);
     double ir = static_ratio(iteration, g_interval.r, g_inv_interval.r);
-    double ig = static_ratio(iteration, g_interval.g, g_inv_interval.g);
-    double ib = static_ratio(iteration, g_interval.b, g_inv_interval.b);
+    double ig = g_is_r ? ir : static_ratio(iteration, g_interval.g, g_inv_interval.g);
+    double ib = b_is_r ? ir : static_ratio(iteration, g_interval.b, g_inv_interval.b);
     float w = 0.0;
     for (uint i = 0; i < palette_attr.static_color_count && i < MAX_STATIC_COLORS; i++) {
         double t = palette_attr.static_color_iterations[i];
-        float md = max(
-            cycle_dist(ir, static_ratio(t, g_interval.r, g_inv_interval.r)),
-            max(cycle_dist(ig, static_ratio(t, g_interval.g, g_inv_interval.g)),
-                cycle_dist(ib, static_ratio(t, g_interval.b, g_inv_interval.b))));
+        float dr = cycle_dist(ir, static_ratio(t, g_interval.r, g_inv_interval.r));
+        float dg = g_is_r ? dr : cycle_dist(ig, static_ratio(t, g_interval.g, g_inv_interval.g));
+        float db = b_is_r ? dr : cycle_dist(ib, static_ratio(t, g_interval.b, g_inv_interval.b));
+        float md = max(dr, max(dg, db));
         w = max(w, 1.0 - smoothstep(0.0, tol, md));
     }
     return w;
@@ -835,14 +845,30 @@ vec4 get_color(double iteration, bool animate, double anim_iters, double warp_it
         return palette_attr.mandelbrot_color;
     }
 
+    // A channel whose interval bits match an earlier one reuses that channel's lookup: every other input is shared.
     vec4 cr = get_color_channel(iteration, g_interval.r, g_inv_interval.r,
                                 animate, anim_iters, warp_iters, unlined);
-    vec4 cg = get_color_channel(iteration, g_interval.g, g_inv_interval.g,
-                                animate, anim_iters, warp_iters, unlined);
-    vec4 cb = get_color_channel(iteration, g_interval.b, g_inv_interval.b,
-                                animate, anim_iters, warp_iters, unlined);
-    vec4 ca = get_color_channel(iteration, g_interval.a, g_inv_interval.a,
-                                animate, anim_iters, warp_iters, unlined);
+    vec4 cg = cr;
+    if (!same_bits(g_interval.g, g_interval.r)) {
+        cg = get_color_channel(iteration, g_interval.g, g_inv_interval.g,
+                               animate, anim_iters, warp_iters, unlined);
+    }
+    vec4 cb = cr;
+    if (same_bits(g_interval.b, g_interval.g)) {
+        cb = cg;
+    } else if (!same_bits(g_interval.b, g_interval.r)) {
+        cb = get_color_channel(iteration, g_interval.b, g_inv_interval.b,
+                               animate, anim_iters, warp_iters, unlined);
+    }
+    vec4 ca = cr;
+    if (same_bits(g_interval.a, g_interval.b)) {
+        ca = cb;
+    } else if (same_bits(g_interval.a, g_interval.g)) {
+        ca = cg;
+    } else if (!same_bits(g_interval.a, g_interval.r)) {
+        ca = get_color_channel(iteration, g_interval.a, g_inv_interval.a,
+                               animate, anim_iters, warp_iters, unlined);
+    }
 
     return vec4(cr.r, cg.g, cb.b, ca.a);
 }

@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-24, 2026-10-01
 //
 
 #pragma once
@@ -17,6 +17,7 @@ namespace merutilm::rff2::workspace {
     class NumericField {
         HWND window = nullptr;
         std::function<bool(float)> accept;
+        std::function<std::wstring(const std::wstring &, int, bool)> nudge;
         std::function<void()> finished;
         std::function<void(int)> advance;
         std::function<void()> validationChanged;
@@ -72,6 +73,13 @@ namespace merutilm::rff2::workspace {
         static LRESULT CALLBACK procedure(HWND editWindow, UINT message, WPARAM wParam, LPARAM lParam,
                                           UINT_PTR, DWORD_PTR contextData) {
             auto &self = *reinterpret_cast<NumericField *>(contextData);
+            if (message == WM_KEYDOWN && (wParam == VK_UP || wParam == VK_DOWN) && self.nudge) {
+                const auto next = self.nudge(self.text(), wParam == VK_UP ? 1 : -1,
+                                              (GetKeyState(VK_SHIFT) & 0x8000) != 0);
+                SetWindowTextW(editWindow, next.c_str());
+                SendMessageW(editWindow, EM_SETSEL, 0, -1);
+                return 0;
+            }
             if (message == WM_KEYDOWN && (wParam == VK_RETURN || wParam == VK_ESCAPE || wParam == VK_TAB)) {
                 self.finish(wParam != VK_ESCAPE);
                 if (!self.editing) {
@@ -117,9 +125,11 @@ namespace merutilm::rff2::workspace {
         }
         void open(RECT rect, std::wstring displayedValue, std::function<bool(float)> setter, std::function<void()> close,
                   std::wstring hint = L"Enter a finite number.", std::wstring name = L"Parameter value",
-                  std::wstring automationId = L"surface.value") {
+                  std::wstring automationId = L"surface.value",
+                  std::function<std::wstring(const std::wstring &, int, bool)> adjustment = {}) {
             finish(false);
             accept = std::move(setter);
+            nudge = std::move(adjustment);
             finished = std::move(close);
             invalid = false;
             editing = true;

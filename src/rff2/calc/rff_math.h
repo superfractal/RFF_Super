@@ -3,6 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-25
+// Modified by GPT-6 on 2026-10-03, 2026-10-04
 //
 
 #pragma once
@@ -19,6 +20,9 @@ namespace merutilm::rff2 {
         // whose algorithm is implementation-defined) so palette recipes reproduce across toolchains.
         static constexpr double UINT32_TO_UNIT = 1.0 / 4294967296.0;
 
+        // Inherited from Merutilm RFF-2.0 at cc0fe08, GPL-3.0; the earlier choice of 0.428 is undocumented, see NOTICE.
+        // Matching mathematical publication: Edgar Bonet, Stack Overflow answer 26607206 (2014), CC BY-SA 3.0; actual donor remains unestablished, see NOTICE.
+        // 2026-10-04 clarification: the owner relays the original author's independent discovery of 0.428; the Bonet match does not establish copying, see NOTICE.
         static double hypot_approx(double x, double y) {
             x = fabs(x);
             y = fabs(y);

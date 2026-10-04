@@ -1,4 +1,5 @@
 {
+  "licenses/bundled/IETF-RFC7049-BSD.txt": "6ec233272962fb8f39558dcb33882c8e8f910188e93b2084e3262c2f2300f091",
   "licenses/bundled/nlohmann-json-MIT.txt": "ef8d465f2bcb07b7561ec89170516d67e5c09c7641f7e0711292bc1516d02dc8",
   "licenses/mingw-w64-x86_64-crt/COPYING": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
   "licenses/mingw-w64-x86_64-crt/COPYING.MinGW-w64-runtime.txt": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
@@ -164,7 +165,6 @@
   "licenses/source-notices/mingw-w64-opencv/opencv-4.13.0/modules/core/3rdparty/SoftFloat/COPYING.txt": "0c5b08365136da52639d777f1ebfc03988b0169d80655c90c59f1b3fa3e526a2",
   "licenses/source-notices/mingw-w64-opencv/opencv-4.13.0/modules/gapi/src/3rdparty/vasot/LICENSE.txt": "a9c8a68807d39b6810d593008f02e7835a8f8280781e5ce9b544a7fb973bb79e",
   "licenses/source-notices/mingw-w64-opencv/opencv-4.13.0/modules/highgui/src/files_Qt/Material/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
-  "licenses/source-notices/mingw-w64-opencv/opencv-4.13.0/samples/data/licenseplate_motion.jpg": "ea6fa9cea75df91bec656d1d3b903111a9c0708c6a3b88f405a5156de38ff9d6",
   "licenses/source-notices/mingw-w64-opencv/opencv_contrib-4.13.0/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
   "licenses/source-notices/mingw-w64-opencv/opencv_contrib-4.13.0/modules/cvv/LICENSE": "51b23061b9cf86a8d07aa84b31c64d98335d3224d65b03f3f16088d5552777f3",
   "licenses/source-notices/mingw-w64-opencv/opencv_contrib-4.13.0/modules/julia/LICENSE": "06c7aabb5e05935695bccbb8621f2d3c2735dba7f890ab27eea5e9f241ca0541",
@@ -197,7 +197,7 @@
   "licenses/source-notices/mingw-w64-zstd/zstd-1.5.7/build/LICENSE": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "licenses/source-notices/mingw-w64-zstd/zstd-1.5.7/COPYING": "f9c375a1be4a41f7b70301dd83c91cb89e41567478859b77eef375a52d782505",
   "licenses/source-notices/mingw-w64-zstd/zstd-1.5.7/LICENSE": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
-  "README.md": "ac326f658006ff458da9c6348dd7fcb8d1b4eb62ec94b6d971ef98d8e5eadc5e",
+  "README.md": "a63bc5f56bc8950a14001d4aa3f88138426ab070f8f26fa2aae5a87421379f55",
   "restore-sources.ps1": "8231683c77e8a4a276b72626c733166addf64317a1fc8b6a393992c5048c7483",
   "sources/archive-parts.json": "46b1671bfa9c68ffbcd4fef1458a1356231ec215d5e37b8c639e363b36287ced",
   "sources/mingw-w64-crt-14.0.0.r37.g2bfe61fba-1.src.tar.zst.part001": "fdaa154ea76401ee2c2146908889bdba8392cb6098f83fe6619edf52d5f3d655",
@@ -285,5 +285,12 @@
   "sources/mingw-w64-zstd-1.5.7-2.src.tar.zst.sig": "aa19abc03ee473ece3f782d5207015e81a9e5203a05d61618ca3439749511ccd",
   "sources/mingw-w64-zstd-1.5.7-2.src.tar.zst.verification.txt": "090551d85e8621d94f9b220ebb9a22e3ed453b6af5e764c7e88a998b29a2f914",
   "sources/sources.json": "bfc4a77dce3188e5da847614570c822284aa07c27f84cc7ec8316159dadb49bf",
-  "licenses/bundled/stb-image-IJG-README.txt": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6"
+  "licenses/bundled/stb-image-IJG-README.txt": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6",
+  "licenses/bundled/boost-type-traits-BSL.txt": "62b80640de3dadc48270d7ceccb9bd14181461ea99c89d5ba60e30c6f0d03f67",
+  "licenses/bundled/sascha-willems-tonemapping-MIT.txt": "4f7773b1ea02ed87e7ce40a8853d09bb4892e69d6c7a26cf58fa84beb4acfbd2",
+  "licenses/bundled/alan-wolfe-ign-MIT.txt": "386fadfcd0972ca97c521d2335096080c7006d12f20cd5e30fd1db712e4e31a1",
+  "licenses/bundled/erkaman-cos-palette-MIT.txt": "073a3d8a775a7e8dd804b81562dd905ab95bb1434681f832fea042e3d98bc991",
+  "licenses/bundled/terminaltexteffects-rainbow-MIT.txt": "b081fda7b8f77fec4b9ac188c802593f3b9ad7f488f5872ec3b2525e2ceb779a",
+  "licenses/bundled/iquilez-palettes-MIT.txt": "cb1f3389722f9e63885ca3290bd917df27e06d64fa731f365448f83bbba1c364",
+  "licenses/bundled/lowbias32-UNLICENSE.txt": "cde0692c0d96248a2ef1246cfe2835cf5d2833e64f026002395a6d8aade0069c"
 }

@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-08-23
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-17, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include <utility>
@@ -19,6 +20,16 @@ namespace merutilm::vkh {
         pipeline->cmdBindAll(commandBuffer, frameIndex, std::move(descIndices));
         pipeline->getLayout().cmdPush(commandBuffer);
         cmdDispatch(commandBuffer);
+    }
+
+    void ComputePipelineConfigurator::cmdRenderRows(const VkCommandBuffer commandBuffer,
+                                                    const uint32_t frameIndex,
+                                                    DescIndexPicker &&descIndices,
+                                                    const uint32_t firstRow, const uint32_t rowCount) {
+        pipeline->cmdBindAll(commandBuffer, frameIndex, std::move(descIndices));
+        pipeline->getLayout().cmdPush(commandBuffer);
+        vkCmdDispatchBase(commandBuffer, 0, firstRow, 0,
+                          (extent.width + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE, rowCount, 1);
     }
 
     void ComputePipelineConfigurator::configure() {

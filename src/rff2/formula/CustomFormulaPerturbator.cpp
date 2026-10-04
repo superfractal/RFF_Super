@@ -4,6 +4,7 @@
 //
 // Modified by Opus 5 on 2026-08-06, 2026-08-16
 // Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-10-01
 //
 
 #include "CustomFormulaPerturbator.h"

@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-26, 2026-09-27
 //
 
 #pragma once
@@ -60,10 +60,17 @@ namespace merutilm::rff2 {
         static Json catalog(const ShaderAttribute &shader);
         static std::string systemPrompt(const ShaderAttribute &shader,
                                         const std::filesystem::path &path = "local-ai-system-prompt.md");
-        static ShaderAttribute apply(const ShaderAttribute &original, const Json &patch);
+        static ShaderAttribute apply(const ShaderAttribute &original, const Json &patch,
+                                     bool paletteOnly = false, bool preserveAnimation = false);
+        static ShaderAttribute randomSmoothColors(const ShaderAttribute &original, bool shortCycle = false);
         static Json readConnection(const std::filesystem::path &path = "local-ai.json");
         static int errorLimit(const Json &connection);
         static void saveErrorLimit(int limit, const std::filesystem::path &path = "local-ai.json");
+        static void saveAppearanceOptions(bool paletteOnly, int limit, const std::filesystem::path &path = "local-ai.json");
+        static void saveVideoOptions(const Json &options, int errorLimit,
+                                     const std::filesystem::path &path = "local-ai.json");
+        static Json proposeVideo(const Json &connection, const std::atomic_bool &cancelled,
+                                 const std::string &previous, const Transport &transport = {}, const Progress &progress = {});
         static Json post(const Json &connection, const Json &request, const std::atomic_bool &cancelled,
                          const Progress &onToken = {}, const Progress &onReasoning = {},
                          const OnStatistics &onStatistics = {});
@@ -72,6 +79,6 @@ namespace merutilm::rff2 {
                                const Progress &progress, const Transport &transport = {},
                                const Progress &onToken = {}, const Progress &onReasoning = {},
                                const OnStatistics &onStatistics = {}, const std::string &imageDataUrl = {},
-                               const std::string &history = {});
+                               const std::string &history = {}, const std::string &overviewImage = {});
     };
 }

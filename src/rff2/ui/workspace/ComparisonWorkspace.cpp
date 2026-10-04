@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-22
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-22, 2026-09-29
 //
 
 #include "ComparisonWorkspace.hpp"
@@ -275,7 +275,11 @@ namespace merutilm::rff2::workspace {
                 self->dragging = false;
                 if (self->panning) {
                     self->panning = false;
-                    SendMessageW(self->canvas, WM_LBUTTONUP, 0, 0);
+                    if (reinterpret_cast<HWND>(l) == self->canvas) {
+                        self->hide();
+                    } else {
+                        SendMessageW(self->canvas, WM_LBUTTONUP, 0, 0);
+                    }
                 }
                 return 0;
             case WM_KEYDOWN:

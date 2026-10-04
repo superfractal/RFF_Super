@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-08-15.
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #include "GPCFog.hpp"
@@ -43,8 +44,9 @@ namespace merutilm::rff2 {
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_TRANSITION, fog.chaosTransition);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_FEATHER, fog.chaosFeather);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_BLUR, fog.chaosBlur);
-        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_HIGHLIGHTS, fog.chaosHighlights);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_SHADE, fog.chaosShade);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_LINEAR,
+                              fog.chaosBlurAverage == ShdChaosBlurAverage::LINEAR ? 1.0f : 0.0f);
         fogUBO.update();
     }
 

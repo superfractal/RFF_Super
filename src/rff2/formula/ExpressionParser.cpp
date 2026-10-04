@@ -4,6 +4,7 @@
 //
 // Modified by Opus 5 on 2026-08-16
 // Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-30, 2026-10-01
 //
 
 #include "ExpressionParser.h"
@@ -46,6 +47,7 @@ namespace merutilm::rff2 {
         }
     }
 
+    // Shunting-yard-style parsing: Dijkstra (1961), mathematical background; see NOTICE; project license unchanged.
     bool ExpressionParser::parse(const std::string& expression) {
         instructions.clear();
         parseError = false;

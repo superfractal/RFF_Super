@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-08.
 // Modified by Opus 5 on 2026-08-09
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "Instance.hpp"
@@ -46,7 +47,8 @@ namespace merutilm::vkh {
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "1.0.0",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion = VK_API_VERSION_1_0,
+            // 1.1 for vkCmdDispatchBase, which the video export uses to split its fractal pass into bands.
+            .apiVersion = VK_API_VERSION_1_1,
         };
         std::vector<const char *> extensions = {
             VK_KHR_SURFACE_EXTENSION_NAME,

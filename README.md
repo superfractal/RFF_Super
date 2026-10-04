@@ -1,5 +1,6 @@
-<!-- Modified by GPT-6 on 2026-09-11, 2026-09-24, 2026-09-25 -->
+<!-- Modified by GPT-6 on 2026-09-11, 2026-09-24, 2026-09-25, 2026-09-30, 2026-10-01 -->
 <!-- Modified by GPT-6 on 2026-09-25. -->
+<!-- Modified by Opus 5.5 on 2026-10-04 -->
 
 <p align="center">
   <img src="res/icon.png" alt="RFF_Super application icon" width="112" height="112">
@@ -52,7 +53,9 @@ Custom formulas have a much shallower useful zoom range than the Mandelbrot path
 
 ### Prepare the application
 
-Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the application's `bin/` and `shaders/` folders together as siblings, and keep the required runtime DLLs available.
+Run **`bin/RFF_Super.exe`** to start the application. The `bin/` folder already contains the executable and the runtime DLLs it needs, so no installer or build step is required.
+
+Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the `bin/` and `shaders/` folders together as siblings, and keep the DLLs beside the executable.
 
 - **Building from source:** follow [BUILDING.md](documentation/BUILDING.md) for the MSYS2 MINGW64 toolchain, dependencies, and build commands.
 - **Exporting video or audio:** follow the [FFmpeg setup guide](guide/ffmpeg-setup.md) to install **FFmpeg separately**, make it available on PATH or beside the executable, and check the required encoders. FFmpeg is not needed for still-image rendering.
@@ -63,7 +66,7 @@ Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the 
 1. Launch `bin/RFF_Super.exe` and use **Load Location / Settings** to open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
 2. Wait for the fractal calculation to finish. Open **Surface Effects** and start with the palette or lighting controls.
 3. Change one setting and choose **Apply & Render**. Use **Ctrl+F** to find a control, or compare appearances in the Comparison module.
-4. Press **Ctrl+S** and choose a new `.rfc` filename to keep your version. Use **Save Image** to export the rendered picture.
+4. Choose **File → Save Location / Settings** and a new `.rfc` filename to keep your version. After that, **Ctrl+S** updates that file. Use **Save Image** to export the rendered picture.
 5. For a zoom film, continue with [animation and export](guide/animation-and-export.md): generate source keyframes, edit the timeline, then export.
 
 The [illustrated settings guide](guide/SETTINGS_GUIDE.md) includes downloadable examples and explains what each adjustment changes. To switch the interface language, use **View → Language / 言語** and restart the application.

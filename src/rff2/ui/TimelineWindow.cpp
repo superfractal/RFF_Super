@@ -1,12 +1,14 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-04
 //
 
 #include "UiLanguage.hpp"
 #include "NativeDialogs.hpp"
 #include "TimelineWindow.hpp"
+#include "../video/CameraFraming.hpp"
 #include "../video/ZoomOverlay.hpp"
 #include "workspace/TimelineTransportLayout.hpp"
 #include "UiDpi.hpp"
@@ -261,6 +263,7 @@ namespace merutilm::rff2 {
         }
 
         // Rounds the label step to 1, 2 or 5 times a power of ten, so the labels land on round depths.
+        // Decimal 1/2/5 tick spacing: background in Heckbert (1990); no donor copying established; see NOTICE.
         float depthTickStep(const float span, const int slots) {
             const float raw = std::max(span, 1e-4f) / static_cast<float>(std::max(slots, 1));
             const float magnitude = std::pow(10.0f, std::floor(std::log10(raw)));
@@ -299,6 +302,10 @@ namespace merutilm::rff2 {
         }
 
         constexpr uint16_t AUDIO_ROW_TARGET = UINT16_MAX - 1;
+        bool isCameraTrack(const uint16_t target) {
+            return target >= vidTimelineTargetId(VidTimelineTarget::CAMERA_ROTATION) &&
+                   target <= vidTimelineTargetId(VidTimelineTarget::CAMERA_LAYOUT);
+        }
         // The R row stands for all three channels while they are linked.
         std::wstring rowName(const uint16_t targetId, const bool linkedRgb) {
             if (targetId == AUDIO_ROW_TARGET) return L"Audio";
@@ -834,10 +841,6 @@ namespace merutilm::rff2 {
                                   .keys = {{.depth = attribute.video.timeline.estimateKeyframes,
                                             .value = value,
                                             .color = glm::vec4(1.0f),
-                                            .out = out},
-                                           {.depth = -attribute.video.animation.overZoom,
-                                            .value = value,
-                                            .color = glm::vec4(1.0f),
                                             .out = out}}};
         if (targetId == SPEED_TARGET) {
             attribute.video.timeline.tracks.insert(attribute.video.timeline.tracks.begin(), std::move(track));
@@ -1359,6 +1362,9 @@ namespace merutilm::rff2 {
             TimelineIO::writeTimeline(out, value);
             AudioTimelineIO::write(out, value.audio);
             TimelineIO::writeOverlayPrecision(out, value.zoomOverlay);
+            TimelineIO::writeOverlayIterations(out, value.legacyOverlay());
+            TimelineIO::writeIterationAppearance(out, value);
+            TimelineIO::writeOverlayTiming(out, value);
             return std::move(out).str();
         }
     } // namespace
@@ -1902,6 +1908,7 @@ namespace merutilm::rff2 {
                 &exportation.fps,         &exportation.bitrate,     &exportation.lossless,
                 &exportation.keyframeAA,  &exportation.colorAA,     &exportation.pauseMainPreview,
                 &exportation.hdrTransfer, &exportation.hdrPeakNits, &exportation.showExportPreview,
+                &exportation.gpuSubmitSplit,
             };
             window.disableRowsInObjectExcept(&exportation, sizeof(VidExportAttribute), kept);
         }
@@ -2415,6 +2422,9 @@ namespace merutilm::rff2 {
             }
             previewBitmap = bitmap;
             publishedPreviewZoom = buffer->zoom;
+            publishedPreviewSeconds = sec;
+            publishedPreviewMaxIteration = buffer->maxIteration;
+            publishedPreviewInterpolatedMaxIteration = buffer->interpolatedMaxIteration;
             previewSize = size;
             publishedPreviewGeneration = generation;
             previewMessage = std::format(L"{} keyframes", frameSource->getFrameCount());
@@ -2755,7 +2765,7 @@ namespace merutilm::rff2 {
         if (dockToggle) {
             return;
         }
-        dockPreferences = Utilities::getDefaultPath() / L"timeline-layout.txt";
+        dockPreferences = Utilities::getConfigFile(L"timeline-layout.txt");
         dockState.load(dockPreferences);
         dockToggle = CreateWindowExW(0, L"BUTTON", UiLanguage::label(L"Hide Tracks"),
                                      WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 1, 1, window,
@@ -2817,6 +2827,7 @@ namespace merutilm::rff2 {
                 tabItem(direction);
             },
             true);
+        dockSplitter->showGrip(true);
         initializeInspector();
         layoutWorkspaceDock();
     }
@@ -3038,7 +3049,7 @@ namespace merutilm::rff2 {
                 DeleteObject(self->previewBitmap);
                 self->previewBitmap = nullptr;
             }
-            self->previewMessage = L"Select a keyframe folder to enable scrubbing";
+            self->previewMessage = noKeyframesMessage;
         }
         self->undoBaselineStatic = source.video.data.isStatic;
         self->attribute.video.data = source.video.data;
@@ -3164,6 +3175,57 @@ namespace merutilm::rff2 {
         if (action == 2) {
             self->loadKeyframeDirectory();
         }
+    }
+
+    void TimelineWindow::matchCameraToPlanar(HWND handle) {
+        auto *self = IsWindow(handle) ? reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA)) : nullptr;
+        if (!self || self->exporting) return;
+        if (!self->frameSource) {
+            NativeDialogs::message(handle, L"Load keyframes before matching the camera framing.", L"Match Planar Framing", MB_OK | MB_ICONINFORMATION);
+            return;
+        }
+        const auto fov = planarCameraFov(self->frameSource->getWidth(), self->frameSource->getHeight());
+        if (!fov) {
+            NativeDialogs::message(handle, L"This aspect ratio requires a camera field of view outside 1 to 179 degrees.", L"Match Planar Framing", MB_OK | MB_ICONWARNING);
+            return;
+        }
+        if (readCameraSourceScale(self->frameSource->getDirectory()) == 1) {
+            NativeDialogs::message(handle, L"Rotation and 360 modes require Rotation / 360 padding when generating keyframes.", L"Match Planar Framing", MB_OK | MB_ICONWARNING);
+            return;
+        }
+        if (!self->commitFieldEdit()) return;
+        self->setPlaying(false);
+        const float depth = std::clamp(snapDepth(self->previewDepth), self->schedule.getEndDepth(), self->schedule.getStartDepth());
+        const double aspect = double(self->frameSource->getWidth()) / self->frameSource->getHeight();
+        const float range = std::max(self->playheadValue(vidTimelineTargetId(VidTimelineTarget::CAMERA_RANGE)),
+                                     float(std::log10(std::hypot(aspect, 1.0))) + 0.00001f);
+        const std::pair<VidTimelineTarget, float> values[] = {
+            {VidTimelineTarget::CAMERA_PROJECTION, 2}, {VidTimelineTarget::CAMERA_PITCH, -90},
+            {VidTimelineTarget::CAMERA_FOV, *fov}, {VidTimelineTarget::CAMERA_LAYOUT, 0},
+            {VidTimelineTarget::CAMERA_RANGE, range}};
+        for (const auto &[target, value] : values) {
+            const auto *track = self->track(vidTimelineTargetId(target));
+            if (track && track->keys.size() >= VidTimelineAttribute::MAX_KEYS_PER_TRACK &&
+                std::ranges::none_of(track->keys, [depth](const auto &key) { return key.depth == depth; })) {
+                MessageBeep(MB_ICONWARNING);
+                return;
+            }
+        }
+        self->lastUndoStep = 0;
+        for (const auto &[target, value] : values) {
+            const auto id = vidTimelineTargetId(target);
+            auto &track = self->ensureScalarTrack(id);
+            track.enabled = true;
+            auto key = std::ranges::find(track.keys, depth, &VidTimelineKey::depth);
+            if (key == track.keys.end()) {
+                track.keys.push_back({depth, value, glm::vec4(1), defaultInterpolation(id)});
+                std::ranges::sort(track.keys, std::greater{}, &VidTimelineKey::depth);
+            } else {
+                key->value = value;
+            }
+        }
+        self->selectTrackRow(vidTimelineTargetId(VidTimelineTarget::CAMERA_PROJECTION), false, false);
+        self->commitTimeline();
     }
 
     bool TimelineWindow::loadWorkspaceKeyframes(HWND handle, const std::filesystem::path &directory) {
@@ -3423,11 +3485,18 @@ namespace merutilm::rff2 {
         constexpr int CMD_DELETE_KEY = 2;
         constexpr int CMD_REMOVE_TRACK = 3;
         constexpr int CMD_AUDIO = 4;
+        constexpr int CMD_ZOOM_OVERLAY = 5;
+        constexpr int CMD_ITERATION_OVERLAY = 6;
+        constexpr int CMD_MATCH_PLANAR = 7;
         constexpr int CMD_INTERPOLATION = 10;
         constexpr int CMD_PARAMETER = 100;
         constexpr int INTERPOLATION_COUNT = 4;
 
         const VidTimelineTrack *current = rowTarget == UINT16_MAX ? nullptr : track(rowTarget);
+        if (isCameraTrack(rowTarget)) {
+            AppendMenuW(menu, MF_STRING, CMD_MATCH_PLANAR, UiLanguage::label(L"Match Planar Framing"));
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+        }
         if (hit.valid() && current != nullptr) {
             const HMENU interpolations = CreatePopupMenu();
             for (int i = 0; i < INTERPOLATION_COUNT; ++i) {
@@ -3459,6 +3528,8 @@ namespace merutilm::rff2 {
                         UiLanguage::label(SHADER_PANELS[i].name));
         }
         AppendMenuW(parameters, MF_STRING, CMD_AUDIO, UiLanguage::label(L"Audio"));
+        AppendMenuW(parameters, MF_STRING, CMD_ZOOM_OVERLAY, UiLanguage::label(L"Zoom Overlay"));
+        AppendMenuW(parameters, MF_STRING, CMD_ITERATION_OVERLAY, UiLanguage::label(L"Max Iterations Display"));
         AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(parameters), UiLanguage::label(L"Parameters"));
         const bool removable = current != nullptr && rowTarget != SPEED_TARGET;
         const std::wstring removeItem = rowTarget == UINT16_MAX
@@ -3481,8 +3552,17 @@ namespace merutilm::rff2 {
             return;
         }
         switch (chosen) {
+        case CMD_MATCH_PLANAR:
+            matchCameraToPlanar(window);
+            break;
         case CMD_AUDIO:
             showInspectorSection(1);
+            break;
+        case CMD_ZOOM_OVERLAY:
+            showInspectorSection(2);
+            break;
+        case CMD_ITERATION_OVERLAY:
+            showInspectorSection(3);
             break;
         case CMD_ADD_KEY:
             addTrackKey(rowTarget, point);
@@ -3518,7 +3598,7 @@ namespace merutilm::rff2 {
                       {L"Tracks", L"Drag a track name or press Alt+Up/Down to reorder. Shift+Up/Down extends "
                                   L"the selection. Right-click or Shift+F10 opens the track menu."},
                       {L"Values", L"Click Distance, Keyframe or Time to enter a formula. Enter applies it; "
-                                  L"Esc cancels. Zoom is read-only."}});
+                                  L"Esc cancels. Magnification is read-only."}});
         std::wstring status;
         {
             std::scoped_lock lock(previewBitmapMutex);
@@ -3607,7 +3687,7 @@ namespace merutilm::rff2 {
         // panels, so nothing sits closer to its neighbour than anything else does.
         const auto dip = [this](int value) { return UiDpi::pixels(value, uiDpi); };
         const bool narrow = width < dip(700);
-        const bool narrowHeader = embedded && width < dip(656);
+        const bool narrowHeader = embedded && width < dip(workspace::TimelineDockLayout::narrowHeaderWidth);
         const int margin = embedded ? dip(12) : sc(12);
         const int headerHeight = embedded ? dip(narrowHeader ? 96 : 48) : sc(88);
         const int transportHeight = sc(72);
@@ -3616,6 +3696,7 @@ namespace merutilm::rff2 {
         const int footerHeight = embedded ? dip(32) : sc(46);
         const int zoomRowHeight = embedded ? dip(28) : sc(38);
         const int scrollHeight = sc(12);
+        const int slimScrollHeight = sc(6);
         const int minRowHeight = embedded ? dip(36) : sc(52);
         const int minAxisHeight = sc(96);
         // The panel below has to keep its ruler, its rows, the zoom bar and the footer, so the preview gives way first.
@@ -3637,7 +3718,10 @@ namespace merutilm::rff2 {
         const int buttonTop = boxTop + (embedded ? 0 : sc(2));
         const int buttonBottom = boxBottom - (embedded ? 0 : sc(2));
         const int headerInset = margin + sc(20);
-        aiButton = {width - headerInset - sc(96), buttonTop, width - headerInset, buttonBottom};
+        // When AI Edit is switched off the button collapses to nothing and Export takes its place.
+        const bool aiShown = settingsMenu == nullptr || settingsMenu->featureShown(SettingsMenu::AI_EDIT_FEATURE);
+        aiButton = aiShown ? RECT{width - headerInset - sc(96), buttonTop, width - headerInset, buttonBottom}
+                           : RECT{width - headerInset + sc(10), buttonTop, width - headerInset + sc(10), buttonBottom};
         exportButton = {aiButton.left - sc(10) - sc(112), buttonTop, aiButton.left - sc(10), buttonBottom};
         saveButton = {exportButton.left - sc(10) - sc(112), buttonTop, exportButton.left - sc(10),
                       buttonBottom};
@@ -3652,7 +3736,8 @@ namespace merutilm::rff2 {
                                       framesButton.left - sc(20), boxBottom};
         if (narrowHeader) {
             const int right = width - margin;
-            aiButton = {right - dip(76), dip(56), right, dip(84)};
+            aiButton = aiShown ? RECT{right - dip(76), dip(56), right, dip(84)}
+                               : RECT{right + dip(8), dip(56), right + dip(8), dip(84)};
             exportButton = {aiButton.left - dip(84), dip(56), aiButton.left - dip(8), dip(84)};
             saveButton = {exportButton.left - dip(84), dip(56), exportButton.left - dip(8), dip(84)};
             loadButton = {saveButton.left - dip(84), dip(56), saveButton.left - dip(8), dip(84)};
@@ -3691,7 +3776,9 @@ namespace merutilm::rff2 {
         }
         drawButton(canvas, loadButton, L"Load", hoverLoad, false, smallFont, theme);
         drawButton(canvas, saveButton, L"Save", hoverSave, false, smallFont, theme);
-        drawButton(canvas, aiButton, L"AI Edit", hoverAi, aiImagesBusy.load(), smallFont, theme);
+        if (!IsRectEmpty(&aiButton)) {
+            drawButton(canvas, aiButton, L"AI Edit", hoverAi, aiImagesBusy.load(), smallFont, theme);
+        }
         drawButton(canvas, exportButton, exporting ? L"Exporting" : L"Export", hoverExport, true, smallFont,
                    theme);
 
@@ -3704,6 +3791,7 @@ namespace merutilm::rff2 {
             frameRect(canvas, previewPanel, theme.border);
         }
         overlayImageRect = {};
+        emptyFramesButton = {};
         RECT preview = previewPanel;
         preview.left += sc(10);
         preview.right -= sc(10);
@@ -3764,11 +3852,15 @@ namespace merutilm::rff2 {
                     overlayRenderer = std::make_unique<ZoomOverlay>();
                 }
                 overlayRenderer->paint(canvas, image, publishedPreviewZoom,
-                                       attribute.video.timeline.zoomOverlay);
+                                       ZoomOverlay::zoomStyle(attribute.video.timeline.zoomOverlay, publishedPreviewSeconds), publishedPreviewMaxIteration);
+                if (!iterationOverlayRenderer) iterationOverlayRenderer = std::make_unique<ZoomOverlay>();
+                iterationOverlayRenderer->paint(canvas, image, publishedPreviewZoom,
+                    ZoomOverlay::iterationStyle(attribute.video.timeline.maxIterationOverlay, publishedPreviewSeconds),
+                    attribute.video.timeline.interpolateMaxIteration ? publishedPreviewInterpolatedMaxIteration : publishedPreviewMaxIteration);
                 shortsGuide.paint(canvas, image);
-                if (overlayPositionMode && attribute.video.timeline.zoomOverlay.visible) {
+                if (overlayPositionMode && selectedOverlay().visibleAt(publishedPreviewSeconds)) {
                     frameRect(canvas, image, theme.accentText);
-                    const auto b = overlayRenderer->bounds();
+                    const auto b = (editingIterationOverlay ? iterationOverlayRenderer : overlayRenderer)->bounds();
                     const int saved = SaveDC(canvas);
                     if (saved != 0) {
                         IntersectClipRect(canvas, image.left, image.top, image.right, image.bottom);
@@ -3792,13 +3884,44 @@ namespace merutilm::rff2 {
                     if (!overlayRenderer) {
                         overlayRenderer = std::make_unique<ZoomOverlay>();
                     }
-                    overlayRenderer->paint(canvas, preview, 100, attribute.video.timeline.zoomOverlay);
+                    overlayRenderer->paint(canvas, preview, 100, ZoomOverlay::zoomStyle(attribute.video.timeline.zoomOverlay, previewSeconds()));
+                    if (!iterationOverlayRenderer) iterationOverlayRenderer = std::make_unique<ZoomOverlay>();
+                    iterationOverlayRenderer->paint(canvas, preview, 100,
+                        ZoomOverlay::iterationStyle(attribute.video.timeline.maxIterationOverlay, previewSeconds()));
                     shortsGuide.paint(canvas, preview);
                 }
-                drawText(canvas,
-                         frameSource == nullptr ? L"SAMPLE OVERLAY - NO KEYFRAMES LOADED"
-                                                : L"CURRENT RENDER PREVIEW",
-                         preview, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
+                if (frameSource != nullptr) {
+                    drawText(canvas, L"CURRENT RENDER PREVIEW", preview, theme.mutedText,
+                             DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
+                } else {
+                    // The empty preview says what is missing and offers the folder picker where the eye already is.
+                    const std::wstring title = L"No keyframes loaded";
+                    const std::wstring detail =
+                        L"Select the folder with the rendered keyframes to enable preview and scrubbing.";
+                    const std::wstring action = L"Select keyframe folder...";
+                    const int titleHeight = fontHeight(canvas, bodyFont);
+                    const int detailHeight = fontHeight(canvas, smallFont);
+                    const int buttonHeight = sc(32);
+                    const int blockHeight = titleHeight + sc(6) + detailHeight + sc(14) + buttonHeight;
+                    if (preview.bottom - preview.top >= blockHeight + sc(8)) {
+                        int top = int(preview.top + preview.bottom - blockHeight) / 2;
+                        drawText(canvas, title, {preview.left, top, preview.right, top + titleHeight}, theme.text,
+                                 DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
+                        top += titleHeight + sc(6);
+                        drawText(canvas, detail,
+                                 {preview.left + sc(12), top, preview.right - sc(12), top + detailHeight},
+                                 theme.mutedText, DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
+                        top += detailHeight + sc(14);
+                        const int middleX = int(preview.left + preview.right) / 2;
+                        const int buttonWidth = textWidth(canvas, action, smallFont) + sc(40);
+                        emptyFramesButton = {middleX - buttonWidth / 2, top, middleX - buttonWidth / 2 + buttonWidth,
+                                             top + buttonHeight};
+                        drawButton(canvas, emptyFramesButton, action, hoverEmptyFrames, true, smallFont, theme);
+                    } else {
+                        drawText(canvas, title, preview, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+                                 bodyFont);
+                    }
+                }
             }
         }
 
@@ -3826,7 +3949,7 @@ namespace merutilm::rff2 {
             {L"Keyframe", std::format(L"{:.1f}", previewDepth)},
             // Read off the keyframe files; with none open the depth axis is a placeholder and the
             // zoom extrapolated along it says nothing, so the readout stands empty until one is.
-            {L"Zoom",
+            {L"Magnification",
              frameSource == nullptr ? std::wstring(L"\u2014") : std::format(L"1E{:.1f}", zoomExponent)},
             {L"Time", std::format(L"{} / {}", durationText(previewSeconds()),
                                   durationText(schedule.getTotalSeconds()))},
@@ -3846,11 +3969,11 @@ namespace merutilm::rff2 {
             transport, transportRight, uiDpi, narrow, textWidth(canvas, fields[3][1], valueFont), fieldOrder,
             std::max(dip(14), fontHeight(canvas, captionFont)) + fontHeight(canvas, valueFont) + dip(7));
         playButton = transportLayout.buttons[0];
-        pauseButton = transportLayout.buttons[1];
-        stopButton = transportLayout.buttons[2];
-        loopButton = transportLayout.buttons[3];
-        drawTransportButton(canvas, playButton, TransportGlyph::PLAY, hoverPlay, playing, theme);
-        drawTransportButton(canvas, pauseButton, TransportGlyph::PAUSE, hoverPause, false, theme);
+        stopButton = transportLayout.buttons[1];
+        loopButton = transportLayout.buttons[2];
+        // The one Play/Pause button shows what a click will do: pause while playing, play otherwise.
+        drawTransportButton(canvas, playButton, playing ? TransportGlyph::PAUSE : TransportGlyph::PLAY, hoverPlay,
+                            playing, theme);
         drawTransportButton(canvas, stopButton, TransportGlyph::STOP, hoverStop, false, theme);
         drawTransportButton(canvas, loopButton, TransportGlyph::LOOP, hoverLoop, loopPlayback, theme);
         fillRect(canvas, transportLayout.separator, theme.border);
@@ -3902,11 +4025,12 @@ namespace merutilm::rff2 {
             status = L"Rendering";
         } else {
             std::scoped_lock lock(previewBitmapMutex);
-            status = previewMessage;
+            // With no folder chosen the preview itself asks for one, so the transport stays quiet.
+            status = previewMessage == noKeyframesMessage ? std::wstring() : previewMessage;
         }
         const auto visibleStatus =
             fittingText(canvas, smallFont, transportLayout.status.right - transportLayout.status.left,
-                        {status, L"See Controls"});
+                        {status, L"Press F1 for help"});
         drawText(canvas, visibleStatus, transportLayout.status, theme.mutedText,
                  DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
 
@@ -3948,6 +4072,7 @@ namespace merutilm::rff2 {
             if (attribute.video.data.isStatic && !TimelineParams::movesOverStaticImage(track.targetId)) {
                 continue;
             }
+            if (TimelineParams::isOverlay(track.targetId)) continue;
             displayedTracks.push_back(&track);
         }
         const int trackValueWidth = embedded ? dip(52) : sc(66);
@@ -3978,12 +4103,8 @@ namespace merutilm::rff2 {
         const int axisTop = timeline.top + axisTopInset;
         const int axisBottom = zoomRowTop - sc(6);
         const int viewHeight = std::max(axisBottom - axisTop, 1);
-        // The rows share the view four ways at the most: past that a row is too short to read the
-        // value or to drag a key on, so the stack scrolls at a quarter of the view rather than
-        // thinning every row further towards nothing.
-        constexpr int maxVisibleTracks = 4;
-        const int trackRowHeight = std::max(readableRowHeight, viewHeight / maxVisibleTracks);
-        const bool tracksScroll = trackCount * trackRowHeight > viewHeight;
+        // Rows keep one compact height rather than stretching to fill the panel; the stack scrolls once they do not fit.
+        const int rowHeight = readableRowHeight + (embedded ? dip(8) : sc(8));
         // The axis stops short of the right column whether the rows scroll or not, so the bar that
         // column holds keeps its place and widening the window never drops it.
         timelineAxis = {timeline.left + labelWidth, axisTop, rightColumnLeft - sc(16), axisBottom};
@@ -4016,6 +4137,16 @@ namespace merutilm::rff2 {
         const float viewEndDistance = displayDistance(viewEnd);
         const float firstTick = std::ceil(viewStartDistance / tickStep) * tickStep;
         const int tickCount = std::min(static_cast<int>((viewEndDistance - firstTick) / tickStep) + 1, 64);
+        // The end of the video is marked with its distance and total time, so the stretch past the last tick reads too.
+        const int endX = depthX(fullEndDepth, viewStart, viewEnd, axis);
+        const bool endVisible = visibleX(endX, axis, 0);
+        const std::wstring endDistanceLabel = std::format(L"d {:.1f}", displayDistance(fullEndDepth));
+        const std::wstring endTimeLabel = durationText(schedule.getTotalSeconds());
+        const int endLabelWidth =
+            std::max(textWidth(canvas, endDistanceLabel, smallFont), textWidth(canvas, endTimeLabel, smallFont));
+        const int tickLabelGap = sc(9);
+        const int tickLabelLimit = endVisible ? endX - tickLabelGap - endLabelWidth - sc(12)
+                                              : static_cast<int>(axis.right) + sc(16);
         for (int i = 0; i < tickCount; ++i) {
             const float distance = firstTick + tickStep * static_cast<float>(i);
             const float depth = depthFromDistance(distance);
@@ -4044,12 +4175,34 @@ namespace merutilm::rff2 {
             LineTo(canvas, x, axis.bottom);
             SelectObject(canvas, oldPen);
             DeleteObject(pen);
-            drawText(canvas, std::format(L"d {:.{}f}", distance, tickDecimals),
-                     {x - sc(62), distanceRowTop, x + sc(62), timeRowTop - sc(4)}, theme.mutedText,
-                     DT_CENTER | DT_VCENTER | DT_SINGLELINE, smallFont);
-            drawText(canvas, durationText(schedule.timeAt(depth)),
-                     {x - sc(58), timeRowTop, x + sc(58), timeRowTop + rulerRowHeight}, theme.mutedText,
-                     DT_CENTER | DT_VCENTER | DT_SINGLELINE, smallFont);
+            // Labels start just right of their tick, clear of the playhead head that rests on it.
+            const std::wstring distanceLabel = std::format(L"d {:.{}f}", distance, tickDecimals);
+            const std::wstring timeLabel = durationText(schedule.timeAt(depth));
+            const int labelLeft = x + tickLabelGap;
+            const int labelRight = labelLeft + std::max(textWidth(canvas, distanceLabel, smallFont),
+                                                        textWidth(canvas, timeLabel, smallFont));
+            if (labelRight > tickLabelLimit) {
+                continue;
+            }
+            drawText(canvas, distanceLabel, {labelLeft, distanceRowTop, labelRight, timeRowTop - sc(4)},
+                     theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+            drawText(canvas, timeLabel, {labelLeft, timeRowTop, labelRight, timeRowTop + rulerRowHeight},
+                     theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+        }
+        if (endVisible) {
+            const HPEN endPen = CreatePen(PS_SOLID, 1, theme.mutedText);
+            const HGDIOBJ oldEndPen = SelectObject(canvas, endPen);
+            MoveToEx(canvas, endX, distanceRowTop, nullptr);
+            LineTo(canvas, endX, axis.bottom);
+            SelectObject(canvas, oldEndPen);
+            DeleteObject(endPen);
+            const int endLabelRight = endX - tickLabelGap;
+            drawText(canvas, endDistanceLabel,
+                     {endLabelRight - endLabelWidth, distanceRowTop, endLabelRight, timeRowTop - sc(4)}, theme.text,
+                     DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
+            drawText(canvas, endTimeLabel,
+                     {endLabelRight - endLabelWidth, timeRowTop, endLabelRight, timeRowTop + rulerRowHeight},
+                     theme.text, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
         }
 
         // Every row is carried by its name cell to any place in the stack, the Speed row included.
@@ -4058,7 +4211,6 @@ namespace merutilm::rff2 {
             reorderRowTargets.push_back(item ? item->targetId : AUDIO_ROW_TARGET);
         }
         // Every track reads the same, so every row gets the same height.
-        const int rowHeight = tracksScroll ? trackRowHeight : viewHeight / trackCount;
         const int contentHeight = trackCount * rowHeight;
         trackScrollRange = std::max(contentHeight - viewHeight, 0);
         trackScrollOffset = std::clamp(trackScrollOffset, 0, trackScrollRange);
@@ -4094,14 +4246,15 @@ namespace merutilm::rff2 {
                     trackLayouts.push_back({.targetId = AUDIO_ROW_TARGET, .row = {axis.left, top, axis.right, bottom},
                                             .label = labelCell, .editable = false, .minValue = 0, .maxValue = 1, .order = row});
                     audioLane = {axis.left, std::max<LONG>(top, axis.top), axis.right, std::min<LONG>(bottom, axis.bottom)};
-                    drawText(canvas, L"Audio", {rowTextLeft, top, axis.left - sc(20), bottom}, theme.accentText,
+                    drawText(canvas, L"Audio", {rowTextLeft, top, axis.left - sc(20), bottom}, theme.text,
                              DT_LEFT | DT_VCENTER | DT_SINGLELINE, bodyFont);
                     const auto &audio = attribute.video.timeline.audio;
                     const int audioDc = SaveDC(canvas);
                     IntersectClipRect(canvas, axis.left, std::max<LONG>(top, axis.top), axis.right, std::min<LONG>(bottom, axis.bottom));
                     if (audio.clips.empty()) {
-                        drawText(canvas, L"Click to add audio", {axis.left + sc(8), top, axis.right, bottom}, theme.mutedText,
-                                 DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+                        drawText(canvas, L"Click to add audio",
+                                 {audioLane.left + sc(8), audioLane.top, audioLane.right - sc(8), audioLane.bottom},
+                                 theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
                     }
                     for (const auto &clip : audio.clips) {
                         const double startSeconds = double(clip.start) / 1000000;
@@ -4114,7 +4267,7 @@ namespace merutilm::rff2 {
                                     std::min<LONG>(axis.right, std::max(right, left + sc(12))), bottom - sc(7)};
                         if (bounds.right <= bounds.left) continue;
                         const bool selected = clip.id == selectedAudioClip;
-                        const COLORREF color = !audio.exportEnabled || clip.muted ? theme.mutedText : theme.accentText;
+                        const COLORREF color = !audio.exportEnabled || clip.muted ? theme.mutedText : theme.text;
                         fillRoundRect(canvas, bounds, theme.panelRaised, selected ? theme.accentText : theme.grid, sc(4));
                         const auto file = std::filesystem::path(std::u8string(clip.path.begin(), clip.path.end())).filename().wstring();
                         drawText(canvas, file, {bounds.left + sc(10), bounds.top, bounds.right - sc(10), bounds.bottom}, color,
@@ -4338,10 +4491,17 @@ namespace merutilm::rff2 {
         const int zoomMid = (axisBottom + guideTop) / 2;
         drawMagnifier(canvas, {rowIconLeft, zoomMid - sc(12), rowIconLeft + rowIconWidth, zoomMid + sc(12)},
                       theme.mutedText);
-        drawText(canvas, L"Zoom", {rowTextLeft, axisBottom, rowTextLeft + sc(62), guideTop}, theme.text,
+        // Named for what it scales, so it is not mistaken for the fractal's magnification; it gives way when space is short.
+        const int zoomPresetWidth = sc(82);
+        const int zoomLabelRoom =
+            std::max(0, static_cast<int>(axis.left) - sc(16) - rowTextLeft - zoomPresetWidth - sc(4));
+        const std::wstring zoomLabel = fittingText(canvas, bodyFont, zoomLabelRoom, {L"Timeline zoom"});
+        const int zoomLabelWidth = zoomLabel.empty() ? 0 : textWidth(canvas, zoomLabel, bodyFont);
+        drawText(canvas, zoomLabel, {rowTextLeft, axisBottom, rowTextLeft + zoomLabelWidth, guideTop}, theme.text,
                  DT_LEFT | DT_VCENTER | DT_SINGLELINE, bodyFont);
+        const int zoomPresetLeft = rowTextLeft + (zoomLabel.empty() ? 0 : zoomLabelWidth + sc(4));
         // Two pixels between the word and the box read as one crowded control rather than two.
-        zoomPresetButton = {rowTextLeft + sc(66), zoomMid - sc(13), rowTextLeft + sc(148), zoomMid + sc(13)};
+        zoomPresetButton = {zoomPresetLeft, zoomMid - sc(13), zoomPresetLeft + zoomPresetWidth, zoomMid + sc(13)};
         drawButton(canvas, zoomPresetButton, L"", hoverZoomPreset, false, smallFont, theme);
         // Centred, the label moved every time the percentage gained or lost a digit, which read as
         // the arrow twitching while the view was zoomed. The number holds its own left edge and
@@ -4354,20 +4514,30 @@ namespace merutilm::rff2 {
                  {zoomPresetButton.left, zoomPresetButton.top, zoomPresetButton.right - sc(9),
                   zoomPresetButton.bottom},
                  theme.text, DT_RIGHT | DT_VCENTER | DT_SINGLELINE, smallFont);
-        scrollTrack = {axis.left, zoomMid - scrollHeight / 2, axis.right, zoomMid + scrollHeight / 2};
-        fillRect(canvas, scrollTrack, theme.panelRaised);
-        frameRect(canvas, scrollTrack, theme.border);
-        const int scrollWidth = static_cast<int>(scrollTrack.right - scrollTrack.left);
-        const int thumbWidth = std::clamp(static_cast<int>(scrollWidth * (shownSpan / fullSpan)),
-                                          std::min(sc(28), scrollWidth), scrollWidth);
-        const float scrolled = fullSpan > shownSpan
-                                   ? std::clamp((startDepth - viewStart) / (fullSpan - shownSpan), 0.0f, 1.0f)
-                                   : 0.0f;
-        const int thumbLeft = scrollTrack.left + static_cast<int>((scrollWidth - thumbWidth) * scrolled);
-        scrollThumb = {thumbLeft, scrollTrack.top, thumbLeft + thumbWidth, scrollTrack.bottom};
-        const bool thumbActive = draggingScrollThumb || hoverScrollThumb;
-        fillRect(canvas, scrollThumb, thumbActive ? theme.accentText : theme.mutedText);
-        frameRect(canvas, scrollThumb, thumbActive ? theme.accentText : theme.border);
+        // With the whole timeline in view there is nothing to scroll, so the bar is left out.
+        if (shownSpan < fullSpan) {
+            scrollTrack = {axis.left, zoomMid - scrollHeight / 2, axis.right, zoomMid + scrollHeight / 2};
+            const int scrollWidth = static_cast<int>(scrollTrack.right - scrollTrack.left);
+            const int thumbWidth = std::clamp(static_cast<int>(scrollWidth * (shownSpan / fullSpan)),
+                                              std::min(sc(28), scrollWidth), scrollWidth);
+            const float scrolled = std::clamp((startDepth - viewStart) / (fullSpan - shownSpan), 0.0f, 1.0f);
+            const int thumbLeft = scrollTrack.left + static_cast<int>((scrollWidth - thumbWidth) * scrolled);
+            scrollThumb = {thumbLeft, scrollTrack.top, thumbLeft + thumbWidth, scrollTrack.bottom};
+            // The bar is drawn slimmer than the strip that takes the clicks, so it stays easy to grab.
+            const auto slim = [&](RECT bar) {
+                const int middle = static_cast<int>(bar.top + bar.bottom) / 2;
+                bar.top = middle - slimScrollHeight / 2;
+                bar.bottom = bar.top + slimScrollHeight;
+                return bar;
+            };
+            const bool thumbActive = draggingScrollThumb || hoverScrollThumb;
+            fillRoundRect(canvas, slim(scrollTrack), theme.panelRaised, theme.border, slimScrollHeight);
+            fillRoundRect(canvas, slim(scrollThumb), thumbActive ? theme.accentText : theme.mutedText,
+                          thumbActive ? theme.accentText : theme.mutedText, slimScrollHeight);
+        } else {
+            scrollTrack = {};
+            scrollThumb = {};
+        }
 
         const HPEN guideDivider = CreatePen(PS_SOLID, 1, theme.grid);
         const HGDIOBJ oldGuideDivider = SelectObject(canvas, guideDivider);
@@ -4376,12 +4546,16 @@ namespace merutilm::rff2 {
         SelectObject(canvas, oldGuideDivider);
         DeleteObject(guideDivider);
         const int guideMiddle = (guideTop + timeline.bottom) / 2;
-        controlsButton = {timeline.right - rowRightPad - dip(84), guideMiddle - dip(14),
-                          timeline.right - rowRightPad, guideMiddle + dip(14)};
-        drawButton(canvas, controlsButton, L"Controls", hoverControls, false, smallFont, theme);
+        const int iterationsButtonWidth = textWidth(canvas, L"Max Iterations Display", smallFont) + dip(24);
+        // Shorter than the footer so the buttons keep the same breathing room as the guidance text beside them.
+        controlsButton = {timeline.right - rowRightPad - iterationsButtonWidth, guideMiddle - dip(12),
+                          timeline.right - rowRightPad, guideMiddle + dip(12)};
+        drawButton(canvas, controlsButton, L"Max Iterations Display", hoverControls,
+                   overlayPositionMode && editingIterationOverlay, smallFont, theme);
         overlayButton = {controlsButton.left - dip(130), controlsButton.top, controlsButton.left - dip(8),
                          controlsButton.bottom};
-        drawButton(canvas, overlayButton, L"Zoom Overlay", false, overlayPositionMode, smallFont, theme);
+        drawButton(canvas, overlayButton, L"Zoom Overlay", false,
+                   overlayPositionMode && !editingIterationOverlay, smallFont, theme);
         RECT guidance = {rowIconLeft, guideTop, overlayButton.left - dip(12), timeline.bottom};
         const int guidanceWidth = guidance.right - guidance.left;
         std::wstring guideText;
@@ -4401,7 +4575,7 @@ namespace merutilm::rff2 {
         } else {
             guideText = fittingText(canvas, smallFont, guidanceWidth,
                                     {L"Double-click a track: add key    |    Drag: scrub preview    |    "
-                                     L"Wheel: zoom    |    F1: all controls",
+                                     L"Wheel: timeline zoom    |    F1: all controls",
                                      L"Double-click: add key    |    Drag: scrub    |    F1: controls",
                                      L"Double-click: add key    |    F1: controls", L"F1: all controls"});
         }
@@ -4471,14 +4645,13 @@ namespace merutilm::rff2 {
         add(Id::fullscreen, L"Fullscreen", fullscreenButton);
         add(Id::play, L"Play / Pause", playButton, L"Play or pause at the current time.",
             ROLE_SYSTEM_CHECKBUTTON);
-        add(Id::pause, L"Pause", pauseButton);
         add(Id::stop, L"Stop", stopButton, L"Stop playback and return to the beginning.");
         add(Id::loop, L"Loop", loopButton, L"Repeat playback.", ROLE_SYSTEM_CHECKBUTTON);
         add(Id::distance, L"Timeline Distance", distanceField,
             L"Distance from the first frame. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
         add(Id::keyframe, L"Timeline Keyframe", keyframeField,
             L"Source keyframe depth. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
-        add(Id::zoom, L"Source zoom", zoomField, L"Zoom read from the source keyframes.",
+        add(Id::zoom, L"Magnification", zoomField, L"Zoom read from the source keyframes.",
             ROLE_SYSTEM_STATICTEXT);
         add(Id::time, L"Timeline Time", timeField,
             L"Elapsed seconds. Enter opens a formula; Left and Right scrub.", ROLE_SYSTEM_TEXT);
@@ -4543,10 +4716,11 @@ namespace merutilm::rff2 {
                 items.push_back(std::move(keyItem));
             }
         }
+        add(Id::emptyFrames, L"Select keyframe folder", emptyFramesButton, L"Select the source keyframe folder.");
         add(Id::viewZoom, L"Timeline zoom", zoomPresetButton, L"Choose the visible timeline range.");
         add(Id::overlay, L"Zoom Overlay", overlayButton, L"Configure the zoom ratio shown in the video.");
-        add(Id::controls, L"Timeline controls", controlsButton,
-            L"F1 shows the controls, preview status and source folder.");
+        add(Id::controls, L"Max Iterations Display", controlsButton,
+            L"Configure the maximum iterations shown in the video.");
         native(Id::editor, fieldEdit, L"Timeline formula");
         RECT client;
         GetClientRect(window, &client);
@@ -4681,6 +4855,7 @@ namespace merutilm::rff2 {
         }
         switch (id) {
         case Id::frames:
+        case Id::emptyFrames:
             loadKeyframeDirectory();
             break;
         case Id::load:
@@ -4704,9 +4879,6 @@ namespace merutilm::rff2 {
         case Id::play:
             setPlaying(!playing);
             break;
-        case Id::pause:
-            setPlaying(false);
-            break;
         case Id::stop:
             stopPlayback();
             break;
@@ -4729,7 +4901,7 @@ namespace merutilm::rff2 {
             openOverlaySettings();
             break;
         case Id::controls:
-            openControlsGuide();
+            showInspectorSection(3);
             break;
         case Id::toggle:
             toggleWorkspaceDock();
@@ -5031,6 +5203,14 @@ namespace merutilm::rff2 {
         }
         RECT bounds = found->bounds;
         InflateRect(&bounds, -2, -2);
+        const int saved = SaveDC(dc);
+        if (keyboardFocus == workspace::TimelineItems::frames || keyboardFocus == workspace::TimelineItems::theme) {
+            const TimelineDpiScope dpiScope(uiDpi);
+            const auto caption = keyboardFocus == workspace::TimelineItems::frames ? L"Keyframes" : L"Theme";
+            const int left = found->bounds.left + sc(12);
+            ExcludeClipRect(dc, left, found->bounds.top - sc(11),
+                            left + textWidth(dc, caption, captionFont) + sc(10), found->bounds.top + sc(11));
+        }
         const auto theme = timelineTheme(lightMode);
         const auto pen = CreatePen(PS_SOLID, std::max(2, UiDpi::pixels(1, uiDpi)), theme.focusRing);
         const auto oldPen = SelectObject(dc, pen), oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -5038,6 +5218,7 @@ namespace merutilm::rff2 {
         SelectObject(dc, oldBrush);
         SelectObject(dc, oldPen);
         DeleteObject(pen);
+        if (saved) RestoreDC(dc, saved);
     }
 
     void TimelineWindow::presentPaint(HDC target, const RECT &activeEditRect) {
@@ -5330,7 +5511,8 @@ namespace merutilm::rff2 {
                     return TRUE;
                 }
                 const bool interactive =
-                    contains(self->framesButton, point) || contains(self->loadButton, point) ||
+                    contains(self->framesButton, point) || contains(self->emptyFramesButton, point) ||
+                    contains(self->loadButton, point) ||
                     contains(self->saveButton, point) || contains(self->exportButton, point) || contains(self->aiButton, point) ||
                     contains(self->controlsButton, point) || contains(self->themeButton, point) ||
                     contains(self->fullscreenButton, point) || self->hitTrackKey(point).valid() ||
@@ -5360,7 +5542,7 @@ namespace merutilm::rff2 {
                 return 0;
             }
             if (self->draggingOverlay) {
-                auto &o = self->attribute.video.timeline.zoomOverlay;
+                auto &o = self->selectedOverlay();
                 o.x =
                     std::clamp(self->overlayDragBefore.x + float(point.x - self->overlayDragStart.x) /
                                                                std::max(1L, self->overlayImageRect.right -
@@ -5422,7 +5604,7 @@ namespace merutilm::rff2 {
             const bool trackThumb = contains(self->trackScrollThumb, point);
             const bool full = contains(self->fullscreenButton, point);
             const bool play = contains(self->playButton, point);
-            const bool pause = contains(self->pauseButton, point);
+            const bool emptyFrames = contains(self->emptyFramesButton, point);
             const bool stop = contains(self->stopButton, point);
             const bool loop = contains(self->loopButton, point);
             const bool zoomPreset = contains(self->zoomPresetButton, point);
@@ -5436,7 +5618,7 @@ namespace merutilm::rff2 {
                 load != self->hoverLoad || save != self->hoverSave || exportVideo != self->hoverExport || ai != self->hoverAi ||
                 thumb != self->hoverScrollThumb || theme != self->hoverTheme ||
                 trackThumb != self->hoverTrackScrollThumb || full != self->hoverFullscreen ||
-                play != self->hoverPlay || pause != self->hoverPause || stop != self->hoverStop ||
+                play != self->hoverPlay || emptyFrames != self->hoverEmptyFrames || stop != self->hoverStop ||
                 loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset ||
                 formulaField != self->hoveredFieldEdit || controls != self->hoverControls) {
                 self->hoveredTrackKey = hoveredKey;
@@ -5450,7 +5632,7 @@ namespace merutilm::rff2 {
                 self->hoverTrackScrollThumb = trackThumb;
                 self->hoverFullscreen = full;
                 self->hoverPlay = play;
-                self->hoverPause = pause;
+                self->hoverEmptyFrames = emptyFrames;
                 self->hoverStop = stop;
                 self->hoverLoop = loop;
                 self->hoverZoomPreset = zoomPreset;
@@ -5530,8 +5712,9 @@ namespace merutilm::rff2 {
                     break;
                 }
             }
-            if (self->overlayPositionMode && contains(self->overlayImageRect, point)) {
-                self->overlayDragBefore = self->attribute.video.timeline.zoomOverlay;
+            if (self->overlayPositionMode && self->selectedOverlay().visibleAt(self->publishedPreviewSeconds) &&
+                contains(self->overlayImageRect, point)) {
+                self->overlayDragBefore = self->selectedOverlay();
                 self->overlayDragStart = point;
                 self->draggingOverlay = true;
                 SetCapture(hwnd);
@@ -5765,7 +5948,7 @@ namespace merutilm::rff2 {
             const bool previewChanged = (self->fieldDrag != FieldDrag::NONE && self->fieldDragMoved) ||
                                         self->draggingTrackKey || self->scrubbingTimeline;
             if (self->draggingOverlay) {
-                self->attribute.video.timeline.zoomOverlay = self->overlayDragBefore;
+                self->selectedOverlay() = self->overlayDragBefore;
                 self->draggingOverlay = false;
                 InvalidateRect(hwnd, nullptr, FALSE);
             }
@@ -5818,7 +6001,7 @@ namespace merutilm::rff2 {
             }
             if (self->overlayPositionMode && wParam == VK_ESCAPE) {
                 if (self->draggingOverlay) {
-                    self->attribute.video.timeline.zoomOverlay = self->overlayDragBefore;
+                    self->selectedOverlay() = self->overlayDragBefore;
                     self->draggingOverlay = false;
                     ReleaseCapture();
                 } else {
@@ -5836,7 +6019,7 @@ namespace merutilm::rff2 {
                 const float h = self->frameSource ? float(self->frameSource->getHeight()) /
                                                         std::max(1u, self->attribute.render.ssaa)
                                                   : 1080.f;
-                auto &o = self->attribute.video.timeline.zoomOverlay;
+                auto &o = self->selectedOverlay();
                 o.x = std::clamp(o.x + (wParam == VK_LEFT    ? -step
                                         : wParam == VK_RIGHT ? step
                                                              : 0) /

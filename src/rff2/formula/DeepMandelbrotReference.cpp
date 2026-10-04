@@ -2,9 +2,12 @@
 // Created by Merutilm on 2025-05-18.
 // Modified by Sonnet 5 on 2026-07-06
 // Modified by Opus 5 on 2026-09-04
+// Modified by GPT-6 on 2026-09-27, 2026-09-29
 //
 
 #include "DeepMandelbrotReference.h"
+
+#include <limits>
 
 #include "../calc/double_exp_math.h"
 #include "../calc/rff_math.h"
@@ -74,7 +77,8 @@ namespace merutilm::rff2 {
 
         auto tools = std::vector<ArrayCompressionTool>();
         uint64_t compressed = 0;
-        uint64_t maxIteration = calc.maxIteration;
+        // Automatic iteration limits must not truncate the period search using the previous view's period.
+        const uint64_t maxIteration = calc.autoMaxIteration ? std::numeric_limits<uint64_t>::max() : calc.maxIteration;
         auto [compressCriteria, compressionThresholdPower, withoutNormalize] = calc.referenceCompAttribute;
         auto func = std::move(actionPerRefCalcIteration);
 
@@ -179,15 +183,18 @@ namespace merutilm::rff2 {
 
             if (compressCriteria > 0 && iteration >= 1) {
                 const uint64_t refIndex = ArrayCompressor::compress(tools, reuseIndex + 1);
-                const bool sr = zr.sgn() == rr[refIndex].sgn() && zr.sgn() == 0;
-                const bool si = zi.sgn() == ri[refIndex].sgn() && zi.sgn() == 0;
-                if (!sr) dex::div(&temps[0], zr, rr[refIndex]);
-                if (!si) dex::div(&temps[1], zi, ri[refIndex]);
-
-                if (
+                bool matches = false;
+                // A reused prefix must precede the run whose stored values will be removed.
+                if (canReuse && reuseIndex < iteration - reuseIndex && refIndex < rr.size()) {
+                    const bool sr = zr.sgn() == rr[refIndex].sgn() && zr.sgn() == 0;
+                    const bool si = zi.sgn() == ri[refIndex].sgn() && zi.sgn() == 0;
+                    if (!sr) dex::div(&temps[0], zr, rr[refIndex]);
+                    if (!si) dex::div(&temps[1], zi, ri[refIndex]);
+                    matches =
                     (sr || std::fabs(static_cast<double>(temps[0]) - 1) <= compressionThreshold) &&
-                    (si || std::fabs(static_cast<double>(temps[1]) - 1) <= compressionThreshold) && canReuse
-                ) {
+                    (si || std::fabs(static_cast<double>(temps[1]) - 1) <= compressionThreshold);
+                }
+                if (matches) {
                     ++reuseIndex;
                 } else if (reuseIndex != 0) {
                     if (reuseIndex > compressCriteria) {
@@ -217,6 +224,12 @@ namespace merutilm::rff2 {
                     ri[index] = zi;
                 }
             }
+        }
+
+        if (compressCriteria > 0 && reuseIndex > compressCriteria) {
+            const auto compressor = ArrayCompressionTool(1, iteration - reuseIndex + 1, iteration);
+            compressed += compressor.range();
+            tools.push_back(compressor);
         }
 
         if (!strictFPG) fpgBn = fp_complex_calculator(fpgBnr, fpgBni, exp10);

@@ -1,6 +1,6 @@
 # Building RFF_Super
 
-Modified by GPT-6 on 2026-09-24, 2026-09-25.
+Modified by GPT-6 on 2026-09-24, 2026-09-25, 2026-10-01.
 
 This guide targets Windows x64 with the project's MSYS2 MINGW64/GCC toolchain. Run all project commands from the directory containing `CMakeLists.txt`, **not** from `documentation/`.
 

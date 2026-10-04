@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-15, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-27
 // Modified by ox-alpha on 2026-08-22
-// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-19, 2026-09-23
+// Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-19, 2026-09-23, 2026-09-30
 //
 
 #pragma once
@@ -201,6 +201,7 @@ namespace merutilm::rff2 {
         return true;
     }
 
+    // Quintic smootherstep: Perlin (2002), section 3; polynomial reference in NOTICE; project license unchanged.
     inline glm::vec4 samplePaletteStops(const ShdPaletteAttribute &p, float t) {
         if (p.stops.empty()) {
             return glm::vec4(0, 0, 0, 1);

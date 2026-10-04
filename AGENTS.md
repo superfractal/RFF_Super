@@ -1,3 +1,4 @@
+<!-- Modified by Opus 5.5 on 2026-10-04. -->
 # Project Overview
 
 **RFF-2.0** is a fast Mandelbrot set rendering application, built with C++20, the Vulkan API, and GMP.
@@ -28,6 +29,11 @@
 - **Memory:** Array compressors are heavily used — storing billons of iterations in memory is prohibitive. Verify rendering stays crisp, free of pixelation or visual glitches.
 - **Vulkan:** Descriptor sets, push constants, and pipeline layouts must match exactly between the C++ pipeline configurator and the GLSL shaders.
 - **Comments:** Keep explanatory comments to a SINGLE line. This does NOT apply to the `// Modified by ...` modification tag. Do NOT modify comments that already exist — this rule applies only to comments you add or write yourself.
+- **Header history:** Keep existing `Created by`/`Modified by` entries in one block:
+  `//`, `Created by` (only if present), contiguous `Modified by` rows, `//`, one blank line,
+  then code. Preserve names and creation text; merge repeated modifier names and sort their
+  unique dates oldest first. Never invent, drop, or convert entries. Keep license/copyright/
+  NOTICE/provenance comments outside the block and unchanged.
 
 ## Attribution, Licensing, and Low-Risk Provenance
 
@@ -59,19 +65,19 @@ ignored folders can contain third-party binaries, headers, and build products.
 ## File-Format Stability (file couples to code — read before editing)
 
 - **Palette recipes** save as `{presetId, seed}` and regenerate on load: freeze `genPalette()`
-  RNG/order, never reuse/renumber recipe ids. See [docs/palette-recipe-stability.md](docs/palette-recipe-stability.md).
+  RNG/order, never reuse/renumber recipe ids. See [documentation/notes/palette-recipe-stability.md](documentation/notes/palette-recipe-stability.md).
 - **ConfigIO** is a flat ordered binary stream: add settings append-only at EOF in fixed order,
   guard each trailing field on load with `peek() != eof`, bump `VERSION` only for non-additive
-  changes. See [docs/config-file-format.md](docs/config-file-format.md).
+  changes. See [documentation/notes/config-file-format.md](documentation/notes/config-file-format.md).
 - **Compressed maps** (`.rfmz`) carry a fixed versioned header naming the stream mode: never
   renumber a mode, never make one lossy (video keyframes read this path), and keep `streamSize` in
-  step with `preprocess`. See [docs/compressed-map-format.md](docs/compressed-map-format.md).
+  step with `preprocess`. See [documentation/notes/compressed-map-format.md](documentation/notes/compressed-map-format.md).
 
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md) is written to one fixed style: present tense, about the program rather
 than the work, fixes phrased as the result and never as their internal cause, and the program always
-called RFF_Super. Read [docs/changelog-style.md](docs/changelog-style.md) before adding an entry.
+called RFF_Super. Read [documentation/notes/changelog-style.md](documentation/notes/changelog-style.md) before adding an entry.
 
 ## Debug / Test Programs
 
@@ -109,7 +115,10 @@ Whenever you (the AI) modify or add code, insert a dated modification tag (e.g. 
 - For OpenAI models, use only the GPT version name (for example, `GPT-5`) in modification tags; do not use variants such as `GPT-5.x` or `Codex GPT-5`.
 
 ```cpp
+//
 // Created by Fractal
 // Modified by Sonnet 4.6 on 2026-08-23
+//
+
 #pragma once
 ```

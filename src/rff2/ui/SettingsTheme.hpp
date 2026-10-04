@@ -2,6 +2,7 @@
 // Modified by GPT-5 on 2026-08-26, 2026-08-27
 // Modified by Opus 5 on 2026-08-27, 2026-09-01, 2026-09-03
 // Modified by GPT-6 on 2026-09-14, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -74,7 +75,8 @@ namespace merutilm::rff2 {
         .sliderThumbBorder = RGB(203, 213, 225),
         .sliderTrackDisabled = RGB(241, 245, 249),
         .sliderDisabled = RGB(203, 213, 225),
-        .rangeText = RGB(100, 116, 139),
+        // Slate 600, so secondary text reaches 7:1 on the background.
+        .rangeText = RGB(71, 85, 105),
         .previewBorder = RGB(148, 163, 184),
         .previewBorderSelected = RGB(37, 99, 235),
         .radioSelectedBackground = RGB(239, 246, 255),
@@ -115,7 +117,8 @@ namespace merutilm::rff2 {
         .sliderThumbBorder = RGB(88, 89, 92),
         .sliderTrackDisabled = RGB(37, 43, 50),
         .sliderDisabled = RGB(88, 89, 92),
-        .rangeText = RGB(157, 160, 164),
+        // Brighter than before so secondary text reaches 7:1 on the background.
+        .rangeText = RGB(163, 166, 170),
         .previewBorder = RGB(88, 89, 92),
         .previewBorderSelected = RGB(42, 86, 164),
         .radioSelectedBackground = RGB(28, 39, 53),

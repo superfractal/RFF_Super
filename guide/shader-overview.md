@@ -1,4 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
+<!-- Modified by GPT-6 on 2026-09-30. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
 # Shader settings: a complete feature overview
 
 [Main guide](SETTINGS_GUIDE.md) · [Individual fields and defaults](settings-reference.md) · [Rendered comparisons](visual-comparisons.md) · [24 additional shader comparisons](shader-comparisons.md)
@@ -24,8 +26,6 @@ Use this page to understand the purpose of each shader feature before looking up
 | Load KFR Color | Opens the palette import workflow | [Imports and presets](#imports-and-presets) |
 | Import Color | Opens the palette import workflow | [Imports and presets](#imports-and-presets) |
 | Local AI appearance | Optional local-model appearance workflow | [Imports and presets](#imports-and-presets) |
-| Save Shader Preset | Saves appearance settings as `.rfsp` | [Imports and presets](#imports-and-presets) |
-| Load Shader Preset | Restores an `.rfsp` appearance | [Imports and presets](#imports-and-presets) |
 
 **Surface editing is also part of shader appearance**, even though its material/style controls are presented separately from the Shader menu's Slope form. See [Studio and surface styles](#studio-and-surface-styles). Color animation controls live in Animation; they are summarized under [Movement](#movement).
 
@@ -35,7 +35,7 @@ Palette controls turn iteration values into colors. Changing them usually recolo
 
 | Feature | Controls and result |
 | --- | --- |
-| Cycle spacing and phase | **Cycle Length (R), Cycle Length (G), Cycle Length (B)** set repetition per channel. Smaller lengths repeat colors more often. **Start Offset** shifts phase. **Iteration Coloring** changes the mapping before cycling. |
+| Cycle spacing and phase | **Cycle Length (R), Cycle Length (G), Cycle Length (B)** set repetition per channel. Smaller lengths repeat colors more often. In the Palette workspace, **Link G & B to R** (On by default) makes G and B follow Cycle Length (R). **Start Offset** shifts phase. **Iteration Coloring** changes the mapping before cycling; the workspace shows its curves as tiles, and Smootherstep remains only in the legacy Palette window and in files that already use it. |
 | Color distribution | **Cycle Bias** and **Cycle Curve** redistribute positions within a cycle. **Seamless (Mirror)** mirrors repetition. **Color Smoothing** selects discrete, normal, or reversed transitions; **Color Interpolation** selects RGB, OKLab, or Linear RGB blending. |
 | Interior and palette highlights | **Mandelbrot Color** colors interior/iteration-limit pixels. **Palette Gloss** and its **Gloss Color** add cycle-linked highlights. This is separate from relief Gloss below. |
 | Basic band lines | **Band Lines**, **Lines per Cycle**, **Line Width**, **Line Opacity**, **Line Softness**, and **Line Color** define the repeated contours. Opacity 0 hides the contribution. |
@@ -131,6 +131,7 @@ The reset menu has different scopes: reset one selected value/color, **Reset eff
 | Feature | Controls and result |
 | --- | --- |
 | Material | **Roughness** spreads Studio reflections; **Metalness** changes the metallic response; **Index of Refraction** controls dielectric reflection. **Clearcoat** adds a coating; **Coat Roughness** spreads that coating's reflections. |
+| Material presets | **Bronze**, **Pearl**, **Obsidian**, and **Ceramic** (Lighting & Relief → Material Presets) turn Studio on and set Roughness, Metalness, Clearcoat, Coat Roughness, Specular Intensity, Specular Anisotropy, Iridescence, and Film Thickness together as one undoable edit. They are starting points; adjust any of those controls afterward. |
 | Studio lighting | **Direct Light** controls direct illumination; **Studio Reflections** controls the environment contribution. **Environment Rotation** rotates the environment; **Follow Light Direction** couples it to the main light direction, from independent at 0 to full follow at 1. |
 | Reflection shaping | **Reflection Detail**, **Reflection Contrast**, **Reflection Brightness**, and **Reflection Curvature** shape reflection structure. **Specular Antialiasing** reduces harsh specular variation; it is not a substitute for image SSAA. |
 | Palette and surface | **Palette Amount** (reference name **Palette Color**) mixes palette color into the style. **Chrome Strength** controls the legacy surface contribution. **Surface Phase** shifts surface/reflection structure. **Surface Color Amount** scales **Surface Color**. Complete Replacement bypasses the legacy composite controls described above. |
@@ -241,7 +242,7 @@ For each of four layers, turn **Enabled** on, choose **Image File**, and raise *
 
 **UV Source** chooses Screen, Cycle × Band, Cycle × Angle, or Cycle × Screen placement. **Texture Period** 0 follows the palette; a positive value gives an independent iteration period. **Size** enlarges/shrinks texture features, **Keep Aspect** preserves source proportions, and **Repeat U / Repeat V** change repetition. **Palette Follow** couples movement to palette animation; **Scroll U / Scroll V** add signed motion. A still image cannot show a speed difference at one fixed time.
 
-Texture, Pattern, and Animated Materials panels also offer **Reset Layer**, **Copy to Next Layer**, **Move Toward Bottom**, and **Move Toward Top**. Copy overwrites the destination layer; moving swaps neighboring slots. See [layer actions](settings-reference.md#palette-and-layer-actions).
+**Clear Image** removes a texture layer's image and turns that layer off, keeping its other settings; choosing an image turns the layer on again. Texture, Pattern, and Animated Materials panels also offer **Reset Layer**, **Copy to Next Layer**, **Move Toward Bottom**, and **Move Toward Top**. Copy overwrites the destination layer; moving swaps neighboring slots. See [layer actions](settings-reference.md#palette-and-layer-actions).
 
 [Texture fields](settings-reference.md#textures)
 
@@ -325,7 +326,7 @@ Color Correction's Exposure is not measured in stops. **HDR Exposure** is a diff
 | Fog | **Radius** and **Opacity** mix blurred color. **Center Start** and **Invert Falloff** shape screen-space coverage. |
 | Rim-masked fog | **Rim Mask**, **Rim Mask Boost**, and **Rim Blur** confine/soften fog around the directional rim footprint. A useful rim contribution is needed to see the mask. |
 | Focus Band | **Focus Amount**, **Focus Depth**, **Focus Range**, **Focus Falloff**, and **Focus Blur** keep an iteration-depth band sharp and blur outside it. This is not physical camera-distance depth of field. |
-| Chaos Blur | **Chaos Amount**, **Chaos Detail Scale**, **Chaos Threshold**, **Chaos Transition**, **Chaos Feather**, and **Chaos Blur Radius** select and soften intricate regions. **Chaos Highlight Detail** retains some bright detail; **Chaos Shade** darkens the selected regions. |
+| Chaos Blur | **Chaos Amount**, **Chaos Detail Scale**, **Chaos Threshold**, **Chaos Transition**, **Chaos Feather**, and **Chaos Blur Radius** select and soften intricate regions. **Chaos Shade** darkens the selected regions, down to black. **Chaos Blur Averaging** chooses whether the blur averages in gamma space, which keeps dark gaps dark, or in linear space, which lets bright detail spread. |
 | Blur Quality | Speed caps relevant full-resolution radii at 16 texels. Appearance permits larger radii, up to the shader's 4096-texel safety limit, and denser sampling. Small ordinary local blurs can match in both modes; Chaos Blur changes sampling density even below the 16-texel cap. |
 
 Focus Band and Chaos Blur are groups within Finishing and participate in the Fog contribution; they do not appear as separate Shader menu entries or reorderable layers.
@@ -357,7 +358,7 @@ Bloom is separate from Line Glow and Animated Materials Glow: those create local
 
 The MFR SDR display modes ignore Highlight Headroom. For PQ/HLG video, enable HDR Rendering and select **Video Transfer** in export settings; the selected SDR preview curve does not by itself select an HDR video format.
 
-[HDR fields](settings-reference.md#hdr-and-tone-mapping) · [Detailed MFR behavior](../docs/mfr-hdr-preview.md)
+[HDR fields](settings-reference.md#hdr-and-tone-mapping) · [Detailed MFR behavior](../documentation/notes/mfr-hdr-preview.md)
 
 **Example: HDR shoulder**
 
@@ -381,7 +382,7 @@ False Color visualizes exposure ranges. Its blue/gray/yellow colors are diagnost
 
 ## Shader Layers
 
-**Custom Layer Order** enables ordered compositing. **Selected Layer** chooses a contribution; **Open Layer List** opens the list. Move Up/Down, Bring to Front, Send to Back, or dragging changes order. Higher layers are applied later. Moving or toggling visibility enables custom order. Hiding a contribution retains its values, so it can be restored without rebuilding the settings.
+**Custom Layer Order** enables ordered compositing. **Selected Layer** chooses a contribution; **Open Layer List** opens the list. Move Up/Down, Bring to Front, Send to Back, or dragging changes order. Higher layers are applied later; the number beside each layer is its application order, 1 first. Moving or toggling visibility enables custom order. Hiding a contribution retains its values, so it can be restored without rebuilding the settings.
 
 The stack has **29 layer slots**. The list can show only currently active contributions; a stored slot is not a guarantee of a visible effect.
 
@@ -408,7 +409,7 @@ The stack has **29 layer slots**. The list can show only currently active contri
 | VHS Finish | VHS/nearest-sampling finish. |
 | Monochrome Finish | Monochrome/grain finish. |
 
-For example, placing a pattern above a blur keeps its newly added edges sharper; placing it below lets the later blur affect them. This is an ordering example, not a promise that every layer interacts identically with every mask. **Restore Original Order** resets order and visibility and disables custom compositing. Turning Custom Layer Order off alone restores the original rendering path while retaining the saved custom arrangement.
+For example, placing a pattern above a blur keeps its newly added edges sharper; placing it below lets the later blur affect them. This is an ordering example, not a promise that every layer interacts identically with every mask. **Restore Original Order** (the layer panel's **Reset** button) resets order and visibility and disables custom compositing. Turning Custom Layer Order off alone restores the original rendering path while retaining the saved custom arrangement.
 
 [Layer controls](settings-reference.md#shader-layer-controls)
 
@@ -432,9 +433,9 @@ The Timeline Editor can animate supported parameters by depth. Selecting a track
 
 **Color Settings File** accepts RFC, RFSP, KFR, or KFP in the palette import workflow. Read the source, then apply it. **Include Color Correction** additionally imports Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. This is narrower than loading a full shader preset.
 
-**Save Shader Preset / Load Shader Preset** work with `.rfsp` appearance settings. A full `.rfc` also saves the artwork's location/configuration. External texture/audio sources are separate assets. The **Preset → Shader** menu provides preset families for palette, stripe, slope, color, fog, bloom, and full examples; a family preset replaces that component while a full example replaces the shader settings.
+**File → Save Appearance Settings / Load Appearance Settings** work with `.rfsp` appearance settings. A full `.rfc` also saves the artwork's location/configuration. External texture/audio sources are separate assets. The **Preset → Shader** menu provides preset families for palette, stripe, slope, color, fog, bloom, and full examples; a family preset replaces that component while a full example replaces the shader settings.
 
-**Local AI appearance** is an optional helper using a configured local-model server. It proposes/applies appearance settings; it is not an additional GPU effect. The [detailed Local AI chapter](local-ai.md) covers setup, Generate/Apply/Undo, refinement, AI zoom, locator retries, and troubleshooting, with actual images of both tabs. The separate [Timeline AI Edit](animation-and-export.md#timeline-ai-edit) exchanges timeline JSON and image sheets.
+**Local AI appearance** is an optional helper using a configured model server. Its menu entry is hidden by default; see [enabling optional AI tools](workspace-and-files.md#menu-visibility-and-optional-ai-entry-points). It proposes/applies appearance settings; it is not an additional GPU effect. The [detailed Local AI chapter](local-ai.md) covers setup, Generate/Apply/Undo, refinement, AI zoom, automatic videos, locator retries, and troubleshooting. The separate [Timeline AI Edit](animation-and-export.md#timeline-ai-edit) exchanges timeline JSON and image sheets.
 
 ## Coverage and verification
 

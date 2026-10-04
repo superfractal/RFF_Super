@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-28.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #pragma once
@@ -31,5 +32,11 @@ namespace merutilm::vkh {
         void destroy() override;
 
         void finish();
+
+        // Submits what is recorded so far without signalling the present semaphore, for a frame sent in several parts.
+        void finishWithoutSignal();
+
+    private:
+        void submit(VkSemaphore signalSemaphore);
     };
 }

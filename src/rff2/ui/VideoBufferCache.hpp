@@ -3,7 +3,7 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-19
 // Modified by GPT-5 on 2026-08-21
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26
 //
 
 #pragma once
@@ -11,6 +11,8 @@
 #include "../../vulkan_helper/handle/CoreHandler.hpp"
 #include "opencv2/core/mat.hpp"
 #include <utility>
+#include <optional>
+#include <cstdint>
 
 namespace merutilm::rff2 {
     struct VideoBufferCache final : vkh::CoreHandler {
@@ -20,6 +22,8 @@ namespace merutilm::rff2 {
         // rgba64le rather than BGR24, which is what the HDR encoder is fed.
         bool hdr;
         float zoom;
+        std::optional<uint64_t> maxIteration;
+        std::optional<uint64_t> interpolatedMaxIteration;
         int subsampleCount;
         cv::Mat image;
 

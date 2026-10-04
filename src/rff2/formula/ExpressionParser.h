@@ -1,6 +1,7 @@
 //
 // Created by AI; exact creation date unavailable.
 // Modified by GPT-5 on 2026-08-21
+// Modified by GPT-6 on 2026-09-30, 2026-10-01
 //
 
 #pragma once
@@ -21,6 +22,7 @@ namespace merutilm::rff2 {
         // New functions for complex fractals
         RABS,  // real absolute: abs(real(z)) + i*imag(z)
         IABS,  // imag absolute: real(z) + i*abs(imag(z))
+        // Burning Ship: Michelitsch and Roessler (1992), mathematical reference; see NOTICE; project license unchanged.
         RIABS, // both absolute: abs(real(z)) + i*abs(imag(z)) - Burning Ship style
         NORM,  // |z|^2 = real(z)^2 + imag(z)^2
         FLOOR, // floor of real and imag parts

@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-05-09.
 // Modified by Opus 5 on 2026-08-26
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-29
 //
 
 #pragma once
@@ -36,10 +36,10 @@ namespace merutilm::rff2 {
         void dispatch();
 
     private:
-        static std::vector<uint16_t> getRenderPriority(uint16_t rowsPerWorker);
+        static std::vector<uint32_t> getRenderPriority(uint32_t rowsPerWorker);
 
 
-        void renderForward(uint16_t xRes, uint16_t yRes, uint16_t y, std::vector<std::atomic<bool> > &rendered);
+        void renderForward(uint16_t xRes, uint16_t yRes, uint32_t y, std::vector<std::atomic<bool> > &rendered);
 
 
         void renderBackward(uint16_t xRes, uint16_t yRes, uint32_t len, std::vector<std::atomic<bool> > &rendered);
@@ -60,12 +60,12 @@ namespace merutilm::rff2 {
 
     template<typename T>
     void ParallelArrayDispatcher<T>::dispatch() {
-        const uint16_t rowsPerWorker = matrix.getHeight() / threads + 1;
+        const uint32_t rowsPerWorker = matrix.getHeight() / threads + 1;
         if (state.interruptRequested()) {
             return;
         }
 
-        const std::vector<uint16_t> rowPriority = getRenderPriority(rowsPerWorker);
+        const std::vector<uint32_t> rowPriority = getRenderPriority(rowsPerWorker);
         const auto xRes = matrix.getWidth();
         const auto yRes = matrix.getHeight();
         const auto pixelCount = matrix.getLength();
@@ -73,7 +73,7 @@ namespace merutilm::rff2 {
         std::vector<std::jthread> workers;
         workers.reserve(threads);
 
-        for (uint16_t startRow = 0; startRow < matrix.getHeight(); startRow += rowsPerWorker) {
+        for (uint32_t startRow = 0; startRow < matrix.getHeight(); startRow += rowsPerWorker) {
             workers.emplace_back([startRow, &rowPriority, xRes, yRes, this, &rendered, pixelCount] {
                 for (const auto rowOffset : rowPriority) {
                     renderForward(xRes, yRes, startRow + rowOffset, rendered);
@@ -90,14 +90,14 @@ namespace merutilm::rff2 {
     }
 
     template<typename T>
-    std::vector<uint16_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint16_t rowsPerWorker) {
-        std::vector<uint16_t> priority(rowsPerWorker, 0);
-        uint16_t offset = rowsPerWorker >> 1;
-        uint16_t repetitionCount = 1;
-        uint16_t writeIndex = 1;
+    std::vector<uint32_t> ParallelArrayDispatcher<T>::getRenderPriority(const uint32_t rowsPerWorker) {
+        std::vector<uint32_t> priority(rowsPerWorker, 0);
+        uint32_t offset = rowsPerWorker >> 1;
+        uint32_t repetitionCount = 1;
+        uint32_t writeIndex = 1;
 
         while (offset > 0) {
-            for (uint16_t j = 0; j < repetitionCount; ++j) {
+            for (uint32_t j = 0; j < repetitionCount; ++j) {
                 priority[writeIndex] = priority[j] + offset;
                 ++writeIndex;
             }
@@ -110,9 +110,9 @@ namespace merutilm::rff2 {
         sortedPriority.resize(writeIndex);
         std::ranges::sort(sortedPriority);
 
-        uint16_t sortedIndex = 0;
+        uint32_t sortedIndex = 0;
         while (writeIndex < priority.size()) {
-            const uint16_t missing = sortedIndex + offset;
+            const uint32_t missing = sortedIndex + offset;
             if (sortedPriority.size() <= sortedIndex || sortedPriority[sortedIndex] != missing) {
                 priority[writeIndex] = missing;
                 ++writeIndex;
@@ -126,7 +126,7 @@ namespace merutilm::rff2 {
 
 
     template<typename T>
-    void ParallelArrayDispatcher<T>::renderForward(const uint16_t xRes, const uint16_t yRes, const uint16_t y,
+    void ParallelArrayDispatcher<T>::renderForward(const uint16_t xRes, const uint16_t yRes, const uint32_t y,
                                                    std::vector<std::atomic<bool> > &rendered) {
         if (y >= yRes) {
             return;

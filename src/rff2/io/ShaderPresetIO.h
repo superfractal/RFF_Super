@@ -6,6 +6,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -27,7 +28,7 @@ namespace merutilm::rff2 {
         static constexpr uint32_t MAGIC = 0x52465350; // "RFSP"
         // v2 added the hybrid palette section (recipe {id, seed} or alpha-less raw colors).
         // v3 added the eyedropper frozen-color list (tolerance + iteration values).
-        static constexpr uint32_t VERSION = 4;
+        static constexpr uint32_t VERSION = 5;
 
         static bool save(const std::filesystem::path &path, const ShaderAttribute &shader);
 
@@ -112,7 +113,11 @@ namespace merutilm::rff2 {
         // from a build without them loads with the lines off, which is the picture it was written under.
         static void writeChaosBlur(std::ostream &out, const ShaderAttribute &shader);
 
-        static void readChaosBlur(std::ifstream &in, ShaderAttribute &shader);
+        static void readChaosBlur(std::ifstream &in, ShaderAttribute &shader, bool legacyHighlights);
+
+        static void writeChaosAverage(std::ostream &out, const ShaderAttribute &shader);
+
+        static void readChaosAverage(std::ifstream &in, ShaderAttribute &shader);
 
         static void writeSurfaceReplacement(std::ostream &out, const ShaderAttribute &shader);
 

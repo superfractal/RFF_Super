@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-23
+// Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30
 //
 
 #include "TimelineJsonIO.hpp"
@@ -103,17 +103,24 @@ namespace merutilm::rff2 {
             clips.push_back({{"id", c.id}, {"path", c.path}, {"sourceDuration", c.sourceDuration},
                 {"start", c.start}, {"in", c.in}, {"out", c.out}, {"fadeIn", c.fadeIn}, {"fadeOut", c.fadeOut},
                 {"gain", c.gain}, {"muted", c.muted}});
-        const auto &o = t.zoomOverlay;
-        Json overlay{{"decimalPlaces", o.decimalPlaces}, {"visible", o.visible}, {"custom", o.custom},
+        const auto overlayJson = [](const VidZoomOverlayAttribute &o) {
+            return Json{{"limitDisplayTime", o.limitDisplayTime}, {"displayStart", o.displayStart}, {"displayEnd", o.displayEnd},
+            {"decimalPlaces", o.decimalPlaces}, {"visible", o.visible}, {"showMaxIteration", o.showMaxIteration}, {"custom", o.custom},
             {"anchor", o.anchor}, {"x", o.x}, {"y", o.y}, {"size", o.size}, {"family", o.family},
             {"style", o.style}, {"color", color(o.color)}, {"outline", o.outline}, {"outlineWidth", o.outlineWidth},
             {"outlineColor", color(o.outlineColor)}, {"shadow", o.shadow}, {"shadowX", o.shadowX},
             {"shadowY", o.shadowY}, {"shadowColor", color(o.shadowColor)}};
+        };
+        auto overlay = overlayJson(t.legacyOverlay());
+        auto iteration = overlayJson(t.maxIterationOverlay);
+        iteration.erase("decimalPlaces");
+        iteration.erase("showMaxIteration");
         return {{"format", "RFF_Super.timeline"}, {"version", 1}, {"timeline", {
             {"enabled", t.enabled}, {"estimateKeyframes", t.estimateKeyframes}, {"tracks", tracks}, {"holds", holds},
             {"rotationMode", int(t.rotationMode)}, {"rotationPeriod", t.rotationPeriod},
             {"rotationDirection", int(t.rotationDirection)}, {"rotationStartAngle", t.rotationStartAngle},
-            {"zoomOverlay", overlay}, {"audio", {{"exportEnabled", t.audio.exportEnabled}, {"gain", t.audio.gain}, {"clips", clips}}}}}};
+            {"zoomOverlay", overlay}, {"maxIterationOverlay", iteration},
+            {"interpolateMaxIteration", t.interpolateMaxIteration}, {"audio", {{"exportEnabled", t.audio.exportEnabled}, {"gain", t.audio.gain}, {"clips", clips}}}}}};
     }
 
     VidTimelineAttribute TimelineJsonIO::parse(std::string_view text) {
@@ -127,11 +134,40 @@ namespace merutilm::rff2 {
             if (event == Json::parse_event_t::object_end) objectKeys.pop_back();
             return true;
         };
-        const auto j = Json::parse(text, callback);
+        auto j = Json::parse(text, callback);
+        if (j.is_object() && j.contains("timeline") && j.at("timeline").is_object() &&
+            j.at("timeline").contains("zoomOverlay") && j.at("timeline").at("zoomOverlay").is_object()) {
+            auto &overlay = j["timeline"]["zoomOverlay"];
+            if (!overlay.contains("showMaxIteration")) overlay["showMaxIteration"] = false;
+        }
         VidTimelineAttribute sample;
         sample.tracks.push_back({0, true, {{1, 1, glm::vec4(1), VidKeyInterpolation::LINEAR}}});
         sample.holds.push_back({1, 1});
         sample.audio.clips.emplace_back();
+        if (j.is_object() && j.contains("timeline") && j.at("timeline").is_object()) {
+            auto &timeline = j["timeline"];
+            if (!timeline.contains("interpolateMaxIteration")) timeline["interpolateMaxIteration"] = false;
+            if (!timeline.contains("maxIterationOverlay") && timeline.contains("zoomOverlay") && timeline["zoomOverlay"].is_object()) {
+                auto iteration = timeline["zoomOverlay"];
+                iteration["visible"] = iteration.value("showMaxIteration", false);
+                iteration["custom"] = true;
+                if (iteration.contains("y") && iteration["y"].is_number() && iteration.contains("size") && iteration["size"].is_number())
+                    iteration["y"] = std::clamp(iteration["y"].get<float>() + iteration["size"].get<float>() * 1.5f, 0.f, 1.f);
+                iteration.erase("decimalPlaces");
+                iteration.erase("showMaxIteration");
+                timeline["maxIterationOverlay"] = std::move(iteration);
+            }
+        }
+        if (j.is_object() && j.contains("timeline") && j.at("timeline").is_object()) {
+            for (const auto *name : {"zoomOverlay", "maxIterationOverlay"}) {
+                auto &timeline = j["timeline"];
+                if (!timeline.contains(name) || !timeline[name].is_object()) continue;
+                auto &overlay = timeline[name];
+                if (!overlay.contains("limitDisplayTime")) overlay["limitDisplayTime"] = false;
+                if (!overlay.contains("displayStart")) overlay["displayStart"] = 0.0;
+                if (!overlay.contains("displayEnd")) overlay["displayEnd"] = 0.0;
+            }
+        }
         shape(j, document(sample), "document");
         require(j.at("format") == "RFF_Super.timeline" && j.at("version") == 1, "Unsupported timeline JSON format/version");
         const auto &v = j.at("timeline");
@@ -180,11 +216,15 @@ namespace merutilm::rff2 {
             range(hold.seconds, 0, 604800, "hold.seconds");
             t.holds.push_back(hold);
         }
-        const auto &o = v.at("zoomOverlay");
-        auto &z = t.zoomOverlay;
+        const auto readOverlayJson = [](const Json &o, VidZoomOverlayAttribute &z) {
         for (const auto *name : {"anchor", "style", "decimalPlaces"})
-            require(o.at(name).get<uint64_t>() <= 9, std::string(name) + ": out of range");
-        z.decimalPlaces = o.at("decimalPlaces"); z.visible = o.at("visible"); z.custom = o.at("custom");
+            if (o.contains(name)) require(o.at(name).get<uint64_t>() <= 9, std::string(name) + ": out of range");
+        z.decimalPlaces = o.value("decimalPlaces", uint32_t(6)); z.visible = o.at("visible"); z.custom = o.at("custom");
+        z.showMaxIteration = o.value("showMaxIteration", false);
+        z.limitDisplayTime = o.at("limitDisplayTime");
+        z.displayStart = o.at("displayStart");
+        z.displayEnd = o.at("displayEnd");
+        require(z.validDisplayTime(), "Overlay display times must be within 0-604800 seconds; end must exceed start or be 0 for the video end.");
         z.anchor = o.at("anchor"); z.x = o.at("x"); z.y = o.at("y"); z.size = o.at("size");
         z.family = o.at("family"); z.style = o.at("style"); z.color = readColor(o.at("color"));
         z.outline = o.at("outline"); z.outlineWidth = o.at("outlineWidth"); z.outlineColor = readColor(o.at("outlineColor"));
@@ -194,6 +234,11 @@ namespace merutilm::rff2 {
         range(z.outlineWidth, 0, .25f, "overlay.outlineWidth");
         range(z.shadowX, -1, 1, "overlay.shadowX"); range(z.shadowY, -1, 1, "overlay.shadowY");
         validColor(z.color); validColor(z.outlineColor); validColor(z.shadowColor);
+        };
+        readOverlayJson(v.at("zoomOverlay"), t.zoomOverlay);
+        readOverlayJson(v.at("maxIterationOverlay"), t.maxIterationOverlay);
+        t.zoomOverlay.showMaxIteration = t.maxIterationOverlay.visible;
+        t.interpolateMaxIteration = v.at("interpolateMaxIteration");
         const auto &a = v.at("audio");
         t.audio.exportEnabled = a.at("exportEnabled"); t.audio.gain = a.at("gain");
         require(a.at("clips").size() <= VidAudioAttribute::maximumClips, "Too many audio clips");
@@ -238,7 +283,7 @@ Timeline behavior:
 - out controls the segment to the NEXT, lower-depth key: 0 STEP holds until the next key; 1 LINEAR; 2 SMOOTH uses u*u*(3-2*u); 3 CUBIC uses neighboring values and may overshoot before clamping. Bool/enum values are integers and require out=0. Colors are RGBA in [0,1], interpolated perceptually in OKLab. Numeric parameters clamp to catalog ranges. Bounds are limits, not recommended artistic values.
 - rotationMode=0 uses camera rotation keys; 1 uses constant-period rotation. rotationPeriod is seconds per revolution [0.01,86400], rotationDirection=0 clockwise/1 counterclockwise, rotationStartAngle is degrees [-360000,360000]. Constant rotation continues during holds. Speed-like animation parameters are integrated over elapsed time; changing speed does not reset phase.
 - Camera tracks: Rotation is degrees; Projection 0=planar, 1=equirectangular 360, 2=perspective 360. Pitch tilts the 360 camera in degrees; Field of View controls the perspective cone. Range bounds the far field as a power of ten of the horizon radius; Layout 0=ground plane with sky, 1=whole sphere. Camera projection works from available keyframes and does not calculate new fractal locations. Texture layers require an existing image, Enabled and nonzero Opacity; Scale U/V control repetition, Size scales the layer, Keep Aspect preserves its source ratio. Shared UV/Blend/Scroll modes follow the guide below. Legacy Studio Softbox tracks are retained for compatibility but no longer affect rendering.
-- zoomOverlay: visible toggles the zoom label; custom=false uses the default appearance. x/y are normalized frame coordinates [0,1]; anchor=0..8 selects a 3x3 anchor grid, row-major. size is relative to frame height [.005,.2]; family names a local font; style bit 1=bold, bit 2=italic; decimalPlaces=0..9. RGBA colors are [0,1]. outlineWidth=[0,.25], shadowX/Y=[-1,1] are relative to text size. Overlay is composited separately and is not included in contact-sheet tiles.
+- zoomOverlay and maxIterationOverlay independently control zoom and maximum-iteration text. visible toggles each label. limitDisplayTime restricts it to video seconds [displayStart, displayEnd), including zoom holds; displayEnd=0 means the video end. Times are 0..604800 seconds and a nonzero end must exceed start. zoomOverlay.showMaxIteration is a legacy mirror of maxIterationOverlay.visible. interpolateMaxIteration gradually interpolates the displayed count between maps without changing rendering; custom=false uses the default appearance. x/y are normalized frame coordinates [0,1]; anchor=0..8 selects a 3x3 anchor grid, row-major. size is relative to frame height [.005,.2]; family names a local font; style bit 1=bold, bit 2=italic; decimalPlaces=0..9. RGBA colors are [0,1]. outlineWidth=[0,.25], shadowX/Y=[-1,1] are relative to text size. Overlay is composited separately and is not included in contact-sheet tiles.
 - audio: all times are INTEGER MICROSECONDS, 1000000 per second, not depth. clip start is video time, in/out trim the source, sourceDuration is source length, fadeIn/fadeOut are durations within the trimmed clip. IDs must remain unique; preserve existing paths and sourceDuration. gain is linear amplitude, muted silences a clip, exportEnabled controls audio export. Clips must not overlap. Master and clip gain are [0,4]. Fade durations must be nonnegative and their sum must not exceed the trimmed duration. Times must fit within seven days. Changing zoom speed does not automatically move audio. Do not fabricate media files.
 - JSON import replaces the whole timeline atomically and can be undone. It does not import the read-only shader base, keyframe folder, export settings or media. Keep all required fields, no extra fields, finite numbers, no duplicate fields/IDs/depths. Maximum JSON size is 16 MiB. Keep edits within the current context depth range. Do not change estimateKeyframes to stretch an existing folder.
 

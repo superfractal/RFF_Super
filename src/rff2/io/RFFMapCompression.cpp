@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-14.
 // Modified by GPT-5 on 2026-08-23
+// Modified by GPT-6 on 2026-09-30
 //
 
 #include "RFFMapCompression.h"
@@ -32,6 +33,7 @@ namespace merutilm::rff2 {
         // few ulp of the value and the difference is a small number instead of a fresh 64-bit one.
         // Taken over the raw bit patterns, which for values of one sign rise with the value itself.
         template<typename Get>
+        // Lorenzo predictor: Ibarria et al. (2003), adapted here to bit-pattern residuals; see NOTICE; project license unchanged.
         uint64_t lorenzo(const Get &get, const size_t i, const size_t x, const size_t width) {
             const bool hasLeft = x > 0;
             if (const bool hasUp = i >= width; hasLeft && hasUp) {

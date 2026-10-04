@@ -3,8 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
-// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-10-01
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30
 //
 
 #pragma once
@@ -16,8 +16,11 @@
 #include <functional>
 #include <mutex>
 #include <optional>
+#include <map>
 
 #include "ImageCanvas.hpp"
+#include "NativeDialogs.hpp"
+#include "../io/ShaderPresetIO.h"
 #include "SmoothZoomMotion.hpp"
 #include "StatusText.hpp"
 #include "RenderSceneRequests.hpp"
@@ -54,6 +57,7 @@ namespace merutilm::rff2 {
         // nothing left to add a color to, and the canvas must go back to panning on a click.
         HWND colorFreezePickOwner = nullptr;
         std::function<void()> colorFreezePickCallback;
+        std::map<double, COLORREF> pickedFreezeColors;
 
         // Shift+drag box-zoom state
         bool boxZooming = false;
@@ -115,6 +119,7 @@ namespace merutilm::rff2 {
         std::chrono::steady_clock::time_point lastPreviewSnapshot = {};
         // Set when a compute starts, cleared by the exact upload that follows the last of its pixels.
         std::atomic<bool> previewUploadPending = false;
+        mutable std::atomic<uint64_t> pendingIterationLimit{0};
         // Row-ordered renders leave the rows below the front untouched, and carrying the front down
         // is what made the partial map read as one picture. A tiled render fills no such front.
         std::atomic<bool> previewFillDown = true;
@@ -142,6 +147,11 @@ namespace merutilm::rff2 {
         std::optional<FractalAttribute> smoothZoomOriginal;
         std::optional<FractalAttribute> smoothZoomCandidateFractal;
         std::unique_ptr<Matrix<double>> smoothZoomPreviewMatrix;
+        // Pixels of the smooth-zoom draft whose full pass has not started yet, and how long the draft
+        // computed for. Only that time is carried over: the wait for the zoom animation between the
+        // two passes is no part of the calculation, and the elapsed time left it out before.
+        uint64_t smoothZoomDraftPixels = 0;
+        std::atomic<std::chrono::high_resolution_clock::rep> smoothZoomDraftTicks{0};
         uint64_t smoothZoomOriginalMax = 0, smoothZoomOriginalPeriod = 0;
         float smoothZoomOriginalLog = 0;
         std::atomic<uint64_t> completedComputeGeneration{0};
@@ -400,15 +410,28 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] uint16_t getMouseYOnIterationBuffer() const;
 
+        void updateIterationStatus() const;
+
         void recomputeThreaded(const Attribute* overrideSettings = nullptr, bool lowResolution = false);
 
         void beforeCompute(Attribute &attr) const;
 
-        bool compute(const Attribute &attr, Matrix<double>* output = nullptr, const Attribute* samplingGeometry = nullptr);
+        // Where one compute sits inside the progress the status bar shows. A smooth-zoom draft and the
+        // full pass after it read as one job: the draft counts its pixels toward the full pass's total
+        // and holds back "Done", and the full pass carries on from the draft's count and clock.
+        struct ComputeProgress {
+            uint64_t before = 0;
+            uint64_t total = 0;
+            bool announceDone = true;
+            std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+        };
+
+        bool compute(const Attribute &attr, Matrix<double>* output = nullptr, const Attribute* samplingGeometry = nullptr,
+                     const ComputeProgress* progress = nullptr);
 
         // Builds currentPerturbator for the given settings/dcMax honoring reuseReferenceMethod.
         // Extracted from compute() so the tiled export can share the exact same reference setup.
-        bool buildPerturbator(const Attribute &attr, const dex &dcMax,
+        bool buildPerturbator(Attribute &attr, const dex &dcMax,
                               std::chrono::high_resolution_clock::time_point start);
 
         void afterCompute(bool success, uint64_t generation);
@@ -439,6 +462,11 @@ namespace merutilm::rff2 {
             colorFreezePickActive = true;
             colorFreezePickOwner = owner;
             colorFreezePickCallback = std::move(onPicked);
+        }
+
+        [[nodiscard]] COLORREF pickedFreezeColor(double iteration) const {
+            const auto found = pickedFreezeColors.find(iteration);
+            return found == pickedFreezeColors.end() ? CLR_INVALID : found->second;
         }
 
         void cancelColorFreezePick() {
@@ -544,6 +572,8 @@ namespace merutilm::rff2 {
         // Everything the scene is holding right now in one block: the view, what the canvas costs,
         // what the last compute came to, the reference and its tables, and what is still running.
         [[nodiscard]] std::wstring dumpState();
+
+        [[nodiscard]] uint64_t getMapMaxIteration() const { return lastMaxIteration; }
 
         [[nodiscard]] RFFDynamicMapBinary generateMap() const {
             return RFFDynamicMapBinary(lastLogZoom, lastPeriod, lastMaxIteration, *iterationMatrix);
@@ -685,7 +715,14 @@ namespace merutilm::rff2 {
         if constexpr (std::is_base_of_v<Presets::ShaderPreset, P>) {
             if constexpr (std::is_base_of_v<Presets::ShaderPresets::FullShaderPreset, P>) {
                 // Every section at once, so nothing of the shader on screen is carried over.
-                attr.shader = preset.genShader();
+                auto shader = preset.genShader();
+                if (!ShaderPresetIO::validate(shader)) {
+                    NativeDialogs::message(nullptr,
+                                           "Could not load this example. Check that its file is complete and readable, then try again.",
+                                           "Example Not Loaded", MB_OK | MB_ICONWARNING);
+                    return;
+                }
+                attr.shader = std::move(shader);
             }
             if constexpr (std::is_base_of_v<Presets::ShaderPresets::PalettePreset, P>) {
                 // Capture the seed before generating so the same color array can be regenerated on load.

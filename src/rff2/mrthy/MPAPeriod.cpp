@@ -1,11 +1,13 @@
 //
 // Created by Merutilm on 2025-05-11.
+// Modified by GPT-6 on 2026-09-29
 //
 
 #include "MPAPeriod.h"
 
 #include <algorithm>
 #include <memory>
+#include <stdexcept>
 
 
 namespace merutilm::rff2 {
@@ -75,6 +77,9 @@ namespace merutilm::rff2 {
         // ...
 
         const int maxMultiplier = mpaSettings.maxMultiplierBetweenLevel;
+        if (maxMultiplier < 2) {
+            throw std::invalid_argument("MPA multiplier must be at least 2");
+        }
         const int minSkip = mpaSettings.minSkipReference;
         const uint64_t longestPeriod = referencePeriod[referencePeriod.size() - 1];
 

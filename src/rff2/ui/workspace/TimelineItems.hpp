@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-18, 2026-09-19, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-03
 //
 
 #pragma once
@@ -21,7 +22,6 @@ struct TimelineItems {
     static constexpr long theme = 5;
     static constexpr long fullscreen = 6;
     static constexpr long play = 7;
-    static constexpr long pause = 8;
     static constexpr long stop = 9;
     static constexpr long loop = 10;
     static constexpr long distance = 11;
@@ -32,6 +32,7 @@ struct TimelineItems {
     static constexpr long controls = 16;
     static constexpr long overlay = 17;
     static constexpr long ai = 18;
+    static constexpr long emptyFrames = 19;
     static constexpr long divider = 50;
     static constexpr long toggle = 51;
     static constexpr long editor = 52;

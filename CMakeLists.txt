@@ -2,7 +2,7 @@
 # Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-26, 2026-09-01.
 # Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 
-# Modified by GPT-6 on 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26
+# Modified by GPT-6 on 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 cmake_minimum_required(VERSION 4.1.2)
 project(RFF_Super)
 
@@ -43,8 +43,16 @@ if(RFF_DISTRIBUTION)
     )
 endif()
 
+# Custom formulas require IEEE nonfinite checks and precise complex arithmetic when an orbit overflows.
+set_source_files_properties(
+    src/rff2/formula/CustomFormulaPerturbator.cpp
+    src/rff2/formula/ExpressionParser.cpp
+    PROPERTIES COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off"
+)
+
 set_source_files_properties(
     src/rff2/io/LocalAiSettings.cpp
+    src/rff2/ui/LocalAiWindow.cpp
     PROPERTIES COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off"
 )
 set_source_files_properties(

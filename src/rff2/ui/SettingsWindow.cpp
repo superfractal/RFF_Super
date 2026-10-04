@@ -3,7 +3,8 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-23, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-26
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-04
 //
 
 #include "UiLanguage.hpp"
@@ -15,6 +16,7 @@
 #include "../constants/Constants.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cwchar>
 #include <optional>
@@ -86,15 +88,23 @@ namespace merutilm::rff2 {
         HBRUSH checked = nullptr;
         HBRUSH textField = nullptr;
         HBRUSH disabledControl = nullptr;
+        std::array<COLORREF, 4> colors{};
 
         void ensure(const SettingsThemeColors &theme) {
-            if (background != nullptr) {
+            const std::array<COLORREF, 4> current{theme.background, theme.checkboxChecked,
+                                               theme.textFieldBackground, theme.controlDisabledFace};
+            if (background && checked && textField && disabledControl && colors == current) {
                 return;
             }
+            DeleteObject(background);
+            DeleteObject(checked);
+            DeleteObject(textField);
+            DeleteObject(disabledControl);
             background = CreateSolidBrush(theme.background);
             checked = CreateSolidBrush(theme.checkboxChecked);
             textField = CreateSolidBrush(theme.textFieldBackground);
             disabledControl = CreateSolidBrush(theme.controlDisabledFace);
+            colors = current;
         }
     };
 
@@ -395,10 +405,13 @@ namespace merutilm::rff2 {
     }
 
     SettingsWindow::SettingsWindow(const std::wstring &name, const int width, const int labelWidth,
-                                   const int inputHeight)
+                                   const int inputHeight, const bool allowWindowCapture)
         : windowWidth(Constants::Win32::settingsWindowScaled(width)),
           labelWidth(labelWidth > 0 ? Constants::Win32::settingsWindowScaled(labelWidth) : labelWidth),
           inputHeight(sc(inputHeight)) {
+        if (allowWindowCapture) {
+            extendedStyle &= ~WS_EX_TOOLWINDOW;
+        }
         const UiDpi::AwarenessScope awareness(true);
         const auto dpiScope = scopedDpi(this);
         windowWidth = sc(width);
@@ -444,7 +457,7 @@ namespace merutilm::rff2 {
             if (width <= 0) {
                 RECT nc = {0, 0, 0, 0};
                 AdjustWindowRectEx(&nc, Constants::Win32::STYLE_SETTINGS_WINDOW, FALSE,
-                                   Constants::Win32::STYLE_EX_SETTINGS_WINDOW);
+                                   extendedStyle);
                 const int border = nc.right - nc.left;
                 const int availOuter = GetSystemMetrics(SM_CXSCREEN) - fractalRight;
                 windowWidth = std::max(200, availOuter - border - GetSystemMetrics(SM_CXVSCROLL));
@@ -462,7 +475,7 @@ namespace merutilm::rff2 {
         // top-level window that merely rides above the window it belongs to. That is what replaces
         // the WS_EX_TOPMOST the panels used to carry, which pinned them over every other program on
         // the desktop.
-        window = CreateWindowExW(Constants::Win32::STYLE_EX_SETTINGS_WINDOW,
+        window = CreateWindowExW(extendedStyle,
                                  Constants::Win32::CLASS_SETTINGS_WINDOW, UiLanguage::text(name).c_str(),
                                  WS_SYSMENU | WS_CLIPCHILDREN, snapLeft, snapTop, windowWidth, 0, master,
                                  nullptr, nullptr, nullptr);
@@ -965,7 +978,7 @@ namespace merutilm::rff2 {
         RECT rect = {0, 0, windowWidth, viewportHeight};
         const UINT nativeDpi = UiDpi::forWindow(window);
         UiDpi::adjustWindowRect(rect, Constants::Win32::STYLE_SETTINGS_WINDOW,
-                                Constants::Win32::STYLE_EX_SETTINGS_WINDOW, nativeDpi);
+                                extendedStyle, nativeDpi);
         int outerW = rect.right - rect.left;
         const int outerH = rect.bottom - rect.top;
         if (needScroll) {
@@ -1412,6 +1425,44 @@ namespace merutilm::rff2 {
         return std::min(maxWidth, std::max(inputHeight, desired));
     }
 
+    SettingsWindow::RadioLayout SettingsWindow::arrangeRadioChoices(const std::vector<std::wstring> &labels,
+                                                                    const int valueWidth,
+                                                                    const bool allowSideBySide) const {
+        RadioLayout layout;
+        const int count = int(labels.size());
+        if (!allowSideBySide || count < 2) {
+            return layout;
+        }
+        // Single digits are layer numbers, shown as narrow tabs rather than stretched across the column.
+        layout.tabs = std::ranges::all_of(labels, [](const std::wstring &label) {
+            return label.size() == 1 && label[0] >= L'0' && label[0] <= L'9';
+        });
+        const HDC hdc = GetDC(window);
+        const auto oldFont = SelectObject(hdc, reinterpret_cast<HFONT>(font));
+        int widest = 0;
+        for (const auto &label : labels) {
+            const auto shown = UiLanguage::text(label);
+            SIZE size{};
+            GetTextExtentPoint32W(hdc, shown.c_str(), int(shown.size()), &size);
+            widest = std::max(widest, int(size.cx));
+        }
+        SelectObject(hdc, oldFont);
+        ReleaseDC(window, hdc);
+        const int segmentWidth = layout.tabs ? std::min(valueWidth / count, sc(48)) : valueWidth / count;
+        // Every label needs its own width plus padding, or the row keeps one radio button per line.
+        if (segmentWidth < widest + sc(20)) {
+            layout.tabs = false;
+            return layout;
+        }
+        layout.sideBySide = true;
+        for (int i = 0; i < count; ++i) {
+            const bool last = i + 1 == count;
+            const int width = layout.tabs || !last ? segmentWidth : valueWidth - i * segmentWidth;
+            layout.spans.emplace_back(i * segmentWidth, width);
+        }
+        return layout;
+    }
+
     bool SettingsWindow::checkIndex(const int index) const {
         return index >= 0 && index < callbacks.size();
     }
@@ -1495,6 +1546,48 @@ namespace merutilm::rff2 {
     // Everything WM_DRAWITEM paints, into dis->hDC. The caller has that pointed at an off-screen
     // bitmap, so none of the steps below - the wipe to the panel color, the face, the label -
     // is on screen on its own. Returns false when the item belongs to nobody here.
+    // One choice of a side-by-side radio row: a filled button when chosen, an outlined one otherwise,
+    // or a tab underlined in the highlight color when the row holds layer numbers.
+    void SettingsWindow::drawRadioSegment(const DRAWITEMSTRUCT *dis, const std::wstring &text, const bool selected,
+                                          const bool enabled, const bool tab, const HFONT font) {
+        const auto &theme = settingsTheme();
+        const bool focused = (dis->itemState & ODS_FOCUS) != 0;
+        const bool chosen = selected && enabled;
+        RECT rc = dis->rcItem;
+        FillRect(dis->hDC, &rc, windowBackgroundBrush());
+        RECT face = rc;
+        face.right -= sc(4); // the gap to the next choice
+        if (tab) {
+            const HBRUSH fill = CreateSolidBrush(chosen ? theme.radioSelectedBackground : theme.textFieldBackground);
+            FillRect(dis->hDC, &face, fill);
+            DeleteObject(fill);
+            const int lineHeight = chosen || focused ? sc(2) : 1;
+            RECT underline{face.left, face.bottom - lineHeight, face.right, face.bottom};
+            const HBRUSH line = CreateSolidBrush(chosen || focused ? theme.radioSelectedBorder : theme.checkboxBorder);
+            FillRect(dis->hDC, &underline, line);
+            DeleteObject(line);
+        } else {
+            const HPEN pen = CreatePen(PS_SOLID, focused && !chosen ? sc(2) : 1,
+                                       chosen || focused ? theme.radioSelectedBorder : theme.checkboxBorder);
+            const HBRUSH brush = CreateSolidBrush(chosen ? theme.radioSelectedBackground : theme.textFieldBackground);
+            const auto oldPen = SelectObject(dis->hDC, pen);
+            const auto oldBrush = SelectObject(dis->hDC, brush);
+            RoundRect(dis->hDC, face.left, face.top, face.right, face.bottom,
+                      sc(Constants::Win32::BUTTON_CORNER_RADIUS), sc(Constants::Win32::BUTTON_CORNER_RADIUS));
+            SelectObject(dis->hDC, oldBrush);
+            SelectObject(dis->hDC, oldPen);
+            DeleteObject(brush);
+            DeleteObject(pen);
+        }
+        RECT label{face.left + sc(4), face.top, face.right - sc(4), face.bottom};
+        const auto oldFont = SelectObject(dis->hDC, font);
+        SetBkMode(dis->hDC, TRANSPARENT);
+        SetTextColor(dis->hDC, !enabled ? theme.textDisabled : chosen ? theme.radioSelectedText : theme.text);
+        UiLanguage::drawText(dis->hDC, text.c_str(), -1, &label,
+                             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+        SelectObject(dis->hDC, oldFont);
+    }
+
     bool SettingsWindow::drawOwnerDrawnItem(SettingsWindow &wnd, const DRAWITEMSTRUCT *dis) {
 
         // A dropdown: its closed face, and the rows it drops.
@@ -1656,6 +1749,12 @@ namespace merutilm::rff2 {
             const auto previewIt = wnd.rowPreviews.find(dis->hwndItem);
             const bool hasPreview = previewIt != wnd.rowPreviews.end();
             const std::wstring text = (*wnd.unparsers[index])(value);
+
+            if (wnd.segmentButtons.contains(dis->hwndItem)) {
+                drawRadioSegment(dis, text, selected, enabled, wnd.tabButtons.contains(dis->hwndItem),
+                                 reinterpret_cast<HFONT>(wnd.font));
+                return true;
+            }
 
             RECT rc = dis->rcItem;
             RECT radioRc = rc;
@@ -3030,7 +3129,9 @@ namespace merutilm::rff2 {
         float value;
         if (sb.logScale) {
             const double factor = coarse ? 10.0 : 1.1220184543019633;
-            const double raw = direction > 0 ? current * factor : current / factor;
+            const double raw = direction > 0
+                ? (sb.zeroStop && current <= 0 ? sb.minValue : current * factor)
+                : current / factor;
             value = static_cast<float>(sb.wholeSteps ? std::llround(std::clamp(raw, floorValue, sb.maxValue))
                                                      : std::clamp(raw, floorValue, sb.maxValue));
             const auto curWhole = static_cast<float>(std::llround(current));
@@ -3836,8 +3937,11 @@ namespace merutilm::rff2 {
 
     void SettingsWindow::setRowPreview(const HWND control, std::function<void(HDC, const RECT &)> &&painter) {
         rowPreviews[control] = std::move(painter);
-        SetWindowPos(control, nullptr, 0, 0, getFixedValueWidth(), inputHeight,
-                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        // A side-by-side choice keeps its own width; a row with previews registers its radios one per line.
+        if (!segmentButtons.contains(control)) {
+            SetWindowPos(control, nullptr, 0, 0, getFixedValueWidth(), inputHeight,
+                         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
         InvalidateRect(control, nullptr, TRUE);
     }
 

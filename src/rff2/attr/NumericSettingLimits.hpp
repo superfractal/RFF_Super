@@ -1,4 +1,8 @@
+//
 // Modified by GPT-6 on 2026-09-24
+// Modified by Opus 5.5 on 2026-10-04
+//
+
 #pragma once
 
 #include <bit>
@@ -46,6 +50,8 @@ namespace merutilm::rff2::NumericSettingLimits {
 
     inline constexpr float minimumFps = 1.f;
     inline constexpr float maximumFps = 1000.f;
+    // Live rendering only: 0 removes the cap. Video export keeps minimumFps.
+    inline constexpr float minimumRenderFps = 0.f;
     inline constexpr float minimumOverZoom = 0.f;
     inline constexpr float maximumOverZoom = 8.f;
 
@@ -58,6 +64,10 @@ namespace merutilm::rff2::NumericSettingLimits {
 
     inline bool acceptsFps(const float &value) {
         return acceptsNonnegativeRange(value, minimumFps, maximumFps);
+    }
+
+    inline bool acceptsRenderFps(const float &value) {
+        return acceptsNonnegativeRange(value, minimumRenderFps, maximumFps);
     }
 
     inline bool acceptsOverZoom(const float &value) {

@@ -1,7 +1,7 @@
 //
 // Modified by Opus 5 on 2026-08-06, 2026-08-26
 // Modified by GPT-5 on 2026-08-23
-// Modified by GPT-6 on 2026-09-16, 2026-09-23
+// Modified by GPT-6 on 2026-09-16, 2026-09-23, 2026-09-29
 //
 
 #version 450
@@ -59,7 +59,8 @@ void main() {
     double iteration = get_iteration(iter_coord);
 
     // Interior pixels carry no meaningful iteration count, so they keep the palette's Mandelbrot color.
-    if (stripe_attr.type == NONE || iteration == 0 || iteration >= iteration_info_attr.max_value) {
+    if (stripe_attr.type == NONE || stripe_attr.first_interval <= 0 || stripe_attr.second_interval <= 0 ||
+        iteration == 0 || iteration >= iteration_info_attr.max_value) {
         color = texelFetch(canvas, ivec2(gl_FragCoord.xy), 0);
         return;
     }
