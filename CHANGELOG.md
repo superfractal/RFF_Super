@@ -4,6 +4,11 @@
 
 ## 2026/10/04
 
+* **3.0.0.1**
+  * Rendering FPS 0 pauses the preview: RFF_Super keeps the last frame on the canvas while settings and calculations still apply, and any value from 1 resumes drawing.
+  * Keyframe generation, camera padding and Save Map now accept up to 200,000,000 pixels, so 3840 x 2160 at Supersampling 4 no longer stops with "Keyframes require 1 to 100,000,000 pixels". A keyframe map at that size uses about 1 GB of memory.
+  * Pause Preview During Export now also frees the main preview's VRAM for the video export, and RFF_Super puts the finished picture back without recalculating it when the export ends. Save Map waits until the export ends while the preview is set aside.
+
 * **3.0.0**
   * Added Match Planar Framing (Video Camera): RFF_Super matches the planar scale at the playhead using the loaded keyframe aspect ratio, a downward-facing 360 camera and Ground layout, while retaining rotation. Undo restores all matching settings together.
   * Added Zoom Holds (Timeline Settings): RFF_Super offers zoom pauses at keyframe positions, with editable durations and Undo. Color animation, constant-period rotation and audio continue during each pause, and settings and timeline files retain the pauses.

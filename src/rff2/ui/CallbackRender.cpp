@@ -78,7 +78,7 @@ namespace merutilm::rff2 {
         window->registerTextInput<float>(
             L"Rendering FPS", &fps, Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::acceptsRenderFps,
             [&scene] { scene.wndRequestFPS(); }, L"Rendering FPS",
-            L"Limits live rendering to 0 to 1000 frames per second; 0 means no limit. Lower this to reduce rendering load. Video export uses a separate frame rate.");
+            L"Limits live rendering to 0 to 1000 frames per second; 0 pauses the preview. Lower this to reduce rendering load. Video export uses a separate frame rate.");
         window->registerTextInput<uint32_t>(L"Threads", &threads, Unparser::U_LONG, Parser::U_LONG,
                                             [](const uint32_t &v) { return v >= 1 && v <= std::max(1u, std::thread::hardware_concurrency()); }, Callback::NOTHING, L"Threads",
                                             L"Sets the number of threads when calculating.");

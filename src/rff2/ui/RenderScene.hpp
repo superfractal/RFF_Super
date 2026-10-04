@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04
 //
 
 #pragma once
@@ -105,6 +105,9 @@ namespace merutilm::rff2 {
         std::atomic<uint64_t> computeGeneration{0};
         std::atomic<bool> isVideoGenerationActive{false};
         std::atomic<bool> isVideoExportActive{false};
+        // Set while a paused-preview video export has shrunk the canvas images; the computed map waits in releasedMatrix.
+        std::atomic<bool> previewImagesReleased{false};
+        std::unique_ptr<Matrix<double>> releasedMatrix = nullptr;
         std::atomic<bool> longJobBusy{false};
 
 
@@ -613,6 +616,13 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] bool getVideoExportActive() const {
             return isVideoExportActive;
+        }
+
+        // Render thread only: shrinks the canvas images to free VRAM for an export, and puts the map back at full size afterwards.
+        void setPreviewImagesReleased(bool released);
+
+        [[nodiscard]] bool isPreviewImagesReleased() const {
+            return previewImagesReleased;
         }
 
         [[nodiscard]] int getWndCWRequest() const {

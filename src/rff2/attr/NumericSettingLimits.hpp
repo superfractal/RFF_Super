@@ -50,7 +50,7 @@ namespace merutilm::rff2::NumericSettingLimits {
 
     inline constexpr float minimumFps = 1.f;
     inline constexpr float maximumFps = 1000.f;
-    // Live rendering only: 0 removes the cap. Video export keeps minimumFps.
+    // Live rendering only: 0 pauses the preview. Video export keeps minimumFps.
     inline constexpr float minimumRenderFps = 0.f;
     inline constexpr float minimumOverZoom = 0.f;
     inline constexpr float maximumOverZoom = 8.f;

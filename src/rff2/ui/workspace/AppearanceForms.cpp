@@ -17,7 +17,7 @@ namespace merutilm::rff2::workspace {
             model, [](auto &attributes) -> auto & { return attributes.render; }, "render.");
         section.number("fps", &Settings::fps, L"Rendering FPS", NumericSettingLimits::minimumRenderFps,
                        NumericSettingLimits::maximumFps,
-                       L"Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. "
+                       L"Live rendering limit: 0 to 1000 frames per second; 0 pauses the preview. Lower values reduce rendering load. "
                        L"Video export has a separate FPS setting.");
         section.number("threads", &Settings::threads, L"Calculation Threads", uint32_t(1),
                        std::max(uint32_t(1), std::thread::hardware_concurrency()),

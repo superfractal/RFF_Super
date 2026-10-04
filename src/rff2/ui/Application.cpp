@@ -1009,6 +1009,8 @@ namespace merutilm::rff2 {
             resolveWindowRequests();
             const auto &exportation = scene->getAttribute().video.exportation;
             const bool timelineOpen = TimelineWindow::isOpen();
+            // A paused preview has nothing to show during an export, so its canvas images give their VRAM to the export until it ends.
+            scene->setPreviewImagesReleased(scene->getVideoExportActive() && exportation.pauseMainPreview);
             if (scene->getVideoExportActive() && (exportation.pauseMainPreview || timelineOpen)) {
                 // The export owns a window context of its own, so nothing here has to run at all.
             } else if (scene->getVideoGenerationActive() &&
@@ -1031,6 +1033,9 @@ namespace merutilm::rff2 {
                 // blackout seen while the arrow keys walk a folder. The requests are still resolved
                 // here - only the drawing is held - and the frame already presented stays on the
                 // canvas underneath, so taking the picture away brings it straight back.
+                scene->render(false);
+            } else if (scene->getAttribute().render.fps <= 0.0f) {
+                // Rendering FPS 0 pauses the preview: requests still resolve, the last frame stays.
                 scene->render(false);
             } else {
                 scene->render(!comparisonWorkspace->active() || !scene->isIdleCompute() ||

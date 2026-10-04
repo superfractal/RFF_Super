@@ -328,7 +328,7 @@ namespace merutilm::rff2::workspace {
                 L"on long, high-resolution exports.",
                 [](auto &a) -> auto & { return a.video.exportation.gpuSubmitSplit; }, uint32_t(0), uint32_t(64));
             model->choice("export.pauseVideo", 5, L"Pause Preview During Export",
-                          L"Reserves the GPU for the video export.",
+                          L"Reserves the GPU and the preview's VRAM for the video export.",
                           [](auto &a) -> auto & { return a.video.exportation.pauseMainPreview; });
             model->choice("export.pauseKeyframes", 5, L"Pause Preview During Generation",
                           L"Holds the picture while calculating new keyframes.",

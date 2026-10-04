@@ -299,7 +299,8 @@ namespace merutilm::rff2 {
             L"Pause preview during video export",
             L"Holds the main window's picture from the moment Export Zooming Video is "
             L"started - the folder and file prompts included - so the whole GPU goes to the "
-            L"export. The picture resumes on its own when the export ends.");
+            L"export. The preview's VRAM is freed for the export as well. The picture resumes "
+            L"on its own when the export ends.");
         window->registerCheckboxInput(
             L"Pause keyframe preview", &pauseKeyframePreview, Callback::NOTHING, L"Pause keyframe preview",
             L"The same while keyframes are being generated. Each keyframe still has to be "
@@ -369,7 +370,7 @@ namespace merutilm::rff2 {
         Attribute &settings = scene.getAttribute();
         const VideoAttribute &videoSettings = settings.video;
         if (!MapLimits::valid(scene.getIterationBufferWidth(settings), scene.getIterationBufferHeight(settings))) {
-            message(nullptr, L"Keyframes require 1 to 100,000,000 pixels. Reduce resolution or internal scale.",
+            message(nullptr, L"Keyframes require 1 to 200,000,000 pixels. Reduce resolution or internal scale.",
                                    L"Keyframe generation", MB_OK | MB_ICONERROR);
             return;
         }
@@ -458,7 +459,7 @@ namespace merutilm::rff2 {
                     scene.getMaxInternalScale()) {
                 message(
                     nullptr,
-                    L"Camera padding exceeds the GPU limit or keyframe limits (65535 per side, 100,000,000 pixels). Reduce resolution or padding scale.",
+                    L"Camera padding exceeds the GPU limit or keyframe limits (65535 per side, 200,000,000 pixels). Reduce resolution or padding scale.",
                     L"Camera keyframes", MB_OK | MB_ICONERROR);
                 return;
             }

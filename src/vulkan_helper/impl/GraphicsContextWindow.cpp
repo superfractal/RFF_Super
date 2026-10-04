@@ -69,8 +69,10 @@ namespace merutilm::vkh {
 
             auto now = steady_clock::now();
 
-            if (framerate > 0.0f && std::isfinite(framerate)) {
-                const duration<float> remaining = duration<float>(1.0f / framerate) - (now - started);
+            // 0 pauses the preview; the loop keeps ticking at the default rate so requests still resolve.
+            const float pacing = framerate > 0.0f ? framerate : config::INITIAL_FPS;
+            if (std::isfinite(pacing)) {
+                const duration<float> remaining = duration<float>(1.0f / pacing) - (now - started);
                 if (remaining > duration<float>::zero()) {
                     const auto milliseconds = duration_cast<std::chrono::milliseconds>(remaining).count();
                     const DWORD timeout = static_cast<DWORD>(std::min<int64_t>(1000, std::max<int64_t>(1, milliseconds)));
@@ -82,9 +84,9 @@ namespace merutilm::vkh {
             // Sub-millisecond comparison. Truncating to whole milliseconds turned a 60 FPS request
             // into roughly 57, which beats against a 60 Hz display: with MAILBOX presentation a
             // vblank then finds no new image and repeats the previous one, showing up as periodic
-            // judder in anything that animates. A framerate of 0 removes the cap.
+            // judder in anything that animates.
             if (const duration<float> elapsed = now - started;
-                framerate <= 0.0f || elapsed.count() * framerate >= 1.0f) {
+                !std::isfinite(pacing) || elapsed.count() * pacing >= 1.0f) {
                 started = now;
                 for (const auto &renderer: renderers) {
                     renderer();

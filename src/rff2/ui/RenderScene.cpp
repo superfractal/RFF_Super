@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04
 //
 
 #include "NativeDialogs.hpp"
@@ -1760,7 +1760,51 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::refreshCanvasExtent() {
+        // A one-pixel canvas keeps every image the resize builds at clarity x SSAA pixels, which is what frees the VRAM.
+        if (previewImagesReleased) {
+            canvasExtent = VkExtent2D{1, 1};
+            return;
+        }
         canvasExtent = documentCanvasExtent.value_or(wc.getSwapchain().getCurrentExtent());
+    }
+
+    void RenderScene::setPreviewImagesReleased(const bool released) {
+        if (released == previewImagesReleased || renderer == nullptr) {
+            return;
+        }
+        if (released) {
+            // Only a finished map is worth keeping aside; a compute still running is left to end first.
+            if (!idleCompute || smoothZoomActive || iterationMatrix == nullptr ||
+                requests.resizeRequested || requests.recomputeRequested) {
+                return;
+            }
+            ++previewRevision;
+            releasedMatrix = std::move(iterationMatrix);
+            previewImagesReleased = true;
+            applyResize();
+            return;
+        }
+        ++previewRevision;
+        previewImagesReleased = false;
+        iterationMatrix.reset();
+        applyResize();
+        std::unique_ptr<Matrix<double> > kept = std::move(releasedMatrix);
+        if (kept == nullptr) {
+            requests.requestRecompute();
+            return;
+        }
+        auto &staging = *renderer->iterationStagingBufferContext;
+        if (kept->getWidth() == iterationMatrix->getWidth() && kept->getHeight() == iterationMatrix->getHeight() &&
+            staging.getWidth() == kept->getWidth() && staging.getHeight() == kept->getHeight()) {
+            staging.fill(kept->getCanvas());
+            iterationMatrix = std::move(kept);
+            previewUploadPending = false;
+            previewSeedGeneration = 0;
+            return;
+        }
+        // The window changed size during the export, so the kept map only seeds the view the recompute fills.
+        seedPreviewFromMatrix(*kept);
+        requests.requestRecompute();
     }
 
     void RenderScene::waitFramesInFlight() const {

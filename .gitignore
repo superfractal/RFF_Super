@@ -46,8 +46,8 @@ __pycache__/
 
 # Others
 *.zip
-/backup/
 /bin/pipeline-cache.bin
+/bin/pipeline-timings.txt
 
 /build/
 /.claude/
@@ -66,7 +66,6 @@ __pycache__/
 /20??-??-??-??????/
 # The running session's kept location / settings, and what a crashed one left behind
 /recovery/
-/models/
 
 /tools/diagnostics/*.log
 /tools/diagnostics/20??-??-??-??????/
@@ -80,6 +79,8 @@ __pycache__/
 /timeline-layout.txt
 /workspace-favorites.txt
 /local-ai-server.json
+# Local AI model files that config/local-ai-server.json points at
+/models/
 /.env
 /.env.*
 !/.env.example
