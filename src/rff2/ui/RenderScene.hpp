@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-25, 2026-10-26, 2026-11-01
 //
 
 #pragma once
@@ -17,6 +17,8 @@
 #include <mutex>
 #include <optional>
 #include <map>
+#include <set>
+#include <string>
 
 #include "ImageCanvas.hpp"
 #include "NativeDialogs.hpp"
@@ -27,12 +29,14 @@
 #include "RenderSceneRenderer.hpp"
 #include "../../vulkan_helper/handle/EngineHandler.hpp"
 #include "../data/ApproxTableCache.h"
+#include "../data/OrbitTrapMatrix.h"
 #include "../formula/MandelbrotPerturbator.h"
 #include "../io/RFFDynamicMapBinary.h"
 #include "../parallel/BackgroundThreads.h"
 #include "../preset/Presets.h"
 #include "../attr/Attribute.h"
 #include "../calc/rff_math.h"
+#include "../vulkan/GpuLightPerturbator.hpp"
 
 namespace merutilm::rff2 {
     class RenderScene final : public vkh::EngineHandler {
@@ -58,6 +62,10 @@ namespace merutilm::rff2 {
         HWND colorFreezePickOwner = nullptr;
         std::function<void()> colorFreezePickCallback;
         std::map<double, COLORREF> pickedFreezeColors;
+        // Focus pick: when active, the next canvas left-click sets Focus Depth to the clicked pixel's iteration.
+        bool focusPickActive = false;
+        HWND focusPickOwner = nullptr;
+        std::function<void()> focusPickCallback;
 
         // Shift+drag box-zoom state
         bool boxZooming = false;
@@ -108,6 +116,10 @@ namespace merutilm::rff2 {
         // Set while a paused-preview video export has shrunk the canvas images; the computed map waits in releasedMatrix.
         std::atomic<bool> previewImagesReleased{false};
         std::unique_ptr<Matrix<double>> releasedMatrix = nullptr;
+        // The escape angles that belong to releasedMatrix, kept and put back with it.
+        std::unique_ptr<Matrix<float>> releasedEscapeAngleMatrix = nullptr;
+        // The orbit traps that belong to releasedMatrix, kept and put back with it.
+        std::unique_ptr<OrbitTrapMatrix> releasedOrbitTrapMatrix = nullptr;
         std::atomic<bool> longJobBusy{false};
 
 
@@ -116,6 +128,12 @@ namespace merutilm::rff2 {
         std::array<std::wstring, Constants::Status::LENGTH> *statusMessageRef = nullptr;
         std::mutex *statusMessageMutexRef = nullptr;
         std::unique_ptr<Matrix<double>> iterationMatrix = nullptr;
+        // arg z where each pixel of iterationMatrix escaped; 0 (interior, unreached, map or draft) draws as with the coloring off.
+        std::unique_ptr<Matrix<float>> escapeAngleMatrix = nullptr;
+        // Orbit traps of each pixel of iterationMatrix; iteration 0 (unreached, map or draft) draws as with the trap coloring off.
+        std::unique_ptr<OrbitTrapMatrix> orbitTrapMatrix = nullptr;
+        // The Orbit Trap Shape the live shape planes are being measured with; disabled while there are none.
+        TrapShapeParams liveTrapShape{};
 
         // The compute threads own iterationMatrix and never touch the staging buffer the GPU copies
         // from; the render thread lifts snapshots of it across, so that buffer has a single writer.
@@ -135,6 +153,8 @@ namespace merutilm::rff2 {
         bool smoothZoomDirty = false;
         bool smoothZoomExactCandidate = false;
         bool smoothZoomSourceExact = false;
+        // The picture navigation holds is a low-resolution draft rather than a full pass.
+        bool smoothZoomSourceDraft = false;
         bool smoothZoomNeedsPreview = true;
         bool smoothZoomCandidateFullQuality = false;
         bool smoothZoomDragging = false;
@@ -150,6 +170,8 @@ namespace merutilm::rff2 {
         std::optional<FractalAttribute> smoothZoomOriginal;
         std::optional<FractalAttribute> smoothZoomCandidateFractal;
         std::unique_ptr<Matrix<double>> smoothZoomPreviewMatrix;
+        std::unique_ptr<Matrix<float>> smoothZoomPreviewAngles;
+        std::unique_ptr<OrbitTrapMatrix> smoothZoomPreviewTraps;
         // Pixels of the smooth-zoom draft whose full pass has not started yet, and how long the draft
         // computed for. Only that time is carried over: the wait for the zoom animation between the
         // two passes is no part of the calculation, and the elapsed time left it out before.
@@ -158,6 +180,23 @@ namespace merutilm::rff2 {
         uint64_t smoothZoomOriginalMax = 0, smoothZoomOriginalPeriod = 0;
         float smoothZoomOriginalLog = 0;
         std::atomic<uint64_t> completedComputeGeneration{0};
+        // A padded 360 view is computed once as a planar map Camera Padding Scale times wider, and turning the camera reprojects it instead of recomputing.
+        std::unique_ptr<Matrix<double>> panoramaSource;
+        std::unique_ptr<Matrix<float>> panoramaSourceAngles;
+        // The orbit traps of panoramaSource, reprojected into the view beside the angles.
+        std::unique_ptr<OrbitTrapMatrix> panoramaSourceTraps;
+        // The settings the finished source was computed for, empty while none is; the camera fields are left out of it.
+        std::string panoramaSourceKey;
+        // The settings of the source compute in flight and the generation it runs under.
+        std::string panoramaPendingKey;
+        uint64_t panoramaPendingGeneration = 0;
+        double panoramaSourceMax = 0.0;
+        [[nodiscard]] bool panoramaPreviewApplies(const Attribute &settings) const;
+        [[nodiscard]] std::string panoramaSourceKeyOf(const Attribute &settings) const;
+        bool preparePanoramaSource(Attribute &source, uint64_t generation);
+        void reprojectPanoramaSource(const Attribute &settings);
+        void reprojectPanoramaView();
+        void releasePanoramaSource();
         void tickSmoothZoom();
         bool beginSmoothNavigation();
         void retargetSmoothNavigation();
@@ -173,6 +212,16 @@ namespace merutilm::rff2 {
         std::unique_ptr<MandelbrotPerturbator> currentPerturbator = nullptr;
 
         std::unique_ptr<RenderSceneRenderer> renderer = nullptr;
+
+        // Built on first use by the compute thread; it stays out of the renderer, which every resize rebuilds.
+        std::unique_ptr<GpuLightPerturbator> gpuPerturbator = nullptr;
+        bool gpuPerturbatorUnavailable = false;
+        std::atomic<bool> gpuComputing = false;
+
+        // Problems met on a worker thread, each a headline and a detail, waiting for the UI thread to show them.
+        std::mutex noticeMutex;
+        std::vector<std::pair<std::wstring, std::wstring>> pendingNotices;
+        std::set<std::wstring> postedNotices;
 
         // The Debug menu's GPU-pass-timing switch. Kept here rather than on the renderer, which is
         // rebuilt from nothing on every resize and would lose it.
@@ -190,7 +239,7 @@ namespace merutilm::rff2 {
         bool browsedMapTyping = false;
         std::wstring browsedMapTyped = {};
 
-        // The same for Load Image: the pictures in the folder it opened from, which of them is over the
+        // The same for a .png opened by Load File: the pictures in the folder it opened from, which of them is over the
         // canvas, and the window holding it there. The two walks are exclusive - each one owns what
         // the canvas shows - so beginning either ends the other.
         std::vector<std::filesystem::path> browsedImages = {};
@@ -232,8 +281,6 @@ namespace merutilm::rff2 {
         RenderScene &operator=(RenderScene &&) = delete;
 
 
-
-        void resolveWindowResizeEnd() const;
 
         // Rebuilds only the swapchain and the framebuffers over it, leaving the compute and the
         // iteration buffer alone. A present that reports the swapchain stale lands here, not in the
@@ -313,6 +360,9 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] uint16_t getIterationBufferHeight(const Attribute &settings) const;
 
+        // Shows the oldest problem a worker thread posted; called by the UI thread once per frame.
+        void showPendingNotice();
+
         // Total device-local (VRAM) bytes summed across DEVICE_LOCAL heaps.
         [[nodiscard]] uint64_t getDeviceLocalMemoryTotal() const;
 
@@ -339,6 +389,12 @@ namespace merutilm::rff2 {
 
         void refreshResizeParams();
 
+        // OrbitTrap::SHAPE_PLANE_COUNT while settings color by the Orbit Trap Shape, PLANE_COUNT otherwise.
+        [[nodiscard]] static uint32_t orbitTrapPlaneCountOf(const Attribute &settings);
+
+        // Reallocates the live trap planes when Orbit Trap Coloring moved onto or off Shape; called with no compute running.
+        void matchOrbitTrapPlanes(const Attribute &settings);
+
         // Takes the canvas size from the swapchain images as they now stand.
         void refreshCanvasExtent();
 
@@ -352,6 +408,12 @@ namespace merutilm::rff2 {
         void waitFramesInFlight() const;
 
         void initRenderer(bool prepareAll = false);
+
+        // Swaps in a surface shader a skip left compiling once it is ready, and lets go of finished warm-ups.
+        void collectDeferredPipelines();
+
+        // Waits, with the preparation window up, for a surface shader a skip left compiling.
+        void awaitDeferredSlope() const;
 
         void refreshRenderContext() const;
 
@@ -430,14 +492,45 @@ namespace merutilm::rff2 {
         };
 
         bool compute(const Attribute &attr, Matrix<double>* output = nullptr, const Attribute* samplingGeometry = nullptr,
-                     const ComputeProgress* progress = nullptr);
+                     const ComputeProgress* progress = nullptr, Matrix<float>* angleOutput = nullptr,
+                     OrbitTrapMatrix* trapOutput = nullptr);
+
+        // Computes the padded planar source on the worker and reprojects it into the view.
+        bool computePanoramaSource(const Attribute &source, const Attribute &settings, const ComputeProgress *progress);
 
         // Builds currentPerturbator for the given settings/dcMax honoring reuseReferenceMethod.
         // Extracted from compute() so the tiled export can share the exact same reference setup.
         bool buildPerturbator(Attribute &attr, const dex &dcMax,
                               std::chrono::high_resolution_clock::time_point start);
 
+        using PixelCoordinate = std::function<std::array<dex, 2>(uint16_t, uint16_t, bool *)>;
+
+        // Runs the iteration on the GPU when the settings and view allow it; false leaves the job to the CPU paths.
+        bool computeOnGpu(const Attribute &attr, const PixelCoordinate &coordinate, uint16_t w, uint16_t h,
+                          Matrix<double> &matrix, Matrix<float> *escapeAngles, OrbitTrapMatrix *traps,
+                          std::atomic<int> &renderPixelsCount);
+
+        // Draws the Buddhabrot density on the flat plane, whatever the projection; false when interrupted.
+        bool computeBuddhabrot(const Attribute &geometry, uint16_t w, uint16_t h, double fullW, double fullH,
+                               Matrix<double> &matrix, std::atomic<int> &renderPixelsCount);
+
+        // Clears the escape angles and orbit traps on the matrices and staging buffers, for a picture put there by anything but a compute of this view.
+        void clearEscapeAngles();
+
+        // The GPU engine, built on first use; nullptr when this device cannot run it.
+        GpuLightPerturbator *gpuPerturbatorOrNull();
+
+        // Every pixel's dc as the CPU iterate() forms it, x then y, NaN for a sky pixel.
+        std::vector<double> gpuPixelOffsets(const Attribute &attr, const LightMandelbrotPerturbator &perturbator,
+                                            const PixelCoordinate &coordinate, uint16_t w, uint16_t h) const;
+
         void afterCompute(bool success, uint64_t generation);
+
+        // Queues a problem for showPendingNotice; one already posted this session is not posted again.
+        void postNotice(std::wstring headline, std::wstring detail);
+
+        // Says on the status line and in a notice that the view's calculation stopped on an error.
+        void reportComputeFailure(std::wstring detail);
 
         void setStatusMessage(const int index, const std::wstring_view &message) const {
             std::scoped_lock lock(*statusMessageMutexRef);
@@ -462,6 +555,7 @@ namespace merutilm::rff2 {
         // palette's frozen list. onPicked runs after a successful pick (e.g. to refresh the UI).
         // owner is the panel the pick belongs to; the arming is dropped when that window closes.
         void beginColorFreezePick(const HWND owner, std::function<void()> onPicked) {
+            cancelFocusPick();
             colorFreezePickActive = true;
             colorFreezePickOwner = owner;
             colorFreezePickCallback = std::move(onPicked);
@@ -470,6 +564,28 @@ namespace merutilm::rff2 {
         [[nodiscard]] COLORREF pickedFreezeColor(double iteration) const {
             const auto found = pickedFreezeColors.find(iteration);
             return found == pickedFreezeColors.end() ? CLR_INVALID : found->second;
+        }
+
+        // Arms the focus pick: the next canvas left-click moves Focus Depth onto that pixel's iteration count.
+        // onPicked runs after the click whether or not the pixel had a count; the arming is dropped when owner closes.
+        void beginFocusPick(const HWND owner, std::function<void()> onPicked) {
+            cancelColorFreezePick();
+            focusPickActive = true;
+            focusPickOwner = owner;
+            focusPickCallback = std::move(onPicked);
+        }
+
+        void cancelFocusPick() {
+            focusPickActive = false;
+            focusPickOwner = nullptr;
+            focusPickCallback = nullptr;
+        }
+
+        [[nodiscard]] bool isFocusPickActive() {
+            if (focusPickActive && focusPickOwner != nullptr && !IsWindow(focusPickOwner)) {
+                cancelFocusPick();
+            }
+            return focusPickActive;
         }
 
         void cancelColorFreezePick() {
@@ -582,6 +698,20 @@ namespace merutilm::rff2 {
             return RFFDynamicMapBinary(lastLogZoom, lastPeriod, lastMaxIteration, *iterationMatrix);
         }
 
+        // The orbit traps of the map generateMap returns, plane-major; empty when this view holds none.
+        [[nodiscard]] std::vector<float> generateOrbitTrapPlanes() const {
+            if (orbitTrapMatrix == nullptr || iterationMatrix == nullptr ||
+                orbitTrapMatrix->getLength() != iterationMatrix->getLength()) {
+                return {};
+            }
+            std::vector<float> planes(static_cast<size_t>(orbitTrapMatrix->getLength()) * orbitTrapMatrix->getPlaneCount());
+            orbitTrapMatrix->copyTo(planes.data());
+            const auto iterations = planes.begin() + static_cast<std::ptrdiff_t>(3u * orbitTrapMatrix->getLength());
+            const auto iterationsEnd = iterations + static_cast<std::ptrdiff_t>(orbitTrapMatrix->getLength());
+            if (std::all_of(iterations, iterationsEnd, [](const float v) { return v == 0.0f; })) return {};
+            return planes;
+        }
+
         [[nodiscard]] RenderSceneRequests &getRequests() {
             return requests;
         }
@@ -669,7 +799,7 @@ namespace merutilm::rff2 {
         // The status bar's line for the map of that index: its place in the folder.
         [[nodiscard]] std::wstring browsedMapStatus(int index) const;
 
-        // The same three for the pictures Load Image walks. There is no typed jump among them: a
+        // The same three for the pictures a .png from Load File walks. There is no typed jump among them: a
         // picture is put up whole by the arrow keys alone.
         void applyBrowsedImage(int index);
 
@@ -714,7 +844,13 @@ namespace merutilm::rff2 {
             requests.requestRecompute();
         }
         if constexpr (std::is_base_of_v<Presets::RenderPreset, P>) {
+            // A quality preset says nothing about which processor calculates, so the GPU choice stays.
+            const RndComputeShaderAttribute computeShader = attr.render.computeShader;
+            // Nor which filter resolves Supersampling.
+            const RndSsaaFilter ssaaFilter = attr.render.ssaaFilter;
             attr.render = preset.genRender();
+            attr.render.computeShader = computeShader;
+            attr.render.ssaaFilter = ssaaFilter;
             requests.requestResize();
             requests.requestRecompute();
         }

@@ -1,0 +1,32 @@
+{
+  "scope": "Source-guarded CPU arithmetic, no loader/GPU execution",
+  "textureRoundtrip": {
+    "encodedInput": 0.01,
+    "shaderPowerDecoded": 0.000039810717055349695,
+    "outputLowBranchEncoded": 0.000514354464355118,
+    "ratio": 0.0514354464355118
+  },
+  "layer2Cancellation": {
+    "normal": [
+      1,
+      0,
+      0
+    ],
+    "paletteColor": [
+      0,
+      0.5,
+      0.5
+    ],
+    "blend": 1,
+    "vectorBeforeNormalize": [
+      0,
+      0,
+      0
+    ]
+  },
+  "noiseOffset": {
+    "noiseSpaceDelta": 0.01,
+    "worldDeltaAtScalePointOne": 0.1,
+    "worldDeltaAtScale2000": 0.000005
+  }
+}

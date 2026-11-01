@@ -1,6 +1,7 @@
 //
 // Modified by GPT-6 on 2026-09-17, 2026-09-21, 2026-09-23
 // Modified by GPT-5 on 2026-09-17
+// Modified by Opus 5.5 on 2026-10-26
 //
 
 #pragma once
@@ -25,12 +26,12 @@ namespace merutilm::rff2::workspace {
                                          L"Pattern 4",
                                          L"Stripe",
                                          L"Lighting & Base Material",
-                                         L"Metal",
+                                         L"Liquid Metal",
                                          L"Cyber Sigilism",
                                          L"PHONK",
-                                         L"Frost",
-                                         L"Sea",
-                                         L"Print Material",
+                                         L"Black Metal",
+                                         L"Deep Sea",
+                                         L"Ukiyo-e",
                                          L"Material Color & Rim",
                                          L"Effect 1",
                                          L"Effect 2",
@@ -39,7 +40,7 @@ namespace merutilm::rff2::workspace {
                                          L"Color Correction",
                                          L"Fog",
                                          L"Bloom",
-                                         L"HDR / Tone Mapping",
+                                         L"HDR & Tone Mapping",
                                          L"Print Color Quantization",
                                          L"VHS Finish",
                                          L"Monochrome Finish"};

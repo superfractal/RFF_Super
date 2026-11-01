@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-18.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -35,8 +36,6 @@ namespace merutilm::vkh {
 
         void setImageContextMF(const MultiframeImageContext &imageContext);
 
-        void setUniqueImageContextMF(const MultiframeImageContext &imageContext);
-
         [[nodiscard]] const ImageContext &getImageContext() const;
 
         [[nodiscard]] const MultiframeImageContext &getImageContextMF() const;
@@ -47,10 +46,6 @@ namespace merutilm::vkh {
 
         [[nodiscard]] bool isMultiframe() const {
             return multiframeEnabled;
-        }
-
-        [[nodiscard]] bool isInitialized() const {
-            return initialized;
         }
 
         [[nodiscard]] SamplerRef getSampler() const {

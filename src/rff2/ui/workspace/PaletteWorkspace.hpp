@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-11-01
 //
 
 #pragma once
@@ -8,6 +8,8 @@
 #include "AttributeFormSection.hpp"
 #include "PaletteSources.hpp"
 #include "AppearanceFormBehavior.hpp"
+#include "../IOUtilities.h"
+#include "../../constants/Constants.hpp"
 #include "../PalettePreview.hpp"
 #include "../../preset/shader/palette/ShdPalettePresets.h"
 
@@ -62,11 +64,12 @@ namespace merutilm::rff2::workspace {
         size_t selected = 0;
         size_t libraryIndex = 0;
         uint32_t librarySeed = 1;
-        std::wstring sourcePath, sourceMessage;
-        bool importCorrection = false;
+        // The KFR file Load KFR File last read, and the RFC/RFSP file Load Settings File last read;
+        // each is shown beside the colors it holds until they are applied.
+        std::wstring importedName, settingsImportedName, sourceMessage;
         bool linkRgb = true;
         std::optional<ShdPaletteAttribute> stopPreviewBefore;
-        std::optional<ShaderAttribute> imported;
+        std::optional<ShaderAttribute> imported, settingsImported;
         ShdPaletteAttribute &palette() const {
             return attribute().shader.palette;
         }
@@ -162,8 +165,6 @@ namespace merutilm::rff2::workspace {
             FormDraft settings;
             auto nextLibrary = libraryIndex;
             auto nextSeed = librarySeed;
-            auto nextPath = sourcePath;
-            auto nextCorrection = importCorrection;
             bool nextLink = linkRgb;
             if (const auto found = draft.find("palette.linkRgb"); found != draft.end()) {
                 if (found->second != L"0" && found->second != L"1") return L"Choose On or Off.";
@@ -195,20 +196,6 @@ namespace merutilm::rff2::workspace {
                     if (!AttributeFormModel::parse(value, nextSeed)) {
                         return L"Seed must be a whole number from 0 to 4294967295.";
                     }
-                    continue;
-                }
-                if (id == "source.path") {
-                    if (value.find(L'\0') != std::wstring::npos) {
-                        return L"Enter a valid path.";
-                    }
-                    nextPath = value;
-                    continue;
-                }
-                if (id == "source.correction") {
-                    if (value != L"0" && value != L"1") {
-                        return L"Choose whether to include color correction.";
-                    }
-                    nextCorrection = value == L"1";
                     continue;
                 }
                 if (id == "palette.stopPosition") {
@@ -253,14 +240,8 @@ namespace merutilm::rff2::workspace {
                 basic.clearHistory();
                 throw;
             }
-            if (nextPath != sourcePath) {
-                imported.reset();
-                sourceMessage.clear();
-            }
-            sourcePath = std::move(nextPath);
             libraryIndex = nextLibrary;
             librarySeed = nextSeed;
-            importCorrection = nextCorrection;
             linkRgb = nextLink;
             selected = nextSelected;
             record(std::move(before), std::move(source));
@@ -362,12 +343,15 @@ namespace merutilm::rff2::workspace {
             s.number("bandLineSoftness", &S::bandLineSoftness, L"Line Softness", 0.f, 1.f);
             s.color("bandLineColor", &S::bandLineColor, L"Line Color");
             s.choice("bandLineGroove", &S::bandLineGroove, L"Recessed Grooves");
+            s.choice("grooveRounded", &S::grooveRounded, L"Rounded Bands");
+            s.number("grooveCreaseBlur", &S::grooveCreaseBlur, L"Crease Blur", 0.f, S::GROOVE_CREASE_BLUR_MAX);
             s.choice("grooveAuto", &S::grooveAuto, L"Auto Groove");
-            s.number("grooveDepth", &S::grooveDepth, L"Groove Depth", 0.f, 5.f);
+            s.choice("grooveSmooth", &S::grooveSmooth, L"Smooth Grooves");
+            s.number("grooveDepth", &S::grooveDepth, L"Groove Depth", 0.f, S::GROOVE_DEPTH_MAX);
             s.number("grooveWidth", &S::grooveWidth, L"Groove Width", 0.f, .5f);
             s.group = 2;
             s.number("stopEasing", &S::stopEasing, L"Stop Easing", uint32_t(0), uint32_t(2),
-                     L"0 Linear, 1 Smoothstep, 2 Smootherstep.");
+                     L"How colors blend between neighboring stops.");
             s.group = -1;
             s.number("animationSpeed", &S::animationSpeed, L"Animation Speed", -formMaximum, formMaximum);
             s.choice("animationMode", &S::animationMode, L"Animation Mode");
@@ -449,8 +433,12 @@ namespace merutilm::rff2::workspace {
             glow.number("width", &ShdSlopeAttribute::styleRimWidth, L"Glow Width", .1f, 32.f);
             glow.color("color", &ShdSlopeAttribute::styleRimColor, L"Glow Color");
             basic = model->form(L"Palette", {L"Color Cycle", L"Band Line", L"Color Stops", L"Arrange Stops",
-                                             L"Preset Library", L"Import Colors"});
+                                             L"Preset Library", L"KFR Color", L"Colors from Settings"});
             basic.addDividers({"iterationColoring", "offsetRatio", "enableGloss", "bandLineGroove", "bandSpineAmount", "strength"});
+            basic.groupInUse.resize(basic.groups.size());
+            basic.groupInUse[1] = [attribute = this->attribute] {
+                return attribute().shader.palette.bandLineEnabled;
+            };
         }
         void usePreset(size_t index, uint32_t seed) {
             auto next = paletteFromLibrary(index, seed);
@@ -461,27 +449,63 @@ namespace merutilm::rff2::workspace {
             record(std::move(before), std::move(source));
             sourceMessage = L"Palette preset applied. Undo restores the previous palette.";
         }
-        bool readImport(const std::filesystem::path &path) {
-            imported.reset();
+        // Choosing the file is the read: there is no path to confirm first, only Apply KFR Colors after it.
+        bool readImport() {
+            const auto path = IOUtilities::ioFileDialog(L"Load KFR File", Constants::Extension::DESC_KFR,
+                                                        IOUtilities::OPEN_FILE, Constants::Extension::KFR);
+            if (!path) {
+                return false;
+            }
             ShaderAttribute candidate;
-            if (!readPaletteSource(path, attribute().shader, candidate, sourceMessage)) {
+            if (!readKfrPalette(*path, attribute().shader, candidate, sourceMessage)) {
+                imported.reset();
                 return false;
             }
             imported = std::move(candidate);
-            sourceMessage = L"Loaded " + path.filename().wstring() + L". Ready to apply imported colors.";
+            importedName = path->filename().wstring();
+            sourceMessage = L"KFR colors loaded. Apply KFR Colors puts them on the palette.";
             return true;
         }
-        bool applyImport(bool includeCorrection) {
+        bool applyImport() {
             if (!imported) {
-                sourceMessage = L"Read a color file before applying it.";
+                sourceMessage = L"Load a KFR file before applying it.";
                 return false;
             }
-            auto next = imported->palette;
+            return applyColors(*imported, false);
+        }
+        // The same two steps for an RFC or RFSP file, whose color correction can come along too.
+        bool readSettingsImport() {
+            const auto path = IOUtilities::ioFileDialogMulti(
+                L"Load Settings File", IOUtilities::OPEN_FILE,
+                {{Constants::Extension::DESC_CONFIG, Constants::Extension::CONFIG},
+                 {Constants::Extension::DESC_SHADER_PRESET, Constants::Extension::SHADER_PRESET}});
+            if (!path) {
+                return false;
+            }
+            ShaderAttribute candidate;
+            if (!readSettingsPalette(*path, attribute().shader, candidate, sourceMessage)) {
+                settingsImported.reset();
+                return false;
+            }
+            settingsImported = std::move(candidate);
+            settingsImportedName = path->filename().wstring();
+            sourceMessage = L"Colors loaded. Apply Colors puts them on the palette.";
+            return true;
+        }
+        bool applySettingsImport(bool includeCorrection) {
+            if (!settingsImported) {
+                sourceMessage = L"Load a settings file before applying it.";
+                return false;
+            }
+            return applyColors(*settingsImported, includeCorrection);
+        }
+        bool applyColors(const ShaderAttribute &from, bool includeCorrection) {
+            auto next = from.palette;
             auto before = values();
             Source source(palette());
             palette() = std::move(next);
             if (includeCorrection) {
-                attribute().shader.color = imported->color;
+                attribute().shader.color = from.color;
             }
             selected = 0;
             record(std::move(before), std::move(source));
@@ -586,19 +610,20 @@ namespace merutilm::rff2::workspace {
                                    L"Whole number from 0 to 4294967295 for repeatable generation.",
                                    [self] { return std::to_wstring(self->librarySeed); },
                                    {}});
-            form.fields.push_back({"source.path",
+            form.fields.push_back({"source.loaded",
                                    5,
-                                   L"Color Settings File",
-                                   L"RFC, RFSP, KFR or KFP. Read first, then apply.",
-                                   [self] { return self->sourcePath; },
-                                   {},
-                                   FormField::Editor::FILE});
-            form.fields.push_back({"source.correction",
-                                   5,
-                                   L"Include Color Correction",
-                                   L"Also imports Gamma, Exposure, Hue, Saturation, Brightness and Contrast.",
-                                   [self] { return self->importCorrection ? L"1" : L"0"; },
-                                   {{L"0", L"Off"}, {L"1", L"On"}}});
+                                   L"Loaded KFR File",
+                                   L"The colors Load KFR File read, ready for Apply KFR Colors.",
+                                   [self] { return self->imported ? self->importedName : std::wstring(); },
+                                   {}});
+            form.fields.push_back({"source.settingsLoaded",
+                                   6,
+                                   L"Loaded Settings File",
+                                   L"The colors Load Settings File read from an RFC or RFSP, ready to apply.",
+                                   [self] {
+                                       return self->settingsImported ? self->settingsImportedName : std::wstring();
+                                   },
+                                   {}});
             for (auto &field : form.fields) {
                 if (field.id == "source.seed") {
                     field.nudge = numericAdjustment(uint32_t(0), std::numeric_limits<uint32_t>::max());
@@ -648,16 +673,26 @@ namespace merutilm::rff2::workspace {
                     field.enabled = [self](const FormDraft &) { return !self->palette().stops.empty(); };
                 if (field.id == "palette.stopPosition" || field.id == "palette.stopColor" || field.id == "palette.stopEasing")
                     field.dependencies.push_back("palette.selectedStop");
+                // Stored as 0 to 2 but picked by name; without a nudge it is a plain choice, not a number.
+                if (field.id == "palette.stopEasing") {
+                    field.choices = {{L"0", L"Linear"}, {L"1", L"Smoothstep"}, {L"2", L"Smootherstep"}};
+                    field.nudge = nullptr;
+                }
                 if (field.id.starts_with("source.") || field.id == "palette.selectedStop") {
                     field.persisted = false;
+                }
+                if (field.id == "source.loaded" || field.id == "source.settingsLoaded") {
+                    field.enabled = [](const FormDraft &) { return false; };
                 }
             }
             const auto previewFields = form.fields;
             const auto preview = [self, previewFields](const FormDraft &draft, int width,
                     std::optional<ShdPalColorSmoothingMethod> smoothing = {},
-                    std::optional<ShdPalColorInterpolationMethod> interpolation = {}, bool imported = false) {
-                if (imported && !self->imported) return std::vector<uint32_t>{};
-                const auto &palette = imported ? self->imported->palette : self->palette();
+                    std::optional<ShdPalColorInterpolationMethod> interpolation = {},
+                    const std::optional<ShaderAttribute> *source = nullptr) {
+                const bool imported = source != nullptr;
+                if (imported && !*source) return std::vector<uint32_t>{};
+                const auto &palette = imported ? (*source)->palette : self->palette();
                 const FormValues values(previewFields, draft);
                 const auto method = smoothing.value_or(imported ? palette.colorSmoothing :
                     ShdPalColorSmoothingMethod(values.number<int>("palette.colorSmoothing").value_or(int(palette.colorSmoothing))));
@@ -678,13 +713,16 @@ namespace merutilm::rff2::workspace {
                 return palettePreviewPixels(palette, width, method, blend);
             };
             for (auto &field : form.fields) {
-                if (field.id == "source.path") field.previewColors = [preview](const FormDraft &draft, int width) {
-                    return preview(draft, width, {}, {}, true);
+                if (field.id == "source.loaded") field.previewColors = [preview, self](const FormDraft &draft, int width) {
+                    return preview(draft, width, {}, {}, &self->imported);
+                };
+                if (field.id == "source.settingsLoaded") field.previewColors = [preview, self](const FormDraft &draft, int width) {
+                    return preview(draft, width, {}, {}, &self->settingsImported);
                 };
             }
             form.groups.push_back(L"Palette Preview");
             for (auto method : Selectable::values<ShdPalColorSmoothingMethod>()) {
-                FormField field{"preview.smoothing." + std::to_string(int(method)), 6, L"Color Smoothing",
+                FormField field{"preview.smoothing." + std::to_string(int(method)), 7, L"Color Smoothing",
                     L"Palette before color correction.", [method] { return Selectable::toString(method); }, {}};
                 field.persisted = false;
                 field.enabled = [](const FormDraft &) { return false; };
@@ -692,7 +730,7 @@ namespace merutilm::rff2::workspace {
                 form.fields.push_back(std::move(field));
             }
             for (auto method : Selectable::values<ShdPalColorInterpolationMethod>()) {
-                FormField field{"preview.interpolation." + std::to_string(int(method)), 6, L"Color Interpolation",
+                FormField field{"preview.interpolation." + std::to_string(int(method)), 7, L"Color Interpolation",
                     L"Palette before color correction.", [method] { return Selectable::toString(method); }, {}};
                 field.persisted = false;
                 field.enabled = [](const FormDraft &) { return false; };
@@ -724,6 +762,7 @@ namespace merutilm::rff2::workspace {
                 self->basic.clearHistory();
                 self->selected = 0;
                 self->imported.reset();
+                self->settingsImported.reset();
                 self->sourceMessage.clear();
             };
             form.actions = {{2, L"Create 8 Stops (Lossy)", [self] { self->editStops(StopAction::CreateEight); }},
@@ -733,9 +772,13 @@ namespace merutilm::rff2::workspace {
                             {3, L"Reverse Colors", [self] { self->editStops(StopAction::ReverseColors); }}};
             form.actions.push_back({4, L"Apply Palette Preset",
                                     [self] { self->usePreset(self->libraryIndex, self->librarySeed); }});
-            form.actions.push_back({5, L"Read Color File", [self] { self->readImport(self->sourcePath); }});
+            // Loading only reads the file, so it does not wait for pending edits; applying does.
+            form.actions.push_back({5, L"Load KFR File", [self] { self->readImport(); }, true});
+            form.actions.push_back({5, L"Apply KFR Colors", [self] { self->applyImport(); }});
+            form.actions.push_back({6, L"Load Settings File", [self] { self->readSettingsImport(); }, true});
+            form.actions.push_back({6, L"Apply Colors", [self] { self->applySettingsImport(false); }});
             form.actions.push_back(
-                {5, L"Apply Imported Colors", [self] { self->applyImport(self->importCorrection); }});
+                {6, L"Apply Colors and Color Correction", [self] { self->applySettingsImport(true); }});
             form.status = [self] {
                 if (!self->sourceMessage.empty()) {
                     return self->sourceMessage;

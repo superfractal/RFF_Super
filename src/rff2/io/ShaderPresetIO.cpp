@@ -8,7 +8,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
 //
 
 #include "ShaderPresetIO.h"
@@ -99,8 +99,12 @@ namespace merutilm::rff2 {
             return std::ranges::all_of(values, [](const float value) { return finiteStored(value); });
         };
         for (const auto &effect : shader.effects) {
-            if (!enumInRange(effect.type, 0, 7) || !enumInRange(effect.blend, 0, 3) ||
-                !enumInRange(effect.mask, 0, 4) || !enumInRange(effect.rainShape, 0, 1)) {
+            if (!enumInRange(effect.type, 0, 7) || effect.type == ShdEffectType::HEAT ||
+                !enumInRange(effect.blend, 0, 3) ||
+                !enumInRange(effect.mask, 0, 4) || !enumInRange(effect.rainShape, 0, 1) ||
+                !enumInRange(effect.flameStyle, 0, 2) || !enumInRange(effect.embersStyle, 0, 2) ||
+                !enumInRange(effect.mistStyle, 0, 2) || !enumInRange(effect.ripplesStyle, 0, 2) ||
+                !enumInRange(effect.flowStyle, 0, 1) || !enumInRange(effect.auroraStyle, 0, 2)) {
                 return false;
             }
             if (!finiteInRange(effect.dropSize, 0.1f, 8.0f) ||
@@ -136,13 +140,39 @@ namespace merutilm::rff2 {
                         palette.staticColorTolerance, palette.cycleBias, palette.bandLineWidth,
                         palette.bandLineOpacity, palette.bandLineSoftness, palette.grooveDepth,
                         palette.grooveWidth}) ||
-            palette.grooveDepth < 0 || palette.grooveDepth > 5 || palette.grooveWidth < 0 ||
-            palette.grooveWidth > 0.5f || !finiteVec4(palette.glossColor) ||
+            palette.grooveDepth < 0 || palette.grooveDepth > ShdPaletteAttribute::GROOVE_DEPTH_MAX || palette.grooveWidth < 0 ||
+            palette.grooveWidth > 0.5f || !std::isfinite(palette.grooveCreaseBlur) || palette.grooveCreaseBlur < 0 ||
+            palette.grooveCreaseBlur > ShdPaletteAttribute::GROOVE_CREASE_BLUR_MAX || !finiteVec4(palette.glossColor) ||
             !finiteVec4(palette.mandelbrotColor) || !finiteVec4(palette.bandLineColor) ||
             !std::ranges::all_of(palette.staticColorIterations,
                                  [](const double value) { return finiteStored(value); }) ||
             !enumInRange(palette.colorSmoothing, 0, 2) || !enumInRange(palette.colorInterpolation, 0, 2) ||
             !enumInRange(palette.cycleCurve, 0, 1) || !enumInRange(palette.iterationColoring, 0, 6) ||
+            !enumInRange(palette.escapeAngleColoring, 0, 2) || !std::isfinite(palette.escapeAngleAmount) ||
+            std::abs(palette.escapeAngleAmount) > ShdPaletteAttribute::ESCAPE_ANGLE_AMOUNT_LIMIT ||
+            !enumInRange(palette.orbitTrapColoring, 0, 3) || !(palette.orbitTrapAmount >= 0.0f) ||
+            !(palette.orbitTrapAmount <= 1.0f) ||
+            !(palette.orbitTrapWidth >= ShdPaletteAttribute::ORBIT_TRAP_WIDTH_MIN) ||
+            !(palette.orbitTrapWidth <= ShdPaletteAttribute::ORBIT_TRAP_WIDTH_MAX) ||
+            !(std::abs(palette.orbitTrapDensity) <= ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT) ||
+            !(std::abs(palette.orbitTrapOffset) <= 1.0f) ||
+            !(std::abs(palette.orbitTrapAnimationSpeed) <= ShdPaletteAttribute::ORBIT_TRAP_SPEED_LIMIT) ||
+            !finiteVec4(palette.orbitTrapGlowColor) || !(palette.orbitTrapGlowStrength >= 0.0f) ||
+            !(palette.orbitTrapGlowStrength <= ShdPaletteAttribute::ORBIT_TRAP_GLOW_STRENGTH_MAX) ||
+            !(palette.orbitTrapGlowSharpness >= ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN) ||
+            !(palette.orbitTrapGlowSharpness <= ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX) ||
+            !enumInRange(palette.orbitTrapBlend, 0, 3) || !enumInRange(palette.orbitTrapRegion, 0, 2) ||
+            !(palette.orbitTrapCellBorderWidth >= ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN) ||
+            !(palette.orbitTrapCellBorderWidth <= ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX) ||
+            !(palette.orbitTrapCellBorderDarkness >= 0.0f) || !(palette.orbitTrapCellBorderDarkness <= 1.0f) ||
+            !enumInRange(palette.orbitTrapShape, 1, static_cast<int32_t>(ORBIT_TRAP_SHAPE_LAST)) ||
+            palette.orbitTrapSides < ORBIT_TRAP_SIDES_MIN || palette.orbitTrapSides > ORBIT_TRAP_SIDES_MAX ||
+            !(std::abs(palette.orbitTrapCenterReal) <= ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT) ||
+            !(std::abs(palette.orbitTrapCenterImag) <= ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT) ||
+            !(palette.orbitTrapRadius >= 0.0) || !(palette.orbitTrapRadius <= ShdPaletteAttribute::ORBIT_TRAP_RADIUS_MAX) ||
+            !(std::abs(palette.orbitTrapAngle) <= ShdPaletteAttribute::ORBIT_TRAP_ANGLE_LIMIT) ||
+            !enumInRange(palette.orbitTrapMapping, 0, 2) || palette.orbitTrapArms < 1 ||
+            palette.orbitTrapArms > ShdPaletteAttribute::ORBIT_TRAP_ARMS_MAX ||
             !(palette.animationMode == ShdPaletteAnimationMode::LINEAR ||
               palette.animationMode == ShdPaletteAnimationMode::PSYCHEDELIC ||
               palette.animationMode == ShdPaletteAnimationMode::BREATHING ||
@@ -511,13 +541,14 @@ namespace merutilm::rff2 {
         const auto &color = shader.color;
         const auto &fog = shader.fog;
         if (!allFinite({fog.chaosAmount, fog.chaosScale, fog.chaosThreshold, fog.chaosTransition,
-                        fog.chaosFeather, fog.chaosBlur, fog.chaosShade}) ||
+                        fog.chaosFeather, fog.chaosBlur, fog.chaosShade, fog.chaosInterior}) ||
             fog.chaosAmount < 0.0f || fog.chaosAmount > 1.0f || fog.chaosScale < 0.5f ||
             fog.chaosScale > 4.0f || fog.chaosThreshold < 0.0f || fog.chaosThreshold > 1.0f ||
             fog.chaosTransition < 0.01f || fog.chaosTransition > 1.0f || fog.chaosFeather < 0.0f ||
             fog.chaosFeather > 32.0f || fog.chaosBlur < 0.0f || fog.chaosBlur > 32.0f ||
             fog.chaosShade < 0.0f ||
-            fog.chaosShade > 1.0f || !enumInRange(fog.chaosBlurAverage, 0, 1)) {
+            fog.chaosShade > 1.0f || !enumInRange(fog.chaosBlurAverage, 0, 1) ||
+            fog.chaosInterior < 0.0f || fog.chaosInterior > 1.0f) {
             return false;
         }
         const auto &bloom = shader.bloom;
@@ -1383,6 +1414,608 @@ namespace merutilm::rff2 {
             return;
         }
         shader.fog.chaosBlurAverage = static_cast<ShdChaosBlurAverage>(average);
+    }
+
+    void ShaderPresetIO::writeChaosInterior(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, uint32_t(0x31494843));
+        IOUtilities::encodeAndWrite(out, shader.fog.chaosInterior);
+    }
+
+    void ShaderPresetIO::readChaosInterior(std::ifstream &in, ShaderAttribute &shader) {
+        shader.fog.chaosInterior = 0.0f;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != 0x31494843) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        if (in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        IOUtilities::readAndDecode(in, &shader.fog.chaosInterior);
+    }
+
+    void ShaderPresetIO::writeEscapeAngle(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, ESCAPE_ANGLE_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.palette.escapeAngleColoring));
+        IOUtilities::encodeAndWrite(out, shader.palette.escapeAngleAmount);
+    }
+
+    void ShaderPresetIO::readEscapeAngle(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        shader.palette.escapeAngleColoring = defaults.escapeAngleColoring;
+        shader.palette.escapeAngleAmount = defaults.escapeAngleAmount;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t mode = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != ESCAPE_ANGLE_MAGIC) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        IOUtilities::readAndDecode(in, &mode);
+        IOUtilities::readAndDecode(in, &shader.palette.escapeAngleAmount);
+        // validate() rejects a mode past the last one, so the cast only has to carry the number.
+        shader.palette.escapeAngleColoring = static_cast<ShdPalEscapeAngleColoring>(mode);
+    }
+
+    void ShaderPresetIO::writeOrbitTrap(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.palette.orbitTrapColoring));
+        IOUtilities::encodeAndWrite(out, shader.palette.orbitTrapAmount);
+        IOUtilities::encodeAndWrite(out, shader.palette.orbitTrapWidth);
+        IOUtilities::encodeAndWrite(out, shader.palette.orbitTrapDensity);
+    }
+
+    void ShaderPresetIO::readOrbitTrap(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        shader.palette.orbitTrapColoring = defaults.orbitTrapColoring;
+        shader.palette.orbitTrapAmount = defaults.orbitTrapAmount;
+        shader.palette.orbitTrapWidth = defaults.orbitTrapWidth;
+        shader.palette.orbitTrapDensity = defaults.orbitTrapDensity;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t mode = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != ORBIT_TRAP_MAGIC) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        IOUtilities::readAndDecode(in, &mode);
+        IOUtilities::readAndDecode(in, &shader.palette.orbitTrapAmount);
+        IOUtilities::readAndDecode(in, &shader.palette.orbitTrapWidth);
+        IOUtilities::readAndDecode(in, &shader.palette.orbitTrapDensity);
+        // validate() rejects a mode past the last one, so the cast only has to carry the number.
+        shader.palette.orbitTrapColoring = static_cast<ShdPalOrbitTrapColoring>(mode);
+    }
+
+    void ShaderPresetIO::writeOrbitTrapInterior(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_INTERIOR_MAGIC);
+        // Inside Only is stored as on here, the nearest look a reader without OTR1 can draw.
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.palette.orbitTrapRegion != ShdPalOrbitTrapRegion::OUTSIDE));
+    }
+
+    void ShaderPresetIO::readOrbitTrapInterior(std::ifstream &in, ShaderAttribute &shader) {
+        shader.palette.orbitTrapRegion = ShdPalOrbitTrapRegion::BOTH;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != ORBIT_TRAP_INTERIOR_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.orbitTrapRegion = enabled == 1 ? ShdPalOrbitTrapRegion::BOTH : ShdPalOrbitTrapRegion::OUTSIDE;
+    }
+
+    void ShaderPresetIO::writeOrbitTrapRegion(std::ostream &out, const ShaderAttribute &shader) {
+        // Inside and Outside and Outside Only are carried by OTI1 alone, so those files stay as they were.
+        if (shader.palette.orbitTrapRegion != ShdPalOrbitTrapRegion::INSIDE) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_REGION_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.palette.orbitTrapRegion));
+    }
+
+    void ShaderPresetIO::readOrbitTrapRegion(std::ifstream &in, ShaderAttribute &shader) {
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ORBIT_TRAP_REGION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t region = 0;
+        IOUtilities::readAndDecode(in, &region);
+        if (in.fail() || region > 2) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.orbitTrapRegion = static_cast<ShdPalOrbitTrapRegion>(region);
+    }
+
+    void ShaderPresetIO::writeOrbitTrapLook(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &p = shader.palette;
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_LOOK_MAGIC);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapOffset);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapAnimationSpeed);
+        for (int i = 0; i < 4; ++i) IOUtilities::encodeAndWrite(out, p.orbitTrapGlowColor[i]);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapGlowStrength);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapGlowSharpness);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(p.orbitTrapBlend));
+        IOUtilities::encodeAndWrite(out, p.orbitTrapCellBorderWidth);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapCellBorderDarkness);
+    }
+
+    void ShaderPresetIO::readOrbitTrapLook(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        auto &p = shader.palette;
+        p.orbitTrapOffset = defaults.orbitTrapOffset;
+        p.orbitTrapAnimationSpeed = defaults.orbitTrapAnimationSpeed;
+        p.orbitTrapGlowColor = defaults.orbitTrapGlowColor;
+        p.orbitTrapGlowStrength = defaults.orbitTrapGlowStrength;
+        p.orbitTrapGlowSharpness = defaults.orbitTrapGlowSharpness;
+        p.orbitTrapBlend = defaults.orbitTrapBlend;
+        p.orbitTrapCellBorderWidth = defaults.orbitTrapCellBorderWidth;
+        p.orbitTrapCellBorderDarkness = defaults.orbitTrapCellBorderDarkness;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t blend = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || (marker != ORBIT_TRAP_LOOK_MAGIC && marker != ORBIT_TRAP_LOOK_V1_MAGIC)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        IOUtilities::readAndDecode(in, &p.orbitTrapOffset);
+        IOUtilities::readAndDecode(in, &p.orbitTrapAnimationSpeed);
+        for (int i = 0; i < 4; ++i) IOUtilities::readAndDecode(in, &p.orbitTrapGlowColor[i]);
+        IOUtilities::readAndDecode(in, &p.orbitTrapGlowStrength);
+        IOUtilities::readAndDecode(in, &p.orbitTrapGlowSharpness);
+        IOUtilities::readAndDecode(in, &blend);
+        IOUtilities::readAndDecode(in, &p.orbitTrapCellBorderWidth);
+        IOUtilities::readAndDecode(in, &p.orbitTrapCellBorderDarkness);
+        if (marker == ORBIT_TRAP_LOOK_V1_MAGIC) {
+            float insideAmount = 0.0f;
+            IOUtilities::readAndDecode(in, &insideAmount);
+        }
+        // validate() rejects a blend past the last one, so the cast only has to carry the number.
+        p.orbitTrapBlend = static_cast<ShdPalOrbitTrapBlend>(blend);
+    }
+
+    void ShaderPresetIO::writeOrbitTrapShape(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &p = shader.palette;
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_SHAPE_MAGIC);
+        // A shape past Line is stored here as the nearest one a reader without OTX1 can draw; OTX1 carries the real one.
+        auto shape = p.orbitTrapShape;
+        switch (shape) {
+            case ShdPalOrbitTrapShape::GRID_POINTS: shape = ShdPalOrbitTrapShape::POINT; break;
+            case ShdPalOrbitTrapShape::GRID_LINES: shape = ShdPalOrbitTrapShape::CROSS; break;
+            case ShdPalOrbitTrapShape::RINGS:
+            case ShdPalOrbitTrapShape::POLYGON:
+            case ShdPalOrbitTrapShape::STAR:
+            case ShdPalOrbitTrapShape::SPIRAL: shape = ShdPalOrbitTrapShape::CIRCLE; break;
+            default: break;
+        }
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shape));
+        IOUtilities::encodeAndWrite(out, p.orbitTrapCenterReal);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapCenterImag);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapRadius);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapAngle);
+    }
+
+    void ShaderPresetIO::readOrbitTrapShape(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        auto &p = shader.palette;
+        p.orbitTrapShape = defaults.orbitTrapShape;
+        p.orbitTrapCenterReal = defaults.orbitTrapCenterReal;
+        p.orbitTrapCenterImag = defaults.orbitTrapCenterImag;
+        p.orbitTrapRadius = defaults.orbitTrapRadius;
+        p.orbitTrapAngle = defaults.orbitTrapAngle;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t shape = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != ORBIT_TRAP_SHAPE_MAGIC) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        IOUtilities::readAndDecode(in, &shape);
+        IOUtilities::readAndDecode(in, &p.orbitTrapCenterReal);
+        IOUtilities::readAndDecode(in, &p.orbitTrapCenterImag);
+        IOUtilities::readAndDecode(in, &p.orbitTrapRadius);
+        IOUtilities::readAndDecode(in, &p.orbitTrapAngle);
+        // validate() rejects a shape outside 1 to ORBIT_TRAP_SHAPE_LAST, so the cast only has to carry the number.
+        p.orbitTrapShape = static_cast<ShdPalOrbitTrapShape>(shape);
+    }
+
+    void ShaderPresetIO::writeOrbitTrapShapeExtension(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &p = shader.palette;
+        // Point to Line are carried by OTS1 alone, so those files stay as they were.
+        if (static_cast<uint32_t>(p.orbitTrapShape) <= static_cast<uint32_t>(ShdPalOrbitTrapShape::LINE)) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_SHAPE_EXTENSION_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(p.orbitTrapShape));
+        IOUtilities::encodeAndWrite(out, p.orbitTrapSides);
+    }
+
+    void ShaderPresetIO::readOrbitTrapShapeExtension(std::ifstream &in, ShaderAttribute &shader) {
+        auto &p = shader.palette;
+        p.orbitTrapSides = ShdPaletteAttribute{}.orbitTrapSides;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ORBIT_TRAP_SHAPE_EXTENSION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t shape = 0;
+        uint32_t sides = 0;
+        IOUtilities::readAndDecode(in, &shape);
+        IOUtilities::readAndDecode(in, &sides);
+        if (in.fail() || shape <= static_cast<uint32_t>(ShdPalOrbitTrapShape::LINE) || shape > ORBIT_TRAP_SHAPE_LAST ||
+            sides < ORBIT_TRAP_SIDES_MIN || sides > ORBIT_TRAP_SIDES_MAX) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        p.orbitTrapShape = static_cast<ShdPalOrbitTrapShape>(shape);
+        p.orbitTrapSides = sides;
+    }
+
+    void ShaderPresetIO::writeEffectStyles(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, EFFECT_STYLES_MAGIC);
+        for (const auto &e : shader.effects) {
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.flameStyle));
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.embersStyle));
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.mistStyle));
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.ripplesStyle));
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.flowStyle));
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(e.auroraStyle));
+        }
+    }
+
+    void ShaderPresetIO::readEffectStyles(std::ifstream &in, ShaderAttribute &shader) {
+        for (auto &e : shader.effects) {
+            e.flameStyle = ShdFlameStyle::CLASSIC;
+            e.embersStyle = ShdEmbersStyle::CLASSIC;
+            e.mistStyle = ShdMistStyle::CLASSIC;
+            e.ripplesStyle = ShdRipplesStyle::CLASSIC;
+            e.flowStyle = ShdFlowStyle::CLASSIC;
+            e.auroraStyle = ShdAuroraStyle::CLASSIC;
+        }
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        if (in.fail() || marker != EFFECT_STYLES_MAGIC) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        for (auto &e : shader.effects) {
+            uint32_t styles[6] = {};
+            for (auto &style : styles) {
+                IOUtilities::readAndDecode(in, &style);
+            }
+            // validate() rejects a style past its type's last choice, so the casts only have to carry the numbers.
+            e.flameStyle = static_cast<ShdFlameStyle>(styles[0]);
+            e.embersStyle = static_cast<ShdEmbersStyle>(styles[1]);
+            e.mistStyle = static_cast<ShdMistStyle>(styles[2]);
+            e.ripplesStyle = static_cast<ShdRipplesStyle>(styles[3]);
+            e.flowStyle = static_cast<ShdFlowStyle>(styles[4]);
+            e.auroraStyle = static_cast<ShdAuroraStyle>(styles[5]);
+        }
+    }
+
+    void ShaderPresetIO::writeOrbitTrapHold(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_HOLD_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.palette.orbitTrapHoldColorAnimation));
+    }
+
+    void ShaderPresetIO::readOrbitTrapHold(std::ifstream &in, ShaderAttribute &shader) {
+        shader.palette.orbitTrapHoldColorAnimation = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != ORBIT_TRAP_HOLD_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.orbitTrapHoldColorAnimation = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeGrooveSmooth(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, GROOVE_SMOOTH_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.palette.grooveSmooth));
+    }
+
+    void ShaderPresetIO::readGrooveSmooth(std::ifstream &in, ShaderAttribute &shader) {
+        shader.palette.grooveSmooth = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != GROOVE_SMOOTH_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.grooveSmooth = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeGrooveRounded(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, GROOVE_ROUNDED_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.palette.grooveRounded));
+    }
+
+    void ShaderPresetIO::readGrooveRounded(std::ifstream &in, ShaderAttribute &shader) {
+        shader.palette.grooveRounded = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != GROOVE_ROUNDED_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.grooveRounded = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeGrooveCreaseBlur(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, GROOVE_CREASE_BLUR_MAGIC);
+        IOUtilities::encodeAndWrite(out, shader.palette.grooveCreaseBlur);
+    }
+
+    void ShaderPresetIO::readGrooveCreaseBlur(std::ifstream &in, ShaderAttribute &shader) {
+        shader.palette.grooveCreaseBlur = 0.0f;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        float width = 0.0f;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &width);
+        if (in.fail() || marker != GROOVE_CREASE_BLUR_MAGIC || !std::isfinite(width) || width < 0.0f ||
+            width > ShdPaletteAttribute::GROOVE_CREASE_BLUR_MAX) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.palette.grooveCreaseBlur = width;
+    }
+
+    void ShaderPresetIO::writeOrbitTrapMapping(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &p = shader.palette;
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_MAPPING_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(p.orbitTrapMapping));
+        IOUtilities::encodeAndWrite(out, p.orbitTrapArms);
+        IOUtilities::encodeAndWrite(out, uint32_t(p.orbitTrapRelief));
+    }
+
+    void ShaderPresetIO::readOrbitTrapMapping(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        auto &p = shader.palette;
+        p.orbitTrapMapping = defaults.orbitTrapMapping;
+        p.orbitTrapArms = defaults.orbitTrapArms;
+        p.orbitTrapRelief = defaults.orbitTrapRelief;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t mapping = 0;
+        uint32_t arms = 0;
+        uint32_t relief = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &mapping);
+        IOUtilities::readAndDecode(in, &arms);
+        IOUtilities::readAndDecode(in, &relief);
+        if (in.fail() || marker != ORBIT_TRAP_MAPPING_MAGIC || mapping > 2 || arms < 1 ||
+            arms > ShdPaletteAttribute::ORBIT_TRAP_ARMS_MAX || relief > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        p.orbitTrapMapping = static_cast<ShdPalOrbitTrapMapping>(mapping);
+        p.orbitTrapArms = arms;
+        p.orbitTrapRelief = relief == 1;
+    }
+
+    void ShaderPresetIO::writeWavesCoatOnly(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, WAVES_COAT_ONLY_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.slope.reliefWavesCoatOnly));
+    }
+
+    void ShaderPresetIO::readWavesCoatOnly(std::ifstream &in, ShaderAttribute &shader) {
+        shader.slope.reliefWavesCoatOnly = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != WAVES_COAT_ONLY_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.reliefWavesCoatOnly = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeStudioEnvironment(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, STUDIO_ENVIRONMENT_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.slope.studioEnvironmentSource));
+        IOUtilities::encodeAndWrite(out, shader.slope.environmentBrightness);
+        for (const auto &stop : shader.slope.environmentStops()) {
+            IOUtilities::encodeAndWrite(out, *stop.position);
+            IOUtilities::encodeAndWrite(out, stop.color->r);
+            IOUtilities::encodeAndWrite(out, stop.color->g);
+            IOUtilities::encodeAndWrite(out, stop.color->b);
+        }
+    }
+
+    void ShaderPresetIO::readStudioEnvironment(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdSlopeAttribute defaults{};
+        auto &slope = shader.slope;
+        slope.studioEnvironmentSource = defaults.studioEnvironmentSource;
+        slope.environmentBrightness = defaults.environmentBrightness;
+        const auto stops = slope.environmentStops();
+        const auto defaultStops = defaults.environmentStops();
+        for (size_t i = 0; i < stops.size(); ++i) {
+            *stops[i].position = *defaultStops[i].position;
+            *stops[i].color = *defaultStops[i].color;
+        }
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t source = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &source);
+        float brightness = 0.0f;
+        IOUtilities::readAndDecode(in, &brightness);
+        bool valid = marker == STUDIO_ENVIRONMENT_MAGIC &&
+                     source <= static_cast<uint32_t>(ShdStudioEnvironmentSource::TEXTURE_LAYER_4) &&
+                     std::isfinite(brightness) && brightness >= 0.0f && brightness <= 32.0f;
+        const auto unit = [](const float v) { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; };
+        for (const auto &stop : stops) {
+            IOUtilities::readAndDecode(in, stop.position);
+            IOUtilities::readAndDecode(in, &stop.color->r);
+            IOUtilities::readAndDecode(in, &stop.color->g);
+            IOUtilities::readAndDecode(in, &stop.color->b);
+            valid = valid && unit(*stop.position) && unit(stop.color->r) && unit(stop.color->g) && unit(stop.color->b);
+        }
+        if (in.fail() || !valid) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        slope.studioEnvironmentSource = static_cast<ShdStudioEnvironmentSource>(source);
+        slope.environmentBrightness = brightness;
+    }
+
+    void ShaderPresetIO::writeCoatSoftbox(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, COAT_SOFTBOX_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.slope.coatSoftbox));
+    }
+
+    void ShaderPresetIO::readCoatSoftbox(std::ifstream &in, ShaderAttribute &shader) {
+        shader.slope.coatSoftbox = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != COAT_SOFTBOX_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.coatSoftbox = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeChaosEdges(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, CHAOS_EDGES_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.fog.chaosEdgeProtection));
+    }
+
+    void ShaderPresetIO::readChaosEdges(std::ifstream &in, ShaderAttribute &shader) {
+        shader.fog.chaosEdgeProtection = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != CHAOS_EDGES_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.fog.chaosEdgeProtection = enabled == 1;
+    }
+
+    void ShaderPresetIO::writeChaosBokeh(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, CHAOS_BOKEH_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.fog.chaosBokehShape));
+        IOUtilities::encodeAndWrite(out, shader.fog.chaosBokehRotation);
+        IOUtilities::encodeAndWrite(out, shader.fog.chaosBokehAspect);
+    }
+
+    void ShaderPresetIO::readChaosBokeh(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdFogAttribute defaults{};
+        shader.fog.chaosBokehShape = defaults.chaosBokehShape;
+        shader.fog.chaosBokehRotation = defaults.chaosBokehRotation;
+        shader.fog.chaosBokehAspect = defaults.chaosBokehAspect;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t shape = 0;
+        float rotation = 0.0f;
+        float aspect = 0.0f;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &shape);
+        IOUtilities::readAndDecode(in, &rotation);
+        IOUtilities::readAndDecode(in, &aspect);
+        if (in.fail() || marker != CHAOS_BOKEH_MAGIC || shape > static_cast<uint32_t>(ShdChaosBokehShape::OCTAGON) ||
+            !std::isfinite(rotation) || rotation < 0.0f || rotation > 360.0f ||
+            !std::isfinite(aspect) || aspect < 0.25f || aspect > 4.0f) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.fog.chaosBokehShape = static_cast<ShdChaosBokehShape>(shape);
+        shader.fog.chaosBokehRotation = rotation;
+        shader.fog.chaosBokehAspect = aspect;
+    }
+
+    void ShaderPresetIO::writeFocusSmooth(std::ostream &out, const ShaderAttribute &shader) {
+        IOUtilities::encodeAndWrite(out, FOCUS_SMOOTH_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t(shader.fog.focusSmoothKeyframes));
+    }
+
+    void ShaderPresetIO::readFocusSmooth(std::ifstream &in, ShaderAttribute &shader) {
+        shader.fog.focusSmoothKeyframes = false;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        uint32_t marker = 0;
+        uint32_t enabled = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        IOUtilities::readAndDecode(in, &enabled);
+        if (in.fail() || marker != FOCUS_SMOOTH_MAGIC || enabled > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.fog.focusSmoothKeyframes = enabled == 1;
     }
 
     void ShaderPresetIO::writeSurfaceReplacement(std::ostream &out, const ShaderAttribute &shader) {
@@ -2376,6 +3009,11 @@ namespace merutilm::rff2 {
             }
             e.enabled = enabled != 0;
             e.type = static_cast<ShdEffectType>(type);
+            // Heat Haze no longer exists: such a layer opens switched off as Mist, which shared its cloud controls.
+            if (e.type == ShdEffectType::HEAT) {
+                e.type = ShdEffectType::MIST;
+                e.enabled = false;
+            }
             e.blend = static_cast<ShdEffectBlend>(blend);
             e.mask = static_cast<ShdEffectMask>(mask);
             read(e.opacity);
@@ -2624,6 +3262,26 @@ namespace merutilm::rff2 {
         writeSurfaceReplacement(out, shader);
         writeChaosBlur(out, shader);
         writeChaosAverage(out, shader);
+        writeChaosInterior(out, shader);
+        writeEscapeAngle(out, shader);
+        writeWavesCoatOnly(out, shader);
+        writeCoatSoftbox(out, shader);
+        writeStudioEnvironment(out, shader);
+        writeChaosEdges(out, shader);
+        writeChaosBokeh(out, shader);
+        writeFocusSmooth(out, shader);
+        writeOrbitTrap(out, shader);
+        writeOrbitTrapInterior(out, shader);
+        writeOrbitTrapLook(out, shader);
+        writeOrbitTrapShape(out, shader);
+        writeEffectStyles(out, shader);
+        writeOrbitTrapHold(out, shader);
+        writeGrooveSmooth(out, shader);
+        writeGrooveRounded(out, shader);
+        writeGrooveCreaseBlur(out, shader);
+        writeOrbitTrapMapping(out, shader);
+        writeOrbitTrapRegion(out, shader);
+        writeOrbitTrapShapeExtension(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -2785,6 +3443,26 @@ namespace merutilm::rff2 {
         readSurfaceReplacement(in, s);
         readChaosBlur(in, s, version < 5);
         readChaosAverage(in, s);
+        readChaosInterior(in, s);
+        readEscapeAngle(in, s);
+        readWavesCoatOnly(in, s);
+        readCoatSoftbox(in, s);
+        readStudioEnvironment(in, s);
+        readChaosEdges(in, s);
+        readChaosBokeh(in, s);
+        readFocusSmooth(in, s);
+        readOrbitTrap(in, s);
+        readOrbitTrapInterior(in, s);
+        readOrbitTrapLook(in, s);
+        readOrbitTrapShape(in, s);
+        readEffectStyles(in, s);
+        readOrbitTrapHold(in, s);
+        readGrooveSmooth(in, s);
+        readGrooveRounded(in, s);
+        readGrooveCreaseBlur(in, s);
+        readOrbitTrapMapping(in, s);
+        readOrbitTrapRegion(in, s);
+        readOrbitTrapShapeExtension(in, s);
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");
             return false;

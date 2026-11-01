@@ -1,13 +1,13 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01. -->
 # Exploration and calculation
 
 [Manual](user-manual.md) · [Exact calculation fields](settings-reference.md#explore)
 
 ## Navigate and choose a formula
 
-Drag the planar fractal to move its center and use the wheel to zoom around the pointer. **Smooth Zooming** supplies transitional navigation while new calculations catch up. Escape settles/cancels pending smooth navigation. Exact **Real**, **Imaginary**, **Log Zoom**, and **Rotation** fields are useful for copying locations reproducibly; preserve every coordinate digit at deep zoom.
+Drag the planar fractal to move its center and use the wheel to zoom around the pointer. **Smooth Navigation** (Render menu) animates mouse-wheel zooms in planar and 360 views and keeps a planar drag under the pointer while new calculations catch up. Escape settles/cancels pending smooth navigation. Exact **Real**, **Imaginary**, **Log Zoom**, and **Rotation** fields are useful for copying locations reproducibly; preserve every coordinate digit at deep zoom.
 
 **Shift+drag** draws a box to zoom into the selected region; release after a sufficiently large drag to apply it. In panorama views, dragging changes orientation rather than ordinary planar translation; vertical camera movement applies to the perspective 360 mode. After calculation, hovering can show the sampled iteration value in the status area. If color-freeze picking is active, the next click selects a frozen iteration band instead of starting a pan.
 
@@ -25,7 +25,7 @@ Start with a simple supported expression such as `z^3+c`. Recompute, then adjust
 
 Turn Automatic Iterations off to set **Max Iteration** manually. If increasing the cap reveals detail in a formerly solid region, the earlier cap was insufficient there. **Bailout** is the escape radius and influences the smooth escape value. **Decimalize Iteration** controls fractional iteration reporting for coloring. In the quadratic escape-potential implementation, exposed non-None modes can produce identical results under ordinary bailout conditions; they are not guaranteed visibly different filters.
 
-**Absolute Iteration Mode** changes reported iteration values and bypasses Boundary Trace Fill. Keep it fixed when comparing a palette recipe. **Reuse Reference** can reuse Current or Centered reference data to avoid setup, but it has no benefit before a suitable reference exists. Disable reuse for independent timing/accuracy comparisons and when loading an unrelated location.
+**Absolute Iteration Mode** changes reported iteration values and bypasses Boundary Trace Fill. Keep it fixed when comparing a palette recipe. **Reuse Reference** can reuse Current Reference or Centered Reference data to avoid setup, but it has no benefit before a suitable reference exists. Disable reuse for independent timing/accuracy comparisons and when loading an unrelated location.
 
 ## MPA and three different kinds of compression
 
@@ -51,15 +51,17 @@ Performance and accuracy depend on the location and settings. Check difficult de
 
 **Planar** is the ordinary complex-plane view. **360° Equirectangular** generates a panorama layout suitable for spherical presentation. **360° Camera** produces a perspective camera view of that mapping. **Layout** chooses Ground and Sky or Full Sphere; **Pitch** aims the camera vertically, **Field of View** changes the visible angle, and **Panorama Range** changes the mapped extent. Rotation also supplies panorama yaw.
 
-These are calculation projections. The similarly named camera controls in Animation transform saved video source maps. If you change the calculation projection, recompute; if you change the video camera, verify that saved padded source maps cover the new view.
+These are calculation projections. The similarly named camera controls in the Timeline Editor (Camera / Rotation / 360° panel and camera tracks) transform saved video source maps. If you change the calculation projection, recompute; if you change the video camera, verify that saved padded source maps cover the new view.
 
 ## Calculation and preview performance
 
 ![Actual render performance controls](ui/performance-0.png)
 
-**Calculation Threads** affects the next CPU calculation, from one worker up to the computer's logical core count. Increasing it can shorten independent pixel work, but setup, memory traffic, and GPU work can limit the benefit. **Rendering FPS** caps live redraws (0 removes the cap); it does not change exported video FPS or the CPU iteration limit.
+**Calculation Threads** affects the next CPU calculation, from one worker up to the computer's logical core count. Increasing it can shorten independent pixel work, but setup, memory traffic, and GPU work can limit the benefit. **Rendering FPS** caps live redraws (0 pauses the preview, keeping the last frame); it does not change exported video FPS or the CPU iteration limit.
 
 **Coarse Preview** shows an early coarse result during computation. **Two-Color Preview** uses a simplified calculation preview. **Boundary Trace Fill** changes how regions are filled during calculation; compare critical fine detail after toggling it. These controls trigger recalculation. **Linear Interpolation** smooths resampling; **Dither** reduces visible quantization banding with small output variations. Neither creates missing fractal detail.
+
+**GPU Perturbation** (Render > Use GPU Perturbation, off by default and in Single Precision once turned on; its settings are in the GPU Perturbation group of Render & Preview, opened by Render > Render & Preview) iterates the view on the GPU in batches down to zoom 1e290: in float down to zoom 1e30 while Single Precision is on, otherwise in the same double precision as the CPU. The status line shows `G :` instead of `C :` while it runs. Pixels still iterating show the iteration they have reached so far. Deeper zooms, custom formulas and compressed references keep calculating on the CPU, as does a GPU without 64-bit shader integers. The CPU-only fill modes (Boundary Trace Fill, Two-Color Preview, Coarse Preview) do not apply to a GPU calculation. **Single Precision** iterates in float down to zoom 1e30, which is far faster on GPUs with slow double precision (most GeForce cards) but lets iteration values drift; turn it off when a result must match the CPU. **Interpolate Isolated Pixels** and **Allowed Unfinished Pixels** also trade exactness for speed and are off or 0 by default.
 
 Canvas dimensions, **Clarity**, and **Supersampling** multiply sample counts. At 1280 × 720, Clarity 1 and SSAA 2 produce about four times as many internal samples as SSAA 1, while ordinary output remains 1280 × 720. Clarity 2 also doubles both output dimensions. These ratios describe sample work and buffer size, not measured elapsed time. See [the memory table](SETTINGS_GUIDE.md#resolution-performance-and-image-quality).
 
@@ -68,8 +70,8 @@ Canvas dimensions, **Clarity**, and **Supersampling** multiply sample counts. At
 | Action | Result and prerequisites |
 | --- | --- |
 | **Recompute** | Recalculates the current view. Also releases a recovery hold when you are ready to generate. |
-| **Cancel** | Requests cancellation. Wait for the job to stop before starting another operation. |
-| **Reset** | Requests default settings, shader refresh, resizing, and recalculation. This is broader than resetting only the camera. |
+| **Cancel Render** | Requests cancellation. Wait for the job to stop before starting another operation. |
+| **Reset Settings (Keep Appearance)** | Returns location, iterations, and the other non-appearance settings to their defaults, then recalculates. The shader, render settings, and formula are kept. This is broader than **Reset View** in the Explore workspace, which resets only zoom, rotation, and center. |
 | **Find Center** | Uses the current Mandelbrot reference/period information to find a center. Requires a usable calculation/reference; changes center without performing the full minibrot zoom-location workflow. |
 | **Locate Minibrot** | Searches for a Mandelbrot minibrot center and suitable zoom. Requires Reuse Reference Disabled. If no suitable minibrot is found, move closer to an appropriate structure and try again. |
 

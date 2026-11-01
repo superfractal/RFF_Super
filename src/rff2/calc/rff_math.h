@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-25
 // Modified by GPT-6 on 2026-10-03, 2026-10-04
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -55,15 +56,9 @@ namespace merutilm::rff2 {
         static uint32_t randomSeed() {
             return rd();
         }
-        static float random_i() {
-            return static_cast<float>(static_cast<uint32_t>(gen()) >> 24);
-        }
         static float random_f() {
             return static_cast<float>(static_cast<uint32_t>(gen()) * UINT32_TO_UNIT);
         }
 
-        static double random_d() {
-            return static_cast<uint32_t>(gen()) * UINT32_TO_UNIT;
-        }
     };
 }

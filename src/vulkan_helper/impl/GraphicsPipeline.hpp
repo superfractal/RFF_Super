@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-27.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-13, 2026-10-21
 //
 
 #pragma once
@@ -41,7 +42,15 @@ namespace merutilm::vkh {
         [[nodiscard]] IndexBufferRef getIndexBuffer() const { return indexBuffer; }
 
     private:
+        struct Target {
+            VkRenderPass renderPass;
+        };
+
+        [[nodiscard]] Target currentTarget() const;
+
         void init() override;
+
+        void create(Target target);
     };
 
     using GraphicsPipeline = std::unique_ptr<GraphicsPipelineImpl>;

@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-18, 2026-09-22
+// Modified by Opus 5.5 on 2026-10-13
 //
 
 #pragma once
@@ -28,6 +29,8 @@ namespace merutilm::rff2 {
         double expected = 0;
         bool animation = true;
         int lastSecond = -1;
+        // Offered while what is left can finish behind a working window; see PipelinePreparation::Job::deferrable.
+        bool skippable = false;
         inline static std::unique_ptr<PipelinePreparationWindow> active;
 
         static std::filesystem::path historyPath() {
@@ -47,6 +50,24 @@ namespace merutilm::rff2 {
             const int remainder = whole % 60;
             return std::to_wstring(whole / 60) + L":" + (remainder < 10 ? L"0" : L"") +
                    std::to_wstring(remainder);
+        }
+        RECT skipButton() const {
+            RECT client;
+            GetClientRect(window, &client);
+            return {client.right - px(168), px(264), client.right - px(28), px(300)};
+        }
+        static std::wstring footer(bool skippable) {
+            return UiLanguage::text(skippable ? L"Skip to start now with simplified shading. Full shading is "
+                                                L"applied automatically when preparation finishes."
+                                              : L"This window closes automatically when preparation finishes.");
+        }
+        void setSkippable(bool value) {
+            if (skippable == value || !window) {
+                return;
+            }
+            skippable = value;
+            SetWindowTextW(labels[4], footer(skippable).c_str());
+            InvalidateRect(window, nullptr, FALSE);
         }
         static std::wstring stage(const std::string &shader) {
             if (shader.find("slope") != std::string::npos) {
@@ -73,6 +94,29 @@ namespace merutilm::rff2 {
                 return DefWindowProcW(hwnd, message, wParam, lParam);
             }
             if (message == WM_CLOSE) {
+                return 0;
+            }
+            if (message == WM_MOUSEACTIVATE) {
+                return MA_NOACTIVATE;
+            }
+            if (message == WM_SETCURSOR && self->skippable) {
+                POINT cursor;
+                GetCursorPos(&cursor);
+                ScreenToClient(hwnd, &cursor);
+                const RECT button = self->skipButton();
+                if (PtInRect(&button, cursor)) {
+                    SetCursor(LoadCursorW(nullptr, MAKEINTRESOURCEW(32649)));
+                    return TRUE;
+                }
+            }
+            if (message == WM_LBUTTONUP && self->skippable) {
+                const POINT point{static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))};
+                const RECT button = self->skipButton();
+                if (PtInRect(&button, point)) {
+                    // The batch hands the deferrable pipelines off on its next wait and closes this window.
+                    vkh::PipelinePreparation::skipRequested = true;
+                    self->setSkippable(false);
+                }
                 return 0;
             }
             if (message == WM_ERASEBKGND) {
@@ -106,6 +150,20 @@ namespace merutilm::rff2 {
                 HBRUSH accent = CreateSolidBrush(self->theme.cardNoteAccent);
                 FillRect(dc, &fill, accent);
                 DeleteObject(accent);
+                if (self->skippable) {
+                    RECT button = self->skipButton();
+                    HBRUSH face = CreateSolidBrush(self->theme.buttonFace);
+                    FillRect(dc, &button, face);
+                    DeleteObject(face);
+                    HBRUSH border = CreateSolidBrush(self->theme.buttonBorder);
+                    FrameRect(dc, &button, border);
+                    DeleteObject(border);
+                    const HGDIOBJ previousFont = SelectObject(dc, self->font);
+                    SetBkMode(dc, TRANSPARENT);
+                    SetTextColor(dc, self->theme.text);
+                    DrawTextW(dc, UiLanguage::label(L"Skip"), -1, &button, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    SelectObject(dc, previousFont);
+                }
                 if (message == WM_PAINT) {
                     EndPaint(hwnd, &paint);
                 }
@@ -115,6 +173,9 @@ namespace merutilm::rff2 {
         }
 
         void releaseResources() noexcept {
+            if (vkh::PipelinePreparation::interactiveWindow == window) {
+                vkh::PipelinePreparation::interactiveWindow = nullptr;
+            }
             if (window) {
                 DestroyWindow(window);
             }
@@ -168,7 +229,8 @@ namespace merutilm::rff2 {
                 if (IsWindowVisible(owner) && !IsIconic(owner)) {
                     GetWindowRect(owner, &anchor);
                 }
-                const int width = px(540), height = px(265);
+                skippable = progress.skippable;
+                const int width = px(540), height = px(skippable ? 320 : 265);
                 const int x = std::clamp((anchor.left + anchor.right - width) / 2, monitor.rcWork.left,
                                          std::max(monitor.rcWork.left, monitor.rcWork.right - width));
                 const int y = std::clamp((anchor.top + anchor.bottom - height) / 2, monitor.rcWork.top,
@@ -194,8 +256,8 @@ namespace merutilm::rff2 {
                 SetWindowTextW(labels[0], UiLanguage::label(L"Preparing GPU shaders"));
                 const auto description = UiLanguage::text(L"Current pipeline: ") + stage(progress.shader);
                 SetWindowTextW(labels[1], description.c_str());
-                SetWindowTextW(labels[4],
-                               UiLanguage::label(L"This window closes automatically when preparation finishes."));
+                SetWindowTextW(labels[4], footer(skippable).c_str());
+                vkh::PipelinePreparation::interactiveWindow = window;
                 restoreOwner = IsWindowEnabled(owner) != FALSE;
                 if (restoreOwner) {
                     EnableWindow(owner, FALSE);
@@ -241,6 +303,17 @@ namespace merutilm::rff2 {
         }
         static void observe(const vkh::PipelinePreparation::Progress &progress) {
             const std::string key = progress.device + "|" + progress.shader;
+            if (progress.skipped) {
+                active.reset();
+                return;
+            }
+            // A compile a skip left running ends with no window up for it, and maybe another one's showing.
+            if (progress.background) {
+                if (progress.finished && progress.succeeded) {
+                    history().record(key, progress.seconds);
+                }
+                return;
+            }
             if (progress.finished) {
                 active.reset();
                 if (progress.succeeded) {
@@ -251,6 +324,7 @@ namespace merutilm::rff2 {
             if (!active) {
                 active = std::make_unique<PipelinePreparationWindow>(progress, history().estimate(key));
             } else {
+                active->setSkippable(progress.skippable);
                 active->update(progress.seconds);
             }
         }

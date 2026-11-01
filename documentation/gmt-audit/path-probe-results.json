@@ -1,0 +1,38 @@
+{
+  "scope": "CPU arithmetic; actual CDF builder with texture-storage-only stub; no GPU or visual execution",
+  "uniformSeedTransforms": {
+    "samples": 1000000,
+    "requestedSpecularProbability": 0.5,
+    "actualSpecularProbability": 0.618046,
+    "requestedRouletteSurvival": 0.5,
+    "actualRouletteSurvival": 0.505563,
+    "expectedUniformSquaredRadiusMean": 0.5,
+    "actualSquaredRadiusMean": 0.42705099437499994
+  },
+  "cdfBrightTexel": {
+    "source": "8x4 RGBA; pixel(0,0) RGB=100; remaining RGB=0; target2x2",
+    "avgColor": [
+      0,
+      0,
+      0
+    ],
+    "physicalAreaAverageIsNonzero": true
+  },
+  "cdfBlackFallback": {
+    "size": {
+      "w": 2,
+      "h": 2
+    },
+    "lumIntegral": 1
+  },
+  "coverageRecurrence": {
+    "samples": [
+      1,
+      0,
+      1,
+      0
+    ],
+    "storedAlpha": 0,
+    "desiredCoverageAverage": 0.5
+  }
+}

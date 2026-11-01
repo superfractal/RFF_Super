@@ -1,8 +1,8 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
-// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-04
+// Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-10, 2026-10-11, 2026-10-13, 2026-10-16, 2026-10-25, 2026-10-27, 2026-11-01
 //
 
 #include "UiLanguage.hpp"
@@ -337,21 +337,6 @@ namespace merutilm::rff2 {
             // A color has no single value to plot on a row or to drag a key up and down, so a color
             // track is shown as the keys it carries and edited nowhere.
             return param != nullptr && param->kind != TimelineParamKind::COLOR;
-        }
-
-        // How far an arrow key moves a typed value, read off the range the parameter is edited in.
-        double keyValueStep(const uint16_t targetId) {
-            if (colorCycleTarget(targetId)) {
-                return 1.0;
-            }
-            const TimelineParamDesc *param = TimelineParams::find(targetId);
-            if (param == nullptr) {
-                return 0.1;
-            }
-            if (param->kind == TimelineParamKind::BOOL || param->kind == TimelineParamKind::ENUM) {
-                return 1.0;
-            }
-            return param->maxValue - param->minValue <= 2.0f ? 0.01 : 0.1;
         }
 
         // A switch or a mode means nothing between its steps, so its keys hold until the next one.
@@ -1053,6 +1038,9 @@ namespace merutilm::rff2 {
                           shared.textError};
         if (inspector) {
             inspector->applyTheme();
+        }
+        if (inspectorNav) {
+            inspectorNav->repaint();
         }
         applyPanelTheme();
         hoverTheme = false;
@@ -1833,6 +1821,7 @@ namespace merutilm::rff2 {
                                    L"Timeline Editor", MB_OK | MB_ICONERROR);
             return;
         }
+        loaded.enabled = true;
         attribute.video.timeline = std::move(loaded);
         PostMessageW(window, WM_APP + 0x266, 0, 0);
         // The keys of the file were written against the keyframe count it carries, so they are moved
@@ -1908,7 +1897,7 @@ namespace merutilm::rff2 {
                 &exportation.fps,         &exportation.bitrate,     &exportation.lossless,
                 &exportation.keyframeAA,  &exportation.colorAA,     &exportation.pauseMainPreview,
                 &exportation.hdrTransfer, &exportation.hdrPeakNits, &exportation.showExportPreview,
-                &exportation.gpuSubmitSplit,
+                &exportation.gpuSubmitSplit, &exportation.outputWidth, &exportation.outputHeight,
             };
             window.disableRowsInObjectExcept(&exportation, sizeof(VidExportAttribute), kept);
         }
@@ -1959,6 +1948,7 @@ namespace merutilm::rff2 {
                 return;
             }
             frameSource = std::move(opened);
+            keyframeRangeFirst = keyframeRangeLast = 0;
             attribute.video.data.isStatic = frameSource->isStatic();
             const float previousStartDepth = attribute.video.timeline.estimateKeyframes;
             attribute.video.timeline.estimateKeyframes = static_cast<float>(frameSource->getFrameCount());
@@ -1979,7 +1969,10 @@ namespace merutilm::rff2 {
         }
 
         const std::filesystem::path directory = frameSource->getDirectory();
-        const Attribute exportAttribute = *sourceAttribute;
+        Attribute exportAttribute = *sourceAttribute;
+        // The export reads exactly the files the preview shows.
+        exportAttribute.video.data.keyframeFirst = frameSource->getRange().first;
+        exportAttribute.video.data.keyframeLast = frameSource->getRange().last();
         const HWND notifyWindow = window;
         RenderScene *const scene = renderScene;
         stopFramePreviewWorker();
@@ -2025,13 +2018,16 @@ namespace merutilm::rff2 {
         if (directory == nullptr) {
             return;
         }
+        if (frameSource == nullptr || frameSource->getDirectory() != *directory) {
+            keyframeRangeFirst = keyframeRangeLast = 0;
+        }
         loadKeyframeDirectory(*directory);
     }
 
     void TimelineWindow::loadKeyframeDirectory(const std::filesystem::path &directory) {
         std::wstring error;
-        std::unique_ptr<VideoFrameSource> opened =
-            VideoFrameSource::open(directory, attribute.video.data.isStatic, error);
+        std::unique_ptr<VideoFrameSource> opened = VideoFrameSource::open(
+            directory, attribute.video.data.isStatic, error, keyframeRangeFirst, keyframeRangeLast);
         if (opened == nullptr) {
             NativeDialogs::message(window, error.c_str(), L"Timeline Preview", MB_OK | MB_ICONERROR);
             return;
@@ -2062,6 +2058,28 @@ namespace merutilm::rff2 {
             rememberWorkspaceSource();
         }
         (void)initializeFramePreview();
+    }
+
+    void TimelineWindow::applyKeyframeRange(const uint32_t first, const uint32_t last) {
+        if (frameSource == nullptr || exporting) {
+            return;
+        }
+        if (last != 0 && last < std::max<uint32_t>(first, 1)) {
+            NativeDialogs::message(window, L"The last file number must not be lower than the first.",
+                                   L"Keyframe File Range", MB_OK | MB_ICONWARNING);
+            return;
+        }
+        const uint32_t previousFirst = keyframeRangeFirst;
+        const uint32_t previousLast = keyframeRangeLast;
+        const VideoFrameSource *const previous = frameSource.get();
+        keyframeRangeFirst = first;
+        keyframeRangeLast = last;
+        loadKeyframeDirectory(std::filesystem::path(frameSource->getDirectory()));
+        if (frameSource.get() == previous) {
+            keyframeRangeFirst = previousFirst;
+            keyframeRangeLast = previousLast;
+        }
+        InvalidateRect(window, nullptr, FALSE);
     }
 
     bool TimelineWindow::initializeFramePreview() {
@@ -2129,6 +2147,7 @@ namespace merutilm::rff2 {
             previewAttribute.video.exportation.keyframeAA = 1;
             previewAttribute.video.exportation.colorAA = 1;
             frameSource->setPreviewSize(previewExtent.width, previewExtent.height);
+            frameSource->setTrapShape(TrapShapeParams::of(previewAttribute.shader.palette));
             previewScene =
                 std::make_unique<VideoRenderScene>(engine, *context, previewExtent, previewAttribute);
         } catch (const std::exception &e) {
@@ -2347,6 +2366,8 @@ namespace merutilm::rff2 {
             return false;
         }
         std::wstring error;
+        // Set on this worker, the one that loads and preloads, so the cache never changes under a read.
+        frameSource->setTrapShape(TrapShapeParams::of(shader.palette));
         if (!frameSource->load(depth, error)) {
             {
                 std::scoped_lock lock(previewBitmapMutex);
@@ -2372,7 +2393,8 @@ namespace merutilm::rff2 {
             auto &normal = frameSource->getNormalDynamic();
             auto &zoomed = frameSource->getZoomedDynamic();
             previewScene->setMap(&normal, &zoomed);
-            previewScene->applyCurrentDynamicMap(normal, zoomed, sampledDepth);
+            previewScene->applyCurrentDynamicMap(normal, zoomed, sampledDepth, &frameSource->getNormalTraps(),
+                                                 &frameSource->getZoomedTraps());
             const uint64_t normalMax = normal.getMaxIteration();
             const uint64_t zoomedMax = zoomed.getMaxIteration();
             previewScene->setMaxIterationDynamic(static_cast<double>(std::max(normalMax, zoomedMax)),
@@ -2458,10 +2480,12 @@ namespace merutilm::rff2 {
             return *cached;
         }
         if (frameSource->isStatic()) {
-            const RFFStaticMapBinary header = RFFStaticMapBinary::readByID(frameSource->getDirectory(), id);
+            const RFFStaticMapBinary header =
+                RFFStaticMapBinary::readByID(frameSource->getDirectory(), frameSource->getRange().fileNumber(id));
             cached = header.hasData() ? header.getLogZoom() : estimated;
         } else if (float logZoom = 0;
-                   RFFDynamicMapBinary::readLogZoomByID(frameSource->getDirectory(), id, logZoom)) {
+                   RFFDynamicMapBinary::readLogZoomByID(frameSource->getDirectory(),
+                                                        frameSource->getRange().fileNumber(id), logZoom)) {
             cached = logZoom;
         } else {
             cached = estimated;
@@ -2512,7 +2536,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::beginFieldEdit(const FieldEdit field) {
-        if (field == FieldEdit::NONE) {
+        if (field == FieldEdit::NONE || !frameSource) {
             return;
         }
         closeFieldEdit();
@@ -2534,6 +2558,13 @@ namespace merutilm::rff2 {
             accessibleId = L"timeline.time";
             focusItem = workspace::TimelineItems::time;
             break;
+        case FieldEdit::RANGE_FIRST:
+        case FieldEdit::RANGE_LAST:
+            box = field == FieldEdit::RANGE_FIRST ? rangeFirstField : rangeLastField;
+            accessibleName = field == FieldEdit::RANGE_FIRST ? L"First keyframe file" : L"Last keyframe file";
+            accessibleId = field == FieldEdit::RANGE_FIRST ? L"timeline.range.first" : L"timeline.range.last";
+            focusItem = workspace::TimelineItems::frames;
+            break;
         default:
             box = keyframeField;
             accessibleName = L"Timeline Keyframe";
@@ -2544,11 +2575,15 @@ namespace merutilm::rff2 {
         if (box.right <= box.left || box.bottom <= box.top) {
             return;
         }
+        const bool rangeField = field == FieldEdit::RANGE_FIRST || field == FieldEdit::RANGE_LAST;
         const std::wstring value =
-            field == FieldEdit::DISTANCE
+            rangeField ? std::to_wstring(field == FieldEdit::RANGE_FIRST ? frameSource->getRange().first
+                                                                         : frameSource->getRange().last())
+            : field == FieldEdit::DISTANCE
                 ? Unparser::floatTrim(4)(displayDistance(previewDepth))
                 : (field == FieldEdit::TIME ? std::format(L"{:.6f}", previewSeconds()) : Unparser::floatTrim(4)(previewDepth));
-        const RECT editRect = {box.left + sc(8), box.top + sc(9), box.right - sc(8), box.bottom - sc(4)};
+        const RECT editRect = rangeField ? box
+                                         : RECT{box.left + sc(8), box.top + sc(9), box.right - sc(8), box.bottom - sc(4)};
         activeFieldEdit = field;
         fieldEdit = CreateWindowExW(
             0, WC_EDITW, value.c_str(), WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_CENTER, editRect.left,
@@ -2558,13 +2593,15 @@ namespace merutilm::rff2 {
             activeFieldEdit = FieldEdit::NONE;
             return;
         }
-        SendMessageW(fieldEdit, WM_SETFONT, reinterpret_cast<WPARAM>(valueFont), TRUE);
+        SendMessageW(fieldEdit, WM_SETFONT, reinterpret_cast<WPARAM>(rangeField ? bodyFont : valueFont), TRUE);
         SendMessageW(fieldEdit, EM_SETLIMITTEXT, 128, 0);
         SendMessageW(fieldEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(sc(4), sc(4)));
         SetWindowSubclass(fieldEdit, fieldEditProc, 1, reinterpret_cast<DWORD_PTR>(this));
         workspace::AccessibleControl::describe(
             fieldEdit, accessibleName,
-            L"Enter a number or formula. Press Enter to apply or Escape to cancel.", accessibleId);
+            rangeField ? L"Enter a file number; 0 or empty uses the whole folder. Press Enter to apply or Escape to cancel."
+                       : L"Enter a number or formula. Press Enter to apply or Escape to cancel.",
+            accessibleId);
         keyboardFocus = focusItem;
         SetFocus(fieldEdit);
         SendMessageW(fieldEdit, EM_SETSEL, 0, -1);
@@ -2579,6 +2616,9 @@ namespace merutilm::rff2 {
         std::wstring text(static_cast<size_t>(length) + 1, L'\0');
         GetWindowTextW(fieldEdit, text.data(), length + 1);
         text.resize(length);
+        if (activeFieldEdit == FieldEdit::RANGE_FIRST || activeFieldEdit == FieldEdit::RANGE_LAST) {
+            return commitRangeFieldEdit(text);
+        }
         const std::optional<double> value = NumericExpression::evaluate(text);
         if (!value.has_value() || std::abs(*value) > std::numeric_limits<float>::max()) {
             workspace::AccessibleControl::validation(fieldEdit,
@@ -2607,6 +2647,32 @@ namespace merutilm::rff2 {
         closeFieldEdit();
         requestFramePreview();
         InvalidateRect(window, nullptr, FALSE);
+        return true;
+    }
+
+    bool TimelineWindow::commitRangeFieldEdit(const std::wstring &text) {
+        const bool first = activeFieldEdit == FieldEdit::RANGE_FIRST;
+        const std::optional<double> value =
+            text.find_first_not_of(L" \t") == std::wstring::npos ? std::optional<double>(0.0)
+                                                                  : NumericExpression::evaluate(text);
+        const KeyframeRange current = frameSource ? frameSource->getRange() : KeyframeRange{};
+        const double number = value.has_value() ? std::round(*value) : -1.0;
+        const uint32_t requested = number >= 0.0 && number <= 999999999.0 ? static_cast<uint32_t>(number) : UINT32_MAX;
+        // An emptied First keeps the end in place, and an emptied Last keeps the start in place.
+        const uint32_t nextFirst = first ? requested : keyframeRangeFirst ? current.first : 0;
+        const uint32_t nextLast = first ? (keyframeRangeLast ? current.last() : 0) : requested;
+        if (requested == UINT32_MAX || (nextLast != 0 && nextLast < std::max<uint32_t>(nextFirst, 1))) {
+            workspace::AccessibleControl::validation(
+                fieldEdit, requested == UINT32_MAX ? L"Enter a file number from 0 to 999999999."
+                                                   : L"The last file number must not be lower than the first.");
+            MessageBeep(MB_ICONWARNING);
+            SendMessageW(fieldEdit, EM_SETSEL, 0, -1);
+            return false;
+        }
+        closeFieldEdit();
+        if (nextFirst != keyframeRangeFirst || nextLast != keyframeRangeLast) {
+            applyKeyframeRange(nextFirst, nextLast);
+        }
         return true;
     }
 
@@ -2731,6 +2797,8 @@ namespace merutilm::rff2 {
         if (owner != nullptr) {
             owner = GetAncestor(owner, GA_ROOT);
         }
+        // Timeline Enabled has no control of its own, so a timeline saved off is turned on as the editor opens it.
+        scene.getAttribute().video.timeline.enabled = true;
         auto *timeline = new TimelineWindow(menu, scene);
         if (!timeline->create(owner)) {
             delete timeline;
@@ -2749,6 +2817,7 @@ namespace merutilm::rff2 {
 
     HWND TimelineWindow::createWorkspace(SettingsMenu &menu, RenderScene &scene, HWND parent, bool floating) {
         registerTimelineWindowClass();
+        scene.getAttribute().video.timeline.enabled = true;
         auto *timeline = new TimelineWindow(menu, scene);
         timeline->embedded = true;
         timeline->floatingWorkspace = floating;
@@ -3024,6 +3093,7 @@ namespace merutilm::rff2 {
         if (!self || !self->embedded || !self->sourceAttribute) {
             return;
         }
+        self->sourceAttribute->video.timeline.enabled = true;
         const auto &source = *self->sourceAttribute;
         self->attribute.shader = source.shader;
         self->attribute.video.animation = source.video.animation;
@@ -3161,22 +3231,6 @@ namespace merutilm::rff2 {
         return redo ? self->redoTimeline() : self->undoTimeline();
     }
 
-    void TimelineWindow::workspaceAction(HWND handle, int action) {
-        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
-        if (!self || !self->embedded) {
-            return;
-        }
-        if (action == 0) {
-            self->setPlaying(!self->playing);
-        }
-        if (action == 1) {
-            self->stopPlayback();
-        }
-        if (action == 2) {
-            self->loadKeyframeDirectory();
-        }
-    }
-
     void TimelineWindow::matchCameraToPlanar(HWND handle) {
         auto *self = IsWindow(handle) ? reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA)) : nullptr;
         if (!self || self->exporting) return;
@@ -3226,25 +3280,6 @@ namespace merutilm::rff2 {
         }
         self->selectTrackRow(vidTimelineTargetId(VidTimelineTarget::CAMERA_PROJECTION), false, false);
         self->commitTimeline();
-    }
-
-    bool TimelineWindow::loadWorkspaceKeyframes(HWND handle, const std::filesystem::path &directory) {
-        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
-        if (!self || !self->embedded) {
-            return false;
-        }
-        self->loadKeyframeDirectory(directory);
-        return self->frameSource && self->frameSource->getDirectory() == directory;
-    }
-
-    bool TimelineWindow::workspacePreviewReady(HWND handle) {
-        auto *self = reinterpret_cast<TimelineWindow *>(GetWindowLongPtrW(handle, GWLP_USERDATA));
-        if (!self || !self->embedded) {
-            return false;
-        }
-        std::scoped_lock lock(self->previewRequestMutex, self->previewBitmapMutex);
-        return self->previewBitmap && !self->previewPending && !self->previewWorkerFailed &&
-               self->publishedPreviewGeneration == self->previewRequestGeneration;
     }
 
     std::wstring TimelineWindow::workspaceStatus(HWND handle) {
@@ -3388,7 +3423,9 @@ namespace merutilm::rff2 {
     void TimelineWindow::advancePlayback() {
         if (audioPreview.takeFailure()) {
             setPlaying(false);
-            const auto message = L"Audio preview stopped. Check the audio file, FFmpeg and the Windows output device.\n\nLog: " + audioPreview.diagnosticLog().wstring();
+            // Translated before the log path goes in, which no table entry could match.
+            const auto message = UiLanguage::text(L"Audio preview stopped. Check the audio file, FFmpeg and the Windows output device.") +
+                                 L"\n\n" + UiLanguage::text(L"Log: ") + audioPreview.diagnosticLog().wstring();
             NativeDialogs::message(window, message.c_str(), L"Audio Preview", MB_OK | MB_ICONERROR);
             return;
         }
@@ -3605,7 +3642,8 @@ namespace merutilm::rff2 {
             status = cacheMessage.empty() ? previewMessage : cacheMessage;
         }
         if (previewBusy && !cachePreloading.load()) {
-            status = std::format(L"Rendering distance {:.2f}.", displayDistance(previewBusyDepth));
+            const auto distance = displayDistance(previewBusyDepth);
+            status = std::vformat(UiLanguage::text(L"Rendering distance {:.2f}."), std::make_wformat_args(distance));
         }
         const std::wstring source =
             frameSource ? frameSource->getDirectory().filename().wstring() : L"No keyframe folder selected.";
@@ -3718,14 +3756,25 @@ namespace merutilm::rff2 {
         const int buttonTop = boxTop + (embedded ? 0 : sc(2));
         const int buttonBottom = boxBottom - (embedded ? 0 : sc(2));
         const int headerInset = margin + sc(20);
+        const auto actionWidth = [&](const wchar_t *label) {
+            const auto translated = UiLanguage::text(label);
+            const HGDIOBJ previous = SelectObject(canvas, smallFont);
+            SIZE size{};
+            GetTextExtentPoint32W(canvas, translated.c_str(), int(translated.size()), &size);
+            SelectObject(canvas, previous);
+            return std::max(sc(112), int(size.cx) + dip(24));
+        };
+        const int loadWidth = actionWidth(L"Load Timeline");
+        const int saveWidth = actionWidth(L"Save Timeline");
+        const int exportWidth = std::max(actionWidth(L"Export Video"), actionWidth(L"Exporting"));
         // When AI Edit is switched off the button collapses to nothing and Export takes its place.
         const bool aiShown = settingsMenu == nullptr || settingsMenu->featureShown(SettingsMenu::AI_EDIT_FEATURE);
         aiButton = aiShown ? RECT{width - headerInset - sc(96), buttonTop, width - headerInset, buttonBottom}
                            : RECT{width - headerInset + sc(10), buttonTop, width - headerInset + sc(10), buttonBottom};
-        exportButton = {aiButton.left - sc(10) - sc(112), buttonTop, aiButton.left - sc(10), buttonBottom};
-        saveButton = {exportButton.left - sc(10) - sc(112), buttonTop, exportButton.left - sc(10),
+        exportButton = {aiButton.left - sc(10) - exportWidth, buttonTop, aiButton.left - sc(10), buttonBottom};
+        saveButton = {exportButton.left - sc(10) - saveWidth, buttonTop, exportButton.left - sc(10),
                       buttonBottom};
-        loadButton = {saveButton.left - sc(10) - sc(96), buttonTop, saveButton.left - sc(10), buttonBottom};
+        loadButton = {saveButton.left - sc(10) - loadWidth, buttonTop, saveButton.left - sc(10), buttonBottom};
         fullscreenButton = embedded ? RECT{}
                                     : RECT{loadButton.left - sc(20) - sc(104), buttonTop,
                                            loadButton.left - sc(20), buttonBottom};
@@ -3738,9 +3787,9 @@ namespace merutilm::rff2 {
             const int right = width - margin;
             aiButton = aiShown ? RECT{right - dip(76), dip(56), right, dip(84)}
                                : RECT{right + dip(8), dip(56), right + dip(8), dip(84)};
-            exportButton = {aiButton.left - dip(84), dip(56), aiButton.left - dip(8), dip(84)};
-            saveButton = {exportButton.left - dip(84), dip(56), exportButton.left - dip(8), dip(84)};
-            loadButton = {saveButton.left - dip(84), dip(56), saveButton.left - dip(8), dip(84)};
+            exportButton = {aiButton.left - dip(8) - exportWidth, dip(56), aiButton.left - dip(8), dip(84)};
+            saveButton = {exportButton.left - dip(8) - saveWidth, dip(56), exportButton.left - dip(8), dip(84)};
+            loadButton = {saveButton.left - dip(8) - loadWidth, dip(56), saveButton.left - dip(8), dip(84)};
             framesButton = {right - dip(136), dip(8), right, dip(40)};
         }
 
@@ -3765,21 +3814,49 @@ namespace merutilm::rff2 {
             const bool loaded = frameSource != nullptr;
             const RECT inner = drawCaptionBox(canvas, framesButton, L"Keyframes", theme.panel, captionFont,
                                               hoverFrames, loaded, theme);
-            drawText(canvas,
-                     loaded ? std::format(L"{} loaded", frameSource->getFrameCount()) : L"Select folder",
-                     inner, loaded ? theme.accentText : theme.text,
-                     DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
+            rangeFirstField = {};
+            rangeLastField = {};
+            if (loaded) {
+                // Each file number is its own field; the rest of the box still opens a folder.
+                const int dash = sc(18);
+                const int middle = static_cast<int>(inner.left + inner.right) / 2;
+                const RECT fieldBand = {inner.left, inner.top + sc(1), inner.right, inner.bottom - sc(1)};
+                rangeFirstField = {fieldBand.left, fieldBand.top, middle - dash / 2, fieldBand.bottom};
+                rangeLastField = {middle + dash / 2, fieldBand.top, fieldBand.right, fieldBand.bottom};
+                const KeyframeRange &range = frameSource->getRange();
+                const std::pair<FieldEdit, std::pair<RECT, uint32_t>> parts[] = {
+                    {FieldEdit::RANGE_FIRST, {rangeFirstField, range.first}},
+                    {FieldEdit::RANGE_LAST, {rangeLastField, range.last()}}};
+                for (const auto &[field, part] : parts) {
+                    const auto &[rect, number] = part;
+                    if (activeFieldEdit == field) {
+                        continue;
+                    }
+                    if (hoveredFieldEdit == field) {
+                        fillRect(canvas, rect, theme.accentSoft);
+                    }
+                    fillRect(canvas, {rect.left + sc(4), rect.bottom - 1, rect.right - sc(4), rect.bottom},
+                             hoveredFieldEdit == field ? theme.accentText : theme.border);
+                    drawText(canvas, std::format(L"{:04d}", number), rect, theme.accentText,
+                             DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
+                }
+                drawText(canvas, L"-", {middle - dash / 2, inner.top, middle + dash / 2, inner.bottom},
+                         theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
+            } else {
+                drawText(canvas, L"Select folder", inner, theme.text,
+                         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
+            }
         }
         if (!embedded) {
             drawButton(canvas, fullscreenButton, fullscreen ? L"WINDOW" : L"FULL", hoverFullscreen,
                        fullscreen, smallFont, theme);
         }
-        drawButton(canvas, loadButton, L"Load", hoverLoad, false, smallFont, theme);
-        drawButton(canvas, saveButton, L"Save", hoverSave, false, smallFont, theme);
+        drawButton(canvas, loadButton, L"Load Timeline", hoverLoad, false, smallFont, theme);
+        drawButton(canvas, saveButton, L"Save Timeline", hoverSave, false, smallFont, theme);
         if (!IsRectEmpty(&aiButton)) {
             drawButton(canvas, aiButton, L"AI Edit", hoverAi, aiImagesBusy.load(), smallFont, theme);
         }
-        drawButton(canvas, exportButton, exporting ? L"Exporting" : L"Export", hoverExport, true, smallFont,
+        drawButton(canvas, exportButton, exporting ? L"Exporting" : L"Export Video", hoverExport, frameSource != nullptr || exporting, smallFont,
                    theme);
 
         RECT previewPanel = {margin, contentTop, width - margin, contentTop + previewHeight};
@@ -3880,14 +3957,6 @@ namespace merutilm::rff2 {
                 // An empty panel named for a render read as one already loaded, so with no keyframe
                 // folder behind it the panel says that instead of naming what it would hold.
                 if (frameSource == nullptr) {
-                    overlayImageRect = preview;
-                    if (!overlayRenderer) {
-                        overlayRenderer = std::make_unique<ZoomOverlay>();
-                    }
-                    overlayRenderer->paint(canvas, preview, 100, ZoomOverlay::zoomStyle(attribute.video.timeline.zoomOverlay, previewSeconds()));
-                    if (!iterationOverlayRenderer) iterationOverlayRenderer = std::make_unique<ZoomOverlay>();
-                    iterationOverlayRenderer->paint(canvas, preview, 100,
-                        ZoomOverlay::iterationStyle(attribute.video.timeline.maxIterationOverlay, previewSeconds()));
                     shortsGuide.paint(canvas, preview);
                 }
                 if (frameSource != nullptr) {
@@ -3895,30 +3964,45 @@ namespace merutilm::rff2 {
                              DT_CENTER | DT_VCENTER | DT_SINGLELINE, bodyFont);
                 } else {
                     // The empty preview says what is missing and offers the folder picker where the eye already is.
-                    const std::wstring title = L"No keyframes loaded";
+                    const std::wstring title = L"Load keyframes to start";
                     const std::wstring detail =
                         L"Select the folder with the rendered keyframes to enable preview and scrubbing.";
-                    const std::wstring action = L"Select keyframe folder...";
-                    const int titleHeight = fontHeight(canvas, bodyFont);
-                    const int detailHeight = fontHeight(canvas, smallFont);
-                    const int buttonHeight = sc(32);
-                    const int blockHeight = titleHeight + sc(6) + detailHeight + sc(14) + buttonHeight;
-                    if (preview.bottom - preview.top >= blockHeight + sc(8)) {
-                        int top = int(preview.top + preview.bottom - blockHeight) / 2;
-                        drawText(canvas, title, {preview.left, top, preview.right, top + titleHeight}, theme.text,
-                                 DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, bodyFont);
-                        top += titleHeight + sc(6);
-                        drawText(canvas, detail,
-                                 {preview.left + sc(12), top, preview.right - sc(12), top + detailHeight},
-                                 theme.mutedText, DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, smallFont);
-                        top += detailHeight + sc(14);
+                    const std::wstring action = L"Select keyframe folder";
+                    const int availableWidth = std::max(1L, preview.right - preview.left - dip(24));
+                    const int titleHeight = fontHeight(canvas, titleFont);
+                    RECT detailMeasure{0, 0, availableWidth, 0};
+                    const auto previousFont = SelectObject(canvas, bodyFont);
+                    UiLanguage::drawText(canvas, detail.c_str(), int(detail.size()), &detailMeasure,
+                                         DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+                    SelectObject(canvas, previousFont);
+                    const int detailHeight = detailMeasure.bottom;
+                    const int buttonHeight = std::max(dip(44), fontHeight(canvas, bodyFont) + dip(16));
+                    const int blockHeight = titleHeight + dip(12) + detailHeight + dip(24) + buttonHeight;
+                    const int availableHeight = preview.bottom - preview.top;
+                    const bool full = availableHeight >= blockHeight + dip(24);
+                    const bool heading = full || availableHeight >= titleHeight + dip(16) + buttonHeight + dip(8);
+                    const int shownHeight = full ? blockHeight : heading ? titleHeight + dip(16) + buttonHeight : buttonHeight;
+                    if (availableHeight >= shownHeight) {
+                        int top = int(preview.top + preview.bottom - shownHeight) / 2;
+                        if (heading) {
+                            drawText(canvas, title, {preview.left, top, preview.right, top + titleHeight}, theme.text,
+                                     DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS, titleFont);
+                            top += titleHeight + (full ? dip(12) : dip(16));
+                        }
+                        if (full) {
+                            drawText(canvas, detail,
+                                     {preview.left + dip(12), top, preview.right - dip(12), top + detailHeight},
+                                     theme.mutedText, DT_CENTER | DT_WORDBREAK, bodyFont);
+                            top += detailHeight + dip(24);
+                        }
                         const int middleX = int(preview.left + preview.right) / 2;
-                        const int buttonWidth = textWidth(canvas, action, smallFont) + sc(40);
+                        const int buttonWidth = std::min(availableWidth,
+                            std::max(dip(240), textWidth(canvas, action, bodyFont) + dip(48)));
                         emptyFramesButton = {middleX - buttonWidth / 2, top, middleX - buttonWidth / 2 + buttonWidth,
                                              top + buttonHeight};
-                        drawButton(canvas, emptyFramesButton, action, hoverEmptyFrames, true, smallFont, theme);
+                        drawButton(canvas, emptyFramesButton, action, hoverEmptyFrames, true, bodyFont, theme);
                     } else {
-                        drawText(canvas, title, preview, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+                        drawText(canvas, title, preview, theme.mutedText, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
                                  bodyFont);
                     }
                 }
@@ -3945,14 +4029,14 @@ namespace merutilm::rff2 {
         const float startDepth = schedule.getStartDepth();
         const float zoomExponent = zoomExponentAt(previewDepth);
         const std::wstring fields[4][2] = {
-            {L"Distance", std::format(L"{:.1f}", displayDistance(previewDepth))},
-            {L"Keyframe", std::format(L"{:.1f}", previewDepth)},
+            {L"Distance", frameSource ? std::format(L"{:.1f}", displayDistance(previewDepth)) : L"\u2014"},
+            {L"Keyframe", frameSource ? std::format(L"{:.1f}", previewDepth) : L"\u2014"},
             // Read off the keyframe files; with none open the depth axis is a placeholder and the
             // zoom extrapolated along it says nothing, so the readout stands empty until one is.
             {L"Magnification",
              frameSource == nullptr ? std::wstring(L"\u2014") : std::format(L"1E{:.1f}", zoomExponent)},
-            {L"Time", std::format(L"{} / {}", durationText(previewSeconds()),
-                                  durationText(schedule.getTotalSeconds()))},
+            {L"Time", frameSource ? std::format(L"{} / {}", durationText(previewSeconds()),
+                                  durationText(schedule.getTotalSeconds())) : L"\u2014 / \u2014"},
         };
         RECT *const fieldRects[4] = {&distanceField, &keyframeField, &zoomField, &timeField};
         // The readouts share one width and one gap, so the row is spaced as evenly as it reads.
@@ -4637,9 +4721,9 @@ namespace merutilm::rff2 {
         if (frameSource && !items.empty()) {
             items.back().help += L" Current source: " + frameSource->getDirectory().wstring();
         }
-        add(Id::load, L"Load timeline", loadButton);
-        add(Id::save, L"Save timeline", saveButton);
-        add(Id::exportVideo, L"Export", exportButton);
+        add(Id::load, L"Load Timeline", loadButton);
+        add(Id::save, L"Save Timeline", saveButton);
+        add(Id::exportVideo, L"Export Video", exportButton);
         add(Id::ai, L"AI Edit", aiButton);
         add(Id::theme, L"Theme", themeButton);
         add(Id::fullscreen, L"Fullscreen", fullscreenButton);
@@ -4729,11 +4813,15 @@ namespace merutilm::rff2 {
                 item.state |= STATE_SYSTEM_CHECKED;
             }
             if (item.id == Id::distance || item.id == Id::keyframe || item.id == Id::time) {
-                item.writable = true;
-                item.value = workspace::AttributeFormModel::number(item.id == Id::distance
+                item.writable = frameSource != nullptr;
+                item.value = !frameSource ? L"\u2014" : workspace::AttributeFormModel::number(item.id == Id::distance
                                                                        ? displayDistance(previewDepth)
                                                                    : item.id == Id::time ? previewSeconds()
                                                                                          : previewDepth);
+            }
+            if (!frameSource && (item.id == Id::distance || item.id == Id::keyframe || item.id == Id::time)) {
+                item.state |= STATE_SYSTEM_READONLY | STATE_SYSTEM_UNAVAILABLE;
+                item.action.clear();
             }
             if (item.id == Id::zoom) {
                 item.state = STATE_SYSTEM_READONLY;
@@ -4919,6 +5007,9 @@ namespace merutilm::rff2 {
 
     bool TimelineWindow::writeItem(long id, std::wstring_view text) {
         using Id = workspace::TimelineItems;
+        if (!frameSource && (id == Id::distance || id == Id::keyframe || id == Id::time)) {
+            return false;
+        }
         const auto value = NumericExpression::evaluate(std::wstring(text));
         if (!value || std::abs(*value) > std::numeric_limits<float>::max() || exporting) {
             return false;
@@ -5609,10 +5700,12 @@ namespace merutilm::rff2 {
             const bool loop = contains(self->loopButton, point);
             const bool zoomPreset = contains(self->zoomPresetButton, point);
             const bool controls = contains(self->controlsButton, point);
-            const FieldEdit formulaField = contains(self->distanceField, point)   ? FieldEdit::DISTANCE
-                                           : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME
-                                           : contains(self->timeField, point)     ? FieldEdit::TIME
-                                                                                  : FieldEdit::NONE;
+            const FieldEdit formulaField = contains(self->distanceField, point)     ? FieldEdit::DISTANCE
+                                           : contains(self->keyframeField, point)   ? FieldEdit::KEYFRAME
+                                           : contains(self->timeField, point)       ? FieldEdit::TIME
+                                           : contains(self->rangeFirstField, point) ? FieldEdit::RANGE_FIRST
+                                           : contains(self->rangeLastField, point)  ? FieldEdit::RANGE_LAST
+                                                                                    : FieldEdit::NONE;
             if (hoveredKey.targetId != self->hoveredTrackKey.targetId ||
                 hoveredKey.keyIndex != self->hoveredTrackKey.keyIndex || frames != self->hoverFrames ||
                 load != self->hoverLoad || save != self->hoverSave || exportVideo != self->hoverExport || ai != self->hoverAi ||
@@ -5699,6 +5792,12 @@ namespace merutilm::rff2 {
                 if (self->attribute.video.timeline.audio.clips.empty()) self->addAudioClip();
                 return 0;
             }
+            if (self->frameSource && !self->exporting &&
+                (contains(self->rangeFirstField, point) || contains(self->rangeLastField, point))) {
+                self->beginFieldEdit(contains(self->rangeFirstField, point) ? FieldEdit::RANGE_FIRST
+                                                                            : FieldEdit::RANGE_LAST);
+                return 0;
+            }
             for (const auto &item : self->accessibleItems()) {
                 if (item.id >= workspace::TimelineItems::frames && item.id < workspace::TimelineItems::divider &&
                     (item.state & STATE_SYSTEM_FOCUSABLE) &&
@@ -5721,8 +5820,8 @@ namespace merutilm::rff2 {
                 return 0;
             }
             // The distance, keyframe and time readouts scrub the preview when they are dragged sideways.
-            if (contains(self->distanceField, point) || contains(self->keyframeField, point) ||
-                contains(self->timeField, point)) {
+            if (self->frameSource && (contains(self->distanceField, point) || contains(self->keyframeField, point) ||
+                contains(self->timeField, point))) {
                 self->fieldDrag = contains(self->timeField, point) ? FieldDrag::TIME : FieldDrag::DEPTH;
                 self->pendingFieldEdit = contains(self->distanceField, point)   ? FieldEdit::DISTANCE
                                          : contains(self->keyframeField, point) ? FieldEdit::KEYFRAME

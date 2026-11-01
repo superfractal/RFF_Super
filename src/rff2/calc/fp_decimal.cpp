@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-05.
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "fp_decimal.h"
@@ -77,20 +78,8 @@ namespace merutilm::rff2 {
         return result;
     }
 
-    int fp_decimal::get_exp2() const {
-        return exp2;
-    }
-
-    bool fp_decimal::is_positive() const {
-        return mpz_sgn(value) == 1;
-    }
-
     bool fp_decimal::is_zero() const {
         return mpz_sgn(value) == 0;
-    }
-
-    bool fp_decimal::is_negative() const {
-        return mpz_sgn(value) == -1;
     }
 
     fp_decimal_calculator fp_decimal::edit() const{

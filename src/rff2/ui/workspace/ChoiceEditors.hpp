@@ -1,5 +1,7 @@
 //
 // Created by Opus 5.5 on 2026-10-04
+// Modified by GPT-6 on 2026-10-07
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -62,28 +64,6 @@ namespace merutilm::rff2::workspace::ChoiceEditors {
         return TimelineSchedule::evaluateTrack(track, float(2 - 2 * x), 0.f);
     }
 
-    // Mirrors coloring_curve in vk_2_map_iter_stripe.comp over three cycles, scaled to end at 1.
-    // Smoothstep and Smootherstep are the eases recorded under Ken Perlin in NOTICE.
-    inline double iterationColoringCurve(size_t choice, double x) {
-        const auto eased = [](double ratio, bool smoother) {
-            const double whole = std::floor(ratio), u = ratio - whole;
-            return whole + (smoother ? u * u * u * (u * (6 * u - 15) + 10) : u * u * (3 - 2 * u));
-        };
-        const auto curve = [&](double ratio) {
-            switch (choice) {
-            case 1: return std::sqrt(ratio);
-            case 2: return std::cbrt(ratio);
-            case 3: return std::log1p(ratio);
-            case 4: return std::log1p(std::log1p(ratio));
-            case 5: return eased(ratio, false);
-            case 6: return eased(ratio, true);
-            default: return ratio;
-            }
-        };
-        constexpr double cycles = 3;
-        return curve(x * cycles) / curve(cycles);
-    }
-
     // Gives every drop-down the form left as TEXT the editor that suits its choices.
     inline void assign(std::vector<FormField> &fields) {
         using Editor = FormField::Editor;
@@ -102,8 +82,7 @@ namespace merutilm::rff2::workspace::ChoiceEditors {
                 field.editor = Editor::STYLE_TOGGLES;
             } else if (labelsAre(field, {L"Linear", L"Square root", L"Cube root", L"Log", L"LogLog", L"Smoothstep",
                                          L"Smootherstep"})) {
-                field.editor = Editor::CURVE_TILES;
-                field.curve = iterationColoringCurve;
+                // Keep the default drop-down editor for iteration coloring.
                 // Smootherstep is not offered as a tile; a file that uses it still renders with it.
                 field.choices.pop_back();
             } else if (labelsAre(field, {L"Step", L"Linear", L"Smooth", L"Cubic"})) {

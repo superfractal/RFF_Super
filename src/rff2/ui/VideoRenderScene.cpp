@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-25, 2026-08-26, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-21, 2026-10-24
 //
 
 #include "VideoRenderScene.hpp"
@@ -157,15 +157,19 @@ namespace merutilm::rff2 {
 
 
     void VideoRenderScene::applyCurrentDynamicMap(const RFFDynamicMapBinary &normal,
-                                                  const RFFDynamicMapBinary &zoomed, const float currentFrame) const {
+                                                  const RFFDynamicMapBinary &zoomed, const float currentFrame,
+                                                  const std::vector<float> *normalTraps,
+                                                  const std::vector<float> *zoomedTraps) const {
         wc.core.getLogicalDevice().waitDeviceIdle();
         auto &normalI = normal.getMatrix();
         if (currentFrame < 1) {
             const std::vector<double> zoomedDefault(normalI.getLength());
             renderer->renderer2MapIterationStripe->setAllIterations(normalI.getCanvas(), zoomedDefault);
+            renderer->renderer2MapIterationStripe->setAllTraps(normalTraps, nullptr);
         } else {
             auto &zoomedI = zoomed.getMatrix();
             renderer->renderer2MapIterationStripe->setAllIterations(normalI.getCanvas(), zoomedI.getCanvas());
+            renderer->renderer2MapIterationStripe->setAllTraps(normalTraps, zoomedTraps);
         }
     }
 
@@ -184,7 +188,7 @@ namespace merutilm::rff2 {
 
     void VideoRenderScene::applyShaderStatic() const {
         engine.getCore().getLogicalDevice().waitDeviceIdle();
-        renderer->renderer2MapIterationStripe->setPalette(baseAttribute.shader.palette);
+        renderer->renderer2MapIterationStripe->setPalette(baseAttribute.shader.palette, baseAttribute.shader.slope);
         renderer->renderer2MapIterationStripe->set2MapSize(videoExtent);
         renderer->renderer2MapIterationStripe->setDefaultZoomIncrement(
             baseAttribute.video.data.defaultZoomIncrement);
@@ -192,7 +196,8 @@ namespace merutilm::rff2 {
         renderer->renderer2MapIterationStripe->setTextures(baseAttribute.shader.textures,
                                                            warpSourceLayer(baseAttribute.shader.warp),
                                                            timelineResidentTextures(baseAttribute.video.timeline,
-                                                               baseAttribute.shader.warp));
+                                                               baseAttribute.shader.warp) |
+                                                           environmentSourceLayerMask(baseAttribute.shader.slope.studioEnvironmentSource));
         renderer->rendererBloom->setBloom(gradeBase().bloom, baseAttribute.shader.hdr, gradeBase().sceneLinear());
         renderer->layerShader = gradeBase();
         renderer->rendererSlope->setEffects(gradeBase().effects, gradeBase().sceneLinear(), !renderer->isStaticImages);
@@ -203,13 +208,15 @@ namespace merutilm::rff2 {
         renderer->rendererLinearInterpolation->setDither(baseAttribute.render.dither);
         renderer->rendererImageRGBA2BGR->setDownsample(
             gpuDownsampleEnabled() ? baseAttribute.render.ssaa : 1);
+        renderer->rendererImageRGBA2BGR->setSsaaFilter(baseAttribute.render.ssaaFilter);
+        renderer->rendererPresent->setSsaaFilter(baseAttribute.render.ssaaFilter);
         // A preview window is an SDR display; only an export that asks for it moves off this.
         setHdrOutput(VidHdrTransfer::SDR, baseAttribute.video.exportation.hdrPeakNits);
     }
 
     void VideoRenderScene::setHdrOutput(const VidHdrTransfer transfer, const float peakNits) const {
         renderer->rendererLinearInterpolation->setToneMap(baseAttribute.shader.hdr, transfer, peakNits, gradeBase().sceneLinear());
-        renderer->rendererImageRGBA2BGR->setHdr(isHdrOutput(transfer));
+        renderer->rendererImageRGBA2BGR->setTransfer(isHdrOutput(transfer) ? transfer : VidHdrTransfer::SDR);
     }
 
     bool VideoRenderScene::isHdrOutput(const VidHdrTransfer transfer) const {
@@ -312,10 +319,11 @@ namespace merutilm::rff2 {
             initRenderer();
             return;
         }
-        renderer->renderer2MapIterationStripe->setPalette(shader.palette);
+        renderer->renderer2MapIterationStripe->setPalette(shader.palette, shader.slope);
         renderer->renderer2MapIterationStripe->setTextures(shader.textures, warpSourceLayer(shader.warp),
                                                            timelineResidentTextures(baseAttribute.video.timeline,
-                                                               shader.warp));
+                                                               shader.warp) |
+                                                           environmentSourceLayerMask(shader.slope.studioEnvironmentSource));
         renderer->rendererBloom->setBloom(gradeBase().bloom, shader.hdr, gradeBase().sceneLinear());
         renderer->layerShader = gradeBase();
         renderer->rendererSlope->setEffects(gradeBase().effects, gradeBase().sceneLinear(), !renderer->isStaticImages);

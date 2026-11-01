@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-09-03
 // Modified by GPT-6 on 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -71,10 +72,6 @@ namespace merutilm::rff2 {
                 }
             }
             return file;
-        }
-
-        static bool endsWith(const std::wstring &str, const std::wstring &suffix) {
-            return str.size() >= suffix.size() && std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
         }
 
         static std::vector<std::wstring> split(const std::wstring &input, const wchar_t delimiter) {

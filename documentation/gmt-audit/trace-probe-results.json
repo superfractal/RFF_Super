@@ -1,0 +1,27 @@
+{
+  "scope": "Executed TypeScript trace generator and checked emitted source; illustrative CPU arithmetic only, no GLSL/GPU execution",
+  "compileGate": {
+    "offOmitsBracket": true,
+    "onIncludesBracket": true
+  },
+  "stepHistory": {
+    "storedStep": 1,
+    "actualStep": 0.85,
+    "relativeOverstatement": 0.17647058823529416
+  },
+  "recoveredVolumeExample": {
+    "segmentsAccumulated": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "candidateAfterSegments": 2,
+    "unrewoundSum": 4,
+    "candidatePrefixSum": 2
+  },
+  "refinementData": {
+    "positionChanges": true,
+    "colorMetadataRecomputed": false
+  }
+}

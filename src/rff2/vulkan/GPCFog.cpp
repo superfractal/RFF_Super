@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-15.
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-09, 2026-10-13
 //
 
 #include "GPCFog.hpp"
@@ -47,6 +47,23 @@ namespace merutilm::rff2 {
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_SHADE, fog.chaosShade);
         fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_LINEAR,
                               fog.chaosBlurAverage == ShdChaosBlurAverage::LINEAR ? 1.0f : 0.0f);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_INTERIOR, fog.chaosInterior);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_EDGES, fog.chaosEdgeProtection ? 1.0f : 0.0f);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_BOKEH_BLADES, chaosBokehBlades(fog.chaosBokehShape));
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_BOKEH_ROTATION, glm::radians(fog.chaosBokehRotation));
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_CHAOS_BOKEH_ASPECT, fog.chaosBokehAspect);
+        fogUBOHost.set<float>(DescFog::TARGET_FOG_FOCUS_SMOOTH, fog.focusSmoothKeyframes ? 1.0f : 0.0f);
+        fogUBO.update();
+    }
+
+    void GPCFog::setFocusFrame(const float frame) {
+        if (frame == focusFrame) {
+            return;
+        }
+        focusFrame = frame;
+        using namespace SharedDescriptorTemplate;
+        const auto &fogUBO = *getDescriptor(SET_FOG).get<vkh::Uniform>(0, DescFog::BINDING_UBO_FOG);
+        fogUBO.getHostObject().set<float>(DescFog::TARGET_FOG_FOCUS_FRAME, frame);
         fogUBO.update();
     }
 
@@ -71,6 +88,7 @@ namespace merutilm::rff2 {
                 break;
             }
             case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
+            case Constants::VulkanWindow::VIDEO_WARMUP_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 fogDesc.get<vkh::CombinedImageSampler>(0, BINDING_FOG_CANVAS_ORIGINAL)->setImageContextMF(
                          sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY));

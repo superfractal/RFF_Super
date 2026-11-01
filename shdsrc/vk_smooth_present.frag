@@ -2,9 +2,12 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-18, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-08
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
+#include "ssaa_resolve.glsl"
 layout(push_constant) uniform ZoomTransform { vec4 transform; } zoom;
 // Original RFF_Super affine presentation and area sampling, GPL-3.0-only; see NOTICE.
 
@@ -12,6 +15,8 @@ layout (set = 0, binding = 0) uniform sampler2D canvas;
 layout (set = 0, binding = 1) uniform ResampleUBO{
     uvec2 extent;
     uint srgb_attachment;
+    // SSAA_FILTER_* from ssaa_resolve.glsl.
+    uint ssaa_filter;
 } resample_attr;
 
 
@@ -29,6 +34,13 @@ void main() {
     vec2 cell = ratio / vec2(taps);
     vec2 start = srcCenter - 0.5 * ratio;
     vec2 invSrc = 1.0 / srcSize;
+
+    if (ssaa_use_mitchell(resample_attr.ssaa_filter, ratio)) {
+        vec4 linear = ssaa_mitchell_linear(canvas, srcCenter, ratio, SSAA_TRANSFER_SRGB);
+        // An sRGB swapchain encodes on write, so it takes linear light; any other takes the encoded value.
+        color = resample_attr.srgb_attachment != 0u ? linear : vec4(ssaa_linear_to_srgb(linear.rgb), linear.a);
+        return;
+    }
 
     vec4 sum = vec4(0.0);
     for (int y = 0; y < taps.y; ++y) {

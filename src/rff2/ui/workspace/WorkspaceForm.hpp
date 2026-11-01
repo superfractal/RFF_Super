@@ -1,6 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
+// Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-10-01, 2026-10-08
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01
 //
 
 #pragma once
@@ -33,6 +33,7 @@ namespace merutilm::rff2::workspace {
         // How a field with choices is shown; ChoiceEditors picks one for each field a form leaves as TEXT.
         enum class Editor {
             TEXT,
+            SECTION,
             COLOR,
             RGB_COLOR,
             IMAGE,
@@ -67,6 +68,8 @@ namespace merutilm::rff2::workspace {
         std::function<double(size_t choice, double x)> curve;
         // Draws a rule above the field, unless it is the first field shown.
         bool divider = false;
+        std::string section;
+        bool initiallyExpanded = false;
     };
 
     struct FormAction {
@@ -75,11 +78,14 @@ namespace merutilm::rff2::workspace {
         std::function<void()> invoke;
         bool allowPending = false;
         bool allowDuringJob = false;
+        std::string section;
     };
 
     struct WorkspaceForm {
         std::wstring title;
         std::vector<std::wstring> groups;
+        // Per group, whether a group that can be switched off is on; a group with no entry is never in use.
+        std::vector<std::function<bool()>> groupInUse;
         std::vector<FormField> fields;
         std::vector<FormAction> actions;
         std::function<std::wstring(const FormDraft &)> apply;

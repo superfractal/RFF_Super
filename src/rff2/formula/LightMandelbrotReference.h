@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-09.
 // Modified by Sonnet 5 on 2026-07-06
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -31,10 +32,6 @@ namespace merutilm::rff2 {
                                                                          strictFPG,
                                                                          std::function<void(uint64_t)> &&
                                                                          actionPerRefCalcIteration);
-
-        double real(uint64_t refIteration) const;
-
-        double imag(uint64_t refIteration) const;
 
         size_t length() const override;
 

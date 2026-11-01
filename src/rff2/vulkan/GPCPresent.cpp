@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-09-05.
 // Modified by GPT-5 on 2026-08-23
 // Modified by GPT-6 on 2026-09-18, 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-13
 //
 
 #include "GPCPresent.hpp"
@@ -56,6 +57,16 @@ namespace merutilm::rff2 {
         resolutionUniform.update();
     }
 
+    void GPCPresent::setSsaaFilter(const RndSsaaFilter filter) {
+        if (filter == ssaaFilter) {
+            return;
+        }
+        ssaaFilter = filter;
+        auto &uniform = *getDescriptor(SET_PRESENT).get<vkh::Uniform>(0, BINDING_PRESENT_UBO);
+        uniform.getHostObject().set<uint32_t>(TARGET_PRESENT_UBO_SSAA_FILTER, static_cast<uint32_t>(filter));
+        uniform.update();
+    }
+
     void GPCPresent::pipelineInitialized() {
         writeDescriptorMF([this](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
             getDescriptor(SET_PRESENT).queue(queue, frameIndex, {}, {BINDING_PRESENT_UBO});
@@ -74,6 +85,7 @@ namespace merutilm::rff2 {
                 break;
             }
             case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
+            case Constants::VulkanWindow::VIDEO_WARMUP_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 presentDescriptor.get<vkh::CombinedImageSampler>(0, BINDING_PRESENT_SAMPLER)->
                         setImageContextMF(sharedImages.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY));
@@ -127,7 +139,8 @@ namespace merutilm::rff2 {
                                                         std::move(combinedSampler));
         auto uboManager = vkh::factory::create<vkh::HostDataObjectManager>();
         uboManager->reserve<glm::uvec2>(TARGET_PRESENT_UBO_EXTENT);
-        uboManager->reserve<uint32_t>(TARGET_PRESENT_UBO_SRGB, 4);
+        uboManager->reserve<uint32_t>(TARGET_PRESENT_UBO_SRGB);
+        uboManager->reserve<uint32_t>(TARGET_PRESENT_UBO_SSAA_FILTER);
         descManager->appendUBO(BINDING_PRESENT_UBO, VK_SHADER_STAGE_FRAGMENT_BIT,
                                vkh::factory::create<vkh::Uniform>(wc.core, std::move(uboManager),
                                                                   vkh::BufferLock::LOCK_UNLOCK, false));

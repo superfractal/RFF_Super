@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-06, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by GPT-6 on 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -20,11 +21,8 @@
 
 namespace merutilm::rff2 {
     namespace ValidCondition {
-        constexpr auto POSITIVE_U_CHAR = [](const unsigned char &e) { return e > 0; };
         constexpr auto ALL_U_CHAR = [](const unsigned char &) { return true; };
-        constexpr auto ALL_U_SHORT = [](const unsigned short &) { return true; };
         constexpr auto ALL_U_LONG = [](const unsigned long) { return true; };
-        constexpr auto ALL_U_LONG_LONG = [](const unsigned long long) { return true; };
         constexpr auto FLOAT_ZERO_TO_ONE = [](const float &e) { return e >= 0 && e <= 1; };
         constexpr auto FLOAT_DEGREE = [](const float &e) { return e >= 0 && e < 360; };
         constexpr auto ALL_FLOAT = [](const float &e) { return std::isfinite(e); };

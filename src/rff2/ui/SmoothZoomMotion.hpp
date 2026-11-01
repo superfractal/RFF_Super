@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-18, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -27,10 +28,6 @@ namespace merutilm::rff2 {
                             widerSource ? delta * (1.0 - progress(seconds)) : -delta * progress(seconds));
         }
 
-        static double sourceOffset(double anchor, double scale) {
-            return anchor * (1.0 - scale);
-        }
-
         static float previewClarity(float savedClarity, uint32_t width, uint32_t height, uint32_t coverage) {
             const float longest = static_cast<float>(std::max({width, height, 1u}));
             return std::min({savedClarity, 0.5f, 640.0f / (longest * std::max(1u, coverage))});
@@ -53,6 +50,12 @@ namespace merutilm::rff2 {
             return {view.scale / source.scale, (view.x - source.x) / source.scale, (view.y - source.y) / source.scale};
         }
 
+        // The view of the same scale nearest to this one that the source covers, or the view itself when none can be.
+        static View clampedInside(View view) {
+            if (view.scale > 1.0) return view;
+            return {view.scale, std::clamp(view.x, 0.0, 1.0 - view.scale), std::clamp(view.y, 0.0, 1.0 - view.scale)};
+        }
+
         static bool covered(View view) {
             constexpr double tolerance = 1e-9;
             return view.scale > 0 && view.x >= -tolerance && view.y >= -tolerance &&
@@ -71,12 +74,12 @@ namespace merutilm::rff2 {
             return {scale, std::lerp(from.x, to.x, weight), std::lerp(from.y, to.y, weight)};
         }
 
-        static View enclosing(View first, View second) {
+        static View enclosing(View first, View second, double margin = 1.2) {
             const double left = std::min(first.x, second.x);
             const double top = std::min(first.y, second.y);
             const double right = std::max(first.x + first.scale, second.x + second.scale);
             const double bottom = std::max(first.y + first.scale, second.y + second.scale);
-            const double scale = std::max(right - left, bottom - top) * 1.2;
+            const double scale = std::max(right - left, bottom - top) * margin;
             return {scale, (left + right - scale) * 0.5, (top + bottom - scale) * 0.5};
         }
     };

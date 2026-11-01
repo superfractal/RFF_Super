@@ -1,6 +1,7 @@
 # Numeric input ranges
 
 Updated by GPT-6 on 2026-09-24.
+Modified by Opus 5.5 on 2026-11-01.
 
 The shared policy lives in `src/rff2/attr/NumericSettingLimits.hpp`.
 These are inclusive input limits, not guarantees about available memory or export duration.
@@ -59,7 +60,7 @@ precision or maximum-iteration cap is introduced.
 
 ## Validation
 
-Scratch regression programs in `debug/ui-audit-20260924/` exercise actual form
+Local scratch regression programs, which are not distributed, exercised actual form
 validation and application, shared legacy parsing, timeline descriptor limits,
 automatic iteration overflow, and timeline stream loading without partial mutation.
 The float parser/range probe uses a separate Release translation unit built with

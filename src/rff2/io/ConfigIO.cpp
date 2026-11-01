@@ -8,7 +8,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29
 //
 
 #include "ConfigIO.h"
@@ -29,6 +29,139 @@
 namespace merutilm::rff2 {
     namespace {
         constexpr uint64_t MAX_CONFIG_STRING_BYTES = 16ULL * 1024 * 1024;
+
+        // GPU1 block: marker, then use, batchSeconds, allowedUnfinishedPixels, ignoreMpa, stopMpaAfterBatches,
+        // interpolateIsolatedPixels and singlePrecision, flags as uint32.
+        void writeGpuPerturbation(std::ostream &out, const RndComputeShaderAttribute &gpu) {
+            IOUtilities::encodeAndWrite(out, ConfigIO::GPU_PERTURBATION_MAGIC);
+            IOUtilities::encodeAndWrite(out, uint32_t(gpu.use));
+            IOUtilities::encodeAndWrite(out, gpu.batchSeconds);
+            IOUtilities::encodeAndWrite(out, gpu.allowedUnfinishedPixels);
+            IOUtilities::encodeAndWrite(out, uint32_t(gpu.ignoreMpa));
+            IOUtilities::encodeAndWrite(out, gpu.stopMpaAfterBatches);
+            IOUtilities::encodeAndWrite(out, uint32_t(gpu.interpolateIsolatedPixels));
+            IOUtilities::encodeAndWrite(out, uint32_t(gpu.singlePrecision));
+        }
+
+        // A missing block leaves the defaults; returns false for a corrupt one.
+        bool readGpuPerturbation(std::ifstream &in, RndComputeShaderAttribute &gpu) {
+            const auto hasMore = [&in] { return in.rdbuf()->sgetc() != std::char_traits<char>::eof(); };
+            const auto readFlag = [&in](bool &flag) {
+                uint32_t value = 0;
+                IOUtilities::readAndDecode(in, &value);
+                flag = value != 0;
+                return !in.fail() && value <= 1;
+            };
+            gpu = {};
+            if (in.fail() || !hasMore()) return true;
+            uint32_t marker = 0;
+            IOUtilities::readAndDecode(in, &marker);
+            if (marker != ConfigIO::GPU_PERTURBATION_MAGIC || !readFlag(gpu.use)) return false;
+            IOUtilities::readAndDecode(in, &gpu.batchSeconds);
+            IOUtilities::readAndDecode(in, &gpu.allowedUnfinishedPixels);
+            if (!readFlag(gpu.ignoreMpa)) return false;
+            IOUtilities::readAndDecode(in, &gpu.stopMpaAfterBatches);
+            if (!readFlag(gpu.interpolateIsolatedPixels)) return false;
+            if (!(gpu.batchSeconds >= 0.01f && gpu.batchSeconds <= 1.0f)) return false;
+            // Single precision was appended to the first GPU1 layout, so a file without it keeps the default.
+            return !hasMore() || readFlag(gpu.singlePrecision);
+        }
+
+        // ASA1 block: marker, then two uint32 flags and a float32; Adaptive SSAA is gone, so it is written fixed to keep the stream layout.
+        void writeRetiredAdaptiveSsaa(std::ostream &out) {
+            IOUtilities::encodeAndWrite(out, ConfigIO::ADAPTIVE_SSAA_MAGIC);
+            IOUtilities::encodeAndWrite(out, uint32_t(1));
+            IOUtilities::encodeAndWrite(out, uint32_t(1));
+            IOUtilities::encodeAndWrite(out, 0.0f);
+        }
+
+        void writeSsaaFilter(std::ostream &out, const RndSsaaFilter filter) {
+            IOUtilities::encodeAndWrite(out, ConfigIO::SSAA_FILTER_MAGIC);
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(filter));
+        }
+
+        // A missing block loads Box (Gamma), the filter every older file was drawn with; returns false for a corrupt one.
+        bool readSsaaFilter(std::ifstream &in, RndSsaaFilter &filter) {
+            filter = RndSsaaFilter::BOX_GAMMA;
+            if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) return true;
+            uint32_t marker = 0;
+            uint32_t value = 0;
+            IOUtilities::readAndDecode(in, &marker);
+            IOUtilities::readAndDecode(in, &value);
+            if (in.fail() || marker != ConfigIO::SSAA_FILTER_MAGIC || value > 1) return false;
+            filter = static_cast<RndSsaaFilter>(value);
+            return true;
+        }
+
+        void writeOutputSize(std::ostream &out, const VidExportAttribute &exportation) {
+            IOUtilities::encodeAndWrite(out, ConfigIO::OUTPUT_SIZE_MAGIC);
+            IOUtilities::encodeAndWrite(out, exportation.outputWidth);
+            IOUtilities::encodeAndWrite(out, exportation.outputHeight);
+            IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(exportation.upscaleFilter));
+        }
+
+        // A missing block keeps the keyframe size, as every older file exported; returns false for a corrupt one.
+        bool readOutputSize(std::ifstream &in, VidExportAttribute &exportation) {
+            exportation.outputWidth = 0;
+            exportation.outputHeight = 0;
+            exportation.upscaleFilter = VidUpscaleFilter::LANCZOS;
+            if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) return true;
+            uint32_t marker = 0;
+            uint32_t width = 0;
+            uint32_t height = 0;
+            uint32_t filter = 0;
+            IOUtilities::readAndDecode(in, &marker);
+            IOUtilities::readAndDecode(in, &width);
+            IOUtilities::readAndDecode(in, &height);
+            IOUtilities::readAndDecode(in, &filter);
+            if (in.fail() || marker != ConfigIO::OUTPUT_SIZE_MAGIC || !VidExportAttribute::validOutputSide(width) ||
+                !VidExportAttribute::validOutputSide(height) || filter > 2) {
+                return false;
+            }
+            exportation.outputWidth = width;
+            exportation.outputHeight = height;
+            exportation.upscaleFilter = static_cast<VidUpscaleFilter>(filter);
+            return true;
+        }
+
+        // BDB1 block: marker, then Buddhabrot Samples per Pixel as uint32 and Min Iteration as uint64.
+        void writeBuddhabrot(std::ostream &out, const FractalAttribute &fractal) {
+            IOUtilities::encodeAndWrite(out, ConfigIO::BUDDHABROT_MAGIC);
+            IOUtilities::encodeAndWrite(out, fractal.buddhabrotSamples);
+            IOUtilities::encodeAndWrite(out, fractal.buddhabrotMinIteration);
+        }
+
+        // A missing block loads the defaults, which no older file used; returns false for a corrupt one.
+        bool readBuddhabrot(std::ifstream &in, FractalAttribute &fractal) {
+            fractal.buddhabrotSamples = 16;
+            fractal.buddhabrotMinIteration = 0;
+            if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) return true;
+            uint32_t marker = 0;
+            uint32_t samples = 0;
+            uint64_t minIteration = 0;
+            IOUtilities::readAndDecode(in, &marker);
+            IOUtilities::readAndDecode(in, &samples);
+            IOUtilities::readAndDecode(in, &minIteration);
+            if (in.fail() || marker != ConfigIO::BUDDHABROT_MAGIC || samples < 1 || samples > 4096) return false;
+            fractal.buddhabrotSamples = samples;
+            fractal.buddhabrotMinIteration = minIteration;
+            return true;
+        }
+
+        // Skips the ASA1 block, whose values no longer mean anything; returns false for a corrupt one.
+        bool skipRetiredAdaptiveSsaa(std::ifstream &in) {
+            if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) return true;
+            uint32_t marker = 0;
+            uint32_t preview = 0;
+            uint32_t video = 0;
+            float equivalentSsaa = 0.0f;
+            IOUtilities::readAndDecode(in, &marker);
+            IOUtilities::readAndDecode(in, &preview);
+            IOUtilities::readAndDecode(in, &video);
+            IOUtilities::readAndDecode(in, &equivalentSsaa);
+            return !in.fail() && marker == ConfigIO::ADAPTIVE_SSAA_MAGIC && preview <= 1 && video <= 1 &&
+                   equivalentSsaa >= 0.0f && equivalentSsaa <= 8.0f;
+        }
         // Clarity x SSAA past this cannot give even a one-pixel canvas a uint16_t iteration-buffer axis.
         constexpr double MAX_RENDER_SCALE = 65535.0;
 
@@ -51,7 +184,7 @@ namespace merutilm::rff2 {
                 !enumInRange(fr.decimalizeIterationMethod, 0, 4) ||
                 !enumInRange(fr.mpaAttribute.mpaSelectionMethod, 0, 1) ||
                 !enumInRange(fr.mpaAttribute.mpaCompressionMethod, 0, 2) ||
-                !enumInRange(fr.reuseReferenceMethod, 0, 2) || !enumInRange(fr.formulaType, 0, 1) ||
+                !enumInRange(fr.reuseReferenceMethod, 0, 2) || !enumInRange(fr.formulaType, 0, BUDDHABROT_AVAILABLE ? 2 : 1) ||
                 !enumInRange(fr.projectionMethod, 0, 2) || !enumInRange(fr.panoramaLayout, 0, 1) ||
                 !std::isfinite(fr.panoramaRange) || fr.panoramaRange < 0.0f || fr.panoramaRange > 6.0f ||
                 !std::isfinite(fr.panoramaPitch) || fr.panoramaPitch < -90.0f || fr.panoramaPitch > 90.0f ||
@@ -72,6 +205,9 @@ namespace merutilm::rff2 {
                 vi.exportation.keyframeAA < 1 || vi.exportation.keyframeAA > 8 ||
                 vi.exportation.colorAA < 1 || vi.exportation.colorAA > 8 ||
                 !enumInRange(vi.exportation.hdrTransfer, 0, 2) ||
+                !VidExportAttribute::validOutputSide(vi.exportation.outputWidth) ||
+                !VidExportAttribute::validOutputSide(vi.exportation.outputHeight) ||
+                !enumInRange(vi.exportation.upscaleFilter, 0, 2) ||
                 !std::isfinite(vi.exportation.hdrPeakNits) || vi.exportation.hdrPeakNits < 100.0f ||
                 vi.exportation.hdrPeakNits > 10000.0f || !std::isfinite(vi.timeline.estimateKeyframes) ||
                 vi.timeline.estimateKeyframes < 0.0f || !enumInRange(vi.timeline.rotationMode, 0, 1) ||
@@ -297,6 +433,31 @@ namespace merutilm::rff2 {
         TimelineIO::writeOverlayTiming(out, vi.timeline);
         ShaderPresetIO::writeChaosAverage(out, attr.shader);
         IOUtilities::encodeAndWrite(out, vi.exportation.gpuSubmitSplit);
+        ShaderPresetIO::writeChaosInterior(out, attr.shader);
+        writeGpuPerturbation(out, attr.render.computeShader);
+        writeRetiredAdaptiveSsaa(out);
+        ShaderPresetIO::writeEscapeAngle(out, attr.shader);
+        writeSsaaFilter(out, attr.render.ssaaFilter);
+        ShaderPresetIO::writeWavesCoatOnly(out, attr.shader);
+        ShaderPresetIO::writeCoatSoftbox(out, attr.shader);
+        ShaderPresetIO::writeStudioEnvironment(out, attr.shader);
+        ShaderPresetIO::writeChaosEdges(out, attr.shader);
+        ShaderPresetIO::writeChaosBokeh(out, attr.shader);
+        ShaderPresetIO::writeFocusSmooth(out, attr.shader);
+        writeOutputSize(out, vi.exportation);
+        ShaderPresetIO::writeOrbitTrap(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapInterior(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapLook(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapShape(out, attr.shader);
+        ShaderPresetIO::writeEffectStyles(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapHold(out, attr.shader);
+        ShaderPresetIO::writeGrooveSmooth(out, attr.shader);
+        ShaderPresetIO::writeGrooveRounded(out, attr.shader);
+        ShaderPresetIO::writeGrooveCreaseBlur(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapMapping(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapRegion(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapShapeExtension(out, attr.shader);
+        if constexpr (BUDDHABROT_AVAILABLE) writeBuddhabrot(out, fr);
 
 
     }
@@ -736,6 +897,31 @@ namespace merutilm::rff2 {
             IOUtilities::readAndDecode(in, &vi.exportation.gpuSubmitSplit);
             if (vi.exportation.gpuSubmitSplit > 64) return false;
         }
+        ShaderPresetIO::readChaosInterior(in, t.shader);
+        if (!readGpuPerturbation(in, t.render.computeShader)) return false;
+        if (!skipRetiredAdaptiveSsaa(in)) return false;
+        ShaderPresetIO::readEscapeAngle(in, t.shader);
+        if (!readSsaaFilter(in, t.render.ssaaFilter)) return false;
+        ShaderPresetIO::readWavesCoatOnly(in, t.shader);
+        ShaderPresetIO::readCoatSoftbox(in, t.shader);
+        ShaderPresetIO::readStudioEnvironment(in, t.shader);
+        ShaderPresetIO::readChaosEdges(in, t.shader);
+        ShaderPresetIO::readChaosBokeh(in, t.shader);
+        ShaderPresetIO::readFocusSmooth(in, t.shader);
+        if (!readOutputSize(in, vi.exportation)) return false;
+        ShaderPresetIO::readOrbitTrap(in, t.shader);
+        ShaderPresetIO::readOrbitTrapInterior(in, t.shader);
+        ShaderPresetIO::readOrbitTrapLook(in, t.shader);
+        ShaderPresetIO::readOrbitTrapShape(in, t.shader);
+        ShaderPresetIO::readEffectStyles(in, t.shader);
+        ShaderPresetIO::readOrbitTrapHold(in, t.shader);
+        ShaderPresetIO::readGrooveSmooth(in, t.shader);
+        ShaderPresetIO::readGrooveRounded(in, t.shader);
+        ShaderPresetIO::readGrooveCreaseBlur(in, t.shader);
+        ShaderPresetIO::readOrbitTrapMapping(in, t.shader);
+        ShaderPresetIO::readOrbitTrapRegion(in, t.shader);
+        ShaderPresetIO::readOrbitTrapShapeExtension(in, t.shader);
+        if (!readBuddhabrot(in, fr)) return false;
         try { AudioTimelineIO::resolvePaths(vi.timeline.audio, path); }
         catch (const std::filesystem::filesystem_error&) { return false; }
         vi.animation.showText = vi.timeline.zoomOverlay.visible;

@@ -1,7 +1,7 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01
+// Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01, 2026-10-07, 2026-10-08
 // Modified by GPT-5 on 2026-09-17
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-14, 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -41,6 +41,7 @@ namespace merutilm::rff2::workspace {
         std::vector<Row> rows;
         std::vector<HWND> actionControls;
         FormDraft draft;
+        std::map<std::string, bool> expandedSections;
         FormDraft sliderDraft;
         bool sliding = false;
         HWND editingControl = nullptr;
@@ -65,12 +66,20 @@ namespace merutilm::rff2::workspace {
         PanelBackBuffer buffer, contentBuffer;
         WorkspaceComboDrawing::Context comboContext;
         bool syncing = false, rebuilding = false, compact = false;
+        // Set when the owner draws the group title above the form, so the form starts with its rows.
+        bool titleHidden = false;
+        // A hidden form skips the re-measure a resize asks for and catches up when it is shown.
+        bool placementStale = false;
         std::function<void()> changed;
         std::function<void(int)> leaveFocus;
         std::function<void()> resetSearch;
 
         int px(int value) const {
             return int(value * scale + .5f);
+        }
+        // A search keeps its header even when the owner draws the title.
+        int headerSpace() const {
+            return titleHidden && query.empty() ? 0 : px(FormLayout::headerHeight);
         }
         static constexpr const wchar_t *checkedProperty = L"RFF.Form.Checked";
         static constexpr const wchar_t *dimmedProperty = L"RFF.Form.Dimmed";
@@ -140,10 +149,18 @@ namespace merutilm::rff2::workspace {
             }
             return value;
         }
+        bool sectionOpen(const FormField &field) const {
+            const auto found = expandedSections.find(field.id);
+            return found == expandedSections.end() ? field.initiallyExpanded : found->second;
+        }
         std::vector<const FormField *> fields() const {
             std::vector<const FormField *> matchingFields;
             const auto normalizedQuery = lower(query);
             for (const auto &field : form.fields) {
+                if (query.empty() && !field.section.empty()) {
+                    const auto section = std::ranges::find(form.fields, field.section, &FormField::id);
+                    if (section != form.fields.end() && !sectionOpen(*section)) continue;
+                }
                 const std::wstring fieldId(field.id.begin(), field.id.end());
                 if (query.empty()
                         ? field.group == group
@@ -267,6 +284,12 @@ namespace merutilm::rff2::workspace {
             rowLayouts.clear();
             int next = px(FormLayout::firstRow - FormLayout::headerHeight);
             for (auto &row : rows) {
+                if (row.field->editor == FormField::Editor::SECTION) {
+                    rowOffsets.push_back(next);
+                    rowLayouts.push_back({0, px(4), 0, px(44)});
+                    next += px(44);
+                    continue;
+                }
                 const auto error = errors.find(row.field->id);
                 const auto &hint = error == errors.end() ? visibleHintFor(*row.field) : error->second;
                 auto layout =
@@ -292,22 +315,21 @@ namespace merutilm::rff2::workspace {
                 std::max(px(FormLayout::footerHeight), px(62) + wrappedHeight(dc, statusText(), width));
             SelectObject(dc, previous);
             ReleaseDC(viewport, dc);
-            flowingFooter =
-                outer.bottom < px(FormLayout::headerHeight + FormLayout::rowPitch + 12) + footerExtent;
+            flowingFooter = outer.bottom < headerSpace() + px(FormLayout::rowPitch + 12) + footerExtent;
             const HWND parent = flowingFooter ? viewport : window;
             for (HWND control : {applyControl, discardControl}) {
                 if (GetParent(control) != parent) {
                     SetParent(control, parent);
                 }
             }
-            positionControl(viewport, 0, px(FormLayout::headerHeight), outer.right,
-                            std::max(1, int(outer.bottom) - px(FormLayout::headerHeight) -
-                                            (flowingFooter ? 0 : footerExtent)));
+            positionControl(viewport, 0, headerSpace(), outer.right,
+                            std::max(1, int(outer.bottom) - headerSpace() - (flowingFooter ? 0 : footerExtent)));
             contentHeight = bodyHeight + (flowingFooter ? footerExtent : 0);
         }
         void placeContent(bool remeasure = true) {
             if (remeasure) {
                 measureFlow();
+                placementStale = false;
             }
             const auto r = contentBounds();
             scroll = std::clamp(scroll, 0, std::max(0, contentHeight - int(r.bottom)));
@@ -532,6 +554,7 @@ namespace merutilm::rff2::workspace {
                         }
                         query.clear();
                         group = field.group;
+                        if (!field.section.empty()) expandedSections[field.section] = true;
                         scroll = 0;
                         rebuild();
                     }
@@ -719,6 +742,13 @@ namespace merutilm::rff2::workspace {
             }
         }
         void setValue(const Row &row, const std::wstring &value) {
+            if (row.field->editor == FormField::Editor::SECTION) {
+                const auto label = std::wstring(sectionOpen(*row.field) ? L"\u25be  " : L"\u25b8  ") + UiLanguage::text(row.field->label);
+                SetWindowTextW(row.control, label.c_str());
+                AccessibleControl::describe(row.control, label, row.field->hint,
+                    std::wstring(row.field->id.begin(), row.field->id.end()));
+                return;
+            }
             updateSwatches(row, value);
             if (row.slider && !sliding) SendMessageW(row.slider, TBM_SETPOS, TRUE,
                 LPARAM(std::lround(std::clamp(row.field->sliderPosition(value), 0.0, 1.0) * 10000)));
@@ -791,9 +821,10 @@ namespace merutilm::rff2::workspace {
                 dialog.hwndOwner = window;
                 dialog.lpstrFile = path.data();
                 dialog.nMaxFile = DWORD(path.size());
+                // FILE is the timeline's Audio File field, so it offers what Add Audio offers.
                 dialog.lpstrFilter = row.field->editor == FormField::Editor::IMAGE
                                          ? L"Images\0*.png;*.jpg;*.jpeg;*.bmp;*.tga\0All files\0*.*\0"
-                                         : L"Color settings\0*.rfc;*.rfsp;*.kfr;*.kfp\0All files\0*.*\0";
+                                         : L"Audio\0*.wav;*.mp3;*.flac;*.m4a;*.ogg\0All files\0*.*\0";
                 dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
                 if (!NativeDialogs::openFile(&dialog)) {
                     return;
@@ -806,6 +837,7 @@ namespace merutilm::rff2::workspace {
             syncing = true;
             for (const auto &row : rows) {
                 if (row.field->swatches) updateSwatches(row, draft.contains(row.field->id) ? draft.at(row.field->id) : row.field->read());
+                if (row.field->editor == FormField::Editor::SECTION) continue;
                 if (draft.contains(row.field->id) || (!includeFocus && GetFocus() == row.control)) {
                     continue;
                 }
@@ -899,10 +931,11 @@ namespace merutilm::rff2::workspace {
                 const int y = inputTop(i);
                 const bool combo = dropDown(*field);
                 const bool checkboxRow = checkbox(*field);
+                const bool sectionRow = field->editor == FormField::Editor::SECTION;
                 const bool colorButton = field->editor == FormField::Editor::COLOR || field->editor == FormField::Editor::RGB_COLOR;
                 const bool ownerDrawnButton = colorButton || checkboxRow;
                 const bool choicePicker = ChoicePicker::handles(*field);
-                const bool pickable = field->editor != FormField::Editor::TEXT && !checkboxRow && !choicePicker;
+                const bool pickable = field->editor != FormField::Editor::TEXT && !sectionRow && !checkboxRow && !choicePicker;
                 auto previous = std::find_if(previousRows.begin(), previousRows.end(),
                                              [field](const auto &row) { return row.field == field; });
                 HWND control =
@@ -912,10 +945,10 @@ namespace merutilm::rff2::workspace {
                                           inputWidth(r.right, false), px(FormLayout::inputHeight), viewport, nullptr,
                                           GetModuleHandleW(nullptr), this)
                         : CreateWindowExW(
-                              combo || ownerDrawnButton ? 0 : WS_EX_CLIENTEDGE, combo ? L"COMBOBOX" : ownerDrawnButton ? L"BUTTON" : L"EDIT", L"",
+                              combo || ownerDrawnButton || sectionRow ? 0 : WS_EX_CLIENTEDGE, combo ? L"COMBOBOX" : ownerDrawnButton || sectionRow ? L"BUTTON" : L"EDIT", L"",
                               WS_CHILD | WS_TABSTOP |
                                   (combo ? CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS | WS_VSCROLL
-                                         : ownerDrawnButton ? BS_OWNERDRAW : ES_AUTOHSCROLL),
+                                         : sectionRow ? BS_PUSHBUTTON | BS_LEFT : ownerDrawnButton ? BS_OWNERDRAW : ES_AUTOHSCROLL),
                               px(20), y, inputWidth(r.right, pickable, colorButton),
                               px(combo ? 260 : FormLayout::inputHeight), viewport, nullptr,
                               GetModuleHandleW(nullptr), nullptr);
@@ -935,6 +968,8 @@ namespace merutilm::rff2::workspace {
                                      reinterpret_cast<LPARAM>(UiLanguage::text(choice.label).c_str()));
                     }
                     WorkspaceComboDrawing::attach(control, comboContext);
+                } else if (sectionRow) {
+                    WorkspaceButton::attach(control);
                 } else if (!combo && !ownerDrawnButton && !choicePicker) {
                     SendMessageW(control, EM_SETLIMITTEXT, 16 * 1024 * 1024, 0);
                     WorkspaceEditDrawing::attach(control, comboContext);
@@ -994,6 +1029,10 @@ namespace merutilm::rff2::workspace {
                     const auto &action = form.actions[i];
                     if (action.group != group) {
                         continue;
+                    }
+                    if (!action.section.empty()) {
+                        const auto section = std::ranges::find(form.fields, action.section, &FormField::id);
+                        if (section != form.fields.end() && !sectionOpen(*section)) continue;
                     }
                     const int actionsTop = FormLayout::actionsTop(int(rows.size()));
                     const auto previous =
@@ -1151,9 +1190,10 @@ namespace merutilm::rff2::workspace {
             PanelDrawing::fill(dc, r, theme.background);
             for (size_t i = 0; i < rows.size(); ++i) {
                 const auto &layout = rowLayouts[i];
+                if (rows[i].field->editor == FormField::Editor::SECTION) continue;
                 const int y = rowTop(int(i));
                 if (i > 0 && rows[i].field->divider) {
-                    const int rule = y - px(FormLayout::dividerSpace / 2);
+                    const int rule = y - px(FormLayout::dividerToLabel);
                     PanelDrawing::fill(dc, {px(20), rule, r.right - px(20), rule + 1}, theme.track);
                 }
                 if (y + layout.height <= 0 || y >= r.bottom) {
@@ -1246,11 +1286,13 @@ namespace merutilm::rff2::workspace {
                 PanelDrawing::text(dc, L"Search " + form.title, {px(20), px(12), right - px(20), px(44)},
                                    theme.foreground, font);
             }
-            if (query.empty() && !compact) {
+            if (query.empty() && !compact && !titleHidden) {
                 PanelDrawing::text(dc, form.groups[group], {px(20), px(12), right - px(20), px(44)},
                                    theme.foreground, font);
             }
-            PanelDrawing::fill(dc, {px(20), px(51), right - px(20), px(52)}, theme.track);
+            if (headerSpace()) {
+                PanelDrawing::fill(dc, {px(20), px(51), right - px(20), px(52)}, theme.track);
+            }
             if (!flowingFooter) {
                 paintFooter(dc, footerTop());
             }
@@ -1549,6 +1591,10 @@ namespace merutilm::rff2::workspace {
                 return 0;
             case WM_SIZE:
                 if (self->discardControl && !self->rebuilding) {
+                    if (!(GetWindowLongPtrW(self->window, GWL_STYLE) & WS_VISIBLE)) {
+                        self->placementStale = true;
+                        return 0;
+                    }
                     self->placeContent();
                     self->invalidate(false);
                 }
@@ -1559,6 +1605,23 @@ namespace merutilm::rff2::workspace {
             case WM_DRAWITEM: {
                 const auto *item = reinterpret_cast<DRAWITEMSTRUCT *>(l);
                 const auto *colorField = reinterpret_cast<FormField *>(GetPropW(item->hwndItem, L"RFF.Form.Field"));
+                if (item->CtlType == ODT_BUTTON && colorField && colorField->editor == FormField::Editor::SECTION) {
+                    const bool focus = GetFocus() == item->hwndItem;
+                    const bool hover = GetPropW(item->hwndItem, L"RFF.Button.Hover") != nullptr;
+                    PanelDrawing::fill(item->hDC, item->rcItem, focus || hover ? self->theme.field : self->theme.background);
+                    auto text = item->rcItem;
+                    text.left += self->px(6);
+                    const auto label = std::wstring(self->sectionOpen(*colorField) ? L"\u25be  " : L"\u25b8  ") + UiLanguage::text(colorField->label);
+                    PanelDrawing::text(item->hDC, label, text, self->theme.foreground, self->font, DT_LEFT);
+                    const auto &r = item->rcItem;
+                    PanelDrawing::fill(item->hDC, {r.left, r.bottom - 1, r.right, r.bottom}, self->theme.track);
+                    if (focus) {
+                        auto ring = item->rcItem;
+                        InflateRect(&ring, -2, -2);
+                        DrawFocusRect(item->hDC, &ring);
+                    }
+                    return TRUE;
+                }
                 if (item->CtlType == ODT_BUTTON && colorField && checkbox(*colorField)) {
                     self->drawCheckbox(*item, *colorField);
                     return TRUE;
@@ -1617,6 +1680,17 @@ namespace merutilm::rff2::workspace {
             case WM_COMMAND:
                 if (self->syncing) {
                     return 0;
+                }
+                if (HIWORD(w) == BN_CLICKED) {
+                    for (const auto &row : self->rows) {
+                        if (row.control != reinterpret_cast<HWND>(l) || row.field->editor != FormField::Editor::SECTION) continue;
+                        const HWND control = row.control;
+                        self->expandedSections[row.field->id] = !self->sectionOpen(*row.field);
+                        self->rebuild();
+                        SetFocus(control);
+                        self->reveal(control);
+                        return 0;
+                    }
                 }
                 if (reinterpret_cast<HWND>(l) == self->groupControl && HIWORD(w) == CBN_SELCHANGE) {
                     self->selectGroup(int(SendMessageW(self->groupControl, CB_GETCURSEL, 0, 0)));
@@ -1718,6 +1792,11 @@ namespace merutilm::rff2::workspace {
         }
 
       public:
+        const std::map<std::string, bool> &sectionState() const { return expandedSections; }
+        void restoreSectionState(std::map<std::string, bool> state) {
+            expandedSections = std::move(state);
+            rebuild();
+        }
         FormWorkspace(HWND parent, WorkspaceForm model, HFONT font, const WorkspaceTheme &theme, float scale,
                       std::function<void()> changed, std::function<void(int)> leaveFocus = {},
                       std::function<void()> resetSearch = {})
@@ -1788,6 +1867,20 @@ namespace merutilm::rff2::workspace {
         const std::wstring &title() const {
             return form.title;
         }
+        bool groupSwitchable(int index) const {
+            return index >= 0 && index < int(form.groupInUse.size()) && form.groupInUse[index];
+        }
+        bool groupInUse(int index) const {
+            return groupSwitchable(index) && form.groupInUse[index]();
+        }
+        bool anyGroupSwitchable() const {
+            for (int i = 0; i < int(form.groups.size()); ++i) {
+                if (groupSwitchable(i)) {
+                    return true;
+                }
+            }
+            return false;
+        }
         WorkspaceForm sharedForm() const {
             return form;
         }
@@ -1828,7 +1921,14 @@ namespace merutilm::rff2::workspace {
             if (field == form.fields.end()) {
                 return false;
             }
-            const bool rebuildNeeded = !query.empty() || group != field->group;
+            bool rebuildNeeded = !query.empty() || group != field->group;
+            if (!field->section.empty()) {
+                const auto section = std::ranges::find(form.fields, field->section, &FormField::id);
+                if (section != form.fields.end() && !sectionOpen(*section)) {
+                    expandedSections[field->section] = true;
+                    rebuildNeeded = true;
+                }
+            }
             query.clear();
             group = field->group;
             if (rebuildNeeded) {
@@ -1883,8 +1983,25 @@ namespace merutilm::rff2::workspace {
         void layout(int width, int height, bool narrow = false) {
             layoutAt(0, 0, width, height, narrow);
         }
+        void hideTitle(bool hidden) {
+            if (titleHidden == hidden) {
+                return;
+            }
+            titleHidden = hidden;
+            if (discardControl && !rebuilding) {
+                if (!(GetWindowLongPtrW(window, GWL_STYLE) & WS_VISIBLE)) {
+                    placementStale = true;
+                    return;
+                }
+                placeContent();
+                invalidate(false);
+            }
+        }
         void show(bool visible) {
             if (!visible) finishSlider(true);
+            if (visible && placementStale && discardControl && !rebuilding) {
+                placeContent();
+            }
             ShowWindow(window, visible ? SW_SHOWNA : SW_HIDE);
             if (visible) {
                 updateValues();

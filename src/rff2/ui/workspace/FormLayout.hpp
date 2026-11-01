@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-09-23
+// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-09-23, 2026-10-07
 // Modified by Opus 5.5 on 2026-10-04
 //
 
@@ -14,7 +14,8 @@ namespace merutilm::rff2::workspace {
         static constexpr int inputOffset = 24;
         static constexpr int inputHeight = 28;
         static constexpr int checkboxHeight = 16;
-        static constexpr int dividerSpace = 24;
+        static constexpr int dividerSpace = 16;
+        static constexpr int dividerToLabel = 12;
         static constexpr int actionPitch = 40;
         static constexpr int footerHeight = 104;
         static constexpr int headerHeight = 52;

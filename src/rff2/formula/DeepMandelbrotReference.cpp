@@ -3,6 +3,7 @@
 // Modified by Sonnet 5 on 2026-07-06
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-27, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "DeepMandelbrotReference.h"
@@ -246,14 +247,6 @@ namespace merutilm::rff2 {
                                                          std::move(periodArray), std::move(*fpgReference), fp_complex(fpgBn));
     }
 
-
-    dex DeepMandelbrotReference::real(const uint64_t refIteration) const {
-        return refReal[ArrayCompressor::compress(compressor, refIteration)];
-    }
-
-    dex DeepMandelbrotReference::imag(const uint64_t refIteration) const {
-        return refImag[ArrayCompressor::compress(compressor, refIteration)];
-    }
 
 
     size_t DeepMandelbrotReference::length() const {

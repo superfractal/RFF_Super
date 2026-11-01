@@ -1,6 +1,6 @@
 <!-- Modified by GPT-6 on 2026-09-11, 2026-09-24, 2026-09-25, 2026-09-30, 2026-10-01 -->
 <!-- Modified by GPT-6 on 2026-09-25. -->
-<!-- Modified by Opus 5.5 on 2026-10-04 -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25 -->
 
 <p align="center">
   <img src="res/icon.png" alt="RFF_Super application icon" width="112" height="112">
@@ -63,10 +63,10 @@ Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the 
 
 ### Make your first image
 
-1. Launch `bin/RFF_Super.exe` and use **Load Location / Settings** to open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
+1. Launch `bin/RFF_Super.exe` and use **File > Load File** to open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
 2. Wait for the fractal calculation to finish. Open **Surface Effects** and start with the palette or lighting controls.
 3. Change one setting and choose **Apply & Render**. Use **Ctrl+F** to find a control, or compare appearances in the Comparison module.
-4. Choose **File → Save Location / Settings** and a new `.rfc` filename to keep your version. After that, **Ctrl+S** updates that file. Use **Save Image** to export the rendered picture.
+4. Choose **File → Save Settings As** and a new `.rfc` filename to keep your version. After that, **Ctrl+S** updates that file. Use **Save Image** to export the rendered picture.
 5. For a zoom film, continue with [animation and export](guide/animation-and-export.md): generate source keyframes, edit the timeline, then export.
 
 The [illustrated settings guide](guide/SETTINGS_GUIDE.md) includes downloadable examples and explains what each adjustment changes. To switch the interface language, use **View → Language / 言語** and restart the application.
@@ -115,7 +115,6 @@ Vulkan handles the rendering and shading pipeline. Supersampling improves image 
 
 - **Calculation precision:** results may be less precise than in the original RFF-2.0. Inspect fine boundaries when changing approximation settings.
 - **Black or white lines:** try lowering **Precision Level** to a more negative value and recalculating. This can resolve approximation artifacts, but lines can also have other causes.
-- **Long, high-resolution video exports:** a reported `VK_ERROR_DEVICE_LOST` failure can terminate export and leave a truncated `.mp4`. The cause remains unresolved; an application bug has not been ruled out. Try lowering **Supersampling (SSAA)** before generating source keyframes to reduce per-frame GPU load without changing the output dimensions at the same canvas size and Clarity.
 
 For recovery options and diagnostic information, see [presets, recovery, and diagnostics](guide/presets-and-recovery.md).
 

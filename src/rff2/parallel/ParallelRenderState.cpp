@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-09.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "ParallelRenderState.h"
@@ -8,10 +9,6 @@
 #include <mutex>
 
 namespace merutilm::rff2 {
-    std::stop_token ParallelRenderState::stopToken() const {
-        std::scoped_lock lock(mutex);
-        return thread.get_stop_token();
-    }
 
     bool ParallelRenderState::interruptRequested() const {
         if (runningOwner == this) {

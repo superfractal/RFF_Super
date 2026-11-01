@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-08-15.
 // Modified by GPT-6 on 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-13
 //
 
 #include "GPCBloomThreshold.hpp"
@@ -30,6 +31,7 @@ namespace merutilm::rff2 {
                 break;
             }
             case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
+            case Constants::VulkanWindow::VIDEO_WARMUP_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 const auto &input = sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_SECONDARY);
                 inputDesc.get<vkh::InputAttachment>(0, BINDING_PREV_RESULT_INPUT).ctx = input;

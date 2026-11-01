@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-05-09.
 // Modified by GPT-5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -32,8 +33,6 @@ namespace merutilm::rff2 {
         template<typename T>
             requires std::is_invocable_r_v<void, T, const std::stop_token&>
         void createThread(T&& func);
-
-        [[nodiscard]] std::stop_token stopToken() const;
 
         [[nodiscard]] bool interruptRequested() const;
 

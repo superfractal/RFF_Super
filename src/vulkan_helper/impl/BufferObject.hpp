@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-07-10.
 // Modified by GPT-6 on 2026-09-23
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-25
 //
 
 #pragma once
@@ -88,8 +88,6 @@ namespace merutilm::vkh {
         void update(uint32_t target) const;
 
         void updateMF(uint32_t frameIndex) const;
-
-        void updateMF(uint32_t frameIndex, uint32_t target) const;
 
         // Copies the host data into every frame's mapping; init() maps a fresh allocation without doing so.
         void upload() const;

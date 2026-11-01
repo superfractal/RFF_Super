@@ -1,5 +1,5 @@
 <!-- Modified by GPT-6 on 2026-10-04. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-28, 2026-11-01. -->
 # Remaining source history and rebuild findings
 
 This requested follow-up establishes an earlier published source and derivation for `0.428`, an earlier MIT-licensed rainbow table, the original RFF introduction/rename history, and the exact GMP library that can be used for a recorded rebuild. It does not establish private acquisition records or declare every historical permission cleared. No implementation, application or numerical test runs, and no release is built.
@@ -55,9 +55,11 @@ The existing `build/distribution/CMakeCache.txt` explicitly selects the verified
 
 This follow-up does not overwrite either GMP library, rebuild the program, create a release tag, or publish an artifact. It identifies the concrete rebuild path and preserves the remaining distinction between new build correspondence and historical provenance.
 
+**2026-10-28 restoration.** `C:/msys64/mingw64/lib/libgmp.a` had been replaced again on 2026-10-04 03:09 by a GMP built with GCC 16.1 (SHA-256 `55460581b763dd29503d87e4e0d48798ff89a4061b062fc151b0cd2878af14ed`; `pacman -Qkk` reported its size and checksum altered and `libgmp.dll.a` missing). The ordinary `build/` links that path, so `bin/RFF_Super.exe` carried this unrecorded GMP. The file was copied to the gitignored `debug/gmp-custom-backup-2026-10-04/` (a local archive, not published with the repository), and the official package was reinstalled from the local MSYS2 cache with `pacman -U mingw-w64-x86_64-gmp-6.3.0-2-any.pkg.tar.zst`. `pacman -Qkk` then reports 0 altered files and the library hashes to `cea4c8ae34263d44e982ff5f7a3a6a38095d539045c0e50e9ee462c5d83784f5`, the recorded package value. `bin/RFF_Super.exe` was relinked from the unchanged objects (SHA-256 `e0e693807f628a97c3ade4fe7320333200cb165c9cd24e4a21693f75244117ac`); it now contains the package's GCC 13.2 objects, which the previous EXE did not, and imports no GMP DLL. EXEs built before this date and already distributed keep the unrecorded GMP. The working EXE is still built with `-march=native` and outside the tagged release flow, so it remains a working build rather than a release artifact.
+
 ## Evidence
 
-New responses, pinned source/license files, revision bodies, hash records and the GMP package check are retained in `debug/license-history-followup-20261004/`. Earlier audit evidence remains intact. The ObjectType answer/revisions, cosine MIT initial revision, and matching GMP source archive records are reused from the completed audit. No contact with upstream authors is made.
+New responses, pinned source/license files, revision bodies, hash records and the GMP package check are retained in `debug/license-history-followup-20261004/`, a local archive on the maintainer's machine that is gitignored and not published with the repository. Earlier audit evidence remains intact. The ObjectType answer/revisions, cosine MIT initial revision, and matching GMP source archive records are reused from the completed audit. No contact with upstream authors is made.
 
 ## Later archive findings and owner clarification
 

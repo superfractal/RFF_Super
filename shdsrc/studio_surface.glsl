@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-18, 2026-09-19, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-08
 //
 
 // Artist-directed GGX and dielectric coating over native relief; equation provenance is recorded in NOTICE.
@@ -10,6 +11,7 @@ vec3 studio_surface(
     vec3 v,
     float aoFactor,
     float variance,
+    float footprint,
     float boundaryMask,
     float wetness
 ) {
@@ -67,7 +69,7 @@ vec3 studio_surface(
     direct *= slope_attr.studio_direct_intensity * 3.0;
     float environmentAngle = radians(slope_attr.studio_environment_rotation)
                            + specAngle * clamp(slope_attr.studio_environment_follow, 0.0, 1.0);
-    vec3 env = studio_environment(reflect(-v, ns), environmentAngle, sky, ground)
+    vec3 env = studio_environment_source(reflect(-v, ns), environmentAngle, sky, ground, rough * rough, footprint)
              * studio_fresnel(f0, dot(ns, v)) * slope_attr.studio_environment_intensity * mix(1.0, aoFactor, 0.3);
     float coat = clamp(slope_attr.studio_clearcoat, 0.0, 1.0);
     vec3 coatLight = vec3(0);
@@ -77,14 +79,22 @@ vec3 studio_surface(
         if (variance > 0.0) {
             coatRough = clamp(pow(pow(coatRough, 4.0) + variance, 0.25), 0.04, 1.0);
         }
-        vec3 coatF = studio_fresnel(vec3(0.04), dot(n, v));
+        // Waves on Clear Coat Only keeps the waves here alone, the rest of the surface having been shaded without them; prior art in NOTICE.
+        vec3 coatNormal = slope_attr.surface_waves_coat_only > 0.5 && slope_attr.surface_relief_waves > 0.0 &&
+                          slope_attr.surface_lustre_relief > 0.5
+                          ? normalize(vec3(-coat_wave_slope, 1.0)) : n;
+        vec3 coatF = studio_fresnel(vec3(0.04), dot(coatNormal, v));
         attenuation = pow(1.0 - coat * coatF.r, 2.0);
         // The coating uses the actual normal for its basis, Fresnel and reflection direction together.
-        coatLight = studio_brdf(n, v, keyDir, coatRough, 0.0, 0.0, vec3(0.04)) * key;
-        coatLight += studio_brdf(n, v, fillDir, coatRough, 0.0, 0.0, vec3(0.04))
+        // Coat Softbox reflects key and fill as rectangles; off keeps the point lights and their lobe-width floor.
+        bool softbox = slope_attr.studio_coat_softbox > 0.5;
+        coatLight = (softbox ? studio_softbox(coatNormal, v, keyDir, specAngle, coatRough, vec3(0.04))
+                             : studio_brdf(coatNormal, v, keyDir, coatRough, 0.0, 0.0, vec3(0.04))) * key;
+        coatLight += (softbox ? studio_softbox(coatNormal, v, fillDir, radians(slope_attr.fill_azimuth), coatRough, vec3(0.04))
+                              : studio_brdf(coatNormal, v, fillDir, coatRough, 0.0, 0.0, vec3(0.04)))
                    * sky * clamp(slope_attr.fill_intensity, 0.0, 1.0);
         coatLight *= slope_attr.studio_direct_intensity * 3.0;
-        coatLight += studio_environment(reflect(-v, n), environmentAngle, sky, ground)
+        coatLight += studio_environment_source(reflect(-v, coatNormal), environmentAngle, sky, ground, coatRough * coatRough, footprint)
                    * coatF * slope_attr.studio_environment_intensity;
         coatLight *= coat;
     }

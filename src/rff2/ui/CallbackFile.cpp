@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-08, 2026-08-10, 2026-08-14, 2026-08-24, 2026-08-26, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-25
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-04
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-04, 2026-10-25, 2026-10-27
 //
 
 #include "NativeDialogs.hpp"
@@ -16,6 +16,7 @@
 #include "../constants/Constants.hpp"
 #include "IOUtilities.h"
 #include "SettingsMenu.hpp"
+#include "CallbackShader.hpp"
 #include "../io/ConfigIO.h"
 #include "../io/ShaderPresetIO.h"
 #include "../io/RFFLocationBinary.h"
@@ -73,42 +74,23 @@ namespace merutilm::rff2 {
         };
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::SAVE_IMAGE =
         [](const SettingsMenu &, RenderScene &scene) { scene.getRequests().requestCreateImage(); };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::LOAD_MAP = [](const SettingsMenu &,
-                                                                                         RenderScene &scene) {
-        const auto path = IOUtilities::ioFileDialogMulti(
-            L"Load Map", IOUtilities::OPEN_FILE,
-            {{Constants::Extension::DESC_DYNAMIC_MAP, Constants::Extension::DYNAMIC_MAP},
-             {Constants::Extension::DESC_COMPRESSED_MAP, Constants::Extension::COMPRESSED_MAP}});
-        if (path == nullptr) {
-            return;
-        }
-        if (!scene.overwriteMatrixFromMap(RFFDynamicMapBinary::readAny(*path))) {
+    static void loadMap(RenderScene &scene, const std::filesystem::path &path) {
+        if (!scene.overwriteMatrixFromMap(RFFDynamicMapBinary::readAny(path))) {
             NativeDialogs::message(nullptr, L"The map could not be loaded at the current canvas size.",
                                    L"Load Map", MB_OK | MB_ICONERROR);
             return;
         }
         // The arrow keys walk the rest of the folder from here, so a keyframe run can be looked
         // through without reopening the dialog for every map.
-        scene.beginMapBrowse(*path);
-    };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::LOAD_IMAGE =
-        [](const SettingsMenu &, RenderScene &scene) {
-            const auto path = IOUtilities::ioFileDialog(L"Load Image", Constants::Extension::DESC_IMAGE,
-                                                        IOUtilities::OPEN_FILE, Constants::Extension::IMAGE);
-            if (path == nullptr) {
-                return;
-            }
-            // The arrow keys walk the rest of the folder from here, so a keyframe run can be looked
-            // through without reopening the dialog for every picture.
-            scene.beginImageBrowse(*path);
-        };
+        scene.beginMapBrowse(path);
+    }
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::SAVE_CONFIG =
         [](const SettingsMenu &, RenderScene &scene) {
             if (!scene.prepareConfigSave()) {
                 return;
             }
             const auto path = IOUtilities::ioFileDialogMulti(
-                L"Save Location / Settings", IOUtilities::SAVE_FILE,
+                L"Save Settings As", IOUtilities::SAVE_FILE,
                 {{Constants::Extension::DESC_CONFIG, Constants::Extension::CONFIG},
                  {Constants::Extension::DESC_LOCATION, Constants::Extension::LOCATION}});
             if (path == nullptr) {
@@ -144,7 +126,7 @@ namespace merutilm::rff2 {
         auto path = scene.getConfigDocumentPath();
         if (path.empty()) {
             const auto selected =
-                IOUtilities::ioFileDialog(L"Save Settings", Constants::Extension::DESC_CONFIG,
+                IOUtilities::ioFileDialog(L"Save Settings As", Constants::Extension::DESC_CONFIG,
                                           IOUtilities::SAVE_FILE, Constants::Extension::CONFIG);
             if (!selected) {
                 return false;
@@ -181,11 +163,12 @@ namespace merutilm::rff2 {
         if (missing.empty()) {
             return;
         }
-        std::wstring text = L"The source image of a texture layer in this file was not found:\n\n";
+        // Translated sentence by sentence: with the file names in it, no table entry matches the whole text.
+        std::wstring text = UiLanguage::text(L"The source image of a texture layer in this file was not found:") + L"\n\n";
         for (const auto &entry : missing) {
             text.append(entry).append(L"\n");
         }
-        text.append(L"\nThose layers render nothing until their image is chosen again.");
+        text.append(L"\n").append(UiLanguage::text(L"Those layers render nothing until their image is chosen again."));
         NativeDialogs::message(nullptr, text.c_str(), L"Warning", MB_OK | MB_ICONWARNING);
     }
     void CallbackFile::warnReuseReference(const FractalAttribute &fractal) {
@@ -194,12 +177,15 @@ namespace merutilm::rff2 {
         }
         // The file names a location of its own, but the reference it reuses is the one the previous
         // view left behind, so what it opens on is drawn around the wrong orbit.
-        const std::wstring text = std::format(
-            L"This settings file has Reuse Reference set to \"{}\".\n\n"
-            L"The location it opens is computed from the reference orbit of the view that was on screen "
-            L"before the load, which does not belong to it, so the image can come out wrong.\n"
-            L"Set Fractal > Reference > Reuse Reference to \"Disabled\" and compute again.",
-            Selectable::toString(fractal.reuseReferenceMethod));
+        // The pattern is translated before the setting's name goes in, which no table entry could match.
+        const std::wstring method = UiLanguage::text(Selectable::toString(fractal.reuseReferenceMethod));
+        const std::wstring text = std::vformat(
+            UiLanguage::text(
+                L"This settings file has Reuse Reference set to \"{}\".\n\n"
+                L"The location it opens is computed from the reference orbit of the view that was on screen "
+                L"before the load, which does not belong to it, so the image can come out wrong.\n"
+                L"Set Fractal > Reference > Reuse Reference to \"Disabled\" and compute again."),
+            std::make_wformat_args(method));
         NativeDialogs::message(nullptr, text.c_str(), L"Warning", MB_OK | MB_ICONWARNING);
     }
     bool CallbackFile::applyConfigFile(RenderScene &scene, const std::filesystem::path &path,
@@ -249,44 +235,70 @@ namespace merutilm::rff2 {
         warnReuseReference(scene.getAttribute().fractal);
         return true;
     }
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::LOAD_CONFIG =
+    static void loadConfig(SettingsMenu &settingsMenu, RenderScene &scene, const std::filesystem::path &path) {
+        // The panels are bound to the values this load overwrites, so they cannot stay open across it.
+        // Among them may be the one a recovery is waiting on. Choosing a file to load answers it:
+        // what this brings in is what gets computed.
+        if (lowerExt(path) == std::format(L".{}", Constants::Extension::LOCATION)) {
+            // Legacy .rfl: location only, leaving all other settings untouched.
+            const RFFLocationBinary location = RFFLocationBinary::read(path);
+            if (!location.hasData()) {
+                NativeDialogs::message(nullptr, L"Failed to load location", L"Error",
+                                       MB_OK | MB_ICONERROR);
+                return;
+            }
+            if (!scene.prepareConfigReplace()) {
+                return;
+            }
+            scene.commitConfigReplace();
+            settingsMenu.closeAllSettingsWindows();
+            scene.cancelRunningCompute();
+            scene.setComputeHold(false);
+            auto &fr = scene.getAttribute().fractal;
+            fr.center = fp_complex(location.getReal(), location.getImag(),
+                                   Perturbator::logZoomToExp10(location.getLogZoom()));
+            fr.logZoom = location.getLogZoom();
+            fr.maxIteration = location.getMaxIteration();
+            scene.getRequests().requestRecompute();
+            return;
+        }
+        if (!CallbackFile::applyConfigFile(scene, path, true,
+                                           [&settingsMenu] { settingsMenu.closeAllSettingsWindows(); })) {
+            NativeDialogs::message(nullptr, L"Failed to load settings", L"Error", MB_OK | MB_ICONERROR);
+        }
+    }
+    // One dialog for every kind of file the program reads. The extension picks what the file is put
+    // to, so each kind keeps its own load: a map onto the canvas, a picture into the viewer, a
+    // settings or location file onto the scene, an appearance preset onto the shader.
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackFile::LOAD_FILE =
         [](SettingsMenu &settingsMenu, RenderScene &scene) {
-            // The panels are bound to the values this load overwrites, so they cannot stay open across it.
-            // Among them may be the one a recovery is waiting on. Choosing a file to load answers it:
-            // what this brings in is what gets computed.
+            using namespace Constants::Extension;
             const auto path = IOUtilities::ioFileDialogMulti(
-                L"Load Location / Settings", IOUtilities::OPEN_FILE,
-                {{Constants::Extension::DESC_CONFIG, Constants::Extension::CONFIG},
-                 {Constants::Extension::DESC_LOCATION, Constants::Extension::LOCATION}});
+                L"Load File", IOUtilities::OPEN_FILE,
+                {{DESC_COMPRESSED_MAP, COMPRESSED_MAP},
+                 {DESC_DYNAMIC_MAP, DYNAMIC_MAP},
+                 {DESC_IMAGE, IMAGE},
+                 {DESC_CONFIG, CONFIG},
+                 {DESC_LOCATION, LOCATION},
+                 {DESC_SHADER_PRESET, SHADER_PRESET}});
             if (path == nullptr) {
                 return;
             }
-            if (lowerExt(*path) == std::format(L".{}", Constants::Extension::LOCATION)) {
-                // Legacy .rfl: location only, leaving all other settings untouched.
-                const RFFLocationBinary location = RFFLocationBinary::read(*path);
-                if (!location.hasData()) {
-                    NativeDialogs::message(nullptr, L"Failed to load location", L"Error",
-                                           MB_OK | MB_ICONERROR);
-                    return;
-                }
-                if (!scene.prepareConfigReplace()) {
-                    return;
-                }
-                scene.commitConfigReplace();
-                settingsMenu.closeAllSettingsWindows();
-                scene.cancelRunningCompute();
-                scene.setComputeHold(false);
-                auto &fr = scene.getAttribute().fractal;
-                fr.center = fp_complex(location.getReal(), location.getImag(),
-                                       Perturbator::logZoomToExp10(location.getLogZoom()));
-                fr.logZoom = location.getLogZoom();
-                fr.maxIteration = location.getMaxIteration();
-                scene.getRequests().requestRecompute();
-                return;
-            }
-            if (!applyConfigFile(scene, *path, true,
-                                 [&settingsMenu] { settingsMenu.closeAllSettingsWindows(); })) {
-                NativeDialogs::message(nullptr, L"Failed to load settings", L"Error", MB_OK | MB_ICONERROR);
+            const std::wstring ext = lowerExt(*path);
+            const auto is = [&ext](const wchar_t *kind) { return ext == std::format(L".{}", kind); };
+            if (is(COMPRESSED_MAP) || is(DYNAMIC_MAP)) {
+                loadMap(scene, *path);
+            } else if (is(IMAGE)) {
+                // The arrow keys walk the rest of the folder from here, so a keyframe run can be looked
+                // through without reopening the dialog for every picture.
+                scene.beginImageBrowse(*path);
+            } else if (is(CONFIG) || is(LOCATION)) {
+                loadConfig(settingsMenu, scene, *path);
+            } else if (is(SHADER_PRESET)) {
+                CallbackShader::loadPreset(settingsMenu, scene, *path);
+            } else {
+                NativeDialogs::message(nullptr, L"This kind of file cannot be loaded.", L"Load File",
+                                       MB_OK | MB_ICONERROR);
             }
         };
 }

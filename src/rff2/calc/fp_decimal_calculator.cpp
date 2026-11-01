@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-05-05.
 // Modified by GPT-5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-29
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "fp_decimal_calculator.h"
@@ -229,10 +230,6 @@ namespace merutilm::rff2 {
 
     void fp_decimal_calculator::negate(fp_decimal_calculator &target) {
         mpz_neg(target.value, target.value);
-    }
-
-    int fp_decimal_calculator::exp2ToExp10(const int exp2) {
-        return static_cast<int>(static_cast<double>(exp2) * Constants::Num::LOG10_2);
     }
 
     int fp_decimal_calculator::exp10ToExp2(const int precision) {

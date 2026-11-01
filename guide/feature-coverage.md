@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01. -->
 # Feature coverage map
 
 [Manual](user-manual.md) · [Shader coverage audit](shader-coverage.md) · [UI gallery](ui-gallery.md)
@@ -14,15 +14,12 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 | Menu action | Description |
 | --- | --- |
 | New Document | [Detailed workflow](workspace-and-files.md) |
+| Load File | [Detailed workflow](workspace-and-files.md) |
 | Save Settings | [Detailed workflow](workspace-and-files.md) |
+| Save Settings As | [Detailed workflow](workspace-and-files.md) |
+| Save Appearance Settings | [Detailed workflow](shader-overview.md) |
 | Save Map | [Detailed workflow](workspace-and-files.md) |
 | Save Image | [Detailed workflow](workspace-and-files.md) |
-| Save Location / Settings | [Detailed workflow](workspace-and-files.md) |
-| Save Appearance Settings | [Detailed workflow](shader-overview.md) |
-| Load Map | [Detailed workflow](workspace-and-files.md) |
-| Load Image | [Detailed workflow](workspace-and-files.md) |
-| Load Location / Settings | [Detailed workflow](workspace-and-files.md) |
-| Load Appearance Settings | [Detailed workflow](shader-overview.md) |
 
 ## Fractal
 
@@ -40,13 +37,14 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 
 | Menu action | Description |
 | --- | --- |
-| Render Properties | [Detailed workflow](exploration-and-calculation.md) |
-| Rendering FPS | [Detailed workflow](exploration-and-calculation.md) |
+| Resolution & Quality | [Detailed workflow](exploration-and-calculation.md) |
+| Render & Preview | [Detailed workflow](exploration-and-calculation.md) |
 | Linear Interpolation | [Detailed workflow](exploration-and-calculation.md) |
 | Boundary Trace Fill | [Detailed workflow](exploration-and-calculation.md) |
-| 2-Color Preview Mode | [Detailed workflow](exploration-and-calculation.md) |
+| Two-Color Preview | [Detailed workflow](exploration-and-calculation.md) |
 | Coarse Preview | [Detailed workflow](exploration-and-calculation.md) |
-| Smooth Zooming | [Detailed workflow](exploration-and-calculation.md) |
+| Use GPU Perturbation | [Detailed workflow](exploration-and-calculation.md) |
+| Smooth Navigation | [Detailed workflow](exploration-and-calculation.md) |
 | Dither | [Detailed workflow](exploration-and-calculation.md) |
 
 ## Shader
@@ -58,13 +56,15 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 | Pattern | [Detailed workflow](shader-overview.md) |
 | Warp | [Detailed workflow](shader-overview.md) |
 | Stripe | [Detailed workflow](shader-overview.md) |
-| Slope | [Detailed workflow](shader-overview.md) |
-| Color | [Detailed workflow](shader-overview.md) |
-| Effects | [Detailed workflow](shader-overview.md) |
+| Lighting & Relief | [Detailed workflow](shader-overview.md) |
+| Color Correction | [Detailed workflow](shader-overview.md) |
+| Animated Materials | [Detailed workflow](shader-overview.md) |
 | Fog | [Detailed workflow](shader-overview.md) |
 | Bloom | [Detailed workflow](shader-overview.md) |
-| HDR | [Detailed workflow](shader-overview.md) |
+| HDR & Tone Mapping | [Detailed workflow](shader-overview.md) |
 | Shader Layers | [Detailed workflow](shader-overview.md) |
+| Orbit Trap | [Detailed workflow](shader-overview.md#orbit-trap-coloring) |
+| Other | [Detailed workflow](shader-overview.md#escape-angle-coloring) |
 | Load KFR Color | [Detailed workflow](shader-overview.md) |
 | Import Color | [Detailed workflow](shader-overview.md) |
 | Local AI appearance | [Detailed workflow](local-ai.md) |
@@ -83,12 +83,12 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 
 | Menu action | Description |
 | --- | --- |
-| Data Settings | [Detailed workflow](animation-and-export.md) |
-| Animation Settings | [Detailed workflow](animation-and-export.md) |
+| Keyframes | [Detailed workflow](animation-and-export.md) |
+| Color Animation | [Detailed workflow](animation-and-export.md) |
 | Timeline Editor | [Detailed workflow](animation-and-export.md) |
-| Export Settings | [Detailed workflow](animation-and-export.md) |
-| Generate Video Keyframe | [Detailed workflow](animation-and-export.md) |
-| Export Zooming Video | [Detailed workflow](animation-and-export.md) |
+| Video Encoding | [Detailed workflow](animation-and-export.md) |
+| Generate Keyframes | [Detailed workflow](animation-and-export.md) |
+| Export Video | [Detailed workflow](animation-and-export.md) |
 
 ## View
 
@@ -104,8 +104,8 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 | Menu action | Description |
 | --- | --- |
 | Recompute | [Detailed workflow](exploration-and-calculation.md) |
-| Cancel | [Detailed workflow](exploration-and-calculation.md) |
-| Reset | [Detailed workflow](exploration-and-calculation.md) |
+| Cancel Render | [Detailed workflow](exploration-and-calculation.md) |
+| Reset Settings (Keep Appearance) | [Detailed workflow](exploration-and-calculation.md) |
 | Find Center | [Detailed workflow](exploration-and-calculation.md) |
 | Locate Minibrot | [Detailed workflow](exploration-and-calculation.md) |
 

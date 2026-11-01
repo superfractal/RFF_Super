@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-21, 2026-09-23, 2026-09-24, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-18, 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -145,66 +145,21 @@ namespace merutilm::rff2::workspace {
         model->choice(
             "animation.showZoom", 2, L"Show Zoom Ratio", L"Adds the zoom readout to video output.",
             [](auto &attributes) -> auto & { return attributes.video.timeline.zoomOverlay.visible; });
-        model->choice("animation.timelineEnabled", 3, L"Timeline Enabled",
-                      L"Uses the existing keyframe tracks during video playback and export.",
-                      [](auto &attributes) -> auto & { return attributes.video.timeline.enabled; });
         model->numeric(
-            "animation.estimatedKeyframes", 3, L"Estimated Keyframes",
-            L"Preview length before loading keyframes: 1 to 100000.",
-            [](auto &attributes) -> auto & { return attributes.video.timeline.estimateKeyframes; },
-            NumericSettingLimits::estimatedKeyframes.minimum, NumericSettingLimits::estimatedKeyframes.maximum);
-        model->numeric(
-            "animation.keyframeStep", 4, L"Zoom Step per Keyframe", L"Magnification between neighboring keyframes; 2 means each is 2x deeper. Greater than 1.",
+            "animation.keyframeStep", 3, L"Zoom Step per Keyframe", L"Magnification between neighboring keyframes; 2 means each is 2x deeper. Greater than 1.",
             [](auto &attributes) -> auto & { return attributes.video.data.defaultZoomIncrement; },
             std::nextafter(1.f, 2.f), limit);
-        model->choice("animation.cameraPadding", 4, L"Rotation / 360 Padding",
-                      L"Generates larger planar keyframes for camera movement.",
+        model->choice("animation.cameraPadding", 3, L"Rotation / 360 Padding",
+                      L"Generates larger planar keyframes for camera movement. At a scale of 4 or less, a 360 preview also computes this padding once, so turning the camera reprojects instead of recomputing.",
                       [](auto &attributes) -> auto & { return attributes.video.data.cameraPadding; });
         model->numeric(
-            "animation.paddingScale", 4, L"Camera Padding Scale",
+            "animation.paddingScale", 3, L"Camera Padding Scale",
             L"2 to 64. Memory and disk use grow with the square of this value.",
             [](auto &attributes) -> auto & { return attributes.video.data.cameraScale; }, uint32_t(2),
             uint32_t(64));
-        model->choice("animation.pngSource", 4, L"Render from PNG Images",
+        model->choice("animation.pngSource", 3, L"Render from PNG Images",
                       L"PNG sources support finishing effects; iteration-based effects require maps.",
                       [](auto &attributes) -> auto & { return attributes.video.data.isStatic; });
-        model->choice("animation.rotationMode", 5, L"Rotation Mode",
-                      L"Constant Period replaces rotation keys and keeps turning during zoom holds. Other "
-                      L"camera tracks still apply.",
-                      [](auto &attributes) -> auto & { return attributes.video.timeline.rotationMode; });
-        model->numeric(
-            "animation.rotationPeriod", 5, L"Seconds per Turn",
-            L"Duration of one complete turn, 0.01 to 86400 seconds. Used by Constant Period.",
-            [](auto &attributes) -> auto & { return attributes.video.timeline.rotationPeriod; }, 0.01f,
-            86400.f);
-        model->choice("animation.rotationDirection", 5, L"Rotation Direction",
-                      L"Direction of continuous rotation. Used by Constant Period.",
-                      [](auto &attributes) -> auto & { return attributes.video.timeline.rotationDirection; });
-        model->numeric(
-            "animation.rotationStartAngle", 5, L"Rotation Start Angle",
-            L"Angle at video time zero, in degrees. Used by Constant Period.",
-            [](auto &attributes) -> auto & { return attributes.video.timeline.rotationStartAngle; },
-            -360000.f, 360000.f);
-        model->numeric(
-            "animation.cameraRotation", 5, L"Camera Rotation",
-            L"Degrees, -360000 to 360000. Values beyond 360 allow multiple turns.",
-            [](auto &attributes) -> auto & { return attributes.shader.camera.rotation; }, -360000.f,
-            360000.f);
-        model->choice("animation.cameraProjection", 5, L"Camera Projection",
-                      L"Video projection; rotation and 360 modes require padded keyframes.",
-                      [](auto &attributes) -> auto & { return attributes.shader.camera.projection; });
-        model->numeric(
-            "animation.cameraPitch", 5, L"Camera Pitch", L"-90 to 90 degrees.",
-            [](auto &attributes) -> auto & { return attributes.shader.camera.pitch; }, -90.f, 90.f);
-        model->numeric(
-            "animation.cameraFov", 5, L"Camera Field of View", L"1 to 179 degrees.",
-            [](auto &attributes) -> auto & { return attributes.shader.camera.fov; }, 1.f, 179.f);
-        model->numeric(
-            "animation.cameraRange", 5, L"Camera Panorama Range",
-            L"Log10 radius limit, 0 to 6. Available detail depends on saved padding.",
-            [](auto &attributes) -> auto & { return attributes.shader.camera.range; }, 0.f, 6.f);
-        model->choice("animation.cameraLayout", 5, L"Camera Layout", L"Ground and Sky or Full Sphere.",
-                      [](auto &attributes) -> auto & { return attributes.shader.camera.layout; });
         model->setNormalizer([](const Attribute &before, Attribute &after, const FormDraft &draft) {
             auto &palette = after.shader.palette;
             if (palette.animationMode != before.shader.palette.animationMode) {

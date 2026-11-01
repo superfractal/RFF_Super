@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-28, 2026-11-01. -->
 # Workspace and files
 
 [Manual](user-manual.md) · [Actual UI gallery](ui-gallery.md)
@@ -35,6 +35,8 @@ Search results lead to the relevant setting rather than enabling an effect autom
 
 The Surface editor offers **Basic** and **Detail** views. Basic reduces the number of controls presented; Detail exposes more of the same appearance. Changing the view is not a different rendering algorithm. **All**, **Used**, and **Favorites** filter surface categories. Used reflects contributions from the base style and added effects; a favorite is a workspace preference, not a shader value.
 
+Every other settings page with four or more sections offers the same **All**, **Used**, and **Favorites** above its section list, with a star on each section; a page with fewer sections keeps a plain list. A section that is on shows **On** under its name, and **Used** lists only those: a texture, pattern or animated-material layer that draws, Domain Warp, Stripe, Bloom, Fog, Focus Band, Chaos Blur, Slope Shading, Rim Light, Gloss, Lustre Relief, Band Line, Escape Angle, the orbit Trap, Color Animation, Frozen Colors, HDR & Tone Mapping and GPU Perturbation. A page with none of these, such as Explore, shows only **All** and **Favorites**.
+
 Select a base style first, then adjust its effects. Resetting a group changes artwork values; hiding a group or removing a docked panel does not. The [shader overview](shader-overview.md) explains all 27 Surface groups and alternate names used in the older panels.
 
 Shader Layers controls the enabled compositing order. Moving a layer changes what later layers receive: a color change before bloom can change the light that blooms, while the same change after bloom changes the already-composited image. Disabled custom ordering uses the standard pipeline. See [the order comparison](shader-comparisons.md) and the [29-slot coverage map](shader-coverage.md).
@@ -62,26 +64,28 @@ flowchart LR
 
 | File / command | What it keeps and how to use it |
 | --- | --- |
-| **Save Settings**, `.rfc` | Saves the current configuration and document canvas size. Use this to resume work with the same location, calculation, shader, and video settings. It is not the computed map or a package of external assets. |
-| **Save Location / Settings**, `.rfc` | Choose a new named settings file. Useful for before/after checkpoints. |
-| **Save Location / Settings**, `.rfl` | Stores the legacy location data: center, log zoom, and iteration limit. Loading it leaves other settings in place; use it to try a location with the current look. |
+| **Save Settings** (Ctrl+S), `.rfc` | Overwrites the open settings file with the current configuration and document canvas size; the first save asks for a file name. Use this to resume work with the same location, calculation, shader, and video settings. It is not the computed map or a package of external assets. |
+| **Save Settings As**, `.rfc` | Choose a new named settings file. Useful for before/after checkpoints. |
+| **Save Settings As**, `.rfl` | Stores the legacy location data: center, log zoom, and iteration limit. Loading it leaves other settings in place; use it to try a location with the current look. |
 | **Save Map**, `.rfm` | Saves calculated dynamic iteration data. Wait until calculation finishes before saving. Use it for recoloring or as a video source. |
 | **Save Map**, `.rfmz` | Losslessly compresses dynamic map data on disk. It is separate from reference-orbit and MPA table compression. |
 | **Save Image** | Writes rendered pixels. A PNG does not contain the iteration data needed to redo palette/relief calculations. |
-| **Save Appearance Settings**, `.rfsp` | Saves appearance for reuse at another location. Load Appearance Settings applies the look without using it as a location file. |
+| **Save Appearance Settings**, `.rfsp` | Saves appearance for reuse at another location. Opening it with Load File applies the look without using it as a location file. |
 | **Timeline Save**, `.rfvt` or `.json` | Saves timing, tracks, audio references, and zoom-overlay settings. It does not embed keyframe maps, music, texture images, or font files. |
 
 New settings saves use RFC version 8. RFF_Super still reads RFC versions 3 through 7, but earlier releases cannot open version 8, and appearance presets (`.rfsp`) saved by this version are likewise unreadable by earlier releases. Keep a backup before moving files between releases; newer optional fields, including timeline overlays, may not be retained by older readers.
 
-Map files have a separate limit of **100,000,000 internal pixels**, including Clarity, SSAA, and any source padding. A canvas that fits the GPU can still exceed this file limit. Reduce the internal dimensions before saving maps or generating map keyframes.
+Map files have a separate limit of **200,000,000 internal pixels**, including Clarity, SSAA, and any source padding. A canvas that fits the GPU can still exceed this file limit. Reduce the internal dimensions before saving maps or generating map keyframes.
 
 **New Document** creates a fresh document. When replacing work, use the program's unsaved-change prompt to keep or discard it deliberately. If saving reports a failure, the open edits remain; correct the destination problem and save again.
 
-**Load Location / Settings** restores the selected file. After loading an RFC with reference reuse enabled, disable Reuse Reference and recompute if it would otherwise use an orbit belonging to the previous location. If an external texture is missing, select its image again; the affected layer renders nothing until its source is available. A file whose combined resolution/clarity/supersampling exceeds the GPU limit is rejected rather than silently accepting that size.
+**Load File** opens every kind of file above except timelines, in one dialog. The extension decides what happens: `.rfmz`/`.rfm` puts a map on the canvas, `.png` displays an image, `.rfc` restores settings, `.rfl` moves to a location while keeping the other settings, and `.rfsp` applies an appearance.
+
+Loading an `.rfc` or `.rfl` restores the selected file. After loading an RFC with reference reuse enabled, disable Reuse Reference and recompute if it would otherwise use an orbit belonging to the previous location. If an external texture is missing, select its image again; the affected layer renders nothing until its source is available. A file whose combined resolution/clarity/supersampling exceeds the GPU limit is rejected rather than silently accepting that size.
 
 ## Browse maps and images
 
-**Load Map** opens calculated map data; **Load Image** displays an image. These are different inputs: an image already has colors, whereas a dynamic map can be reshaded from iteration values. Loading an image does not reconstruct its original Mandelbrot coordinates.
+Loading an `.rfm`/`.rfmz` opens calculated map data; loading a `.png` displays an image. These are different inputs: an image already has colors, whereas a dynamic map can be reshaded from iteration values. Loading an image does not reconstruct its original Mandelbrot coordinates.
 
 While browsing a folder, **Left/Right** moves to the previous/next item, **Up/Down** takes larger steps, and **Home/End** goes to the first/last item. For maps, type a one-based item number and press Enter to jump; Backspace edits the number and Escape cancels the typed jump. Escape exits image browsing. A long calculation/generation/export can reserve the data and temporarily prevent browsing.
 

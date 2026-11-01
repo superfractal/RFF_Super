@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-23, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-21
 //
 
 #pragma once
@@ -274,6 +275,31 @@ namespace merutilm::rff2::workspace {
                      for (T candidate : values) {
                          if (int(candidate) == value) {
                              get(a) = candidate;
+                             return true;
+                         }
+                     }
+                     return false;
+                 }});
+        }
+        // A choice read and written through functions, for a menu that spans several members.
+        template <class T, class Read, class Write>
+        void derivedChoice(std::string id, int group, std::wstring label, std::wstring hint, Read read, Write write) {
+            const auto values = Selectable::values<T>();
+            std::vector<FormChoice> choices;
+            for (T value : values) {
+                choices.push_back({number(int(value)), Selectable::toString(value)});
+            }
+            bindings.push_back(
+                {{std::move(id), group, std::move(label), std::move(hint), {}, std::move(choices)},
+                 [read](const Attribute &a) { return number(int(read(a))); },
+                 [write, values](Attribute &a, const std::wstring &text) {
+                     int value;
+                     if (!parse(text, value)) {
+                         return false;
+                     }
+                     for (T candidate : values) {
+                         if (int(candidate) == value) {
+                             write(a, candidate);
                              return true;
                          }
                      }

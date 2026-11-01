@@ -6,6 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-24
 //
 
 #include "../vulkan/GPCIterationPalette.hpp"
@@ -38,12 +39,17 @@ namespace merutilm::rff2 {
         phases.writeTimeUniform(timeBinding, frameIndex, now);
     }
 
-    void GPCIterationPalette::cmdRefreshIterations(const VkCommandBuffer cbh, const vkh::BufferContext &src) const {
-        const auto& result = getResultIterationBuffer();
-        vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_ACCESS_TRANSFER_WRITE_BIT, result.buffer, 0, result.bufferSize,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
-        vkh::BufferImageContextUtils::cmdCopyBuffer(cbh, src, result);
+    void GPCIterationPalette::cmdRefreshIterations(const VkCommandBuffer cbh, const vkh::BufferContext &iterationSrc,
+                                                   const vkh::BufferContext &escapeAngleSrc,
+                                                   const vkh::BufferContext &orbitTrapSrc) const {
+        for (const auto &[src, result] : {std::pair{&iterationSrc, &getResultIterationBuffer()},
+                                          std::pair{&escapeAngleSrc, &getResultEscapeAngleBuffer()},
+                                          std::pair{&orbitTrapSrc, &getResultOrbitTrapBuffer()}}) {
+            vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, result->buffer, 0, result->bufferSize,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+            vkh::BufferImageContextUtils::cmdCopyBuffer(cbh, *src, *result);
+        }
     }
 
     const vkh::BufferContext &GPCIterationPalette::getResultIterationBuffer() const {
@@ -54,8 +60,23 @@ namespace merutilm::rff2 {
         return iterSSBO.getBufferContext();
     }
 
+    const vkh::BufferContext &GPCIterationPalette::getResultEscapeAngleBuffer() const {
+        using namespace SharedDescriptorTemplate;
+        const auto &angleSSBO = *getDescriptor(SET_ITERATION).get<vkh::ShaderStorage>(
+            0, DescIteration::BINDING_SSBO_ESCAPE_ANGLE);
+        return angleSSBO.getBufferContext();
+    }
 
-    void GPCIterationPalette::resetIterationBuffer(const uint32_t width, const uint32_t height) {
+    const vkh::BufferContext &GPCIterationPalette::getResultOrbitTrapBuffer() const {
+        using namespace SharedDescriptorTemplate;
+        const auto &trapSSBO = *getDescriptor(SET_ITERATION).get<vkh::ShaderStorage>(
+            0, DescIteration::BINDING_SSBO_ORBIT_TRAP);
+        return trapSSBO.getBufferContext();
+    }
+
+
+    void GPCIterationPalette::resetIterationBuffer(const uint32_t width, const uint32_t height,
+                                                   const uint32_t trapPlanes) {
         using namespace SharedDescriptorTemplate;
         auto &iterDesc = getDescriptor(SET_ITERATION);
         const auto &iterUBO = *iterDesc.get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO);
@@ -74,9 +95,27 @@ namespace merutilm::rff2 {
         iterSSBOHost.resizeArray<double>(DescIteration::TARGET_SSBO_ITERATION_BUFFER, width * height);
         iterSSBO.reloadBuffer();
         iterSSBO.lock(wc.getCommandPool());
+        DescIteration::resizeCaches(iterDesc, width, height, wc.getCommandPool());
+        DescIteration::resizeEscapeAngles(iterDesc, width, height, trapPlanes, wc.getCommandPool());
         writeDescriptorMF(
             [&iterDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
-                iterDesc.queue(queue, frameIndex, {}, {DescIteration::BINDING_SSBO_ITERATION_MATRIX});
+                iterDesc.queue(queue, frameIndex, {}, {DescIteration::BINDING_SSBO_ITERATION_MATRIX,
+                                                       DescIteration::BINDING_SSBO_RELIEF_CACHE,
+                                                       DescIteration::BINDING_SSBO_CHAOS_CACHE,
+                                                       DescIteration::BINDING_SSBO_ESCAPE_ANGLE,
+                                                       DescIteration::BINDING_SSBO_CHAOS_DEFOCUS,
+                                                       DescIteration::BINDING_SSBO_ORBIT_TRAP});
+            });
+    }
+
+    void GPCIterationPalette::resizeOrbitTrapBuffer(const uint32_t width, const uint32_t height,
+                                                    const uint32_t trapPlanes) {
+        using namespace SharedDescriptorTemplate;
+        auto &iterDesc = getDescriptor(SET_ITERATION);
+        DescIteration::resizeOrbitTraps(iterDesc, width, height, trapPlanes, wc.getCommandPool());
+        writeDescriptorMF(
+            [&iterDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                iterDesc.queue(queue, frameIndex, {}, {DescIteration::BINDING_SSBO_ORBIT_TRAP});
             });
     }
 
@@ -121,7 +160,7 @@ namespace merutilm::rff2 {
         iterUBO.update(DescIteration::TARGET_UBO_ITERATION_CANVAS_OFFSET);
     }
 
-    void GPCIterationPalette::setPalette(const ShdPaletteAttribute &palette) {
+    void GPCIterationPalette::setPalette(const ShdPaletteAttribute &palette, const ShdSlopeAttribute &slope) {
         using namespace SharedDescriptorTemplate;
         // Freeze the phase reached under the old speeds before adopting the new ones, so a speed
         // edit continues from where the animation stands instead of restarting somewhere else.
@@ -190,6 +229,10 @@ namespace merutilm::rff2 {
 
         paletteSSBOHost.set<glm::vec4>(DescPalette::TARGET_PALETTE_MANDELBROT_COLOR, palette.mandelbrotColor);
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_CYCLE_BIAS, palette.cycleBias);
+        paletteSSBOHost.set<uint32_t>(DescPalette::TARGET_PALETTE_ESCAPE_ANGLE_MODE,
+                                      static_cast<uint32_t>(palette.escapeAngleColoring));
+        paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_ESCAPE_ANGLE_AMOUNT, palette.escapeAngleAmount);
+        DescPalette::setOrbitTrap(paletteSSBOHost, palette, slope);
         paletteSSBOHost.resizeArray<glm::vec4>(DescPalette::TARGET_PALETTE_COLORS, finalColors.size());
         paletteSSBOHost.set<glm::vec4>(DescPalette::TARGET_PALETTE_COLORS, finalColors);
 
@@ -206,13 +249,14 @@ namespace merutilm::rff2 {
     }
 
     void GPCIterationPalette::setTextures(const std::array<ShdTextureAttribute, TEXTURE_LAYER_COUNT> &textures,
-                                          const int warpSourceLayer) {
+                                          const int warpSourceLayer, const uint32_t residentMask) {
         phases.advanceTo(animationNow());
         auto &textureDesc = getDescriptor(SET_TEXTURE);
         for (uint32_t layer = 0; layer < TEXTURE_LAYER_COUNT; ++layer) {
             const auto &texture = textures[layer];
             phases.setTextureSpeed(layer, texture);
-            const bool wanted = texture.enabled || static_cast<int>(layer) == warpSourceLayer;
+            const bool wanted = texture.enabled || static_cast<int>(layer) == warpSourceLayer ||
+                                (residentMask >> layer & 1u) != 0u;
             if (TextureDescriptor::uploadImage(wc.core, wc.getCommandPool(), textureDesc, layer,
                                                wanted ? texture.path : std::string{},
                                                loadedTexturePaths[layer])) {
@@ -325,7 +369,7 @@ namespace merutilm::rff2 {
                 .flags = 0,
                 .magFilter = VK_FILTER_LINEAR,
                 .minFilter = VK_FILTER_LINEAR,
-                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
                 .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -335,7 +379,7 @@ namespace merutilm::rff2 {
                 .compareEnable = VK_FALSE,
                 .compareOp = VK_COMPARE_OP_ALWAYS,
                 .minLod = 0,
-                .maxLod = 0,
+                .maxLod = VK_LOD_CLAMP_NONE,
                 .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
                 .unnormalizedCoordinates = VK_FALSE,
             });

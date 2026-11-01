@@ -5,25 +5,29 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01, 2026-09-02
 // Modified by Opus 5 on 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-21, 2026-08-25
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-08, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-27, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
 #include "VideoWindow.hpp"
+#include "SsaaResolve.hpp"
 #include <numeric>
 #include <stdexcept>
+#include "../video/HdrTransfer.hpp"
 #include "../video/ZoomOverlay.hpp"
 #include "../video/AudioExport.hpp"
 #include "../video/TimelineTime.hpp"
 #include <fstream>
 #include <shellapi.h>
 #include "../video/VideoCameraSource.hpp"
+#include "../video/KeyframeRange.hpp"
 
 #include "IOUtilities.h"
 #include "SettingsTheme.hpp"
 #include "UiDpi.hpp"
 #include "../io/RFFDynamicMapBinary.h"
 #include "../io/RFFStaticMapBinary.h"
+#include "../io/RFFOrbitTrapBinary.h"
 #include "../video/TimelineSchedule.hpp"
 #include "opencv2/opencv.hpp"
 
@@ -58,49 +62,6 @@ namespace merutilm::rff2 {
             dwmSetWindowAttribute(window, 13, &value, sizeof(value));
         }
 
-        // SMPTE ST 2084 and ARIB STD-B67 transfer functions, acknowledged in NOTICE.
-        float decodeHdrCode(const float code, const VidHdrTransfer transfer) {
-            const float v = std::clamp(code, 0.0f, 1.0f);
-            if (transfer == VidHdrTransfer::PQ) {
-                constexpr float m1 = 0.1593017578125f;
-                constexpr float m2 = 78.84375f;
-                constexpr float c1 = 0.8359375f;
-                constexpr float c2 = 18.8515625f;
-                constexpr float c3 = 18.6875f;
-                const float p = std::pow(v, 1.0f / m2);
-                const float y = std::max(p - c1, 0.0f) / std::max(c2 - c3 * p, 1e-6f);
-                return std::pow(y, 1.0f / m1) * 10000.0f;
-            }
-            if (transfer == VidHdrTransfer::HLG) {
-                constexpr float a = 0.17883277f;
-                constexpr float b = 0.28466892f;
-                constexpr float c = 0.55991073f;
-                return v <= 0.5f ? v * v / 3.0f : (std::exp((v - c) / a) + b) / 12.0f;
-            }
-            return v;
-        }
-
-        float encodeHdrCode(const float linear, const VidHdrTransfer transfer) {
-            const float v = std::max(linear, 0.0f);
-            if (transfer == VidHdrTransfer::PQ) {
-                constexpr float m1 = 0.1593017578125f;
-                constexpr float m2 = 78.84375f;
-                constexpr float c1 = 0.8359375f;
-                constexpr float c2 = 18.8515625f;
-                constexpr float c3 = 18.6875f;
-                const float y = std::pow(std::clamp(v / 10000.0f, 0.0f, 1.0f), m1);
-                return std::pow((c1 + c2 * y) / (1.0f + c3 * y), m2);
-            }
-            if (transfer == VidHdrTransfer::HLG) {
-                constexpr float a = 0.17883277f;
-                constexpr float b = 0.28466892f;
-                constexpr float c = 0.55991073f;
-                return v <= 1.0f / 12.0f ? std::sqrt(3.0f * v)
-                                         : a * std::log(std::max(12.0f * v - b, 1e-6f)) + c;
-            }
-            return v;
-        }
-
         void decodeHdrFrame(const cv::Mat &encoded, cv::Mat &linear, const VidHdrTransfer transfer) {
             linear.create(encoded.size(), CV_32FC4);
             for (int y = 0; y < encoded.rows; ++y) {
@@ -108,7 +69,7 @@ namespace merutilm::rff2 {
                 auto *dst = linear.ptr<cv::Vec4f>(y);
                 for (int x = 0; x < encoded.cols; ++x) {
                     for (int c = 0; c < 3; ++c) {
-                        dst[x][c] = decodeHdrCode(static_cast<float>(src[x][c]) / 65535.0f, transfer);
+                        dst[x][c] = HdrTransfer::decode(static_cast<float>(src[x][c]) / 65535.0f, transfer);
                     }
                     dst[x][3] = static_cast<float>(src[x][3]) / 65535.0f;
                 }
@@ -122,13 +83,30 @@ namespace merutilm::rff2 {
                 auto *dst = encoded.ptr<cv::Vec4w>(y);
                 for (int x = 0; x < linear.cols; ++x) {
                     for (int c = 0; c < 3; ++c) {
-                        const float code = std::clamp(encodeHdrCode(src[x][c], transfer), 0.0f, 1.0f);
+                        const float code = std::clamp(HdrTransfer::encode(src[x][c], transfer), 0.0f, 1.0f);
                         dst[x][c] = static_cast<uint16_t>(std::lround(code * 65535.0f));
                     }
                     dst[x][3] = static_cast<uint16_t>(std::lround(
                         std::clamp(src[x][3], 0.0f, 1.0f) * 65535.0f));
                 }
             }
+        }
+
+        // Encoded frame size from Output Width / Height; a 0 axis follows the rendered aspect, and 4:2:0 encoders get even sides.
+        VkExtent2D videoOutputExtent(const VidExportAttribute &exportation, const int width, const int height,
+                                     const bool lossless) {
+            if (exportation.outputWidth == 0 && exportation.outputHeight == 0) {
+                return {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+            }
+            double w = exportation.outputWidth;
+            double h = exportation.outputHeight;
+            if (w == 0) w = h * width / height;
+            if (h == 0) h = w * height / width;
+            const auto side = [lossless](const double v) {
+                const auto n = static_cast<uint32_t>(std::max(1.0, std::round(v)));
+                return lossless ? n : std::max(2u, n / 2 * 2);
+            };
+            return {side(w), side(h)};
         }
 
         struct FFmpegPipe {
@@ -161,6 +139,7 @@ namespace merutilm::rff2 {
 
 
             FFmpegPipe(const std::filesystem::path &output, const int width, const int height,
+                       const VkExtent2D target,
                        const float fps, const uint32_t bitrate, const bool lossless,
                        const VidHdrTransfer hdr, const float peakNits, const VidAudioAttribute &audio,
                        std::atomic<bool> *cancelRequested,
@@ -181,6 +160,14 @@ namespace merutilm::rff2 {
 
                 // HDR frames arrive as 16 bits per channel with alpha, which is what carries the PQ or HLG code values.
                 const bool isHdr = hdr != VidHdrTransfer::SDR;
+                // Output Size resizes only the finished frames; without it the filter keeps the old force-even expression.
+                const bool resized = target.width != static_cast<uint32_t>(width) ||
+                                     target.height != static_cast<uint32_t>(height);
+                // Lanczos only: the saved Resize Filter is no longer offered, so a file's choice is not read.
+                const std::wstring scale = resized
+                                               ? L" -vf scale=" + std::to_wstring(target.width) + L":" +
+                                                 std::to_wstring(target.height) + L":flags=lanczos"
+                                               : L" -vf scale=trunc(iw/2)*2:trunc(ih/2)*2";
                 std::wstring cmd = L"\"" + ffmpeg + L"\""
                                    L" -y -nostdin -nostats -loglevel info -f rawvideo -pixel_format " +
                                    (isHdr ? std::wstring(L"rgba64le") : std::wstring(L"bgr24")) +
@@ -217,8 +204,7 @@ namespace merutilm::rff2 {
                     // they carry, and the filter is asked for the matrix and the even size, nothing else.
                     const std::wstring trc = hdr == VidHdrTransfer::HLG ? L"arib-std-b67" : L"smpte2084";
                     const auto nits = static_cast<uint32_t>(std::lround(std::max(peakNits, 1.0f)));
-                    cmd += L" -c:v libx265 -preset veryfast -pix_fmt yuv420p10le"
-                           L" -vf scale=trunc(iw/2)*2:trunc(ih/2)*2"
+                    cmd += L" -c:v libx265 -preset veryfast -pix_fmt yuv420p10le" + scale +
                            L" -color_primaries bt2020 -colorspace bt2020nc -color_trc " + trc +
                            L" -x265-params \"colorprim=bt2020:colormatrix=bt2020nc:transfer=" + trc;
                     if (hdr == VidHdrTransfer::PQ) {
@@ -233,10 +219,10 @@ namespace merutilm::rff2 {
                 } else if (lossless) {
                     // libx264rgb takes the piped BGR24 with no RGB->YUV step, so -qp 0 is bit-exact, and 4:4:4 RGB drops the even-dimension rule the scale filter exists for.
                     cmd += L" -c:v libx264rgb -preset veryfast -threads 0 -qp 0 -pix_fmt gbrp";
+                    if (resized) cmd += scale;
                 } else {
                     // libx264 + yuv420p requires even dimensions; force-even via scale.
-                    cmd += L" -c:v libx264 -preset veryfast -threads 0 -pix_fmt yuv420p"
-                           L" -vf scale=trunc(iw/2)*2:trunc(ih/2)*2";
+                    cmd += L" -c:v libx264 -preset veryfast -threads 0 -pix_fmt yuv420p" + scale;
                     if (bitrate > 0) {
                         cmd += L" -b:v " + std::to_wstring(bitrate) + L"k";
                     }
@@ -343,7 +329,9 @@ namespace merutilm::rff2 {
                                    &si.StartupInfo, &pi)) {
                     opened = true;
                 } else {
-                    startupFailure = std::format(L"Cannot start FFmpeg (Windows error {}).", GetLastError());
+                    const DWORD code = GetLastError();
+                    startupFailure = std::vformat(UiLanguage::text(L"Cannot start FFmpeg (Windows error {})."),
+                                                  std::make_wformat_args(code));
                     writeWideLog(startupFailure + L"\r\n");
                 }
                 DeleteProcThreadAttributeList(si.lpAttributeList);
@@ -484,13 +472,20 @@ namespace merutilm::rff2 {
             ~FFmpegPipe() { finish(); }
         };
 
+        // A failure with its log path after it, translated piece by piece: the path keeps any table
+        // entry from matching the whole text.
+        std::wstring failureWithLog(std::wstring_view message, const std::filesystem::path &logPath) {
+            return UiLanguage::text(message) + L"\n" + UiLanguage::text(L"Encoder log: ") + logPath.wstring();
+        }
+
         void showEncoderFailure(HWND owner, std::wstring message, const std::filesystem::path &logPath) {
             std::error_code error;
             if (logPath.empty() || !std::filesystem::is_regular_file(logPath, error)) {
                 NativeDialogs::message(owner, message.c_str(), L"Export failed", MB_OK | MB_ICONERROR);
                 return;
             }
-            message += L"\n\nEncoder log: " + logPath.wstring() + L"\n\nOpen the encoder log?";
+            message = UiLanguage::text(message) + L"\n\n" + UiLanguage::text(L"Encoder log: ") + logPath.wstring() +
+                      L"\n\n" + UiLanguage::text(L"Open the encoder log?");
             if (NativeDialogs::message(owner, message.c_str(), L"Export failed", MB_YESNO | MB_ICONERROR) == IDYES) {
                 ShellExecuteW(owner, L"open", logPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
@@ -922,8 +917,11 @@ namespace merutilm::rff2 {
             return;
         }
 
+        // The same file range the Timeline Editor previews; position 1 is its first file.
+        const KeyframeRange keyframeRange = keyframe_range::resolve(
+            open, attr.video.data.isStatic, attr.video.data.keyframeFirst, attr.video.data.keyframeLast);
         if (attr.video.data.isStatic) {
-            const RFFStaticMapBinary targetMap = RFFStaticMapBinary::readByID(open, 1);
+            const RFFStaticMapBinary targetMap = RFFStaticMapBinary::readByID(open, keyframeRange.first);
             if (!targetMap.hasData()) {
                 if (progress) {
                     progress->report(ExportProgress::Phase::FAILED, L"No readable keyframes in this folder.");
@@ -937,7 +935,7 @@ namespace merutilm::rff2 {
             imgWidth = static_cast<int>(targetMap.getWidth());
             imgHeight = static_cast<int>(targetMap.getHeight());
         } else {
-            const RFFDynamicMapBinary targetMap = RFFDynamicMapBinary::readByID(open, 1);
+            const RFFDynamicMapBinary targetMap = RFFDynamicMapBinary::readByID(open, keyframeRange.first);
             if (!targetMap.hasData()) {
                 if (progress) {
                     progress->report(ExportProgress::Phase::FAILED, L"No readable keyframes in this folder.");
@@ -1031,7 +1029,8 @@ namespace merutilm::rff2 {
         };
 
 
-        const auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale] = attr.video.data;
+        const auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast] =
+            attr.video.data;
         const auto &[overZoom, showText, mps] = attr.video.animation;
         const auto overlaySettings = attr.video.timeline.zoomOverlay;
         const auto iterationSettings = attr.video.timeline.maxIterationOverlay;
@@ -1058,12 +1057,11 @@ namespace merutilm::rff2 {
         const int ssaa = std::max(1, static_cast<int>(attr.render.ssaa));
         const int outW = std::max(1, imgWidth / ssaa);
         const int outH = std::max(1, imgHeight / ssaa);
+        const VkExtent2D encodedExtent = videoOutputExtent(attr.video.exportation, outW, outH, lossless);
 
         // Same count the render thread uses for maxNumber; recorded so the frame at which a
         // run died can be converted back into a zoom depth without guessing.
-        const uint32_t keyframes = isStatic
-                                       ? IOUtilities::fileNameCount(open, Constants::Extension::STATIC_MAP)
-                                       : RFFDynamicMapBinary::keyframeCount(open);
+        const uint32_t keyframes = keyframeRange.count;
         // The depth axis runs from the last keyframe down to -overZoom, and the time that takes is
         // the speed curve integrated over it - a plain division only while the speed is constant.
         // Built here, before either thread starts, so the frame count is known from the outset.
@@ -1082,7 +1080,7 @@ namespace merutilm::rff2 {
         scene.setHdrOutput(hdrTransfer, hdrPeakNits);
         scene.setSubmitTimingLog(true);
 
-        FFmpegPipe writer(temporaryOutput, outW, outH, fps, bitrate, lossless, hdrTransfer, hdrPeakNits, attr.video.timeline.audio,
+        FFmpegPipe writer(temporaryOutput, outW, outH, encodedExtent, fps, bitrate, lossless, hdrTransfer, hdrPeakNits, attr.video.timeline.audio,
                           &window->closeRequested, &pipeAbort);
         if (progress) progress->setDiagnosticLog(writer.logPath.wstring());
 
@@ -1092,7 +1090,7 @@ namespace merutilm::rff2 {
             const auto message = writer.startupFailure.empty() ? L"Cannot open the output file or video encoder."
                                                                : writer.startupFailure;
             if (progress) {
-                progress->report(ExportProgress::Phase::FAILED, message + L"\nEncoder log: " + writer.logPath.wstring());
+                progress->report(ExportProgress::Phase::FAILED, failureWithLog(message, writer.logPath));
             } else {
                 showEncoderFailure(wnd, message, writer.logPath);
             }
@@ -1115,7 +1113,7 @@ namespace merutilm::rff2 {
                 }
                 cv::Mat out;
                 if (img.cols != outW || img.rows != outH) {
-                    cv::resize(img, out, cv::Size(outW, outH), 0, 0, cv::INTER_AREA);
+                    out = SsaaResolve::resize(img, cv::Size(outW, outH), attr.render.ssaaFilter, hdrTransfer);
                 } else {
                     out = img;
                 }
@@ -1234,9 +1232,7 @@ namespace merutilm::rff2 {
             try {
                 const auto renderFrames = [&] {
             const auto frameInterval = schedule.speedAt(schedule.getStartDepth()) / fps;
-            const uint32_t maxNumber = isStatic
-                                           ? IOUtilities::fileNameCount(open, Constants::Extension::STATIC_MAP)
-                                           : RFFDynamicMapBinary::keyframeCount(open);
+            const uint32_t maxNumber = keyframeRange.count;
             const float minNumber = -overZoom;
             auto currentFrame = static_cast<float>(maxNumber);
             double currentSec = 0;
@@ -1250,6 +1246,16 @@ namespace merutilm::rff2 {
 
             RFFDynamicMapBinary zoomedDynamic = RFFDynamicMapBinary::DEFAULT;
             RFFDynamicMapBinary normalDynamic = RFFDynamicMapBinary::DEFAULT;
+            // The keyframes' orbit traps, read only while Orbit Trap Coloring is on; empty where a keyframe has none.
+            std::vector<float> zoomedTraps;
+            std::vector<float> normalTraps;
+            const bool readTraps = attr.shader.palette.orbitTrapColoring != ShdPalOrbitTrapColoring::NONE;
+            const TrapShapeParams trapShape = TrapShapeParams::of(attr.shader.palette);
+            const auto trapsOf = [&](const uint32_t file) {
+                return readTraps ? RFFOrbitTrapBinary::readByID(open, file, static_cast<uint16_t>(imgWidth),
+                                                                static_cast<uint16_t>(imgHeight), trapShape)
+                                 : std::vector<float>{};
+            };
             RFFStaticMapBinary zoomedStatic = RFFStaticMapBinary::DEFAULT;
             RFFStaticMapBinary normalStatic = RFFStaticMapBinary::DEFAULT;
             cv::Mat zoomedStaticImage = cv::Mat::zeros(imgHeight, imgWidth, CV_16UC4);
@@ -1281,9 +1287,9 @@ namespace merutilm::rff2 {
                     if (0 != pf1) {
                         if (isStatic) {
                             zoomedStatic = RFFStaticMapBinary::DEFAULT;
-                            normalStatic = RFFStaticMapBinary::readByID(open, 1);
+                            normalStatic = RFFStaticMapBinary::readByID(open, keyframeRange.first);
                             zoomedStaticImage = cv::Mat::zeros(imgHeight, imgWidth, CV_16UC4);
-                            normalStaticImage = RFFStaticMapBinary::loadImageByID(open, 1);
+                            normalStaticImage = RFFStaticMapBinary::loadImageByID(open, keyframeRange.first);
                             if (!normalStatic.hasData() ||
                                 normalStatic.getWidth() != static_cast<uint32_t>(imgWidth) ||
                                 normalStatic.getHeight() != static_cast<uint32_t>(imgHeight) ||
@@ -1293,7 +1299,9 @@ namespace merutilm::rff2 {
                             }
                         } else {
                             zoomedDynamic = RFFDynamicMapBinary::DEFAULT;
-                            normalDynamic = RFFDynamicMapBinary::readByID(open, 1);
+                            normalDynamic = RFFDynamicMapBinary::readByID(open, keyframeRange.first);
+                            zoomedTraps.clear();
+                            normalTraps = trapsOf(keyframeRange.first);
                             if (!normalDynamic.hasData() || normalDynamic.getMatrix().getWidth() != imgWidth ||
                                 normalDynamic.getMatrix().getHeight() != imgHeight) {
                                 failVideo(L"The first RFM/RFMZ keyframe has mismatched dimensions.");
@@ -1305,15 +1313,18 @@ namespace merutilm::rff2 {
                     }
                 } else {
                     if (const auto f1 = static_cast<uint32_t>(sampledFrame); f1 != pf1) {
-                        const uint32_t f2 = f1 + 1;
+                        const uint32_t file1 = keyframeRange.fileNumber(f1);
+                        const uint32_t file2 = file1 + 1;
                         if (isStatic) {
-                            zoomedStatic = RFFStaticMapBinary::readByID(open, f1);
-                            normalStatic = RFFStaticMapBinary::readByID(open, f2);
-                            zoomedStaticImage = RFFStaticMapBinary::loadImageByID(open, f1);
-                            normalStaticImage = RFFStaticMapBinary::loadImageByID(open, f2);
+                            zoomedStatic = RFFStaticMapBinary::readByID(open, file1);
+                            normalStatic = RFFStaticMapBinary::readByID(open, file2);
+                            zoomedStaticImage = RFFStaticMapBinary::loadImageByID(open, file1);
+                            normalStaticImage = RFFStaticMapBinary::loadImageByID(open, file2);
                         } else {
-                            zoomedDynamic = RFFDynamicMapBinary::readByID(open, f1);
-                            normalDynamic = RFFDynamicMapBinary::readByID(open, f2);
+                            zoomedDynamic = RFFDynamicMapBinary::readByID(open, file1);
+                            normalDynamic = RFFDynamicMapBinary::readByID(open, file2);
+                            zoomedTraps = trapsOf(file1);
+                            normalTraps = trapsOf(file2);
                         }
                         const bool dimensionsMatch = isStatic
                             ? zoomedStatic.hasData() && normalStatic.hasData() &&
@@ -1348,7 +1359,8 @@ namespace merutilm::rff2 {
                         scene.applyCurrentStaticImage(normalStaticImage, zoomedStaticImage);
                     } else {
                         scene.setMap(&normalDynamic, &zoomedDynamic);
-                        scene.applyCurrentDynamicMap(normalDynamic, zoomedDynamic, sampledFrame);
+                        scene.applyCurrentDynamicMap(normalDynamic, zoomedDynamic, sampledFrame, &normalTraps,
+                                                     &zoomedTraps);
                         // Use the larger of the two keyframes' maxIteration: using normal's alone makes
                         // max_value jump at the keyframe switch, flipping mid-range pixels between
                         // "clamped/interior" and "real height" within a single frame (slope AO/shade pop).
@@ -1534,11 +1546,12 @@ namespace merutilm::rff2 {
                     message = workerFailure;
                 }
                 if (message.empty()) {
-                    message = std::format(L"FFmpeg could not finish the video (exit code {}).",
-                                          writer.getExitCode());
+                    const auto code = writer.getExitCode();
+                    message = std::vformat(UiLanguage::text(L"FFmpeg could not finish the video (exit code {})."),
+                                           std::make_wformat_args(code));
                 }
                 if (progress) {
-                    progress->report(ExportProgress::Phase::FAILED, message + L"\nEncoder log: " + writer.logPath.wstring());
+                    progress->report(ExportProgress::Phase::FAILED, failureWithLog(message, writer.logPath));
                 } else {
                     showEncoderFailure(IsWindow(wnd) ? wnd : nullptr, message, writer.logPath);
                 }

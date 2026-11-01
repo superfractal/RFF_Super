@@ -1,0 +1,31 @@
+{
+  "scope": "Source-guarded CPU arithmetic and source order checks, not GLSL execution",
+  "saturation": {
+    "input": [
+      0,
+      1,
+      0
+    ],
+    "amount": 2,
+    "graded": [
+      -0.7152,
+      1.2848,
+      -0.7152
+    ],
+    "acesOutput": [
+      1,
+      0.8518246859191213,
+      1
+    ]
+  },
+  "reinhard": {
+    "inputGray": 0.0001,
+    "currentOutput": 0.000009999000099990002,
+    "algebraicallyCancelledOutput": 0.00009999000099990002,
+    "ratio": 0.1
+  },
+  "mask": {
+    "appliedBeforeColorInjection": true,
+    "beautyAlphaForcedOne": true
+  }
+}

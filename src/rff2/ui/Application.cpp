@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-18, 2026-10-21, 2026-10-25, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
@@ -157,9 +157,13 @@ namespace merutilm::rff2 {
                                                        }
                                                    }, [this](double iteration) { return scene->pickedFreezeColor(iteration); });
         auto animationForm =
-            animation->form(L"Animation", {L"Color Animation", L"Frozen Colors", L"Zoom Motion", L"Timeline",
-                                           L"Keyframes", L"Video Camera"});
+            animation->form(L"Animation", {L"Color Animation", L"Frozen Colors", L"Zoom Motion", L"Keyframes"});
         workspace::addAnimationGuidance(animationForm);
+        animationForm.groupInUse.resize(animationForm.groups.size());
+        animationForm.groupInUse[0] = [this] { return scene->getAttribute().shader.palette.animationSpeed != 0; };
+        animationForm.groupInUse[1] = [this] {
+            return !scene->getAttribute().shader.palette.staticColorIterations.empty();
+        };
         auto frozenField =
             std::find_if(animationForm.fields.begin(), animationForm.fields.end(), [](const auto &field) {
                 return field.id == "animation.frozenIterations";
@@ -176,14 +180,7 @@ namespace merutilm::rff2 {
              }},
             {1, L"Clear Frozen Colors",
              [animation] { animation->apply({{"animation.frozenIterations", L""}}); }},
-            {3, L"Open Timeline Editor", [this] { openTimelineEditor(); }},
-            {3, L"Play / Pause Timeline",
-             [this] { TimelineWindow::workspaceAction(openTimelineEditor(), 0); }, true},
-            {3, L"Stop Timeline", [this] { TimelineWindow::workspaceAction(timelineWorkspace, 1); }, true},
-            {3, L"Load Keyframe Folder",
-             [this] { TimelineWindow::workspaceAction(openTimelineEditor(), 2); }},
-            {5, L"Match Planar Framing", [this] { TimelineWindow::matchCameraToPlanar(openTimelineEditor()); }},
-            {4, L"Generate Keyframes",
+            {3, L"Generate Keyframes",
              [this] { CallbackVideo::GENERATE_VID_KEYFRAME(*settingsMenu, *scene); }}};
         animationForm.status = [this]() -> std::wstring {
             if (IsWindowVisible(timelineWorkspace)) {
@@ -231,8 +228,10 @@ namespace merutilm::rff2 {
         workspaceShell->installWorkspace(2, std::move(animationForm));
         exportWorkspace = std::make_shared<workspace::ExportWorkspace>(*scene, masterWindow);
         auto exportForm = exportWorkspace->form();
+        exportForm.actions.insert(std::ranges::find(exportForm.actions, 1, &workspace::FormAction::group),
+                                  {1, L"Open Timeline Editor", [this] { openTimelineEditor(); }});
         exportForm.actions.push_back(
-            {2, L"Rendering FPS & Performance", [this] { workspaceShell->openSection(20, 0); }});
+            {2, L"Render & Preview", [this] { workspaceShell->openSection(20, 0); }});
         workspaceShell->installWorkspace(3, std::move(exportForm));
         const workspace::AttributeGetter appearanceAttribute = [this]() -> Attribute & {
             return scene->getAttribute();
@@ -245,8 +244,12 @@ namespace merutilm::rff2 {
             [this](int from, int to) { scene->swapAnimationLayers(AnimatedLayerFamily::PATTERN, from, to); }));
         workspaceShell->installWorkspace(13,
                                          workspace::warpStripeForm(appearanceAttribute, appearanceChanged));
-        workspaceShell->installWorkspace(14,
-                                         workspace::finishingForm(appearanceAttribute, appearanceChanged));
+        auto finishing = workspace::finishingForm(appearanceAttribute, appearanceChanged,
+            [this](std::function<void()> picked) { scene->beginFocusPick(masterWindow, std::move(picked)); });
+        finishing.status = [this]() -> std::wstring {
+            return scene->isFocusPickActive() ? L"Click the fractal to set Focus Depth." : L"No pending changes.";
+        };
+        workspaceShell->installWorkspace(14, std::move(finishing));
         workspaceShell->installWorkspace(
             15, workspace::materialEffectsForm(appearanceAttribute, appearanceChanged,
                 [this](int from, int to) { scene->swapAnimationLayers(AnimatedLayerFamily::EFFECT, from, to); }));
@@ -261,6 +264,10 @@ namespace merutilm::rff2 {
             });
         auto layerForm = shaderLayers->form([] {});
         workspaceShell->installWorkspace(18, std::move(layerForm));
+        workspaceShell->installWorkspace(workspace::OTHER_WORKSPACE,
+                                         workspace::otherForm(appearanceAttribute, appearanceChanged));
+        workspaceShell->installWorkspace(workspace::ORBIT_TRAP_WORKSPACE,
+                                         workspace::orbitTrapForm(appearanceAttribute, appearanceChanged));
         workspaceShell->installLayerPanel(shaderLayers);
         workspaceShell->installPanelLayout();
         auto previewState = std::make_shared<RenderAttribute>(scene->getAttribute().render);
@@ -271,8 +278,12 @@ namespace merutilm::rff2 {
             }
             if (value.boundaryTraceFill != previewState->boundaryTraceFill ||
                 value.preview2Color != previewState->preview2Color ||
-                value.coarsePreview != previewState->coarsePreview) {
+                value.coarsePreview != previewState->coarsePreview ||
+                value.computeShader != previewState->computeShader) {
                 scene->getRequests().requestRecompute();
+            }
+            if (value.ssaaFilter != previewState->ssaaFilter) {
+                scene->getRequests().requestShader();
             }
             *previewState = value;
         });
@@ -284,16 +295,14 @@ namespace merutilm::rff2 {
         workspaceShell->setOperationGuard(
             [this] { return exportWorkspace->ownsActiveJob() || scene->isLongJobBusy(); });
         workspaceShell->setLayoutObserver([this] { layoutPending = true; });
-        settingsMenu->workspaceNavigation = [this](int id, int section) {
-            if (id == 2 && section == 3) {
-                openTimelineEditor();
-            } else {
-                workspaceShell->openSection(id, section);
-            }
-        };
+        settingsMenu->workspaceNavigation = [this](int id, int section) { workspaceShell->openSection(id, section); };
+        settingsMenu->timelineEditor = [this] { openTimelineEditor(); };
         workspaceShell->observeWorkspace([this](int id, int group, const RECT &) {
             if (id != 2 || group != 1) {
                 scene->cancelColorFreezePick();
+            }
+            if (id != 14) {
+                scene->cancelFocusPick();
             }
         });
         scene->setConfigFileObserver(
@@ -319,7 +328,9 @@ namespace merutilm::rff2 {
             },
             [this] { return confirmDocumentReplacement(); }, [this] { workspaceShell->discardAllPending(); });
         setClientSize(initialWidth, initialHeight);
-        document.accept(scene->getAttribute(), scene->getClientWidth(), scene->getClientHeight());
+        scene->configureCanvasSize(Constants::Win32::INIT_CANVAS_WIDTH, Constants::Win32::INIT_CANVAS_HEIGHT);
+        const auto initialCanvas = scene->documentCanvasSize();
+        document.accept(scene->getAttribute(), initialCanvas.cx, initialCanvas.cy);
         scene->getRequests().requestResize();
         bindWindowHandlers();
         setProcedure();
@@ -411,7 +422,7 @@ namespace merutilm::rff2 {
             scene ? workspace::PreviewGeometry::fit(available, scene->documentCanvasSize()) : available;
         SetWindowPos(renderWindow, nullptr, canvas.left, canvas.top, canvas.right - canvas.left,
                      canvas.bottom - canvas.top, SWP_NOZORDER);
-        // A picture put up by Load Image stands over the canvas, so it takes the rectangle the canvas
+        // A picture put up by Load File stands over the canvas, so it takes the rectangle the canvas
         // was just given. Does nothing while no picture is up.
         if (scene != nullptr) {
             scene->layoutImageCanvas(canvas);
@@ -450,7 +461,8 @@ namespace merutilm::rff2 {
             (statusBarWidth - rightEdges[Constants::Status::PERIOD_STATUS]) / 2;
 
         SendMessageW(statusBar, SB_SETPARTS, Constants::Status::LENGTH, (LPARAM)rightEdges.data());
-        InvalidateRect(masterWindow, nullptr, TRUE);
+        // Painted now, not on a later WM_PAINT: during a panel drag the strip the canvas left kept its old picture as a trail.
+        RedrawWindow(masterWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_NOCHILDREN);
         if (workspaceShell) {
             workspaceShell->repaintPanels();
         }
@@ -1007,6 +1019,10 @@ namespace merutilm::rff2 {
                 resolveWindowResizeEnd();
             }
             resolveWindowRequests();
+            // Outside the branches below: a paused or covered preview still has to swap in a surface
+            // shader a skipped preparation finished, and let the video warm-ups go.
+            scene->collectDeferredPipelines();
+            scene->showPendingNotice();
             const auto &exportation = scene->getAttribute().video.exportation;
             const bool timelineOpen = TimelineWindow::isOpen();
             // A paused preview has nothing to show during an export, so its canvas images give their VRAM to the export until it ends.

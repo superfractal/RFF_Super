@@ -1,0 +1,29 @@
+{
+  "scope": "Actual AO emitter and atmosphere feature injection executed; flat-plane AO arithmetic mirror is source-guarded, no GPU rendering.",
+  "flatPlane": {
+    "intensity": 0.2,
+    "spread": 0.5,
+    "samples": 5,
+    "fixedNormal": 1,
+    "stochasticMean": 0.8333668971984233,
+    "navigationBiasedDirectionMean": 0.9552374912972261,
+    "idealUnoccludedVisibility": 1
+  },
+  "sampleReach": {
+    "spread": 0.5,
+    "samples5": 0.3,
+    "samples32": 1.9875
+  },
+  "atmosphereGate": {
+    "glowOn": {
+      "volumeBodies": 1,
+      "hasDensity": true,
+      "postBodies": 2
+    },
+    "glowOff": {
+      "volumeBodies": 0,
+      "hasDensity": false,
+      "postBodies": 2
+    }
+  }
+}

@@ -2,7 +2,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-24, 2026-08-26, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-10, 2026-10-11, 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -31,6 +31,7 @@
 #include "workspace/AccessibleItems.hpp"
 #include "workspace/TimelineItems.hpp"
 #include "workspace/WorkspaceTheme.hpp"
+#include "workspace/TimelineInspectorNav.hpp"
 
 namespace merutilm::rff2 {
     namespace workspace {
@@ -59,7 +60,7 @@ namespace merutilm::rff2 {
         // Which transport readout a sideways drag is currently moving the playhead from.
         enum class FieldDrag { NONE, DEPTH, TIME };
 
-        enum class FieldEdit { NONE, DISTANCE, KEYFRAME, TIME };
+        enum class FieldEdit { NONE, DISTANCE, KEYFRAME, TIME, RANGE_FIRST, RANGE_LAST };
 
         struct KeyHit {
             uint16_t targetId = 0;
@@ -99,6 +100,9 @@ namespace merutilm::rff2 {
         int inspectorKey = -2;
         std::string inspectorDocumentKey;
         int inspectorSectionRequest = -1;
+        int inspectorListRequest = -1;
+        // Declared after the theme and dock state it reads, so it is destroyed before them.
+        std::unique_ptr<workspace::TimelineInspectorNav> inspectorNav;
         AudioPreview audioPreview;
         void restartAudioPreview();
         uint64_t selectedAudioClip = 0;
@@ -210,6 +214,12 @@ namespace merutilm::rff2 {
         RECT controlsButton = {};
         bool hoverControls = false;
         std::unique_ptr<SettingsWindow> controlsGuide;
+        // Requested keyframe file range for the loaded folder; 0 picks the lowest file or runs to the first gap.
+        uint32_t keyframeRangeFirst = 0;
+        uint32_t keyframeRangeLast = 0;
+        // The first and last file numbers drawn in the Keyframes box, each edited in place.
+        RECT rangeFirstField = {};
+        RECT rangeLastField = {};
         // The transport readouts. Dragging the distance, keyframe or time box moves the playhead.
         RECT distanceField = {};
         RECT keyframeField = {};
@@ -399,6 +409,7 @@ namespace merutilm::rff2 {
         void beginFieldEdit(FieldEdit field);
 
         [[nodiscard]] bool commitFieldEdit();
+        [[nodiscard]] bool commitRangeFieldEdit(const std::wstring &text);
 
         void closeFieldEdit();
 
@@ -424,7 +435,6 @@ namespace merutilm::rff2 {
 
         void openAiExchangeMenu();
         void importTimelineJson(const std::string &text, const std::filesystem::path &document = {});
-        void requestAiImages();
         struct AiBundleRequest {
             std::filesystem::path parent;
             std::string prompt;
@@ -463,6 +473,7 @@ namespace merutilm::rff2 {
 
         void loadKeyframeDirectory();
         void loadKeyframeDirectory(const std::filesystem::path &directory);
+        void applyKeyframeRange(uint32_t first, uint32_t last);
 
         [[nodiscard]] bool initializeFramePreview();
 
@@ -579,10 +590,7 @@ namespace merutilm::rff2 {
         static uint64_t workspaceHistoryOrder(HWND handle, bool redo);
         static void bindWorkspaceHistory(HWND handle, std::shared_ptr<workspace::HistoryDomain> domain,
                                          std::function<void(bool)> request);
-        static void workspaceAction(HWND handle, int action);
         static void matchCameraToPlanar(HWND handle);
-        static bool loadWorkspaceKeyframes(HWND handle, const std::filesystem::path &directory);
-        static bool workspacePreviewReady(HWND handle);
         static std::wstring workspaceStatus(HWND handle);
 
         static LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);

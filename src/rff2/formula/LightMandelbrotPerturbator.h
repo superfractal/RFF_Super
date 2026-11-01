@@ -1,9 +1,12 @@
 //
 // Created by Merutilm on 2025-05-10.
 // Modified by GPT-6 on 2026-09-18
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12
 //
 
 #pragma once
+
+#include <array>
 
 #include "LightMandelbrotReference.h"
 #include "MandelbrotPerturbator.h"
@@ -27,13 +30,21 @@ namespace merutilm::rff2 {
                                    double offR = 0, double offI = 0);
 
 
-        double iterate(const dex &dcr, const dex &dci) const override;
+        using MandelbrotPerturbator::iterate;
+
+        double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const override;
 
         std::unique_ptr<LightMandelbrotPerturbator> reuse(const FractalAttribute &calc, double dcMax, ApproxTableCache &tableRef);
 
         const LightMandelbrotReference *getReference() const override;
 
         LightMPATable &getTable() const;
+
+        // The table is absent when the reference was terminated before one was built.
+        const LightMPATable *getTableOrNull() const { return table.get(); }
+
+        // The reuse offset iterate() adds to every dc.
+        std::array<double, 2> getOffset() const { return {offR, offI}; }
 
         double getDcMax() const;
 

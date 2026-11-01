@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-22
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #pragma once
@@ -10,6 +11,8 @@
 #include <charconv>
 #include <filesystem>
 #include <fstream>
+#include <set>
+#include <string>
 #include <windows.h>
 
 namespace merutilm::rff2::workspace {
@@ -19,7 +22,8 @@ namespace merutilm::rff2::workspace {
 
       public:
         static bool load(const std::filesystem::path &path, EffectNavigation &navigation,
-                         PaneWidths *widths = nullptr, AppearancePanelLayout *panels = nullptr) {
+                         PaneWidths *widths = nullptr, AppearancePanelLayout *panels = nullptr,
+                         std::set<std::string> *sections = nullptr) {
             std::ifstream input(path);
             std::string line;
             if (!std::getline(input, line) || line != "RFF_WORKSPACE_FAVORITES_1") {
@@ -28,6 +32,7 @@ namespace merutilm::rff2::workspace {
             EffectNavigation loadedNavigation;
             PaneWidths loadedWidths = widths ? *widths : PaneWidths{};
             AppearancePanelLayout loadedPanels;
+            std::set<std::string> loadedSections;
             while (std::getline(input, line)) {
                 loadedPanels.read(line);
                 const auto readWidth = [&](std::string_view prefix, int &target, int minimum, int maximum) {
@@ -46,6 +51,11 @@ namespace merutilm::rff2::workspace {
                           PaneWidths::maximumNavigation);
                 readWidth("inspector-width=", loadedWidths.inspector, PaneWidths::minimumInspector,
                           PaneWidths::maximumInspector);
+                // Favorite sections of the settings pages; versions without them skip the line as unknown.
+                if (line.starts_with("section=") && line.size() > 8) {
+                    loadedSections.insert(line.substr(8));
+                    continue;
+                }
                 if (line.starts_with("recent=")) {
                     const auto key = std::string_view(line).substr(7);
                     const auto entry = std::find(keys.begin(), keys.end(), key);
@@ -74,11 +84,15 @@ namespace merutilm::rff2::workspace {
             if (panels) {
                 *panels = loadedPanels;
             }
+            if (sections) {
+                *sections = std::move(loadedSections);
+            }
             return true;
         }
 
         static bool save(const std::filesystem::path &path, const EffectNavigation &navigation,
-                         const PaneWidths *widths = nullptr, const AppearancePanelLayout *panels = nullptr) {
+                         const PaneWidths *widths = nullptr, const AppearancePanelLayout *panels = nullptr,
+                         const std::set<std::string> *sections = nullptr) {
             if (path.empty()) {
                 return true;
             }
@@ -107,6 +121,11 @@ namespace merutilm::rff2::workspace {
                 }
                 if (panels) {
                     panels->write(output);
+                }
+                if (sections) {
+                    for (const auto &section : *sections) {
+                        output << "section=" << section << '\n';
+                    }
                 }
                 output.close();
                 if (!output) {

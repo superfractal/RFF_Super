@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-04.
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "fp_complex.h"
@@ -17,35 +18,6 @@ namespace merutilm::rff2 {
     }
 
 
-    fp_decimal &fp_complex::get_real() {
-        return real;
-    }
-
-    fp_decimal &fp_complex::get_imag() {
-        return imag;
-    }
-
-
-    std::string fp_complex::to_string() const {
-        const std::string re = real.to_string();
-        const std::string im = imag.to_string() + "i";
-
-        if (real.is_zero() && imag.is_zero()) {
-            return "0";
-        }
-        if (real.is_zero()) {
-            return im;
-        }
-        if (imag.is_zero()) {
-            return re;
-        }
-
-        if (imag.is_positive()) {
-            return re + "+" + im;
-        }
-
-        return re + im;
-    }
 
     fp_complex fp_complex::addCenterDouble(const dex re, const dex im, const int exp10) const {
         auto calc = edit(exp10);

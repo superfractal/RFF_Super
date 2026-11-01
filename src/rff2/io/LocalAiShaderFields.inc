@@ -1,4 +1,5 @@
 // Modified by GPT-6 on 2026-09-21, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-22, 2026-10-23
 #define AI_FIELD(member, label, minimum, maximum)                                                            \
     appendShaderField(                                                                                       \
         registeredFields, registeredAddresses, referenceShader, #member, label,                              \
@@ -38,9 +39,12 @@ AI_FIELD(palette.bandOrnamentSize, "Band Line / Ornament size", .25, 3);
 AI_FIELD(palette.bandOrnamentDensity, "Band Line / Ornament density", .25, 2);
 AI_FIELD(palette.bandOrnamentInset, "Band Line / Ornament inset", 0, .25);
 AI_FIELD(palette.bandLineGroove, "Band Line / Groove enabled", 0, 1);
-AI_FIELD(palette.grooveDepth, "Band Line / Groove depth", 0, 5);
+AI_FIELD(palette.grooveDepth, "Band Line / Groove depth", 0, 20);
 AI_FIELD(palette.grooveWidth, "Band Line / Groove width", 0, .5);
 AI_FIELD(palette.grooveAuto, "Band Line / Automatic groove", 0, 1);
+AI_FIELD(palette.grooveSmooth, "Band Line / Smooth grooves", 0, 1);
+AI_FIELD(palette.grooveRounded, "Band Line / Rounded bands", 0, 1);
+AI_FIELD(palette.grooveCreaseBlur, "Band Line / Rounded band crease blur", 0, 24);
 AI_ENUM(slope.shadingBlend, "Slope / Shading blend", 0, 2, R"({"0":"Overlay","2":"OKLab lightness"})");
 AI_ENUM(slope.lightBlend, "Slope / Light blend", 0, 1, R"({"0":"Direct","1":"Linear"})");
 AI_ENUM(slope.tintBlend, "Slope / Tint blend", 0, 1, R"({"0":"Multiply","1":"OKLab"})");
@@ -54,10 +58,20 @@ AI_FIELD(slope.glossColor, "Slope / Gloss color", 0, 1);
 AI_FIELD(slope.glossRelief, "Slope / Gloss relief", 0, 16);
 AI_FIELD(slope.lustreRelief, "Surface / Lustre relief enabled", 0, 1);
 AI_FIELD(slope.invertRelief, "Surface / Invert relief", 0, 1);
+AI_FIELD(slope.reliefWavesCoatOnly, "Surface / Relief waves on clear coat only", 0, 1);
+AI_FIELD(slope.coatSoftbox, "Studio / Clear coat softbox reflections", 0, 1);
+AI_ENUM(slope.studioEnvironmentSource, "Studio / Environment source", 0, 5,
+        R"({"0":"Two colors","1":"Gradient","2":"Texture layer 1","3":"Texture layer 2","4":"Texture layer 3","5":"Texture layer 4"})");
+AI_FIELD(slope.environmentBrightness, "Studio / Environment brightness", 0, 32);
+AI_FIELD(slope.environmentStop1Position, "Studio / Environment gradient stop 1 position", 0, 1);
+AI_FIELD(slope.environmentStop2Position, "Studio / Environment gradient stop 2 position", 0, 1);
+AI_FIELD(slope.environmentStop3Position, "Studio / Environment gradient stop 3 position", 0, 1);
+AI_FIELD(slope.environmentStop4Position, "Studio / Environment gradient stop 4 position", 0, 1);
 AI_FIELD(slope.reliefAutoZoom, "Surface / Automatic relief zoom", 0, 1);
 AI_FIELD(slope.layerCommon, "Surface / Common mix", 0, 1);
 AI_FIELD(slope.replaceSurfaceStyle, "Surface / Replace style", 0, 1);
 AI_ENUM(slope.surfaceBlend, "Surface / Blend", 0, 3, R"({"0":"Mix","1":"Add","2":"Multiply","3":"Screen"})");
+AI_FIELD(fog.focusSmoothKeyframes, "Fog / Smooth focus across video keyframes", 0, 1);
 AI_ENUM(fog.blurQuality, "Fog / Blur quality", 0, 1, R"({"0":"Speed","1":"Appearance"})");
 AI_FIELD(hdr.use, "HDR / Enabled", 0, 1);
 AI_FIELD(hdr.exposure, "HDR / Exposure stops", -16, 16);
@@ -102,10 +116,16 @@ for (size_t i = 0; i < EFFECT_LAYER_COUNT; ++i) {
     AI_EFFECT(syncColorAnimation, 0, 1);
     AI_EFFECT_ENUM(
         type, 0, 7,
-        R"({"0":"Rain","1":"Flame","2":"Embers","3":"Mist","4":"Heat","5":"Ripples","6":"Flow","7":"Aurora"})");
+        R"({"0":"Rain","1":"Flame","2":"Embers","3":"Mist","5":"Ripples","6":"Flow","7":"Aurora"})");
     AI_EFFECT_ENUM(blend, 0, 3, R"({"0":"Normal","1":"Add","2":"Screen","3":"Multiply"})");
     AI_EFFECT_ENUM(mask, 0, 4, R"({"0":"All","1":"Exterior","2":"Interior","3":"Bands","4":"Edge"})");
     AI_EFFECT_ENUM(rainShape, 0, 1, R"({"0":"Streaks","1":"Drops"})");
+    AI_EFFECT_ENUM(flameStyle, 0, 2, R"({"0":"Classic","1":"Turbulent","2":"BurningEdge"})");
+    AI_EFFECT_ENUM(embersStyle, 0, 2, R"({"0":"Classic","1":"Rising","2":"Burst"})");
+    AI_EFFECT_ENUM(mistStyle, 0, 2, R"({"0":"Classic","1":"Drifting","2":"Pooled"})");
+    AI_EFFECT_ENUM(ripplesStyle, 0, 2, R"({"0":"Classic","1":"Interference","2":"Caustics"})");
+    AI_EFFECT_ENUM(flowStyle, 0, 1, R"({"0":"Classic","1":"Chase"})");
+    AI_EFFECT_ENUM(auroraStyle, 0, 2, R"({"0":"Classic","1":"Curtain","2":"Ribbons"})");
 #undef AI_EFFECT
 #undef AI_EFFECT_ENUM
 }

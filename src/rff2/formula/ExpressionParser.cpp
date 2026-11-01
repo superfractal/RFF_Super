@@ -5,6 +5,7 @@
 // Modified by Opus 5 on 2026-08-16
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "ExpressionParser.h"
@@ -521,21 +522,4 @@ namespace merutilm::rff2 {
         throw std::runtime_error("Unknown operator: " + token);
     }
 
-    std::string ExpressionParser::getSupportedSyntax() {
-        return
-            "Variables: z, c, i, pi, tau, phi, e\n"
-            "Operators: + - * / ^ or ** (power, right-assoc)\n"
-            "Basic: abs, sqrt, exp, log/ln\n"
-            "Trig: sin, cos, tan, asin, acos, atan\n"
-            "Hyper: sinh, cosh, tanh\n"
-            "Complex: real(re), imag(im), conj, arg, norm\n"
-            "Fractal: rabs, iabs, riabs (Burning Ship)\n"
-            "Util: floor, ceil, round, sign\n"
-            "Imaginary: 1i, 2i, etc. (number followed by i)\n"
-            "Implicit *: 2z, 2sin(z), 2(z+c), (z+1)(z-1)\n"
-            "Examples:\n"
-            "  z^2+c (Mandelbrot)\n"
-            "  riabs(z)^2+c (Burning Ship)\n"
-            "  iabs(z^2+1)+c";
-    }
 }

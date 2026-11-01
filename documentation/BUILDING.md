@@ -1,6 +1,7 @@
 # Building RFF_Super
 
 Modified by GPT-6 on 2026-09-24, 2026-09-25, 2026-10-01.
+Modified by Opus 5.5 on 2026-10-07, 2026-10-18.
 
 This guide targets Windows x64 with the project's MSYS2 MINGW64/GCC toolchain. Run all project commands from the directory containing `CMakeLists.txt`, **not** from `documentation/`.
 
@@ -63,9 +64,9 @@ For PowerShell commands, use a session-local setting (replace the prefix if MSYS
 $env:Path = "C:\msys64\mingw64\bin;" + $env:Path
 ```
 
-For launching a locally built executable from Explorer, either add `C:\msys64\mingw64\bin` to your account's Path and start a new session, or prepare the required runtime DLLs alongside the executable using the release workflow. `MSYS2_ROOT` is not read by CMake; setting that variable alone does not configure dependency paths.
+A local (non-distribution) build copies every runtime DLL the new executable loads from the compiler's own `bin` folder into `bin/` after linking ([tools/copy_runtime_dlls.cmake](../tools/copy_runtime_dlls.cmake)), replacing any older copies there, so it can be launched from Explorer without changing Path. The Vulkan loader `vulkan-1.dll` is never copied; it comes with the GPU driver. `MSYS2_ROOT` is not read by CMake; setting that variable alone does not configure dependency paths.
 
-Do not copy the entire MSYS2 `bin` folder into the project. It contains compilers, unrelated programs, and hundreds of libraries. Old DLLs already beside the executable can take precedence over updated dependencies on PATH; keep runtime files consistent with the libraries used for the build.
+Do not copy the entire MSYS2 `bin` folder into the project. It contains compilers, unrelated programs, and hundreds of libraries. DLLs beside the executable take precedence over PATH, which is why the local build refreshes them; after an MSYS2 update, `git status` therefore shows changed DLLs in `bin/` along with the executable.
 
 ## 3. Supply GMP
 
@@ -73,7 +74,7 @@ The [official GMP package](https://packages.msys2.org/packages/mingw-w64-x86_64-
 
 Advanced local builds may supply a matching custom `include/gmp.h` and `lib/libgmp.a`. Ordinary builds search these local directories, so a stale header or library there can affect the result. Keep custom builds separate from the package-based release workflow.
 
-Distribution mode explicitly selects `libgmp.a` from `RFF_GMP_PREFIX` and uses headers from that prefix. The default is `C:/msys64/mingw64`. The release inventory verifies the static library against MSYS2 package records; an independently built GMP requires a separately documented and reviewed source/build path.
+Distribution mode explicitly selects `libgmp.a` from `RFF_GMP_PREFIX` and uses headers from that prefix. The default is `C:/msys64/mingw64`. Configuration stops unless that `libgmp.a` has the SHA-256 of the reviewed MSYS2 GMP 6.3.0-2 package (`RFF_GMP_SHA256`); a GMP update therefore needs a new review before a distribution build. The release inventory verifies the static library against MSYS2 package records; an independently built GMP requires a separately documented and reviewed source/build path.
 
 ## 4. Build
 
@@ -122,7 +123,7 @@ cmake --build build/local --parallel 2
 ./bin/RFF_Super.exe
 ```
 
-This writes `bin/RFF_Super.exe` and `shaders/*.spv`, replacing the corresponding local outputs. It links GMP by library name, so the selected local/package library determines whether an additional GMP DLL is needed. The DLL list from a distribution build must not be assumed sufficient for every local build.
+This writes `bin/RFF_Super.exe` and `shaders/*.spv`, replacing the corresponding local outputs. It links GMP statically from `lib/libgmp.a` if present, otherwise from `RFF_GMP_PREFIX/lib/libgmp.a`, so no `libgmp-10.dll` is needed; CMake warns and falls back to linking by name only when neither exists. The DLL list from a distribution build must not be assumed sufficient for every local build.
 
 For Debug, use another directory with `-DCMAKE_BUILD_TYPE=Debug -DRFF_DISTRIBUTION=OFF`. The executable is `bin/RFF_Super_Debug.exe`. `RFF_ASAN=ON` probes AddressSanitizer support; if it cannot link, CMake warns and continues without it. Distribution mode requires Release.
 

@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-18.
 // Modified by Sonnet 5 on 2026-07-06
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #pragma once
@@ -180,10 +181,6 @@ namespace merutilm::rff2 {
         const auto func = std::move(actionPerCreatingTableIteration);
         initTable(reference);
 
-        if (mpaPeriod == nullptr) {
-            return;
-        }
-
         std::vector<std::vector<PAB> > *tablePtr;
         if constexpr (std::is_same_v<LightPA, PAB>) {
             tablePtr = &tableRef.lightTable;
@@ -192,6 +189,12 @@ namespace merutilm::rff2 {
         }
         std::vector<std::vector<PAB> > &table = *tablePtr;
 
+        // A reference too short to skip builds no table, so the cache must not keep the previous view's one.
+        if (mpaPeriod == nullptr) {
+            table.clear();
+            return;
+        }
+
         const auto &tablePeriod = mpaPeriod->tablePeriod;
         const uint64_t longestPeriod = tablePeriod.back();
         const auto &tableElements = mpaPeriod->tableElements;
@@ -199,6 +202,7 @@ namespace merutilm::rff2 {
         const auto epsilonPower = mpaSettings.epsilonPower;
 
         if (longestPeriod < mpaSettings.minSkipReference) {
+            table.clear();
             return;
         }
 

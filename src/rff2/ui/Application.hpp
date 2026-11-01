@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-27, 2026-09-01
 // Modified by GPT-5 on 2026-08-23, 2026-09-02
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -66,10 +67,6 @@ namespace merutilm::rff2 {
         Application &operator=(const Application &) = delete;
 
         Application &operator=(Application &&) = delete;
-
-        vkh::EngineRef getEngine() const {
-            return *engine;
-        }
 
         void start() const;
 

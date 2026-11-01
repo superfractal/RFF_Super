@@ -7,19 +7,26 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29
 //
 
 #pragma once
+#include <algorithm>
 #include <memory>
 #include <glm/glm.hpp>
 
+#include "../attr/ShdPaletteAttribute.h"
 #include "../attr/ShdPatternAttribute.h"
+#include "../attr/ShdSlopeAttribute.h"
 #include "../attr/ShdEffectsAttribute.h"
 #include "../attr/ShdTextureAttribute.h"
+#include "../formula/OrbitTrap.h"
 #include "../../vulkan_helper/core/factory.hpp"
 #include "../../vulkan_helper/manage/DescriptorManager.hpp"
 #include "../../vulkan_helper/struct/DescriptorTemplate.hpp"
+#include "../../vulkan_helper/impl/CommandPool.hpp"
+#include "../../vulkan_helper/impl/Descriptor.hpp"
+#include "../../vulkan_helper/impl/ShaderStorage.hpp"
 
 namespace merutilm::rff2::SharedDescriptorTemplate {
     struct DescEffects final : public vkh::DescriptorTemplate {
@@ -56,7 +63,9 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_TIME_WARP_SCROLL = TARGET_TIME_PATTERN_SCROLL +
                                                             PATTERN_LAYER_COUNT * 2;
         static constexpr uint32_t TARGET_TIME_EFFECTS = TARGET_TIME_WARP_SCROLL + 2;
-        static constexpr uint32_t TARGET_TIME_COUNT = TARGET_TIME_EFFECTS + EFFECT_LAYER_COUNT * 2;
+        // The orbit trap's own palette phase, in cycles, behind the effects.
+        static constexpr uint32_t TARGET_TIME_ORBIT_TRAP_PHASE = TARGET_TIME_EFFECTS + EFFECT_LAYER_COUNT * 2;
+        static constexpr uint32_t TARGET_TIME_COUNT = TARGET_TIME_ORBIT_TRAP_PHASE + 1;
 
         void configure(const vkh::CoreRef core,
                                       std::vector<vkh::DescriptorManager> &managers) override {
@@ -88,8 +97,49 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         // Appended at the tail so the shaders that declare only the leading fields keep their offsets.
         static constexpr uint32_t TARGET_UBO_ITERATION_CANVAS_EXTENT = 4;
         static constexpr uint32_t TARGET_UBO_ITERATION_CANVAS_OFFSET = 5;
+        // Orbit trap planes held per pixel, the live buffer's in x and the video's zoomed keyframe's in y; a shader's
+        // length() of a trap buffer past 2 GiB comes back wrong, so the host says how much it uploaded.
+        static constexpr uint32_t TARGET_UBO_ITERATION_TRAP_PLANES = 6;
 
         static constexpr uint32_t TARGET_SSBO_ITERATION_BUFFER = 0;
+
+        // Three floats per pixel of Lustre relief, filled by the slope pass's INITIALIZE stage for the ordered layers after it.
+        static constexpr uint32_t BINDING_SSBO_RELIEF_CACHE = 2;
+        static constexpr uint32_t RELIEF_CACHE_FLOATS_PER_PIXEL = 3;
+        // chaos_irregularity() per pixel, filled by vk_chaos_irregularity.comp for the fog pass's defocus.
+        static constexpr uint32_t BINDING_SSBO_CHAOS_CACHE = 3;
+        // Each cache buffer holds a single float array.
+        static constexpr uint32_t TARGET_SSBO_FLOAT_CACHE = 0;
+        // The angle of z where each pixel escaped, copied in from RenderSceneRenderer's staging buffer; 0 where there is none.
+        static constexpr uint32_t BINDING_SSBO_ESCAPE_ANGLE = 4;
+        // Each pixel's narrowly feathered defocus, filled by vk_chaos_irregularity.comp's second stage for Chaos Edge Protection.
+        static constexpr uint32_t BINDING_SSBO_CHAOS_DEFOCUS = 5;
+        // Each pixel's OrbitTrap, plane-major, copied in from RenderSceneRenderer's staging buffer; iteration plane 0 where there is none.
+        static constexpr uint32_t BINDING_SSBO_ORBIT_TRAP = 6;
+
+        // Sizes both per-pixel caches to the iteration buffer whenever it is resized; the caller then queues their bindings.
+        static void resizeCaches(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
+                                 vkh::CommandPoolRef commandPool) {
+            resizeFloatCache(descriptor, BINDING_SSBO_RELIEF_CACHE, width * height * RELIEF_CACHE_FLOATS_PER_PIXEL, commandPool);
+            resizeFloatCache(descriptor, BINDING_SSBO_CHAOS_CACHE, width * height, commandPool);
+            resizeFloatCache(descriptor, BINDING_SSBO_CHAOS_DEFOCUS, width * height, commandPool);
+        }
+
+        // Sized apart from the caches: only the live view's palette pass fills this buffer, so only it resizes it.
+        static void resizeEscapeAngles(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
+                                       const uint32_t trapPlanes, vkh::CommandPoolRef commandPool) {
+            resizeFloatCache(descriptor, BINDING_SSBO_ESCAPE_ANGLE, width * height, commandPool);
+            resizeOrbitTraps(descriptor, width, height, trapPlanes, commandPool);
+        }
+
+        // trapPlanes must equal the staging buffer's, since the whole staging buffer is copied in.
+        static void resizeOrbitTraps(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
+                                     const uint32_t trapPlanes, vkh::CommandPoolRef commandPool) {
+            resizeFloatCache(descriptor, BINDING_SSBO_ORBIT_TRAP, width * height * trapPlanes, commandPool);
+            const auto &info = *descriptor.get<vkh::Uniform>(0, BINDING_UBO_ITERATION_INFO);
+            info.getHostObject().set<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_PLANES, {trapPlanes, 0});
+            info.update(TARGET_UBO_ITERATION_TRAP_PLANES);
+        }
 
         void configure(const vkh::CoreRef core,
                                       std::vector<vkh::DescriptorManager> &managers) override {
@@ -102,6 +152,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             infoManager->reserve<double>(TARGET_UBO_ITERATION_MAX_ZOOMED);
             infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_CANVAS_EXTENT);
             infoManager->reserve<glm::ivec2>(TARGET_UBO_ITERATION_CANVAS_OFFSET);
+            infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_PLANES);
 
             auto bufferManager = vkh::factory::create<vkh::HostDataObjectManager>();
             bufferManager->reserveArray<double>(TARGET_SSBO_ITERATION_BUFFER, 1);
@@ -112,8 +163,29 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
                                                                 vkh::BufferLock::LOCK_ONLY, false);
             descManager->appendUBO(BINDING_UBO_ITERATION_INFO, STAGE, std::move(ubo));
             descManager->appendSSBO(BINDING_SSBO_ITERATION_MATRIX, STAGE, std::move(ssbo));
+            descManager->appendSSBO(BINDING_SSBO_RELIEF_CACHE, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_CHAOS_CACHE, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_ESCAPE_ANGLE, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_CHAOS_DEFOCUS, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_ORBIT_TRAP, STAGE, createFloatCache(core));
 
             managers.emplace_back(std::move(descManager));
+        }
+
+    private:
+        // A device-local float array the shaders both write and read; resizeCaches gives it its real size.
+        static vkh::ShaderStorage createFloatCache(const vkh::CoreRef core) {
+            auto layout = vkh::factory::create<vkh::HostDataObjectManager>();
+            layout->reserveArray<float>(TARGET_SSBO_FLOAT_CACHE, 1);
+            return vkh::factory::create<vkh::ShaderStorage>(core, std::move(layout), vkh::BufferLock::LOCK_ONLY, false);
+        }
+
+        static void resizeFloatCache(vkh::DescriptorRef descriptor, const uint32_t binding, const uint32_t floats,
+                                     vkh::CommandPoolRef commandPool) {
+            auto &cache = *descriptor.get<vkh::ShaderStorage>(0, binding);
+            cache.getHostObject().resizeArray<float>(TARGET_SSBO_FLOAT_CACHE, std::max<uint32_t>(floats, 1));
+            cache.reloadBuffer();
+            cache.lock(commandPool);
         }
     };
 
@@ -145,7 +217,27 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         // reserve order, and the reserve carries the pad that drops the array onto the 16-byte
         // boundary the shader's own layout gives it.
         static constexpr uint32_t TARGET_PALETTE_CYCLE_BIAS = 14;
-        static constexpr uint32_t TARGET_PALETTE_COLORS = 15;
+        static constexpr uint32_t TARGET_PALETTE_ESCAPE_ANGLE_MODE = 15;
+        static constexpr uint32_t TARGET_PALETTE_ESCAPE_ANGLE_AMOUNT = 16;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_MODE = 17;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_AMOUNT = 18;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_WIDTH = 19;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_DENSITY = 20;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_INTERIOR = 21;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_OFFSET = 22;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_GLOW_STRENGTH = 23;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_GLOW_SHARPNESS = 24;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_WIDTH = 25;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_GLOW_COLOR = 26;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_BLEND = 27;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_DARKNESS = 28;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_HOLD = 29;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_MAPPING = 30;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_ARMS = 31;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_RELIEF = 32;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH = 33;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH = 34;
+        static constexpr uint32_t TARGET_PALETTE_COLORS = 35;
 
         void configure(const vkh::CoreRef core,
                                       std::vector<vkh::DescriptorManager> &managers) override {
@@ -169,7 +261,30 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             // Fixed-size double array sits before the runtime colors array (which must stay last).
             bufferManager->reserveArray<double>(TARGET_PALETTE_STATIC_COLOR_ITERATIONS, MAX_STATIC_COLORS);
 
-            bufferManager->reserve<float>(TARGET_PALETTE_CYCLE_BIAS, 12);
+            // Eight 4-byte fields from offset 208 bring the color array to 240 with no pad.
+            bufferManager->reserve<float>(TARGET_PALETTE_CYCLE_BIAS);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ESCAPE_ANGLE_MODE);
+            bufferManager->reserve<float>(TARGET_PALETTE_ESCAPE_ANGLE_AMOUNT);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_MODE);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_AMOUNT);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_WIDTH);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_DENSITY);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_INTERIOR);
+            // Four 4-byte fields from 240 put the glow color on 256, four more after it end at 288, a 16-byte boundary.
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_OFFSET);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_GLOW_STRENGTH);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_GLOW_SHARPNESS);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_WIDTH);
+            bufferManager->reserve<glm::vec4>(TARGET_PALETTE_ORBIT_TRAP_GLOW_COLOR);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_BLEND);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_DARKNESS);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_HOLD);
+            // The mapping takes the old pad at 284; five more 4-byte fields from 288 end at 304, a 16-byte boundary.
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_MAPPING);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_ARMS);
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_RELIEF);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH);
             bufferManager->reserveArray<glm::vec4>(TARGET_PALETTE_COLORS, 0);
 
             auto ssbo = vkh::factory::create<vkh::ShaderStorage>(core, std::move(bufferManager),
@@ -178,6 +293,29 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
 
             descManager->appendSSBO(BINDING_SSBO_PALETTE, STAGE, std::move(ssbo));
             managers.emplace_back(std::move(descManager));
+        }
+
+        // The Orbit Trap Coloring fields, written alike by the live palette pass and the video merge pass; the relief takes Slope's light.
+        static void setOrbitTrap(const vkh::HostDataObjectRef host, const ShdPaletteAttribute &palette,
+                                 const ShdSlopeAttribute &slope) {
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_MODE, static_cast<uint32_t>(palette.orbitTrapColoring));
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_AMOUNT, palette.orbitTrapAmount);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_WIDTH, palette.orbitTrapWidth);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_DENSITY, palette.orbitTrapDensity);
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_INTERIOR, static_cast<uint32_t>(palette.orbitTrapRegion));
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_OFFSET, palette.orbitTrapOffset);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_GLOW_STRENGTH, palette.orbitTrapGlowStrength);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_GLOW_SHARPNESS, palette.orbitTrapGlowSharpness);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_WIDTH, palette.orbitTrapCellBorderWidth);
+            host.set<glm::vec4>(TARGET_PALETTE_ORBIT_TRAP_GLOW_COLOR, palette.orbitTrapGlowColor);
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_BLEND, static_cast<uint32_t>(palette.orbitTrapBlend));
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_CELL_BORDER_DARKNESS, palette.orbitTrapCellBorderDarkness);
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_HOLD, palette.orbitTrapHoldColorAnimation ? 1u : 0u);
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_MAPPING, static_cast<uint32_t>(palette.orbitTrapMapping));
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_ARMS, static_cast<float>(palette.orbitTrapArms));
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_RELIEF, palette.orbitTrapRelief ? 1u : 0u);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH, slope.azimuth);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH, slope.zenith);
         }
     };
 
@@ -394,6 +532,17 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_STUDIO_ENVIRONMENT_ROTATION = 162;
         static constexpr uint32_t TARGET_STUDIO_ENVIRONMENT_FOLLOW = 163;
         static constexpr uint32_t TARGET_REPLACE_SURFACE_STYLE = 164;
+        static constexpr uint32_t TARGET_SURFACE_WAVES_COAT_ONLY = 165;
+        static constexpr uint32_t TARGET_STUDIO_COAT_SOFTBOX = 166;
+        static constexpr uint32_t TARGET_STUDIO_ENVIRONMENT_SOURCE = 167;
+        // Four positions, then four r, g, b triples, one float each.
+        static constexpr uint32_t TARGET_ENVIRONMENT_STOP_POSITION_1 = 168;
+        static constexpr uint32_t TARGET_ENVIRONMENT_STOP_COLOR_1_R = 172;
+        static constexpr uint32_t ENVIRONMENT_STOP_COUNT = 4;
+        static constexpr uint32_t TARGET_ENVIRONMENT_BRIGHTNESS = 184;
+        static constexpr uint32_t TARGET_GROOVE_SMOOTH = 185;
+        static constexpr uint32_t TARGET_GROOVE_ROUNDED = 186;
+        static constexpr uint32_t TARGET_GROOVE_CREASE_BLUR = 187;
 
 
 
@@ -565,6 +714,16 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_STUDIO_ENVIRONMENT_ROTATION);
             bufferManager->reserve<float>(TARGET_STUDIO_ENVIRONMENT_FOLLOW);
             bufferManager->reserve<float>(TARGET_REPLACE_SURFACE_STYLE);
+            bufferManager->reserve<float>(TARGET_SURFACE_WAVES_COAT_ONLY);
+            bufferManager->reserve<float>(TARGET_STUDIO_COAT_SOFTBOX);
+            bufferManager->reserve<float>(TARGET_STUDIO_ENVIRONMENT_SOURCE);
+            for (uint32_t i = 0; i < ENVIRONMENT_STOP_COUNT * 4; ++i) {
+                bufferManager->reserve<float>(TARGET_ENVIRONMENT_STOP_POSITION_1 + i);
+            }
+            bufferManager->reserve<float>(TARGET_ENVIRONMENT_BRIGHTNESS);
+            bufferManager->reserve<float>(TARGET_GROOVE_SMOOTH);
+            bufferManager->reserve<float>(TARGET_GROOVE_ROUNDED);
+            bufferManager->reserve<float>(TARGET_GROOVE_CREASE_BLUR);
 
 
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
@@ -608,7 +767,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
 
     struct DescFog final : public vkh::DescriptorTemplate {
         static constexpr uint32_t ID = 7;
-        static constexpr VkShaderStageFlags STAGE = VK_SHADER_STAGE_FRAGMENT_BIT;
+        // Compute as well: vk_chaos_irregularity.comp reads the chaos settings from this same block.
+        static constexpr VkShaderStageFlags STAGE = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
 
         static constexpr uint32_t BINDING_UBO_FOG = 0;
 
@@ -634,6 +794,14 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_FOG_CHAOS_BLUR = 18;
         static constexpr uint32_t TARGET_FOG_CHAOS_SHADE = 19;
         static constexpr uint32_t TARGET_FOG_CHAOS_LINEAR = 20;
+        static constexpr uint32_t TARGET_FOG_CHAOS_INTERIOR = 21;
+        static constexpr uint32_t TARGET_FOG_CHAOS_EDGES = 22;
+        static constexpr uint32_t TARGET_FOG_CHAOS_BOKEH_BLADES = 23;
+        static constexpr uint32_t TARGET_FOG_CHAOS_BOKEH_ROTATION = 24;
+        static constexpr uint32_t TARGET_FOG_CHAOS_BOKEH_ASPECT = 25;
+        // Smooth Focus Across Keyframes, and the keyframe depth the video is drawing (0 outside a video).
+        static constexpr uint32_t TARGET_FOG_FOCUS_SMOOTH = 26;
+        static constexpr uint32_t TARGET_FOG_FOCUS_FRAME = 27;
 
 
         void configure(const vkh::CoreRef core,
@@ -662,6 +830,13 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_BLUR);
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_SHADE);
             bufferManager->reserve<float>(TARGET_FOG_CHAOS_LINEAR);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_INTERIOR);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_EDGES);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_BOKEH_BLADES);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_BOKEH_ROTATION);
+            bufferManager->reserve<float>(TARGET_FOG_CHAOS_BOKEH_ASPECT);
+            bufferManager->reserve<float>(TARGET_FOG_FOCUS_SMOOTH);
+            bufferManager->reserve<float>(TARGET_FOG_FOCUS_FRAME);
 
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
             descManager->appendUBO(BINDING_UBO_FOG, STAGE, std::move(ubo));

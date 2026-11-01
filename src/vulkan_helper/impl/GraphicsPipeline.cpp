@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-23
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-13, 2026-10-21
 //
 
 #include "GraphicsPipeline.hpp"
@@ -20,7 +21,8 @@ namespace merutilm::vkh {
         : PipelineAbstract(windowContext, pipelineLayout, std::move(pipelineManager)),
           renderContextIndex(renderContextIndex), primarySubpassIndex(primarySubpassIndex),
           vertexBuffer(vertexBuffer), indexBuffer(indexBuffer) {
-        prepare([this] { GraphicsPipelineImpl::init(); });
+        // The render pass is read here, on the window's thread: a resize may replace it while the compile runs.
+        prepare([this, target = currentTarget()] { create(target); });
     }
 
     GraphicsPipelineImpl::~GraphicsPipelineImpl() {
@@ -39,7 +41,16 @@ namespace merutilm::vkh {
     }
 
 
+    GraphicsPipelineImpl::Target GraphicsPipelineImpl::currentTarget() const {
+        const auto *renderPass = wc.getRenderContext(renderContextIndex).getRenderPass();
+        return {renderPass->getRenderPassHandle()};
+    }
+
     void GraphicsPipelineImpl::init() {
+        create(currentTarget());
+    }
+
+    void GraphicsPipelineImpl::create(const Target target) {
         if (pipeline != VK_NULL_HANDLE) {
             throw exception_invalid_state("Graphics pipeline is already initialized");
         }
@@ -186,7 +197,7 @@ namespace merutilm::vkh {
             .pColorBlendState = &colorBlendStateCreateInfo,
             .pDynamicState = &dynamicState,
             .layout = pipelineLayout.getLayoutHandle(),
-            .renderPass = wc.getRenderContext(renderContextIndex).getRenderPass()->getRenderPassHandle(),
+            .renderPass = target.renderPass,
             .subpass = primarySubpassIndex,
             .basePipelineHandle = nullptr,
             .basePipelineIndex = -1

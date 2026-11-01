@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-30. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-21, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-28, 2026-10-29. -->
 # Shader settings: a complete feature overview
 
 [Main guide](SETTINGS_GUIDE.md) · [Individual fields and defaults](settings-reference.md) · [Rendered comparisons](visual-comparisons.md) · [24 additional shader comparisons](shader-comparisons.md)
@@ -16,18 +16,20 @@ Use this page to understand the purpose of each shader feature before looking up
 | Pattern | Four generated pattern layers | [Patterns](#patterns) |
 | Warp | Displacement of appearance coordinates | [Domain warp](#domain-warp) |
 | Stripe | Iteration-based stripe shading | [Stripe](#stripe) |
-| Slope | Lighting & Relief controls | [Lighting and relief](#lighting-and-relief) |
-| Color | Color Correction controls in Finishing | [Color correction](#color-correction) |
-| Effects | Four Animated Materials layers | [Animated materials](#animated-materials) |
+| Lighting & Relief | Lighting & Relief controls | [Lighting and relief](#lighting-and-relief) |
+| Color Correction | Color Correction controls in Finishing | [Color correction](#color-correction) |
+| Animated Materials | Four Animated Materials layers | [Animated materials](#animated-materials) |
 | Fog | Fog, with Focus Band and Chaos Blur in Finishing | [Fog and selective blur](#fog-and-selective-blur) |
 | Bloom | Bright-area glow | [Bloom](#bloom) |
-| HDR | HDR & Tone Mapping in the output settings | [HDR and tone mapping](#hdr-and-tone-mapping) |
+| HDR & Tone Mapping | HDR & Tone Mapping in the output settings | [HDR and tone mapping](#hdr-and-tone-mapping) |
 | Shader Layers | Order and visibility of compositing contributions | [Shader Layers](#shader-layers) |
+| Orbit Trap | Palette from each orbit's nearest approach to a trap shape | [Orbit trap coloring](#orbit-trap-coloring) |
+| Other | Escape Angle Coloring | [Escape angle coloring](#escape-angle-coloring) |
 | Load KFR Color | Opens the palette import workflow | [Imports and presets](#imports-and-presets) |
-| Import Color | Opens the palette import workflow | [Imports and presets](#imports-and-presets) |
+| Import Color | Opens the palette's Colors from Settings section | [Imports and presets](#imports-and-presets) |
 | Local AI appearance | Optional local-model appearance workflow | [Imports and presets](#imports-and-presets) |
 
-**Surface editing is also part of shader appearance**, even though its material/style controls are presented separately from the Shader menu's Slope form. See [Studio and surface styles](#studio-and-surface-styles). Color animation controls live in Animation; they are summarized under [Movement](#movement).
+**Surface editing is also part of shader appearance**, even though its material/style controls are presented separately from the Shader menu's Lighting & Relief form. See [Studio and surface styles](#studio-and-surface-styles). Color animation controls live in Animation; they are summarized under [Movement](#movement).
 
 ## Palette and band lines
 
@@ -39,7 +41,7 @@ Palette controls turn iteration values into colors. Changing them usually recolo
 | Color distribution | **Cycle Bias** and **Cycle Curve** redistribute positions within a cycle. **Seamless (Mirror)** mirrors repetition. **Color Smoothing** selects discrete, normal, or reversed transitions; **Color Interpolation** selects RGB, OKLab, or Linear RGB blending. |
 | Interior and palette highlights | **Mandelbrot Color** colors interior/iteration-limit pixels. **Palette Gloss** and its **Gloss Color** add cycle-linked highlights. This is separate from relief Gloss below. |
 | Basic band lines | **Band Lines**, **Lines per Cycle**, **Line Width**, **Line Opacity**, **Line Softness**, and **Line Color** define the repeated contours. Opacity 0 hides the contribution. |
-| Recessed grooves | **Recessed Grooves** adds a relief groove. **Auto Groove** derives the shape from the band-line setup; **Groove Depth** and **Groove Width** shape the manual response. |
+| Recessed grooves | **Recessed Grooves** adds a relief groove. **Rounded Bands** swells each band into a rounded cord instead, with the lines as the creases between cords, and **Crease Blur** softens those creases. **Auto Groove** derives the shape from the band-line setup; **Smooth Grooves** keeps them from reading as thin black lines; **Groove Depth** and **Groove Width** shape the manual response. |
 | Spines and branches | **Spine Amount**, **Spine Length**, **Spine Density**, and **Branch Amount** decorate the contours. Amount 0 removes the decoration. They use the band-line color, width, and opacity; Studio is not required. |
 | Ornaments | **Ornament Amount**, **Ornament Size**, **Ornament Density**, and **Ornament Inset** control ornamental detail and placement along the lines. They are also band-line controls, independent of Studio. |
 | Line glow | **Line Glow**, **Glow Width**, and **Glow Color** add contour glow. These share underlying values with the legacy surface rim controls; they are not the directional Rim Light controls. |
@@ -85,7 +87,7 @@ Lighting works with the apparent surface derived from iteration data. Test these
 | Local light tone | **Slope Brightness**, **Slope Gamma**, **Highlight Knee**, and **Light Blend** shape the lighting response. These are distinct from final Color Correction and HDR tone mapping. |
 | Directional rim light | **Rim Intensity**, **Rim Power**, and **Rim Color** brighten rims; power changes concentration. This rim footprint can also mask Fog. |
 | Relief Gloss | **Gloss Intensity**, **Gloss Source**, **Gloss Relief**, **Gloss Bands**, **Gloss Sharpness**, **Gloss Phase**, and **Gloss Color** create repeated highlights from the chosen relief source. They do not edit Palette Gloss. |
-| Lustre relief | **Lustre Relief**, **Lustre Depth**, **Normal Smoothing**, **AO Radius**, and **Boundary Reflection Guard** control the alternate relief and its boundary/reflection response. **Invert Relief** reverses its orientation. **Relief Waves** and **Wave Frequency** add modulation. |
+| Lustre relief | **Lustre Relief**, **Lustre Depth**, **Normal Smoothing**, **AO Radius**, and **Boundary Reflection Guard** control the alternate relief and its boundary/reflection response. **Invert Relief** reverses its orientation. **Relief Waves** and **Wave Frequency** add modulation; **Waves on Clear Coat Only** keeps that modulation in the clear-coat highlights alone. |
 | Zoom compensation | **Auto Zoom Compensation** and **Zoom Reference** keep Lustre behavior relative to a reference zoom. **Use Current Zoom** captures that reference. |
 
 [Light-direction and slope comparisons](visual-comparisons.md#lighting) · [All lighting fields](settings-reference.md#lighting--relief)
@@ -130,7 +132,7 @@ The reset menu has different scopes: reset one selected value/color, **Reset eff
 
 | Feature | Controls and result |
 | --- | --- |
-| Material | **Roughness** spreads Studio reflections; **Metalness** changes the metallic response; **Index of Refraction** controls dielectric reflection. **Clearcoat** adds a coating; **Coat Roughness** spreads that coating's reflections. |
+| Material | **Roughness** spreads Studio reflections; **Metalness** changes the metallic response; **Index of Refraction** controls dielectric reflection. **Clearcoat** adds a coating; **Coat Roughness** spreads that coating's reflections; **Coat Softbox** makes the coating reflect the key and fill lights as small rectangular softboxes instead of round highlights. **Environment Source** picks what both reflect — the original two colors, a four-stop **Gradient**, or a texture layer read as a 360-degree panorama — and **Environment Brightness** sets how brightly the gradient or image shines. |
 | Material presets | **Bronze**, **Pearl**, **Obsidian**, and **Ceramic** (Lighting & Relief → Material Presets) turn Studio on and set Roughness, Metalness, Clearcoat, Coat Roughness, Specular Intensity, Specular Anisotropy, Iridescence, and Film Thickness together as one undoable edit. They are starting points; adjust any of those controls afterward. |
 | Studio lighting | **Direct Light** controls direct illumination; **Studio Reflections** controls the environment contribution. **Environment Rotation** rotates the environment; **Follow Light Direction** couples it to the main light direction, from independent at 0 to full follow at 1. |
 | Reflection shaping | **Reflection Detail**, **Reflection Contrast**, **Reflection Brightness**, and **Reflection Curvature** shape reflection structure. **Specular Antialiasing** reduces harsh specular variation; it is not a substitute for image SSAA. |
@@ -288,16 +290,15 @@ Each of four independent layers has **Enabled**, **Effect Type**, **Blend**, **M
 
 | Effect Type | Visual purpose |
 | --- | --- |
-| Rain | Rain-shaped streaks/drops; **Rain Shape** and **Drop Size** specialize this type. |
-| Flame | Flowing flame-like surface highlights. |
-| Embers | Scattered ember-like luminous details. |
-| Mist | Soft mist-like coverage. |
-| Heat Haze | Heat-like surface distortion treatment. |
-| Ripples | Repeating ripple-like structure. |
-| Flow Light | Flowing bands of light. |
-| Aurora | Aurora-like colored curtains. |
+| Rain | Rain-shaped streaks/drops; Effect Type offers Rain (Raindrops) and Rain (Water Streaks), and **Drop Size** specializes this type. |
+| Flame | Flowing flame-like surface highlights; Effect Type offers Flame (Classic), Flame (Turbulent) and Flame (Burning Edge). |
+| Embers | Scattered ember-like luminous details; Effect Type offers Embers (Classic), Embers (Rising Sparks) and Embers (Spark Bursts). |
+| Mist | Soft mist-like coverage; Effect Type offers Mist (Classic), Mist (Drifting) and Mist (Pooled). |
+| Ripples | Repeating ripple-like structure; Effect Type offers Ripples (Classic), Ripples (Interference) and Ripples (Caustics). |
+| Flow Light | Flowing bands of light; Effect Type offers Flow Light (Classic) and Flow Light (Band Chase). |
+| Aurora | Aurora-like colored curtains; Effect Type offers Aurora (Classic), Aurora (Ray Curtain) and Aurora (Ribbons). |
 
-**Surface Scale**, **Density**, **Shape Length**, **Shape Width**, **Surface Depth**, **Glow**, **Primary Color**, **Secondary Color**, and **Seed** shape the selected effect. Their interpretation depends on the type; Rain Shape does not select a flame shape. **Speed**, **Evolution**, and **Flow Bend** control its motion. **Sync Color Animation** couples its clock to color animation. **Band Period** sets the iteration period used by the band mask. Check the mask and motion clock before deciding a control is ineffective.
+**Surface Scale**, **Density**, **Shape Length**, **Shape Width**, **Surface Depth**, **Glow**, **Primary Color**, **Secondary Color**, and **Seed** shape the selected effect. Their interpretation depends on the type. **Speed**, **Evolution**, and **Flow Bend** control its motion. **Sync Color Animation** couples its clock to color animation. **Band Period** sets the iteration period used by the band mask. Check the mask and motion clock before deciding a control is ineffective.
 
 [Flame comparison](SETTINGS_GUIDE.md#textures-patterns-warp-and-stripes) · [All Animated Materials fields](settings-reference.md#animated-materials)
 
@@ -326,7 +327,7 @@ Color Correction's Exposure is not measured in stops. **HDR Exposure** is a diff
 | Fog | **Radius** and **Opacity** mix blurred color. **Center Start** and **Invert Falloff** shape screen-space coverage. |
 | Rim-masked fog | **Rim Mask**, **Rim Mask Boost**, and **Rim Blur** confine/soften fog around the directional rim footprint. A useful rim contribution is needed to see the mask. |
 | Focus Band | **Focus Amount**, **Focus Depth**, **Focus Range**, **Focus Falloff**, and **Focus Blur** keep an iteration-depth band sharp and blur outside it. This is not physical camera-distance depth of field. |
-| Chaos Blur | **Chaos Amount**, **Chaos Detail Scale**, **Chaos Threshold**, **Chaos Transition**, **Chaos Feather**, and **Chaos Blur Radius** select and soften intricate regions. **Chaos Shade** darkens the selected regions, down to black. **Chaos Blur Averaging** chooses whether the blur averages in gamma space, which keeps dark gaps dark, or in linear space, which lets bright detail spread. |
+| Chaos Blur | **Chaos Amount**, **Chaos Detail Scale**, **Chaos Threshold**, **Chaos Transition**, **Chaos Feather**, and **Chaos Blur Radius** select and soften intricate regions. **Chaos Shade** darkens the selected regions, down to black. **Chaos Interior** also selects areas that reach Max Iterations, such as the black interior. **Chaos Blur Averaging** chooses whether the blur averages in gamma space, which keeps dark gaps dark, or in linear space, which lets bright detail spread. **Chaos Edge Protection** keeps smooth surfaces beside the blurred regions from bleeding into the blur. **Chaos Bokeh Shape**, **Chaos Bokeh Rotation** and **Chaos Bokeh Aspect** turn the round aperture into a polygon or an oval. |
 | Blur Quality | Speed caps relevant full-resolution radii at 16 texels. Appearance permits larger radii, up to the shader's 4096-texel safety limit, and denser sampling. Small ordinary local blurs can match in both modes; Chaos Blur changes sampling density even below the 16-texel cap. |
 
 Focus Band and Chaos Blur are groups within Finishing and participate in the Fog contribution; they do not appear as separate Shader menu entries or reorderable layers.
@@ -393,19 +394,19 @@ The stack has **29 layer slots**. The list can show only currently active contri
 | Pattern 1–4 | The four generated pattern layers, separately ordered. |
 | Stripe | Iteration-based stripe shading. |
 | Lighting & Base Material | Base surface lighting/material response. |
-| Metal | Liquid Metal contribution. |
+| Liquid Metal | Liquid Metal contribution. |
 | Cyber Sigilism | Sigil styling. |
 | PHONK | PHONK contribution. |
-| Frost | Black Metal frost contribution. |
-| Sea | Deep Sea contribution. |
-| Print Material | Ukiyo-e surface/wave material. |
+| Black Metal | Black Metal frost contribution. |
+| Deep Sea | Deep Sea contribution. |
+| Ukiyo-e | Ukiyo-e surface/wave material. |
 | Material Color & Rim | Material color/rim contribution, distinct from the base light stage. |
 | Effect 1–4 | Animated Materials layers. |
 | Color Correction | Final-style color grading at its chosen position. |
 | Fog | Fog, Focus Band, and Chaos Blur processing. |
 | Bloom | Bright-area glow. |
-| HDR / Tone Mapping | Display/tonal mapping at its position in the ordered stack. |
-| Print Color Quantization | Print color reduction, separately ordered from Print Material. |
+| HDR & Tone Mapping | Display/tonal mapping at its position in the ordered stack. |
+| Print Color Quantization | Print color reduction, separately ordered from the Ukiyo-e layer. |
 | VHS Finish | VHS/nearest-sampling finish. |
 | Monochrome Finish | Monochrome/grain finish. |
 
@@ -423,6 +424,18 @@ When the pattern is below desaturation, it turns gray too. Moving Pattern 1 to t
 
 [Full comparison and settings](shader-comparisons.md#layer-order)
 
+## Orbit trap coloring
+
+**Shader > Orbit Trap** colors each pixel by how close its orbit came to a trap shape, inside the set as well as outside it. **Coloring** picks the trap: **Cross Glow** measures the nearest approach to the real and imaginary axes and glows along it (Pickover stalks); **Cellular** measures the nearest and second nearest approach to the origin and colors each cell by the iteration of its nearest approach, darkening it toward its border; **Shape** measures the nearest approach to a trap of your own, set by **Shape** (Point, Circle, Cross, Line, Grid Points, Grid Lines, Rings, Polygon, Star or Spiral), **Center Real**, **Center Imaginary**, **Radius**, **Angle** and, for Polygon and Star, **Sides**. Grid Points and Grid Lines draw tiles and mosaics, Rings concentric bands, and Spiral a winding trap. Changing the shape or its placement recalculates the view.
+
+With Shape, **Color Mapping** decides what the trap's colors follow: Distance, Angle (petals and rays turning **Arms** times per revolution) or Bands (rings of equal distance). **Amount** and **Blend Mode** lay the trap over the iteration palette, **Apply To** decides whether it colors the inside of the set, the outside, or both, and **Width**, **Glow Color**, **Glow Strength** and **Glow Sharpness** shape the light where the orbit nearly hits the trap; lower Width at deep zooms. **Relief** draws Cross Glow or Shape traps as lit, glossy tubes instead. **Offset**, **Animation Speed** and **Hold in Color Animation** control how the trap's colors move. Iterations skipped by MPA are not sampled, so the trap can differ slightly from the exact orbit.
+
+Keyframes generated with Coloring on save their traps as numbered `.rftz` files beside the maps, so the Timeline Editor preview and video export draw them too. A view opened from a map file draws as None until it is recalculated. See the [field reference](settings-reference.md#orbit-trap).
+
+## Escape angle coloring
+
+**Shader > Other** holds **Escape Angle Coloring**, which shifts the palette by the angle at which each orbit escaped. **Binary Decomposition** moves the half of every band that escaped below the real axis by **Escape Angle Amount** cycles, drawing a checkerboard along the external rays; **Angle Twist** moves every pixel by that many cycles per full turn of the angle. It applies to the live view and image export; a view opened from a map file, and video export, draw as None. See the [field reference](settings-reference.md#other).
+
 ## Movement
 
 Shader animation includes more than the **Color Animation Speed** slider. **Animation Mode**, **Flow Amount**, **Flow Scale**, **Flow Speed**, and **Swirl** shape palette motion. **Frozen Iteration Values** and **Freeze Match Tolerance** hold selected bands still. Texture/Pattern/Warp have their own follow/scroll settings; Stripe has Animation Speed; Animated Materials has its own speed/evolution controls. A static image at a fixed timestamp cannot demonstrate each speed difference.
@@ -431,9 +444,9 @@ The Timeline Editor can animate supported parameters by depth. Selecting a track
 
 ## Imports and presets
 
-**Color Settings File** accepts RFC, RFSP, KFR, or KFP in the palette import workflow. Read the source, then apply it. **Include Color Correction** additionally imports Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. This is narrower than loading a full shader preset.
+**Load KFR File** in the palette's KFR Color section reads a `.kfr` file as soon as it is chosen; **Apply KFR Colors** then puts its colors on the palette. **Shader > Import Color** opens the Colors from Settings section, which works the same way for an RFC or RFSP: **Load Settings File**, then **Apply Colors**, or **Apply Colors and Color Correction** to also import Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. Both are narrower than loading a full shader preset.
 
-**File → Save Appearance Settings / Load Appearance Settings** work with `.rfsp` appearance settings. A full `.rfc` also saves the artwork's location/configuration. External texture/audio sources are separate assets. The **Preset → Shader** menu provides preset families for palette, stripe, slope, color, fog, bloom, and full examples; a family preset replaces that component while a full example replaces the shader settings.
+**File → Save Appearance Settings** writes `.rfsp` appearance settings, and **File → Load File** opens them. A full `.rfc` also saves the artwork's location/configuration. External texture/audio sources are separate assets. The **Preset → Shader** menu provides preset families for palette, stripe, slope, color, fog, bloom, and full examples; a family preset replaces that component while a full example replaces the shader settings.
 
 **Local AI appearance** is an optional helper using a configured model server. Its menu entry is hidden by default; see [enabling optional AI tools](workspace-and-files.md#menu-visibility-and-optional-ai-entry-points). It proposes/applies appearance settings; it is not an additional GPU effect. The [detailed Local AI chapter](local-ai.md) covers setup, Generate/Apply/Undo, refinement, AI zoom, automatic videos, locator retries, and troubleshooting. The separate [Timeline AI Edit](animation-and-export.md#timeline-ai-edit) exchanges timeline JSON and image sheets.
 

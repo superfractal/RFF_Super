@@ -1,5 +1,5 @@
 //
-// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-01
+// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-08
 // Modified by Opus 5.5 on 2026-10-03
 //
 
@@ -193,6 +193,44 @@ namespace merutilm::rff2::workspace {
         const std::string_view name = id.substr(prefix.size());
         return name != "visible" && name != "decimalPlaces" && name != "interpolate" && name != "limitDisplayTime" &&
                name != "displayStart" && name != "displayEnd" && name != "custom" && name != "positionMode";
+    }
+    inline void organizeTimelineOverlay(WorkspaceForm &form) {
+        for (bool iteration : {false, true}) {
+            const std::string prefix = iteration ? "iterationOverlay." : "overlay.";
+            const int group = iteration ? 3 : 2;
+            std::vector<FormField> ordered;
+            const auto section = [&](const char *id, const wchar_t *label, bool expanded,
+                                     std::initializer_list<const char *> members) {
+                FormField heading{prefix + "section." + id, group, label, L"", [] { return std::wstring{}; }};
+                heading.editor = FormField::Editor::SECTION;
+                heading.persisted = false;
+                heading.initiallyExpanded = expanded;
+                const auto sectionId = heading.id;
+                ordered.push_back(std::move(heading));
+                for (const auto member : members) {
+                    const auto field = std::ranges::find(form.fields, prefix + member, &FormField::id);
+                    if (field == form.fields.end()) continue;
+                    auto entry = *field;
+                    entry.section = sectionId;
+                    entry.divider = false;
+                    if (entry.id == prefix + "custom") {
+                        entry.hint = L"Off keeps the original font and position. Editing position or appearance enables it automatically.";
+                    }
+                    ordered.push_back(std::move(entry));
+                }
+            };
+            section("display", L"Display Content", true, {"visible", "decimalPlaces", "interpolate", "custom"});
+            section("timing", L"Display Timing", true, {"displayStart", "displayEnd"});
+            section("position", L"Position", false, {"positionMode", "anchor", "x", "y"});
+            section("font", L"Font and Color", false, {"family", "style", "size", "color", "colorOpacity"});
+            section("outline", L"Outline", false, {"outline", "outlineWidth", "outlineColor", "outlineOpacity"});
+            section("shadow", L"Shadow", false, {"shadow", "shadowX", "shadowY", "shadowColor", "shadowOpacity"});
+            section("tools", L"Overlay Tools", false, {});
+            for (auto &action : form.actions)
+                if (action.group == group) action.section = prefix + "section.tools";
+            std::erase_if(form.fields, [&](const auto &field) { return field.id.starts_with(prefix); });
+            form.fields.insert(form.fields.end(), ordered.begin(), ordered.end());
+        }
     }
     inline void normalizeTimelineOverlay(Attribute &after, const FormDraft &draft) {
         for (bool iteration : {false, true}) {

@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-28, 2026-11-01. -->
 # RFF_Super settings guide
 
 Learn what each group of settings changes, see before-and-after renders, and understand calculation settings. The instructions are reviewed against the **October 4, 2026** source tree. Images and their recorded measurements retain their original capture dates; see [validation](validation.md).
@@ -9,7 +9,7 @@ For detailed workflows beyond shaders, open the **[complete user manual](user-ma
 
 Start with the illustrated sections below. Use the **[complete field reference](settings-reference.md)** to look up individual controls, choices, and fresh-session defaults. Saved files and presets can have different defaults.
 
-For every shader feature, including advanced Surface controls and names that differ between panels, use the **[shader feature overview](shader-overview.md)**. Its [menu map](shader-overview.md#find-a-feature-from-the-shader-menu) covers all 15 Shader menu entries, and its [coverage checklist](shader-coverage.md) maps the source groups to their descriptions. The main guide below is the illustrated introduction, not the sole description of every field.
+For every shader feature, including advanced Surface controls and names that differ between panels, use the **[shader feature overview](shader-overview.md)**. Its [menu map](shader-overview.md#find-a-feature-from-the-shader-menu) covers all 17 Shader menu entries, and its [coverage checklist](shader-coverage.md) maps the source groups to their descriptions. The main guide below is the illustrated introduction, not the sole description of every field.
 
 The overview now includes more images alongside the explanations. The **[24 additional shader comparisons](shader-comparisons.md)** cover grooves, ornaments, lighting, materials, emission, print colors, pixelation, outlines, layer order, and HDR, with before/after settings to download. Together with the original examples, there are **54 render comparisons**.
 
@@ -57,7 +57,7 @@ The comparisons use the second location and a controlled baseline: animation is 
 | --- | --- |
 | Real / Imaginary | Moves the center in the complex plane. Keep the complete decimal coordinates when copying deep locations. |
 | Log Zoom (10) | Controls the base-10 scale: adding 1 magnifies by 10 at the same canvas size. Older UI captures retain the incorrect Log Zoom (e) label. |
-| Rotation | Rotates the calculated view; also supplies yaw in panorama projections. This requires recalculation. Video Camera Rotation transforms saved source maps separately. |
+| Rotation | Rotates the calculated view; also supplies yaw in panorama projections. This requires recalculation. Camera Rotation in the Timeline Editor transforms saved source maps separately. |
 | Automatic Iterations | For Mandelbrot, derives the iteration limit from the detected period and Auto Iteration Multiplier. Fast-period-guessing stays automatic. |
 | Max Iteration | Manual escape-iteration limit when Automatic Iterations is off. Raising 1000 to 2000 permits twice as many iterations for difficult pixels; it does not double the work of pixels that already escape early. |
 | Auto Iteration Multiplier | Multiplies the detected period. For the example's period 16, 150 gives a limit of 2400; 300 gives 4800. More iterations can resolve detail that previously reached the limit. |
@@ -85,7 +85,7 @@ The objective is to calculate the same fractal with less work and manageable mem
 | Compression Criteria | A positive value sets the repeated-reference batch threshold; 0 disables reference compression. Lower positive thresholds can make shorter repeats eligible. | This is reference-orbit storage compression, separate from MPA table compression and `.rfmz` disk compression. |
 | Compression Threshold 7 → 11 | The relative matching threshold goes from `10^-7` to `10^-11`. Tighter matching can retain more data. | Higher positive values are stricter. A value of 0 produces a zero tolerance in the implementation; use **Compression Criteria = 0** to explicitly disable compression. |
 | Disable Normalization | Alters normalization of the reference compressor's representation. | An advanced storage choice. Leave it at the chosen preset's value unless you are measuring a specific large reference. |
-| Reuse Reference: Disabled / Current / Centered | Reuses an existing reference where applicable, avoiding some setup work. | The first calculation has no previous reference to reuse. Use Disabled for independent comparisons or after an incompatible location change. |
+| Reuse Reference: Disabled / Current Reference / Centered Reference | Reuses an existing reference where applicable, avoiding some setup work. | The first calculation has no previous reference to reuse. Use Disabled for independent comparisons or after an incompatible location change. |
 
 ## Resolution, performance, and image quality
 
@@ -144,7 +144,7 @@ The Palette workspace's **Palette Preview** shows the current palette under ever
 | --- | --- |
 | ![Palette without band lines](images/band-lines-before.png) | ![Palette with black band lines](images/band-lines-after.png) |
 
-Use **Selected Stop**, **Stop Position**, and **Stop Color** to edit a stop palette. **Create 8 Stops (Lossy)** resamples and replaces the existing palette representation; it is not a lossless view of the original. Preset + Seed gives repeatable generated palettes. Color Settings File imports colors from RFC, RFSP, KFR, or KFP; Include Color Correction also imports the six grading controls.
+Use **Selected Stop**, **Stop Position**, and **Stop Color** to edit a stop palette. **Create 8 Stops (Lossy)** resamples and replaces the existing palette representation; it is not a lossless view of the original. Preset + Seed gives repeatable generated palettes. In KFR Color, Load KFR File reads a `.kfr` file and Apply KFR Colors puts its colors on the palette; in Colors from Settings, Load Settings File reads an RFC or RFSP, and Apply Colors or Apply Colors and Color Correction (which also sets the six grading controls) puts it on.
 
 [More palette examples and downloadable settings](visual-comparisons.md#palette) · [Every palette field](settings-reference.md#palette)
 
@@ -202,7 +202,7 @@ Pattern Ink Mode selects a fixed Ink Color or a shifted palette color. Sharpness
 
 **Stripe** is a separate iteration-based shading effect. Choose a non-None Stripe Type, set the two intervals, and raise Opacity. Offset shifts the pattern; Animation Speed moves it over time.
 
-**Animated Materials** provides Rain, Flame, Embers, Mist, Heat Haze, Ripples, Flow Light, and Aurora. Enable a layer, select its Mask and Blend, and adjust Opacity. Density, Surface Scale, Shape Length/Width, Surface Depth, Glow, colors, and Seed shape the effect; Speed, Evolution, and Flow Bend shape its motion. Rain Shape and Drop Size are rain-specific. A static image cannot demonstrate a speed setting by itself.
+**Animated Materials** provides Rain, Flame, Embers, Mist, Ripples, Flow Light, and Aurora. Enable a layer, select its Mask and Blend, and adjust Opacity. Density, Surface Scale, Shape Length/Width, Surface Depth, Glow, colors, and Seed shape the effect; Speed, Evolution, and Flow Bend shape its motion. Effect Type also names a shape or style in parentheses, such as Rain (Water Streaks) or Flame (Turbulent); each type's Classic entry keeps its original look. Drop Size is rain-specific. A static image cannot demonstrate a speed setting by itself.
 
 | Flame layer off | Flame layer on: Opacity 0.85, Glow 1, at 2 s |
 | --- | --- |
@@ -260,8 +260,6 @@ There are three separate rates: **Rendering FPS** for the live display, **Video 
 | Zoom Step per Keyframe | The saved-map magnification ratio: 2 means neighboring maps differ by a factor of 2. Wider spacing requires fewer maps but puts more demand on transitions. |
 | Rotation / 360 Padding | Calculates a larger source area for rotation/projection. Camera Padding Scale 2 → 4 multiplies padded pixel count by 4. Existing unpadded maps do not gain missing detail when this switch changes. |
 | Render from PNG Images | Uses already-colored pictures. Iteration-based recoloring and relief need RFM/RFMZ sources; PNGs support the available image finishing path. |
-| Timeline Enabled | Applies saved parameter tracks. Keys are attached to depth, so changing zoom speed changes their timing while keeping their location. |
-| Estimated Keyframes | Preview estimate before loading a folder. It does not create maps or change the actual folder's file count. |
 | Camera Rotation / Projection / Pitch / Field of View / Range / Layout | Transforms the saved view during playback. Rotations and panorama views need suitable source coverage. |
 | Rotation Mode: Constant Period | Replaces rotation keys with a continuous turn. Seconds per Turn controls the duration, Direction sets its sign, and Start Angle sets the phase. Rotation continues during zoom holds. |
 
@@ -278,7 +276,7 @@ Add a parameter track, select a key, and set **Keyframe Depth**, **Value** (or C
 ![Three camera rotation keys at depths 10, 5, and 0, with values 0, 45, and 90 degrees](diagrams/timeline-keys.png)
 
 1. Load the saved-map sequence into the Timeline Editor. This example assumes its available depth range includes 10 through 0. Use three available depths in your own sequence if it is shorter. **Keyframe Depth is the sequence position**, not the Explore panel's Log Zoom. Playback progresses from higher to lower depth values.
-2. Set **Timeline Enabled** to On and **Rotation Mode** to **Keyframes**. Constant Period replaces rotation keys with continuous rotation.
+2. Set **Rotation Mode** to **Keyframes**. Constant Period replaces rotation keys with continuous rotation.
 3. Use **Add Parameter** to select **Camera / Rotation**. Select an existing key or use **Add Key at Playhead** to add one; a track's context menu also offers **Add Key Here**.
 4. In the inspector, set the three keys to depth/value pairs **10 / 0°**, **5 / 45°**, and **0 / 90°**, applying the edits. Keep keys at least one keyframe apart; the editor validates this spacing.
 5. Set the first two keys' **Interpolation** to **Linear**. The context menu calls this **To Next Key**: it controls the segment leaving that key.
@@ -336,6 +334,7 @@ Keep duration and resolution fixed when comparing these controls. A **10-second*
 | Compress Keyframes | Writes lossless `.rfmz` maps. File size and compression time depend on the data. Recoloring remains possible. |
 | Create Video After Keyframes | Starts video export after keyframe generation completes. |
 | Show Video Export Preview | Displays the export while it runs. Turning it off reduces display work while retaining progress/cancellation. |
+| GPU Work Split 0 → 16 | Sends each video frame to the GPU as per-pass parts, with the fractal pass in 16 horizontal bands, so no single piece of work reaches the roughly 2-second limit after which Windows resets the GPU. The video is identical; the export runs slightly slower. New documents start at 16. |
 | Pause Preview During Export / Generation | Stops competing preview work during long jobs; it does not pause the export itself. |
 | Image File / Video File / Keyframe Folder | Chooses the output destination or existing input sequence. Export does not create a missing source sequence automatically. |
 

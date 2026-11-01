@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-18.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -55,22 +56,12 @@ namespace merutilm::vkh {
                                                                    std::forward<SwapchainImgGetter>(swapchainImageContext))));
         }
 
-        template <typename Configurator>
-            requires std::is_base_of_v<RenderContextConfiguratorAbstract, Configurator>
-        [[nodiscard]] Configurator &getRenderContextConfigurator() {
-            return *dynamic_cast<Configurator *>(getRenderContext(Configurator::CONTEXT_INDEX).getConfigurator());
-        }
-
         [[nodiscard]] uint32_t getAttachmentIndex() const {
             return attachmentIndex;
         }
 
         [[nodiscard]] GraphicsContextWindowRef getWindow() const {
             return *window;
-        }
-
-        [[nodiscard]] SurfaceRef getSurface() const {
-            return *surface;
         }
 
         [[nodiscard]] SwapchainRef getSwapchain() const {

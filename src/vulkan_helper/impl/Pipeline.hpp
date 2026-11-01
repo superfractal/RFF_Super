@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-07-11.
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-20, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-13
 //
 
 #pragma once
@@ -89,6 +90,39 @@ namespace merutilm::vkh {
         }
 
 
+        // Lets a skip leave this pipeline compiling, inside a PipelinePreparation::DeferralScope only.
+        bool allowDeferral() const {
+            if (!preparation || !PipelinePreparation::DeferralScope::open) {
+                return false;
+            }
+            preparation->deferrable = true;
+            return true;
+        }
+
+        // True from a skip until the pipeline is collected; `pipeline` must not be bound meanwhile.
+        [[nodiscard]] bool isDeferred() const {
+            return preparation && preparation->deferred;
+        }
+
+        // Takes a deferred pipeline once its compile is done, rethrowing a failure; false while it still runs.
+        bool collectDeferred() {
+            if (!isDeferred() ||
+                preparation->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                return false;
+            }
+            finishPreparation();
+            return true;
+        }
+
+        // Waits for a deferred pipeline with the preparation window up, then takes it.
+        void awaitDeferred() {
+            if (!isDeferred()) {
+                return;
+            }
+            PipelinePreparation::await(preparation);
+            finishPreparation();
+        }
+
         [[nodiscard]] std::vector<VkDescriptorSet> enumerateDescriptorSets(const uint32_t frameIndex, DescIndexPicker &&descIndices = {}) const {
             std::vector<VkDescriptorSet> descriptorSets(descriptors.size());
 
@@ -113,12 +147,24 @@ namespace merutilm::vkh {
         }
         void finishPreparation() {
             if (preparation) {
+                traceBlockingWait("finishPreparation");
                 auto pending = std::move(preparation);
                 pending->result.get();
             }
         }
+        // Notes a wait that will actually block on a compile, for the skip trace.
+        void traceBlockingWait(const char *where) const noexcept {
+            try {
+                if (preparation &&
+                    preparation->result.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                    PipelinePreparation::trace(std::string(where) + " blocks on " + preparation->progress.shader);
+                }
+            } catch (...) {
+            }
+        }
         void waitPreparation() const noexcept {
             if (preparation) {
+                traceBlockingWait("destructor");
                 preparation->result.wait();
             }
         }

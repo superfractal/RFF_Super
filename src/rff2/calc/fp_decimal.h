@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-05.
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -29,13 +30,7 @@ namespace merutilm::rff2 {
 
         std::string to_string() const;
 
-        int get_exp2() const;
-
-        bool is_positive() const;
-
         bool is_zero() const;
-
-        bool is_negative() const;
 
         fp_decimal_calculator edit() const;
 

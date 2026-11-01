@@ -1,0 +1,84 @@
+//
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-09
+//
+
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_control_flow_attributes : require
+
+// Fills chaos_irregularity() once per pixel so vk_fog.frag's defocus gathers stored values instead of re-deriving each tap.
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) uniform IterUBO {
+    uvec2 extent;
+    double max_value;
+    double max_value_normal;
+    double max_value_zoomed;
+    uvec2 canvas_extent;
+    ivec2 canvas_offset;
+} iteration_info_attr;
+
+layout (set = 0, binding = 1) buffer IterSSBO {
+    double iterations[];
+} iteration_attr;
+
+layout (set = 0, binding = 3) buffer ChaosSSBO {
+    float irregularity[];
+} chaos_cache;
+
+layout (set = 0, binding = 5) buffer ChaosDefocusSSBO {
+    float defocus[];
+} chaos_defocus_cache;
+
+// 0 fills the irregularity; 1 turns it into each pixel's defocus for Chaos Edge Protection, after stage 0 has finished.
+layout (push_constant) uniform ChaosPush {
+    uint stage;
+} chaos_push;
+
+// Must match vk_fog.frag's FogUBO, which follows DescFog's reserve order.
+layout (set = 1, binding = 0) uniform FogUBO {
+    float radius;
+    float opacity;
+    float rim_mask;
+    float rim_mask_boost;
+    float rim_blur;
+    float center_start;
+    float center_invert;
+    float focus_amount;
+    float focus_ratio;
+    float focus_range;
+    float focus_falloff;
+    float focus_blur;
+    float blur_quality;
+    float chaos_amount;
+    float chaos_scale;
+    float chaos_threshold;
+    float chaos_transition;
+    float chaos_feather;
+    float chaos_blur;
+    float chaos_shade;
+    float chaos_linear;
+    float chaos_interior;
+    float chaos_edges;
+} fog_attr;
+
+#include "fog_iteration.glsl"
+#include "chaos_defocus.glsl"
+
+void main() {
+    uvec2 p = gl_GlobalInvocationID.xy;
+    if (fog_attr.chaos_amount <= 0.0 || p.x >= iteration_info_attr.extent.x || p.y >= iteration_info_attr.extent.y) {
+        return;
+    }
+    if (chaos_push.stage == 1u) {
+        if (fog_attr.chaos_edges <= 0.5) return;
+        // A 2-pixel feather at 1280 width: Chaos Feather's width would spread the selection over the smooth surfaces the taps must leave out, none at all leaves a grainy rim.
+        float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
+        chaos_defocus_cache.defocus[p.y * iteration_info_attr.extent.x + p.x] = chaos_defocus_at(vec2(p) + 0.5, int(2.0 * scale + 0.5));
+        return;
+    }
+    // The same radius vk_fog.frag's chaos_defocus() derives.
+    float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
+    int radius = max(int(fog_attr.chaos_scale * scale + 0.5), 1);
+    chaos_cache.irregularity[p.y * iteration_info_attr.extent.x + p.x] = chaos_irregularity(p, radius);
+}

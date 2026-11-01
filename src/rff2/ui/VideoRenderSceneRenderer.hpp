@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-09, 2026-10-21
 //
 
 #pragma once
@@ -16,6 +16,7 @@
 #include "../../vulkan_helper/impl/Renderer.hpp"
 #include "../../vulkan_helper/util/BarrierUtils.hpp"
 #include "../vulkan/CPCBoxBlur.hpp"
+#include "../vulkan/CPCChaosIrregularity.hpp"
 #include "../vulkan/CPC2MapIterationStripe.hpp"
 #include "../vulkan/CPCImageRGBA2BGR.hpp"
 #include "../vulkan/GPCBloom.hpp"
@@ -47,6 +48,7 @@ namespace merutilm::rff2 {
         GPCColor *rendererColor = nullptr;
         GPCDownsampleForBlur *rendererDownsampleForBlur = nullptr;
         CPCBoxBlur *rendererBoxBlur = nullptr;
+        CPCChaosIrregularity *rendererChaosIrregularity = nullptr;
         GPCFog *rendererFog = nullptr;
         GPCBloomThreshold *rendererBloomThreshold = nullptr;
         GPCBloom *rendererBloom = nullptr;
@@ -210,7 +212,9 @@ namespace merutilm::rff2 {
                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             };
             setLayerStage(ShaderLayerControl::INITIALIZE);
+            rendererSlope->cmdReliefCacheBeforeWrite(cbh);
             surfacePass();
+            rendererSlope->cmdReliefCacheAfterWrite(cbh);
             splitPoint(cbh, "layer surface");
             for (const auto layer : layerShader.layerOrder.layers) {
                 if (!shaderLayerActive(layerShader, layer)) {
@@ -274,6 +278,8 @@ namespace merutilm::rff2 {
             rendererBoxBlur = vkh::PipelineConfiguratorAbstract::createShaderProgram<CPCBoxBlur>(
                 configurators, engine, wc.getAttachmentIndex()
             );
+            rendererChaosIrregularity = vkh::PipelineConfiguratorAbstract::createShaderProgram<CPCChaosIrregularity>(
+                configurators, engine, wc.getAttachmentIndex());
 
             rendererFog = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCFog>(
                 configurators, engine, wc.getAttachmentIndex(),
@@ -318,6 +324,9 @@ namespace merutilm::rff2 {
             setLayerStage(layerShader.layerOrder.enabled ? ShaderLayerControl::INITIALIZE : 0);
             renderer2MapIterationStripe->setTime(currentSec, frameIndex);
             renderer2MapIterationStripe->setCurrentFrame(currentFrame, frameIndex);
+            // Written here rather than with the frame number, so the pair of keyframes and their maximum
+            // iterations the band glides between are the ones this frame is drawn from.
+            rendererFog->setFocusFrame(currentFrame);
         }
 
 
@@ -327,8 +336,8 @@ namespace merutilm::rff2 {
         // cannot carry is the iteration data the stripe and the relief are read from, and those
         // are held off in the attribute rather than here (VideoRenderScene::staticGradeBase).
         void cmdGradeChain() {
-            if (layerShader.layerOrder.enabled) { cmdOrderedLayers(); return; }
             const auto cbh = wc.getCommandBuffer().getCommandBufferHandle(frameIndex);
+            if (layerShader.layerOrder.enabled) { cmdOrderedLayers(); return; }
             const auto mfg = [this](const uint32_t index) {
                 return wc.getSharedImageContext().getImageContextMF(index)[frameIndex].image;
             };
@@ -497,6 +506,7 @@ namespace merutilm::rff2 {
                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
                 passDone(cbh, "static image");
+                rendererChaosIrregularity->cmdFill(cbh, frameIndex);
                 cmdGradeChain();
             } else {
                 vkh::BarrierUtils::cmdImageMemoryBarrier(
@@ -536,6 +546,7 @@ namespace merutilm::rff2 {
                 // [BARRIER] SSBO (Result Iteration Buffer)
                 // [BARRIER] PRIMARY (Result Image)
 
+                rendererChaosIrregularity->cmdFill(cbh, frameIndex);
                 cmdGradeChain();
 
             }

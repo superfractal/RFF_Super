@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-18
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
 //
 
 #include "LightMandelbrotPerturbator.h"
@@ -52,7 +53,9 @@ namespace merutilm::rff2 {
     }
 
 
-    double LightMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci) const {
+    double LightMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const {
+        if (escapeAngle != nullptr) *escapeAngle = 0.0f;
+        if (trap != nullptr) *trap = OrbitTrap{};
         if (state.interruptRequested()) return 0.0;
 
         const double dcr1 = static_cast<double>(dcr) + offR;
@@ -77,7 +80,17 @@ namespace merutilm::rff2 {
         // sqrt(FLT_MAX) (~1.8e19), and an infinite threshold makes "cd > bailout2" never true, so
         // every pixel would come back as max iteration.
         const double bailout2 = static_cast<double>(bailout) * static_cast<double>(bailout);
-
+        OrbitTrapAccumulator<double> traps(trap != nullptr ? &trapShape : nullptr);
+        // Every return past this point reports the traps gathered up to it.
+        const auto finish = [&](const double value) {
+            if (trap != nullptr) *trap = traps.result();
+            return value;
+        };
+        const auto sampleTrap = [&](const double r, const double i, const double norm) {
+            if (trap == nullptr || !(norm <= bailout2)) return;
+            traps.sample(std::min(std::abs(r), std::abs(i)), norm, iteration);
+            if (traps.measuresShape()) traps.sampleShape(r - trapShape.centerReal, i - trapShape.centerImag, iteration);
+        };
 
 
         while (iteration < maxIteration) {
@@ -95,7 +108,14 @@ namespace merutilm::rff2 {
                     ++absIteration;
 
                     if (iteration >= maxIteration) {
-                        return static_cast<double>(isAbs ? absIteration : maxIteration);
+                        return finish(static_cast<double>(isAbs ? absIteration : maxIteration));
+                    }
+                    // The skip's endpoint is the only point of its interval the trap sees.
+                    if (trap != nullptr) {
+                        const uint64_t index = ArrayCompressor::compress(reference->compressor, refIteration);
+                        const double sr = reference->refReal[index] + dzr;
+                        const double si = reference->refImag[index] + dzi;
+                        sampleTrap(sr, si, sr * sr + si * si);
                     }
                     continue;
                 }
@@ -127,11 +147,12 @@ namespace merutilm::rff2 {
             if (zi == 0 && zr < 0.25 && zr >= -2) {
                 //IT IS NOT SATISFIED MPA SKIP RADIUS CONDITION.
                 //WHEN THE MAX ITERATION IS HIGH, REPEATS SEMI-INFINITELY.
-                return static_cast<double>(maxIteration);
+                return finish(static_cast<double>(maxIteration));
             }
 
             pd = cd;
             cd = zr * zr + zi * zi;
+            sampleTrap(zr, zi, cd);
 
             if (refIteration == maxRefIteration || cd < dzr * dzr + dzi * dzi) {
                 refIteration = 0;
@@ -141,6 +162,7 @@ namespace merutilm::rff2 {
 
 
             if (cd > bailout2) {
+                if (escapeAngle != nullptr) *escapeAngle = escapeAngleOf(zr, zi);
                 break;
             }
 
@@ -148,17 +170,17 @@ namespace merutilm::rff2 {
         }
 
         if (isAbs) {
-            return absIteration;
+            return finish(absIteration);
         }
 
         if (iteration >= maxIteration) {
-            return static_cast<double>(maxIteration);
+            return finish(static_cast<double>(maxIteration));
         }
 
         pd = sqrt(pd);
         cd = sqrt(cd);
 
-        return getQuadraticDoubleValueIteration(iteration, pd, cd, calc.decimalizeIterationMethod, bailout);
+        return finish(getQuadraticDoubleValueIteration(iteration, pd, cd, calc.decimalizeIterationMethod, bailout));
     }
 
 

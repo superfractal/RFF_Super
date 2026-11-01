@@ -1,0 +1,24 @@
+{
+  "scope": "Actual reflection/VNDF emitters executed; generated-source assertions and isolated arithmetic. No GPU performance or image validation.",
+  "gates": {
+    "accurateColorOffOmitsFullMap": true,
+    "accurateColorOnEmitsFullMap": true,
+    "offDoesNotResetTrapGlobals": true
+  },
+  "throughputGate": {
+    "normalIncidenceDielectricF0": 0.04,
+    "specular": 1,
+    "G1": 1,
+    "squaredRGB": 0.0048,
+    "requiredMinimum": 0.01,
+    "geometryTraceAllowed": false,
+    "neutralPerChannelBoundary": 0.05773502691896258,
+    "illustrativeRadiance": 100,
+    "unoccludedWeightedRadiance": 4
+  },
+  "oneTangentCurvatureCounterexample": {
+    "surface": "z=k*x*x/2 at origin, normal up z, sampled tangent y",
+    "normalChangeAlongY": 0,
+    "normalChangeAlongXNonzeroForNonzeroK": true
+  }
+}

@@ -1,7 +1,7 @@
 //
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 // Modified by GPT-5 on 2026-09-17
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -38,6 +38,8 @@
 #include "ShaderLayerWorkspace.hpp"
 #include "DockedAppearancePanel.hpp"
 #include <memory>
+#include <map>
+#include <set>
 #include <commdlg.h>
 #include <array>
 #include <functional>
@@ -94,7 +96,7 @@ namespace merutilm::rff2::workspace {
         int selectedPanel = 0;
         std::wstring panelLayoutMessage;
         static constexpr UINT panelCommand = WM_APP + 164;
-        int activeWorkspace = 1;
+        int activeWorkspace = 0;
         RECT canvasBounds{};
         std::function<void(int, int, const RECT &)> workspaceObserver;
         bool notifyingWorkspace = false;
@@ -121,6 +123,9 @@ namespace merutilm::rff2::workspace {
         EffectsLayout::Target hoveredEffect;
         std::filesystem::path preferencesPath;
         bool preferencesSaveFailed = false;
+        // Starred sections of the settings pages as "page:section", and the filter each page last showed.
+        std::set<std::string> sectionFavorites;
+        std::map<int, EffectFilter> sectionFilters;
         std::wstring query;
         bool configDirty = false;
         SurfaceInspectorContent surfaceContent;
@@ -373,10 +378,48 @@ namespace merutilm::rff2::workspace {
         int paletteActionTop() const {
             return EffectsLayout::palette(int(navigation.rows(attribute()).size())).y;
         }
+        std::string sectionKey(int group) const {
+            std::string key = std::to_string(activeWorkspace) + ":";
+            for (const wchar_t c : page()->groups().at(group)) {
+                key.push_back(c < 0x80 ? char(c) : '_');
+            }
+            return key;
+        }
+        bool sectionFavorite(int group) const {
+            return sectionFavorites.contains(sectionKey(group));
+        }
+        // No tabs on a short page, and no Used tab where no section can be switched off.
+        std::vector<EffectFilter> sectionTabs() const {
+            if (int(page()->groups().size()) < EffectsLayout::minimumTabbedSections) {
+                return {};
+            }
+            if (page()->anyGroupSwitchable()) {
+                return {EffectFilter::ALL, EffectFilter::USED, EffectFilter::FAVORITES};
+            }
+            return {EffectFilter::ALL, EffectFilter::FAVORITES};
+        }
+        EffectFilter sectionFilter() const {
+            const auto found = sectionFilters.find(activeWorkspace);
+            const auto shown = found == sectionFilters.end() ? EffectFilter::ALL : found->second;
+            const auto tabs = sectionTabs();
+            return std::find(tabs.begin(), tabs.end(), shown) == tabs.end() ? EffectFilter::ALL : shown;
+        }
+        std::vector<int> sectionRows() const {
+            std::vector<int> result;
+            const auto shown = sectionFilter();
+            for (int i = 0; i < int(page()->groups().size()); ++i) {
+                if (shown == EffectFilter::ALL || (shown == EffectFilter::USED && page()->groupInUse(i)) ||
+                    (shown == EffectFilter::FAVORITES && sectionFavorite(i))) {
+                    result.push_back(i);
+                }
+            }
+            return result;
+        }
         int navigationContentHeight() const {
             const int saveFailureHeight = preferencesSaveFailed ? 42 : 0;
-            if (const auto *form = page()) {
-                return px(84 + int(form->groups().size()) * 40 + saveFailureHeight);
+            if (page()) {
+                return px(EffectsLayout::sectionListBottom(int(sectionRows().size()), !sectionTabs().empty()) + 20 +
+                          saveFailureHeight);
             }
             return px(paletteActionTop() + 48 + saveFailureHeight);
         }
@@ -408,8 +451,14 @@ namespace merutilm::rff2::workspace {
         }
         void revealNavigationSelection() {
             if (page()) {
-                const int top = px(64 + page()->selectedGroup() * 40);
-                revealNavigationRange(top, top + px(36));
+                const auto rows = sectionRows();
+                const auto found = std::find(rows.begin(), rows.end(), page()->selectedGroup());
+                if (found != rows.end()) {
+                    const auto row =
+                        EffectsLayout::sectionRow(int(found - rows.begin()), navigationWidth(), !sectionTabs().empty())
+                            .pixels(scale);
+                    revealNavigationRange(row.top, row.bottom);
+                }
                 return;
             }
             const auto categories = navigation.rows(attribute());
@@ -420,8 +469,10 @@ namespace merutilm::rff2::workspace {
             }
         }
         std::vector<AccessibleItem> navigationItems() const {
-            auto result = page() ? NavigationItems::sections(page()->groups(), page()->selectedGroup(),
-                                                             navigationWidth(), scale)
+            auto result = page() ? NavigationItems::sections(
+                                       page()->groups(), sectionRows(), page()->selectedGroup(), sectionFilter(),
+                                       sectionTabs(),
+                                       [this](int group) { return sectionFavorite(group); }, navigationWidth(), scale)
                                  : NavigationItems::effects(attribute(), navigation, selected,
                                                             navigationWidth(), scale);
             RECT viewport;
@@ -711,6 +762,26 @@ namespace merutilm::rff2::workspace {
                 return false;
             }
             if (page()) {
+                if (id >= NavigationItems::filter && id < NavigationItems::filter + EffectNavigation::filterCount) {
+                    sectionFilters[activeWorkspace] = static_cast<EffectFilter>(id - NavigationItems::filter);
+                    setNavigationScroll(0);
+                    refresh();
+                    focusNavigation(id);
+                    return true;
+                }
+                if (id >= NavigationItems::sectionFavorite) {
+                    const auto key = sectionKey(int(id - NavigationItems::sectionFavorite));
+                    if (!sectionFavorites.erase(key)) {
+                        sectionFavorites.insert(key);
+                    }
+                    savePreferences();
+                    refresh();
+                    // A star cleared under Favorites takes its row away, so the focus moves to the filter.
+                    if (!focusNavigation(id)) {
+                        focusNavigation(NavigationItems::filter + int(EffectFilter::FAVORITES));
+                    }
+                    return true;
+                }
                 if (id < NavigationItems::section) {
                     return false;
                 }
@@ -776,6 +847,11 @@ namespace merutilm::rff2::workspace {
                 activateNavigation(navigationFocus);
                 return true;
             }
+            if (key == 'F' && page() && navigationFocus >= NavigationItems::section &&
+                navigationFocus < NavigationItems::sectionFavorite) {
+                activateNavigation(NavigationItems::sectionFavorite + (navigationFocus - NavigationItems::section));
+                return true;
+            }
             if (key == 'F' && !page() && navigationFocus >= NavigationItems::category &&
                 navigationFocus < NavigationItems::category + 20) {
                 activateNavigation(NavigationItems::favoriteId(
@@ -791,9 +867,11 @@ namespace merutilm::rff2::workspace {
             const bool filters = navigationFocus >= NavigationItems::filter &&
                                  navigationFocus < NavigationItems::filter + EffectNavigation::filterCount;
             for (const auto &item : items) {
-                if (filters ? item.role == ROLE_SYSTEM_RADIOBUTTON
+                if (filters ? item.role == ROLE_SYSTEM_RADIOBUTTON && (item.state & STATE_SYSTEM_FOCUSABLE)
                     : page()
-                        ? item.id >= NavigationItems::section
+                        ? item.id >= NavigationItems::section &&
+                              (item.id >= NavigationItems::sectionFavorite) ==
+                                  (navigationFocus >= NavigationItems::sectionFavorite)
                         : item.id >= NavigationItems::category && item.id < NavigationItems::category + 20 &&
                               ((item.id - navigationFocus) % 2 == 0)) {
                     peers.push_back(item.id);
@@ -811,7 +889,7 @@ namespace merutilm::rff2::workspace {
                     : key == VK_END ? int(peers.size()) - 1
                                     : std::clamp(index + (backward ? -step : step), 0, int(peers.size()) - 1);
             const long next = peers[index];
-            if (filters || page() || next % 2 == 0) {
+            if (filters || (page() && next < NavigationItems::sectionFavorite) || (!page() && next % 2 == 0)) {
                 activateNavigation(next);
             } else {
                 focusNavigation(next);
@@ -1103,7 +1181,8 @@ namespace merutilm::rff2::workspace {
         void savePreferences() {
             panelLayout.layerHeight = layerHeight;
             preferencesSaveFailed =
-                !WorkspacePreferences::save(preferencesPath, navigation, &paneWidths, &panelLayout);
+                !WorkspacePreferences::save(preferencesPath, navigation, &paneWidths, &panelLayout,
+                                            &sectionFavorites);
             setNavigationScroll(navigationScroll);
             InvalidateRect(panels[1].window, nullptr, FALSE);
         }
@@ -1774,16 +1853,70 @@ namespace merutilm::rff2::workspace {
             const int width = navigationWidth();
             if (const auto *form = page()) {
                 text(dc, form->title(), box(18, 12, width - 40, 36), theme.foreground, true);
-                for (int i = 0; i < int(form->groups().size()); ++i) {
-                    if (i == form->selectedGroup()) {
-                        fill(dc, box(10, 64 + i * 40, width - 20, 36), theme.selected);
+                const auto shown = sectionFilter();
+                const auto tabs = sectionTabs();
+                const bool tabbed = !tabs.empty();
+                for (int slot = 0; slot < int(tabs.size()); ++slot) {
+                    const auto bounds = EffectsLayout::sectionFilter(slot, width).pixels(scale);
+                    if (shown == tabs[slot]) {
+                        fill(dc, bounds, theme.selected);
+                    } else if (hoveredEffect == EffectsLayout::Target{EffectsLayout::Kind::FILTER, slot}) {
+                        fill(dc, bounds, theme.field);
                     }
-                    text(dc, form->groups()[i], box(20, 64 + i * 40, width - 36, 36),
-                         i == form->selectedGroup() ? theme.selectedForeground : theme.secondary);
+                    PanelDrawing::text(dc, EffectNavigation::filterLabels[int(tabs[slot])], bounds,
+                                       shown == tabs[slot]
+                                           ? (highContrastSettingsMode() ? theme.selectedForeground : theme.accent)
+                                           : theme.secondary,
+                                       font, DT_CENTER);
+                }
+                const auto rows = sectionRows();
+                for (int row = 0; row < int(rows.size()); ++row) {
+                    const int group = rows[row];
+                    const bool chosen = group == form->selectedGroup();
+                    const auto bounds = EffectsLayout::section(row, width, tabbed);
+                    if (chosen) {
+                        fill(dc, bounds.pixels(scale), theme.selected);
+                    } else if (hoveredEffect == EffectsLayout::Target{EffectsLayout::Kind::CATEGORY, row}) {
+                        fill(dc, bounds.pixels(scale), theme.field);
+                    }
+                    if (!tabbed) {
+                        text(dc, form->groups()[group], box(bounds.x + 10, bounds.y, bounds.width - 16, bounds.height),
+                             chosen ? theme.selectedForeground : theme.secondary);
+                        continue;
+                    }
+                    const auto star = EffectsLayout::sectionFavorite(row, width).pixels(scale);
+                    if (hoveredEffect == EffectsLayout::Target{EffectsLayout::Kind::FAVORITE, row}) {
+                        fill(dc, star, theme.field);
+                    }
+                    // A section that is on says so on a second line, as a Surface Effects row gives its state.
+                    const bool on = form->groupInUse(group);
+                    text(dc, form->groups()[group],
+                         on ? box(bounds.x + 12, bounds.y + 4, bounds.width - 20, 22)
+                            : box(bounds.x + 12, bounds.y, bounds.width - 20, bounds.height),
+                         chosen ? theme.selectedForeground : theme.secondary);
+                    if (on) {
+                        text(dc, L"On", box(bounds.x + 12, bounds.y + 28, bounds.width - 20, 18),
+                             chosen && highContrastSettingsMode() ? theme.selectedForeground : theme.secondary);
+                    }
+                    const bool favorite = sectionFavorite(group);
+                    PanelDrawing::text(dc, favorite ? L"\u2605" : L"\u2606", star,
+                                       favorite || hoveredEffect ==
+                                                       EffectsLayout::Target{EffectsLayout::Kind::FAVORITE, row}
+                                           ? theme.accent
+                                           : theme.secondary,
+                                       font, DT_CENTER);
+                }
+                if (tabbed && rows.empty()) {
+                    const auto empty = NavigationItems::sectionEmptyText(shown);
+                    for (int i = 0; i < 2; ++i) {
+                        text(dc, empty[i], box(20, EffectsLayout::sectionTop + i * 20, width - 34, 20),
+                             theme.secondary);
+                    }
                 }
                 if (preferencesSaveFailed) {
                     text(dc, L"Preferences not saved",
-                         box(12, 84 + int(form->groups().size()) * 40, width - 24, 32), theme.error);
+                         box(12, EffectsLayout::sectionListBottom(int(rows.size()), tabbed) + 4, width - 24, 32),
+                         theme.error);
                 }
                 return;
             }
@@ -2416,11 +2549,16 @@ namespace merutilm::rff2::workspace {
                         self.scrollBar().positionAt(GET_Y_LPARAM(l), self.scrollGrabOffset));
                     return 0;
                 }
-                if (panel->kind == 1 && !self.page()) {
-                    const auto target =
-                        EffectsLayout::hit(GET_X_LPARAM(l), GET_Y_LPARAM(l) + self.navigationScroll,
-                                           int(self.navigation.rows(self.attribute()).size()), self.scale,
-                                           self.navigationWidth());
+                if (panel->kind == 1) {
+                    auto target =
+                        self.page()
+                            ? EffectsLayout::sectionHit(GET_X_LPARAM(l), GET_Y_LPARAM(l) + self.navigationScroll,
+                                                        int(self.sectionRows().size()),
+                                                        int(self.sectionTabs().size()), self.scale,
+                                                        self.navigationWidth())
+                            : EffectsLayout::hit(GET_X_LPARAM(l), GET_Y_LPARAM(l) + self.navigationScroll,
+                                                 int(self.navigation.rows(self.attribute()).size()), self.scale,
+                                                 self.navigationWidth());
                     if (target != self.hoveredEffect) {
                         self.hoveredEffect = target;
                         InvalidateRect(hwnd, nullptr, FALSE);
@@ -2689,7 +2827,8 @@ namespace merutilm::rff2::workspace {
             : attribute(std::move(getter)), requestRender(std::move(render)),
               openWorkspace(std::move(action)), preferencesPath(std::move(preferences)) {
             if (!preferencesPath.empty()) {
-                WorkspacePreferences::load(preferencesPath, navigation, &paneWidths, &panelLayout);
+                WorkspacePreferences::load(preferencesPath, navigation, &paneWidths, &panelLayout,
+                                           &sectionFavorites);
             }
             layerHeight = panelLayout.layerHeight;
             scale = UiDpi::forWindow(parent) / 96.f;
@@ -3063,7 +3202,7 @@ namespace merutilm::rff2::workspace {
             return false;
         }
         void installWorkspace(int id, WorkspaceForm form, int parentTab = -1) {
-            if (appearanceTracker && id >= 10 && id <= 16) {
+            if (appearanceTracker && isAppearanceWorkspace(id)) {
                 form = appearanceTracker->wrap(std::move(form));
             }
             if (form.bindHistory) {
@@ -3510,7 +3649,7 @@ namespace merutilm::rff2::workspace {
             FormField type{"panel.module", 1, L"Panel Content", L"Each panel has its own selected section.",
                            [this] { return std::to_wstring(panelLayout.slots[selectedPanel].module); }};
             type.choices.push_back({L"1", L"Surface Effects"});
-            for (int id = 10; id <= 16; ++id) {
+            for (const int id : APPEARANCE_WORKSPACES) {
                 type.choices.push_back({std::to_wstring(id), workspaces.at(id)->title()});
             }
             form.fields.push_back(std::move(type));
@@ -3992,16 +4131,6 @@ namespace merutilm::rff2::workspace {
             for (auto &panel : panels) {
                 InvalidateRect(panel.window, nullptr, FALSE);
             }
-        }
-        void invalidateModel() {
-            history.clear();
-            if (appearanceHistory) {
-                appearanceHistory->clear();
-            }
-            if (appearanceTracker) {
-                appearanceTracker->clear();
-            }
-            refresh();
         }
         void setDocumentDirty(bool dirty) {
             if (configDirty == dirty) {

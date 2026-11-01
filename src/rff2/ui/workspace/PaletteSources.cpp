@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "PaletteSources.hpp"
@@ -65,25 +66,14 @@ namespace merutilm::rff2::workspace {
         return palette;
     }
 
-    bool readPaletteSource(const std::filesystem::path &path, const ShaderAttribute &current,
-                           ShaderAttribute &source, std::wstring &error) {
+    bool readKfrPalette(const std::filesystem::path &path, const ShaderAttribute &current,
+                        ShaderAttribute &source, std::wstring &error) {
         try {
             auto extension = path.extension().wstring();
             std::transform(extension.begin(), extension.end(), extension.begin(),
                            [](wchar_t c) { return std::towlower(c); });
             ShaderAttribute loadedShader = current;
-            if (extension == L".rfc" || extension == L".rfsp") {
-                bool loaded = false;
-                if (extension == L".rfc") {
-                    loaded = ConfigIO::loadShader(path, loadedShader);
-                } else {
-                    loaded = ShaderPresetIO::load(path, loadedShader);
-                }
-                if (!loaded) {
-                    error = L"Unable to read the color settings file.";
-                    return false;
-                }
-            } else if (extension == L".kfr" || extension == L".kfp") {
+            if (extension == L".kfr") {
                 std::wifstream input(path);
                 if (!input) {
                     error = L"Unable to open the palette file.";
@@ -114,7 +104,32 @@ namespace merutilm::rff2::workspace {
                 loadedShader.palette.recipeSeed = 0;
                 loadedShader.palette.stops.clear();
             } else {
-                error = L"Choose an RFC, RFSP, KFR or KFP file.";
+                error = L"Choose a KFR file.";
+                return false;
+            }
+            source = std::move(loadedShader);
+            error.clear();
+            return true;
+        } catch (const std::exception &) {
+            error = L"The color file could not be read. Current settings are unchanged.";
+            return false;
+        }
+    }
+
+    bool readSettingsPalette(const std::filesystem::path &path, const ShaderAttribute &current,
+                             ShaderAttribute &source, std::wstring &error) {
+        try {
+            auto extension = path.extension().wstring();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](wchar_t c) { return std::towlower(c); });
+            ShaderAttribute loadedShader = current;
+            if (extension != L".rfc" && extension != L".rfsp") {
+                error = L"Choose an RFC or RFSP file.";
+                return false;
+            }
+            if (!(extension == L".rfc" ? ConfigIO::loadShader(path, loadedShader)
+                                       : ShaderPresetIO::load(path, loadedShader))) {
+                error = L"Unable to read the color settings file.";
                 return false;
             }
             source = std::move(loadedShader);

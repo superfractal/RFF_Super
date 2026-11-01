@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-21, 2026-09-01
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-13
 //
 
 #pragma once
@@ -11,6 +12,8 @@ namespace merutilm::rff2::Constants::Extension {
     constexpr auto DYNAMIC_MAP = L"rfm";
     constexpr auto COMPRESSED_MAP = L"rfmz";
     constexpr auto STATIC_MAP = L"rfsm";
+    // A keyframe's orbit traps, beside its map under the same number.
+    constexpr auto ORBIT_TRAP = L"rftz";
     constexpr auto LOCATION = L"rfl";
     constexpr auto IMAGE = L"png";
     constexpr auto VIDEO = L"mp4";

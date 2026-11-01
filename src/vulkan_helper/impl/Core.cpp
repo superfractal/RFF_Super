@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-13.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "Core.hpp"
@@ -17,18 +18,11 @@ namespace merutilm::vkh {
         CoreImpl::destroy();
     }
 
-    float CoreImpl::getTime() const {
-        using namespace std::chrono;
-        const auto currentTime = high_resolution_clock::now();
-        return std::chrono::duration_cast<duration<float>>(currentTime - startTime).count();
-    }
-
 
     void CoreImpl::init() {
         instance = factory::create<Instance>();
         physicalDevice = factory::create<PhysicalDeviceLoader>(*instance);
         logicalDevice = factory::create<LogicalDevice>(*physicalDevice);
-        startTime = std::chrono::high_resolution_clock::now();
     }
 
 

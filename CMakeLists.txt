@@ -3,6 +3,7 @@
 # Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 
 # Modified by GPT-6 on 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
+# Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-18, 2026-10-21, 2026-10-23, 2026-10-26
 cmake_minimum_required(VERSION 4.1.2)
 project(RFF_Super)
 
@@ -19,6 +20,12 @@ if(RFF_DISTRIBUTION)
         PATHS "${RFF_GMP_PREFIX}/lib"
         NO_DEFAULT_PATH REQUIRED
     )
+    # MSYS2 mingw-w64-x86_64-gmp 6.3.0-2 mtree digest; its source package is the one shipped in the release.
+    set(RFF_GMP_SHA256 "cea4c8ae34263d44e982ff5f7a3a6a38095d539045c0e50e9ee462c5d83784f5" CACHE STRING "Required SHA-256 of the static GMP library")
+    file(SHA256 "${RFF_GMP_STATIC_LIBRARY}" RFF_GMP_ACTUAL_SHA256)
+    if(NOT RFF_GMP_ACTUAL_SHA256 STREQUAL RFF_GMP_SHA256)
+        message(FATAL_ERROR "${RFF_GMP_STATIC_LIBRARY} is not the reviewed GMP package (SHA-256 ${RFF_GMP_ACTUAL_SHA256}); reinstall mingw-w64-x86_64-gmp 6.3.0-2 or point RFF_GMP_PREFIX at an unmodified copy of it")
+    endif()
     find_file(
         RFF_ZSTD_IMPORT_LIBRARY
         NAMES libzstd.dll.a
@@ -113,6 +120,7 @@ add_executable(
     RFF_Super
     res/resources.rc
     src/rff2/ui/Main.cpp
+    src/rff2/ui/CpuSupportCheck.cpp
     src/rff2/io/LocalAiSettings.cpp
     src/rff2/ui/LocalAiWindow.cpp
     src/rff2/ui/UiLanguage.cpp
@@ -131,6 +139,7 @@ add_executable(
     src/rff2/attr/Attribute.h
     src/rff2/attr/FractalAttribute.h
     src/rff2/attr/RenderAttribute.h
+    src/rff2/attr/RndComputeShaderAttribute.h
     src/rff2/attr/ShaderAttribute.h
     src/rff2/attr/ShdSlopeAttribute.h
     src/rff2/attr/ShdStripeAttribute.h
@@ -157,6 +166,8 @@ add_executable(
     src/rff2/io/RFFDynamicMapBinary.h
     src/rff2/io/RFFMapCompression.cpp
     src/rff2/io/RFFMapCompression.h
+    src/rff2/io/RFFOrbitTrapBinary.cpp
+    src/rff2/io/RFFOrbitTrapBinary.h
     src/rff2/data/Matrix.h
     src/rff2/attr/ShdPalColorSmoothingMethod.h
     src/rff2/attr/ShdPalColorInterpolationMethod.h
@@ -180,6 +191,7 @@ add_executable(
     src/rff2/video/TimelineSchedule.hpp
     src/rff2/video/VideoFrameSource.cpp
     src/rff2/video/VideoFrameSource.hpp
+    src/rff2/video/KeyframeRange.hpp
     src/rff2/ui/TimelineLayout.cpp
     src/rff2/ui/TimelineInspector.cpp
     src/rff2/ui/TimelineOverlay.cpp
@@ -198,6 +210,8 @@ add_executable(
     src/rff2/parallel/ParallelArrayDispatcher.h
     src/rff2/ui/Utilities.h
     src/rff2/formula/LightMandelbrotPerturbator.cpp
+    src/rff2/formula/BuddhabrotPerturbator.cpp
+    src/rff2/formula/BuddhabrotPerturbator.h
     src/rff2/formula/CustomFormulaPerturbator.cpp
     src/rff2/formula/ExpressionParser.cpp
     src/rff2/formula/CustomFormulaPerturbator.h
@@ -502,6 +516,10 @@ add_executable(
     src/rff2/vulkan/GPCStaticImage2Map.hpp
     src/rff2/vulkan/CPCImageRGBA2BGR.cpp
     src/rff2/vulkan/CPCImageRGBA2BGR.hpp
+    src/rff2/vulkan/CPCChaosIrregularity.cpp
+    src/rff2/vulkan/CPCChaosIrregularity.hpp
+    src/rff2/vulkan/GpuLightPerturbator.cpp
+    src/rff2/vulkan/GpuLightPerturbator.hpp
     src/rff2/ui/VideoBufferCache.hpp
 )
 
@@ -515,9 +533,13 @@ set_target_properties(
 )
 
 find_package(Vulkan REQUIRED)
+# The MSYS2 prefix the compiler belongs to, e.g. C:/msys64/mingw64; local builds take their dependencies from it.
+get_filename_component(RFF_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+get_filename_component(RFF_TOOLCHAIN_PREFIX "${RFF_TOOLCHAIN_BIN}" DIRECTORY)
 # Only the three modules the code actually calls; this also pins headers and libraries to one
 # OpenCV install instead of letting a hand-placed copy in include/ shadow the linked one.
-find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc)
+# The hint ranks the toolchain's own OpenCV ahead of one reached through PATH, such as Anaconda's.
+find_package(OpenCV REQUIRED COMPONENTS core imgcodecs imgproc HINTS "${RFF_TOOLCHAIN_PREFIX}/lib/cmake/opencv4")
 
 # Debug is a debugging build and nothing else: nothing optimized away, full symbols, and a stack
 # that can always be walked back to the frame that did it. AddressSanitizer is asked for here too,
@@ -570,6 +592,11 @@ set_source_files_properties(
     src/rff2/preset/shader/palette/ShdPalettePresets.cpp
     PROPERTIES COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off"
 )
+# The processor check runs before any other code and must not itself use what it checks for (appended flags win).
+set_source_files_properties(
+    src/rff2/ui/CpuSupportCheck.cpp
+    PROPERTIES COMPILE_OPTIONS "-march=x86-64;-mtune=generic"
+)
 
 target_compile_definitions(RFF_Super
     PRIVATE
@@ -602,7 +629,19 @@ if(RFF_DISTRIBUTION)
     set(RFF_ZSTD_LINK "${RFF_ZSTD_IMPORT_LIBRARY}")
 else()
     target_link_directories(RFF_Super PRIVATE ${CMAKE_SOURCE_DIR}/lib)
-    set(RFF_GMP_LINK gmp)
+    # Static GMP here too: the MSYS2 package also ships libgmp.dll.a, which plain -lgmp prefers, and bin/ carries no libgmp-10.dll.
+    find_file(
+        RFF_LOCAL_GMP_STATIC_LIBRARY
+        NAMES libgmp.a
+        PATHS "${CMAKE_SOURCE_DIR}/lib" "${RFF_GMP_PREFIX}/lib"
+        NO_DEFAULT_PATH
+    )
+    if(RFF_LOCAL_GMP_STATIC_LIBRARY)
+        set(RFF_GMP_LINK "${RFF_LOCAL_GMP_STATIC_LIBRARY}")
+    else()
+        message(WARNING "libgmp.a not found in lib/ or ${RFF_GMP_PREFIX}/lib; linking gmp by name may need libgmp-10.dll at run time.")
+        set(RFF_GMP_LINK gmp)
+    endif()
     set(RFF_ZSTD_LINK zstd)
 endif()
 
@@ -617,6 +656,8 @@ target_link_libraries(RFF_Super PRIVATE
     uiautomationcore
     comdlg32
     gdiplus
+    # Texture images stb_image cannot decode
+    windowscodecs
     # Entropy coder of the compressed map format
     ${RFF_ZSTD_LINK}
     # OpenCV Linkers
@@ -631,10 +672,39 @@ else()
     set(RFF_SHADER_OUTPUT "${CMAKE_SOURCE_DIR}/shaders")
 endif()
 
-add_custom_target(
-    spirv ALL
+if(NOT RFF_DISTRIBUTION AND MINGW)
+    # A DLL beside the exe is loaded before PATH, so bin/'s copies are refreshed from the toolchain this build linked against.
+    add_custom_command(
+        TARGET RFF_Super POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" "-DRFF_EXE=$<TARGET_FILE:RFF_Super>" "-DRFF_DLL_SOURCE=${RFF_TOOLCHAIN_BIN}"
+            -P "${CMAKE_SOURCE_DIR}/tools/copy_runtime_dlls.cmake"
+        VERBATIM
+    )
+endif()
+
+# compile.ps1 rebuilds the whole shaders folder, so it runs only when a shader, an include or the script changes, or an output is missing.
+file(GLOB_RECURSE RFF_SHADER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/shdsrc/*.vert"
+    "${CMAKE_SOURCE_DIR}/shdsrc/*.frag"
+    "${CMAKE_SOURCE_DIR}/shdsrc/*.comp"
+    "${CMAKE_SOURCE_DIR}/shdsrc/*.glsl"
+)
+# The HDR variant of the merge shader is the extra build listed in compile.ps1's $variants.
+set(RFF_SHADER_OUTPUTS "${RFF_SHADER_OUTPUT}/vk_2_map_iter_stripe_hdr.comp.spv")
+foreach(source IN LISTS RFF_SHADER_SOURCES)
+    if(NOT source MATCHES "\\.glsl$")
+        file(RELATIVE_PATH relative "${CMAKE_SOURCE_DIR}/shdsrc" "${source}")
+        list(APPEND RFF_SHADER_OUTPUTS "${RFF_SHADER_OUTPUT}/${relative}.spv")
+    endif()
+endforeach()
+add_custom_command(
+    OUTPUT ${RFF_SHADER_OUTPUTS}
     COMMAND powershell -ExecutionPolicy Bypass
         -File "${CMAKE_CURRENT_SOURCE_DIR}/tools/compile.ps1"
         -OutputDirectory "${RFF_SHADER_OUTPUT}"
+    DEPENDS ${RFF_SHADER_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/tools/compile.ps1"
+    COMMENT "Compiling shaders"
+    VERBATIM
 )
+add_custom_target(spirv ALL DEPENDS ${RFF_SHADER_OUTPUTS})
 add_dependencies(RFF_Super spirv)

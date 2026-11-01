@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-05.
 // Modified by GPT-5 on 2026-08-31
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -52,8 +53,6 @@ namespace merutilm::rff2 {
         static void fp_swap(fp_decimal_calculator &a, fp_decimal_calculator &b);
 
         static void negate(fp_decimal_calculator &target);
-
-        static int exp2ToExp10(int exp2);
 
         static int exp10ToExp2(int precision);
 

@@ -1,0 +1,39 @@
+{
+  "scope": "Source-guarded CPU equations, not shader/GPU execution",
+  "threshold": 0.25,
+  "below": 0.062450017494002814,
+  "at": 0.25,
+  "spread": [
+    {
+      "radius": 0.5,
+      "levels": 2,
+      "constantFieldGain": 1,
+      "draws": 12
+    },
+    {
+      "radius": 1.5,
+      "levels": 2,
+      "constantFieldGain": 2,
+      "draws": 12
+    },
+    {
+      "radius": 5,
+      "levels": 6,
+      "constantFieldGain": 5.5,
+      "draws": 24
+    },
+    {
+      "radius": 6.5,
+      "levels": 7,
+      "constantFieldGain": 7,
+      "draws": 27
+    },
+    {
+      "radius": 7,
+      "levels": 7,
+      "constantFieldGain": 7,
+      "draws": 27
+    }
+  ],
+  "normalizedBlurWeightSum": 1
+}

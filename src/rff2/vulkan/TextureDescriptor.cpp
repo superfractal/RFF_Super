@@ -2,11 +2,18 @@
 // Created by Opus 5 on 2026-08-05
 // Modified by Opus 5 on 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-27
 // Modified by GPT-6 on 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-23
 //
 
 #include "TextureDescriptor.hpp"
 
+#include <windows.h>
+#include <wincodec.h>
+#include <wrl/client.h>
+
 #include <array>
+#include <climits>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -41,6 +48,46 @@ namespace merutilm::rff2::TextureDescriptor {
                 return {};
             }
             return bytes;
+        }
+
+        // The bundled stb_image 1.33 rejects progressive JPEGs, so anything it cannot decode goes through WIC.
+        std::vector<std::byte> decodeWithWic(const std::vector<std::byte> &bytes, int &width, int &height) {
+            using Microsoft::WRL::ComPtr;
+            struct ComScope {
+                HRESULT result = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+                ~ComScope() { if (SUCCEEDED(result)) CoUninitialize(); }
+            } com;
+            if ((FAILED(com.result) && com.result != RPC_E_CHANGED_MODE) || bytes.empty() || bytes.size() > MAXDWORD) {
+                return {};
+            }
+            ComPtr<IWICImagingFactory> factory;
+            ComPtr<IWICStream> stream;
+            ComPtr<IWICBitmapDecoder> decoder;
+            ComPtr<IWICBitmapFrameDecode> frame;
+            ComPtr<IWICBitmapSource> rgba;
+            UINT w = 0;
+            UINT h = 0;
+            if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,
+                                        IID_PPV_ARGS(&factory))) ||
+                FAILED(factory->CreateStream(&stream)) ||
+                FAILED(stream->InitializeFromMemory(reinterpret_cast<BYTE *>(const_cast<std::byte *>(bytes.data())),
+                                                    static_cast<DWORD>(bytes.size()))) ||
+                FAILED(factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand,
+                                                        &decoder)) ||
+                FAILED(decoder->GetFrame(0, &frame)) ||
+                FAILED(WICConvertBitmapSource(GUID_WICPixelFormat32bppRGBA, frame.Get(), &rgba)) ||
+                FAILED(rgba->GetSize(&w, &h)) || w == 0 || h == 0 || w > INT_MAX || h > INT_MAX ||
+                uint64_t{w} * h * 4 > UINT_MAX) {
+                return {};
+            }
+            std::vector<std::byte> pixels(size_t{w} * h * 4);
+            if (FAILED(rgba->CopyPixels(nullptr, w * 4, static_cast<UINT>(pixels.size()),
+                                        reinterpret_cast<BYTE *>(pixels.data())))) {
+                return {};
+            }
+            width = static_cast<int>(w);
+            height = static_cast<int>(h);
+            return pixels;
         }
     }
 
@@ -190,17 +237,20 @@ namespace merutilm::rff2::TextureDescriptor {
                               : stbi_load_from_memory(reinterpret_cast<const stbi_uc *>(bytes.data()),
                                                       static_cast<int>(bytes.size()), &width, &height, &channels,
                                                       STBI_rgb_alpha);
-        if (pixels == nullptr || width <= 0 || height <= 0) {
-            if (pixels != nullptr) {
-                stbi_image_free(pixels);
-            }
-            vkh::logger::w_log(L"ERROR : Cannot load texture image");
-            uploadPlaceholder(core, commandPool, desc, layer);
-            cachedPath.clear();
-            return true;
-        }
-
         std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> decodedPixels(pixels, &stbi_image_free);
+        std::vector<std::byte> wicPixels;
+        if (pixels == nullptr || width <= 0 || height <= 0) {
+            decodedPixels.reset();
+            pixels = nullptr;
+            wicPixels = decodeWithWic(bytes, width, height);
+            if (wicPixels.empty()) {
+                vkh::logger::w_log(L"ERROR : Cannot load texture image");
+                uploadPlaceholder(core, commandPool, desc, layer);
+                cachedPath.clear();
+                return true;
+            }
+        }
+        const std::byte *rgba = pixels != nullptr ? reinterpret_cast<const std::byte *>(pixels) : wicPixels.data();
         const auto maxDimension = core.getPhysicalDevice().getPhysicalDeviceProperties().limits.maxImageDimension2D;
         VkImageFormatProperties imageProperties{};
         const VkResult imageSupport = vkGetPhysicalDeviceImageFormatProperties(
@@ -218,8 +268,9 @@ namespace merutilm::rff2::TextureDescriptor {
         }
         const auto ctx = vkh::BufferImageContextUtils::imageFromByteColorArray(
             core, commandPool, TEXTURE_FORMAT, static_cast<uint32_t>(width), static_cast<uint32_t>(height), 4, 8,
-            false, reinterpret_cast<std::byte *>(pixels));
+            true, rgba);
         decodedPixels.reset();
+        wicPixels = {};
         try {
             desc.get<vkh::CombinedImageSampler>(0, samplerBinding(layer))->setUniqueImageContext(ctx);
         } catch (...) {

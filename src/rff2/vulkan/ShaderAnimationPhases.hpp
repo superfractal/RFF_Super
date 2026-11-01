@@ -1,6 +1,7 @@
 //
 // Created by Opus 5 on 2026-08-26.
 // Modified by GPT-6 on 2026-09-11, 2026-09-21, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-10-12, 2026-10-14, 2026-10-20
 //
 
 #pragma once
@@ -43,6 +44,7 @@ namespace merutilm::rff2 {
         std::array<Scroll, PATTERN_LAYER_COUNT> pattern = {};
         Scroll warp = {};
         std::array<Scroll, EFFECT_LAYER_COUNT> effects = {};
+        Axis orbitTrap = {};
 
         // A clock that went backwards, or forward by this much at once, was seeked rather than
         // played: nothing ran across the gap to add up, so the phases are re-derived from the
@@ -89,6 +91,8 @@ namespace merutilm::rff2 {
             }
             warp.u.phase = values[index++];
             warp.v.phase = values[index];
+            // No timeline track varies the orbit trap's speed, so its phase is the constant run up to now.
+            orbitTrap.phase = static_cast<double>(orbitTrap.speed) * now;
             started = true;
             lastUpdateTime = now;
         }
@@ -96,6 +100,7 @@ namespace merutilm::rff2 {
         void setPaletteSpeeds(const ShdPaletteAttribute &attribute) {
             palette.speed = attribute.animationSpeed;
             flow.speed = attribute.animationFlowSpeed;
+            orbitTrap.speed = attribute.orbitTrapAnimationSpeed;
             setEffectsSpeed(effectSettings);
         }
 
@@ -153,9 +158,10 @@ namespace merutilm::rff2 {
             }
         }
 
-        [[nodiscard]] static float effectTravelPhaseForUniform(const ShdEffectType type, const double phase) {
-            const double travelRate = type == ShdEffectType::RAIN ? 1.5 :
-                                      type == ShdEffectType::EMBERS ? -double(0.8f) : 0.0;
+        [[nodiscard]] static float effectTravelPhaseForUniform(const ShdEffectAttribute &effect, const double phase) {
+            // Only the classic rain and ember lattices repeat every 8 rows; the ember styles move by lifetimes and must not wrap.
+            const double travelRate = effect.type == ShdEffectType::RAIN ? 1.5 :
+                                      effect.type == ShdEffectType::EMBERS && effect.embersStyle == ShdEmbersStyle::CLASSIC ? -double(0.8f) : 0.0;
             const double travelPhase = travelRate != 0.0 ?
                 std::fmod(phase * travelRate, 8.0) / travelRate : phase;
             return static_cast<float>(travelPhase);
@@ -188,10 +194,11 @@ namespace merutilm::rff2 {
             host.set<float>(DescTime::TARGET_TIME_WARP_SCROLL + 1, static_cast<float>(warp.v.phase));
             for (uint32_t i = 0; i < EFFECT_LAYER_COUNT; ++i) {
                 host.set<float>(DescTime::TARGET_TIME_EFFECTS + i * 2,
-                                effectTravelPhaseForUniform(effectSettings[i].type, effects[i].u.phase));
+                                effectTravelPhaseForUniform(effectSettings[i], effects[i].u.phase));
                 host.set<float>(DescTime::TARGET_TIME_EFFECTS + i * 2 + 1,
                                 static_cast<float>(effects[i].v.phase));
             }
+            host.set<float>(DescTime::TARGET_TIME_ORBIT_TRAP_PHASE, static_cast<float>(std::fmod(orbitTrap.phase, 1.0)));
             timeUBO.updateMF(frameIndex);
         }
 
@@ -220,6 +227,7 @@ namespace merutilm::rff2 {
             }
             action(warp.u);
             action(warp.v);
+            action(orbitTrap);
         }
     };
 } // namespace merutilm::rff2

@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-18.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #include "CombinedImageSampler.hpp"
@@ -98,19 +99,6 @@ namespace merutilm::vkh {
         this->imageContext = std::move(nextContext);
         initialized = true;
         isUnique = false;
-    }
-
-    void CombinedImageSamplerImpl::setUniqueImageContextMF(const MultiframeImageContext &imageContext) {
-        if (!multiframeEnabled) {
-            throw exception_invalid_state("Sampler is not multiframe (Unique)");
-        }
-        auto nextContext = imageContext;
-        if (isUnique) {
-            ImageContext::destroyContext(core, getImageContextMF());
-        }
-        this->imageContext = std::move(nextContext);
-        initialized = true;
-        isUnique = true;
     }
 
 

@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-17, 2026-09-22
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -21,7 +22,6 @@ namespace merutilm::rff2 {
         void refresh();
         void layout(int width);
         int height() const;
-        void cancel();
         static bool requested();
     };
 } // namespace merutilm::rff2

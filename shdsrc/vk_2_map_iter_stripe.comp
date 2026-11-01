@@ -6,12 +6,14 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-16, 2026-09-23, 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-03
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01
 //
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_control_flow_attributes : require
 #include "shader_layer.glsl"
+#include "orbit_trap_relief.glsl"
 #define SMOOTH_ITER_NONE 0
 #define SMOOTH_ITER_NORMAL 1
 #define SMOOTH_ITER_REVERSED 2
@@ -71,6 +73,15 @@ layout (set = 0, binding = 1) buffer Iteration2MapZoomedSSBO {
     double iterations[];
 } it2map_zoomed_attr;
 
+// Each keyframe's orbit traps, plane-major as vk_iteration_palette.frag's OrbitTrapSSBO; one element long when the keyframe has none.
+layout (set = 0, binding = 2) buffer Iteration2MapNormalTrapSSBO {
+    float traps[];
+} it2map_normal_trap_attr;
+
+layout (set = 0, binding = 3) buffer Iteration2MapZoomedTrapSSBO {
+    float traps[];
+} it2map_zoomed_trap_attr;
+
 
 layout (set = 1, binding = 0) uniform VideoUBO {
     float default_zoom_increment;
@@ -101,6 +112,31 @@ layout (set = 2, binding = 0) buffer PaletteSSBO {
     double static_color_iterations[MAX_STATIC_COLORS];
     // Mirrors vk_iteration_palette.frag: appended ahead of the runtime color array, which must stay last.
     float cycle_bias;
+    // Declared only to keep the color array where the host puts it; a saved map holds no escape angles.
+    uint escape_angle_mode;
+    float escape_angle_amount;
+    // Orbit Trap Coloring, drawn from the traps saved beside each keyframe; see orbit_trap_color.
+    uint orbit_trap_mode;
+    float orbit_trap_amount;
+    float orbit_trap_width;
+    float orbit_trap_density;
+    // 0 leaves pixels at Max Iterations without the trap, 1 traps every pixel, 2 traps only the pixels at Max Iterations.
+    uint orbit_trap_interior;
+    float orbit_trap_offset;
+    float orbit_trap_glow_strength;
+    float orbit_trap_glow_sharpness;
+    float orbit_trap_cell_border_width;
+    vec4 orbit_trap_glow_color;
+    uint orbit_trap_blend;
+    float orbit_trap_cell_border_darkness;
+    // 1 keeps the trap's colors out of the palette animation.
+    uint orbit_trap_hold;
+    // Shape's mapping and arms, the relief switch and Slope's light it is lit from; see orbit_trap_color.
+    uint orbit_trap_mapping;
+    float orbit_trap_arms;
+    uint orbit_trap_relief;
+    float orbit_trap_light_azimuth;
+    float orbit_trap_light_zenith;
     vec4 palette[];
 } palette_attr;
 
@@ -130,6 +166,17 @@ layout (set = 3, binding = 0) uniform TimeUBO {
     float pattern_scroll_v_3;
     float warp_scroll_u;
     float warp_scroll_v;
+    // The effects' phases, declared only to reach the orbit trap phase behind them.
+    float effect_phase_0u;
+    float effect_phase_0v;
+    float effect_phase_1u;
+    float effect_phase_1v;
+    float effect_phase_2u;
+    float effect_phase_2v;
+    float effect_phase_3u;
+    float effect_phase_3v;
+    // Orbit Trap Animation Speed run up on the host, in palette cycles wrapped to [0,1).
+    float orbit_trap_phase;
 } time_attr;
 
 // The image this writes into is the one the whole video chain then grades in. It is the 8-bit one
@@ -147,6 +194,11 @@ layout (set = 5, binding = 0) uniform OutputIterationUBO {
     double max_value;
     double max_value_normal;
     double max_value_zoomed;
+    // Declared to reach the trap plane counts behind them.
+    uvec2 canvas_extent;
+    ivec2 canvas_offset;
+    // Trap planes per pixel the host uploaded for the normal (x) and zoomed (y) keyframe; length() fails past 2 GiB.
+    uvec2 trap_planes;
 } iteration_output_info_attr;
 
 layout (set = 5, binding = 1) writeonly buffer OutputIterationSSBO {
@@ -598,47 +650,7 @@ double smooth_iteration(double iteration) {
 }
 
 // ln(1+x) in double: the float builtin's own ulp is thousands of iterations wide at depth and would step the bands this feeds.
-double log1p_d(double x) {
-    if (x <= 0.0LF) {
-        return 0.0LF;
-    }
-    double s;
-    double hi = 0.0LF;
-    if (x < 0.25LF) {
-        // The same reduction without forming 1 + x, whose rounding is the whole error for a small x.
-        s = x / (2.0LF + x);
-    } else {
-        double u = 1.0LF + x;
-        int e = int(floor(log2(float(u))));
-        // exp2 of a whole number is exact in float and in double, so this scaling costs no bits.
-        double m = u * double(exp2(float(-e)));
-        // The float exponent can miss by one either way; these put the mantissa back in [1/sqrt2, sqrt2).
-        if (m >= 1.4142135623730951LF) {
-            m *= 0.5LF;
-            e += 1;
-        }
-        if (m < 0.70710678118654746LF) {
-            m *= 2.0LF;
-            e -= 1;
-        }
-        s = (m - 1.0LF) / (m + 1.0LF);
-        hi = double(e) * LN2;
-    }
-    double t = s * s;
-    // ln((1+s)/(1-s)) = 2s * (1 + s^2/3 + s^4/5 + ...), taken past double's last bit for every s that reduction leaves.
-    double p = 1.0LF / 21.0LF;
-    p = fma(p, t, 1.0LF / 19.0LF);
-    p = fma(p, t, 1.0LF / 17.0LF);
-    p = fma(p, t, 1.0LF / 15.0LF);
-    p = fma(p, t, 1.0LF / 13.0LF);
-    p = fma(p, t, 1.0LF / 11.0LF);
-    p = fma(p, t, 1.0LF / 9.0LF);
-    p = fma(p, t, 1.0LF / 7.0LF);
-    p = fma(p, t, 1.0LF / 5.0LF);
-    p = fma(p, t, 1.0LF / 3.0LF);
-    p = fma(p, t, 1.0LF);
-    return fma(2.0LF * s, p, hi);
-}
+#include "log1p_d.glsl"
 
 // Cube root in double: the float builtin seeds it, and two Newton steps on y^3 = x each double the digits that seed holds.
 double cbrt_d(double x) {
@@ -1268,6 +1280,47 @@ vec4 apply_pattern(vec4 base, double iteration, vec2 coord, vec2 band_grad, doub
     return base;
 }
 
+#define ORBIT_TRAP_NONE 0u
+#define ORBIT_TRAP_CROSS_GLOW 1u
+#define ORBIT_TRAP_SHAPE 3u
+#define ORBIT_TRAP_BLEND_MIX 0u
+#define ORBIT_TRAP_BLEND_MULTIPLY 1u
+#define ORBIT_TRAP_BLEND_SCREEN 2u
+#define ORBIT_TRAP_BLEND_ADD 3u
+
+// The pixel's orbit trap color, worked out once in main(); without trap data the palette is left as it is.
+bool g_trap_valid = false;
+vec3 g_trap_rgb = vec3(0.0);
+// Relief outside its tube: base only takes this shadow, as vk_iteration_palette.frag returns it there.
+bool g_trap_shadow_only = false;
+float g_trap_shadow = 1.0;
+
+// Mirrors the blend that ends apply_orbit_trap in vk_iteration_palette.frag.
+vec4 blend_orbit_trap(vec4 base) {
+    if (!g_trap_valid) {
+        return base;
+    }
+    if (g_trap_shadow_only) {
+        return vec4(base.rgb * g_trap_shadow, base.a);
+    }
+    float amount = clamp(palette_attr.orbit_trap_amount, 0.0, 1.0);
+    vec3 blended;
+    switch (palette_attr.orbit_trap_blend) {
+        case ORBIT_TRAP_BLEND_MULTIPLY: blended = mix(base.rgb, base.rgb * g_trap_rgb, amount); break;
+        case ORBIT_TRAP_BLEND_SCREEN: blended = mix(base.rgb, 1.0 - (1.0 - base.rgb) * (1.0 - g_trap_rgb), amount); break;
+        case ORBIT_TRAP_BLEND_ADD: blended = base.rgb + g_trap_rgb * amount; break;
+        case ORBIT_TRAP_BLEND_MIX:
+        default: blended = mix(base.rgb, g_trap_rgb, amount); break;
+    }
+    return vec4(blended, base.a);
+}
+
+// Mandelbrot Color, under the trap unless Orbit Trap Region is Outside Only.
+vec3 interior_color() {
+    vec4 m = palette_attr.mandelbrot_color;
+    return (palette_attr.orbit_trap_interior != 0u ? blend_orbit_trap(m) : m).rgb;
+}
+
 vec4 get_color(double iteration, vec2 coord, vec2 band_grad, double anim_offset, dvec4 timed_offset) {
 
     if (iteration == 0) {
@@ -1294,6 +1347,10 @@ vec4 get_color(double iteration, vec2 coord, vec2 band_grad, double anim_offset,
     vec4 result = fw > 0.0
                       ? mix(animated, assemble_color(iteration, dvec4(palette_attr.offset) + warp_term), fw)
                       : animated;
+    // The trap goes over the palette and under the texture and pattern layers, as in the live view; Inside Only skips it here.
+    if (palette_attr.orbit_trap_interior != 2u) {
+        result = blend_orbit_trap(result);
+    }
     if (g_any_texture) {
         result = apply_texture(result, iteration, coord, band_grad, anim_offset, warp_iters);
     }
@@ -1303,6 +1360,13 @@ vec4 get_color(double iteration, vec2 coord, vec2 band_grad, double anim_offset,
     return result;
 }
 
+
+// The map texel both keyframes are scaled about. get_iteration_* read row extent.y - 1 - y, so a keyframe's middle row
+// extent.y / 2 lands on y = extent.y / 2 - 1; scaling about extent.y / 2 slid the coarser keyframe one finer-keyframe
+// row off the finer one, and the relief drew that slip as streaks where the two are cross-faded.
+vec2 map_center() {
+    return vec2(iteration_output_info_attr.extent) / 2.0 - vec2(0.0, 1.0);
+}
 
 double normalize_map_iteration(double iteration, double map_max_value) {
     return map_max_value > 0.0 && iteration >= map_max_value ? iteration_output_info_attr.max_value : iteration;
@@ -1514,7 +1578,7 @@ double slope_height(HeightSample sample_value) {
 }
 
 HeightSample sample_map_height(vec2 coord, float nsr, float zsr, float r, const in HeightWindow nw, const in HeightWindow zw) {
-    vec2 center = vec2(iteration_output_info_attr.extent) / 2.0;
+    vec2 center = map_center();
     bool sky;
     coord = camera_offset(coord, vec2(iteration_output_info_attr.extent), sky);
     if (sky) return height_sample(0.0);
@@ -1553,10 +1617,190 @@ double sample_height(vec2 coord, float nsr, float zsr, float r, const in HeightW
     return slope_height(sample_map_height(coord, nsr, zsr, r, nw, zw));
 }
 
+// Catmull-Rom weights for the four texels around fraction t (Catmull & Rom 1974; see NOTICE).
+dvec4 catmull_rom_weights(double t) {
+    double t2 = t * t;
+    double t3 = t2 * t;
+    return dvec4(-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2);
+}
+
+// A keyframe's height at a texel coordinate with a continuous slope, so the relief shows no texel grid where the map
+// is enlarged; -1 where any of the 16 texels is off the map or not an escaping count. Held inside the middle four
+// texels so the cubic never overshoots past a steep edge.
+double cubic_map_height(bool zoomed, dvec2 tx) {
+    dvec2 base = floor(tx);
+    dvec2 f = tx - base;
+    ivec2 b = ivec2(base) - 1;
+    if (any(lessThan(b, ivec2(0))) || any(greaterThan(b + 3, ivec2(iteration_output_info_attr.extent) - 1))) return -1.0;
+    dvec4 wx = catmull_rom_weights(f.x);
+    dvec4 wy = catmull_rom_weights(f.y);
+    double mv = iteration_output_info_attr.max_value;
+    double sum = 0.0;
+    double lo = mv;
+    double hi = 0.0;
+    for (int j = 0; j < 4; ++j) {
+        double row = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            uvec2 c = uvec2(b + ivec2(i, j));
+            double v = zoomed ? get_iteration_zoomed(c) : get_iteration_normal(c);
+            if (v <= 0.0 || v >= mv) return -1.0;
+            row += wx[i] * v;
+            if (i == 1 || i == 2) {
+                if (j == 1 || j == 2) {
+                    lo = min(lo, v);
+                    hi = max(hi, v);
+                }
+            }
+        }
+        sum += wy[j] * row;
+    }
+    return clamp(sum, lo, hi);
+}
+
+// The relief's height at the pixel center from both keyframes, cross-faded as sample_map_height fades them; -1 where
+// the coarser keyframe's cubic is unavailable, which leaves the bilinear height in place. At the finer keyframe's own
+// edge, where its fade weight is near zero and the two keyframes agree, the coarser one stands alone.
+double smooth_relief_height(vec2 coord, float nsr, float zsr, float r) {
+    vec2 size = vec2(iteration_output_info_attr.extent);
+    vec2 center = map_center();
+    bool sky;
+    coord = camera_offset(coord, size, sky);
+    if (sky) return -1.0;
+    // The texel position is formed in double: the relief reads height steps far finer than float's step at a few thousand texels.
+    double n = cubic_map_height(false, dvec2(coord) / double(nsr) + dvec2(center));
+    if (n < 0.0) return -1.0;
+    vec2 ztx = coord / zsr + center;
+    if (ztx.x < 0.0 || ztx.y < 0.0 || ztx.x >= size.x - 1.0 || ztx.y >= size.y - 1.0) return n;
+    double z = cubic_map_height(true, dvec2(coord) / double(zsr) + dvec2(center));
+    if (z < 0.0) return n;
+    float w = smoothstep(0.0, 1.0, r + 1.0) * zoomed_edge_fade(ztx, zsr);
+    return n - (n - z) * double(w);
+}
+
 vec3 shade_sample(HeightSample sample_value, vec2 out_coord, vec2 band_grad, double anim_offset, dvec4 timed_offset) {
-    if (sample_value.exterior <= 0.0) return palette_attr.mandelbrot_color.rgb;
+    if (sample_value.exterior <= 0.0) return interior_color();
     vec3 exterior = get_color(sample_value.iteration, out_coord, band_grad, anim_offset, timed_offset).rgb * get_stripe_mul(sample_value.iteration);
-    return mix(palette_attr.mandelbrot_color.rgb, exterior, float(sample_value.exterior));
+    return mix(interior_color(), exterior, float(sample_value.exterior));
+}
+
+// Shape reads planes 4 (distance) and 7 (status) in place of 0 and 3, and needs a keyframe saved with all eight.
+bool trap_shape_mode() {
+    return palette_attr.orbit_trap_mode == ORBIT_TRAP_SHAPE;
+}
+
+bool keyframe_has_traps(bool zoomed) {
+    return (zoomed ? iteration_output_info_attr.trap_planes.y : iteration_output_info_attr.trap_planes.x) >= (trap_shape_mode() ? 8u : 4u);
+}
+
+// One plane of a keyframe's trap at a map texel, flipped as get_iteration_normal flips the counts.
+float keyframe_trap(bool zoomed, uint plane, uvec2 c) {
+    c.y = iteration_output_info_attr.extent.y - 1u - c.y;
+    uint i = plane * iteration_output_info_attr.extent.x * iteration_output_info_attr.extent.y + c.y * iteration_output_info_attr.extent.x + c.x;
+    return zoomed ? it2map_zoomed_trap_attr.traps[i] : it2map_normal_trap_attr.traps[i];
+}
+
+// An exact hit is stored near -1e6, so it is held at a floor where it no longer swamps its neighbours' bilinear weights.
+vec3 keyframe_trap_distances(bool zoomed, uvec2 c) {
+    return max(vec3(keyframe_trap(zoomed, trap_shape_mode() ? 4u : 0u, c), keyframe_trap(zoomed, 1u, c), keyframe_trap(zoomed, 2u, c)), vec3(-4096.0));
+}
+
+// The distances are bilinear as the heights are; the iteration comes from the nearest texel, since it has no mean.
+// The Shape angle comes from that texel too, and only when want_angle asks for it.
+vec4 sample_keyframe_trap(bool zoomed, vec2 tx, bool want_angle, out float angle) {
+    vec2 last = vec2(iteration_output_info_attr.extent) - 1.0;
+    vec2 c = clamp(tx, vec2(0.0), last);
+    uvec2 c0 = uvec2(c);
+    uvec2 c1 = min(c0 + 1u, uvec2(last));
+    vec2 f = c - vec2(c0);
+    vec3 d0 = mix(keyframe_trap_distances(zoomed, c0), keyframe_trap_distances(zoomed, uvec2(c1.x, c0.y)), f.x);
+    vec3 d1 = mix(keyframe_trap_distances(zoomed, uvec2(c0.x, c1.y)), keyframe_trap_distances(zoomed, c1), f.x);
+    angle = want_angle ? keyframe_trap(zoomed, 6u, uvec2(round(c))) : 0.0;
+    return vec4(mix(d0, d1, f.y), keyframe_trap(zoomed, trap_shape_mode() ? 7u : 3u, uvec2(round(c))));
+}
+
+// The pixel's trap from both keyframes, cross-faded with the weight the heights use, as (axis, nearest, second
+// nearest log2 distance, 1 + iteration); w = 0 marks no trap data. The angle follows the keyframe w is taken from.
+vec4 sample_orbit_trap(vec2 coord, float nsr, float zsr, float r, bool want_angle, out float angle) {
+    angle = 0.0;
+    vec2 size = vec2(iteration_output_info_attr.extent);
+    vec2 center = map_center();
+    bool sky;
+    coord = camera_offset(coord, size, sky);
+    if (sky) return vec4(0.0);
+    float n_angle = 0.0;
+    float z_angle = 0.0;
+    vec2 ntx = coord / nsr + center;
+    bool normal_inside = all(greaterThanEqual(ntx, vec2(-0.5))) && all(lessThan(ntx, size - vec2(0.5)));
+    vec4 n = normal_inside && keyframe_has_traps(false) ? sample_keyframe_trap(false, ntx, want_angle, n_angle) : vec4(0.0);
+    vec2 ztx = coord / zsr + center;
+    bool zoomed_inside = all(greaterThanEqual(ztx, vec2(0.0))) && all(lessThan(ztx, size - 1.0));
+    vec4 z = zoomed_inside && keyframe_has_traps(true) ? sample_keyframe_trap(true, ztx, want_angle, z_angle) : vec4(0.0);
+    if (z.w == 0.0) {
+        angle = n_angle;
+        return n;
+    }
+    if (n.w == 0.0) {
+        angle = z_angle;
+        return z;
+    }
+    float w = smoothstep(0.0, 1.0, r + 1.0) * zoomed_edge_fade(ztx, zsr);
+    angle = w >= 0.5 ? z_angle : n_angle;
+    return vec4(mix(n.xyz, z.xyz, w), w >= 0.5 ? z.w : n.w);
+}
+
+// The trap distance's slope across output pixels for the relief, from the four neighbours' cross-faded distances.
+vec2 orbit_trap_gradient(vec2 coord, float nsr, float zsr, float r) {
+    float unused;
+    float l = clamp(sample_orbit_trap(coord - vec2(1.0, 0.0), nsr, zsr, r, false, unused).x, -4096.0, 64.0);
+    float rr = clamp(sample_orbit_trap(coord + vec2(1.0, 0.0), nsr, zsr, r, false, unused).x, -4096.0, 64.0);
+    float d = clamp(sample_orbit_trap(coord - vec2(0.0, 1.0), nsr, zsr, r, false, unused).x, -4096.0, 64.0);
+    float u = clamp(sample_orbit_trap(coord + vec2(0.0, 1.0), nsr, zsr, r, false, unused).x, -4096.0, 64.0);
+    return vec2(rr - l, u - d);
+}
+
+// Mirrors apply_orbit_trap in vk_iteration_palette.frag; the palette shift goes in negated because timed_offset_ratios subtracts it.
+// Under Relief it also sets g_trap_shadow_only and g_trap_shadow, and reads the neighbours at coord for the tube's slope.
+vec3 orbit_trap_color(vec4 trap, float angle, double anim_offset, vec2 coord, float nsr, float zsr, float r) {
+    float cross_log2 = trap.x;
+    float point_log2 = trap.y;
+    float second_log2 = trap.z;
+    float nearest_iteration = trap.w;
+    float width = palette_attr.orbit_trap_width;
+    float density = palette_attr.orbit_trap_density;
+    float sharpness = palette_attr.orbit_trap_glow_sharpness;
+    vec3 glow_light = palette_attr.orbit_trap_glow_strength * palette_attr.orbit_trap_glow_color.rgb;
+    float shift = palette_attr.orbit_trap_offset + time_attr.orbit_trap_phase;
+    bool cross_glow = palette_attr.orbit_trap_mode == ORBIT_TRAP_CROSS_GLOW || trap_shape_mode();
+    float cycles = (cross_glow ? -0.1 * density * cross_log2 : density * fract((nearest_iteration - 1.0) / 12.0)) + shift;
+    uint mapping = trap_shape_mode() ? palette_attr.orbit_trap_mapping : ORBIT_TRAP_MAPPING_DISTANCE;
+    if (mapping != ORBIT_TRAP_MAPPING_DISTANCE) {
+        cycles = trap_mapping_cycles(mapping, cross_log2, angle, palette_attr.orbit_trap_arms, density) + shift;
+    }
+    double trap_anim = palette_attr.orbit_trap_hold != 0u ? 0.0LF : anim_offset;
+    vec3 color = assemble_color(1.0, timed_offset_ratios(true, trap_anim, -double(cycles) * g_interval.r)).rgb;
+    if (cross_glow) {
+        if (mapping == ORBIT_TRAP_MAPPING_BANDS) {
+            color *= trap_band_seam(cycles);
+        }
+        if (palette_attr.orbit_trap_relief != 0u) {
+            float t = exp2(clamp(cross_log2 - width, -64.0, 64.0));
+            if (t >= 1.0) {
+                g_trap_shadow_only = true;
+                g_trap_shadow = trap_relief_shadow(t, clamp(palette_attr.orbit_trap_amount, 0.0, 1.0));
+                return color;
+            }
+            vec3 light = trap_relief_light(palette_attr.orbit_trap_light_azimuth, palette_attr.orbit_trap_light_zenith);
+            return trap_relief_shade(color, t, orbit_trap_gradient(coord, nsr, zsr, r), light, glow_light);
+        }
+        float glow = 1.0 / (1.0 + exp2(clamp(sharpness * (cross_log2 - width), -64.0, 64.0)));
+        return color * (0.25 + 0.75 * glow) + glow_light * (glow * glow * glow);
+    }
+    // F1/F2 cells after Steven Worley, "A Cellular Texture Basis Function" (SIGGRAPH 1996); written independently, see NOTICE.
+    // Cellular: d1/d2 runs from 0 at a cell's center to 1 on its border.
+    float ratio = exp2(clamp(point_log2 - second_log2, -64.0, 0.0));
+    float halo = 1.0 / (1.0 + exp2(clamp(sharpness * (point_log2 - width + 2.7), -64.0, 64.0)));
+    float border = pow(ratio, 2.0 / max(palette_attr.orbit_trap_cell_border_width, 0.01));
+    return color * (1.0 - palette_attr.orbit_trap_cell_border_darkness * border) + glow_light * (halo / 1.2);
 }
 
 
@@ -1609,7 +1853,7 @@ void main() {
     g_any_texture = s_any_texture;
     g_any_pattern = s_any_pattern;
 
-    vec2 center = vec2(iteration_output_info_attr.extent) / 2.0;
+    vec2 center = map_center();
     vec2 coord = vec2(gl_GlobalInvocationID.xy) - center + video_attr.sample_jitter;
     float r = int(max(0, video_attr.current_frame)) - video_attr.current_frame;
 
@@ -1636,6 +1880,12 @@ void main() {
         : (h0.iteration * h0.exterior + h1.iteration * h1.exterior
             + h2.iteration * h2.exterior + h3.iteration * h3.exterior) / (exterior * 4.0);
     if (h0.iteration == 0.0 && h1.iteration == 0.0 && h2.iteration == 0.0 && h3.iteration == 0.0) h = 0.0;
+    // The relief reads this height, and a bilinear height's slope jumps at every texel edge of an enlarged keyframe,
+    // which the relief draws as a fine grid; the cubic one keeps the slope continuous. The colors keep their taps.
+    if (exterior >= 1.0) {
+        double smooth_h = smooth_relief_height(coord, nsr, zsr, r);
+        if (smooth_h > 0.0) h = smooth_h;
+    }
     set_iteration_output(gl_GlobalInvocationID.xy, h);
 
     // Band-aligned decor UV needs the height gradient in output pixels. Computed once here: the
@@ -1660,10 +1910,22 @@ void main() {
     vec2 out_coord = vec2(gl_GlobalInvocationID.xy) + vec2(0.5);
     double anim_offset = animation_offset_iterations(out_coord);
     dvec4 timed_offset = timed_offset_ratios(true, anim_offset, 0.0);
-    vec3 c = (shade_sample(h0, out_coord, band_grad, anim_offset, timed_offset)
-            + shade_sample(h1, out_coord, band_grad, anim_offset, timed_offset)
-            + shade_sample(h2, out_coord, band_grad, anim_offset, timed_offset)
-            + shade_sample(h3, out_coord, band_grad, anim_offset, timed_offset)) * 0.25;
+    // One trap per pixel at its center, shared by the four taps below.
+    if (palette_attr.orbit_trap_mode != ORBIT_TRAP_NONE) {
+        float trap_angle;
+        bool want_angle = trap_shape_mode() && palette_attr.orbit_trap_mapping == ORBIT_TRAP_MAPPING_ANGLE;
+        vec4 trap = sample_orbit_trap(coord, nsr, zsr, r, want_angle, trap_angle);
+        g_trap_valid = trap.w != 0.0;
+        if (g_trap_valid) {
+            g_trap_rgb = orbit_trap_color(trap, trap_angle, anim_offset, coord, nsr, zsr, r);
+        }
+    }
+    // One loop body instead of four inlined copies: the sum keeps its order, so the result is bit for bit unchanged.
+    vec3 shaded[4];
+    [[dont_unroll]] for (int k = 0; k < 4; ++k) {
+        shaded[k] = shade_sample(k == 0 ? h0 : k == 1 ? h1 : k == 2 ? h2 : h3, out_coord, band_grad, anim_offset, timed_offset);
+    }
+    vec3 c = (shaded[0] + shaded[1] + shaded[2] + shaded[3]) * 0.25;
     // This image is 8-bit, so half a step of noise here scatters the gradient's crossings into a grain instead of bands.
     // The HDR build of it is not, and its own step is finer than this noise, as the final pass knows.
 #ifndef MERGED_IMAGE_HDR

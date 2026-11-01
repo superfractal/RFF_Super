@@ -1,4 +1,5 @@
 <!-- Modified by GPT-6 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-11-01. -->
 # Owner disposition and original JSON restoration
 
 On October 4, 2026, the owner instructs setting aside the Rainbow and historical ObjectType permission questions and restoring the complete original `extern/nlohmann/json.hpp`. Those two questions are closed for further action within this task by the owner's decision. The original-source and permission findings remain historical records; no new author grant is claimed.
@@ -9,7 +10,7 @@ The header is restored byte-for-byte to [nlohmann/json v3.12.0](https://github.c
 
 This restores the entire upstream file, including the original ObjectType declarations, detector, ADL helpers, endian helper, documentation and copyright notices. Earlier local functional patches are also removed. It is not merely an undo of the latest ObjectType change. No local modification tag or attribution comment is inserted into the restored vendor file, following the owner's explicit request for the original. The restoration date and authorship of this action are recorded in NOTICE and this report.
 
-The previous modified header is preserved under `debug/json-upstream-restoration-20261004/json-before-restoration.hpp`. The earlier ObjectType replacement and JSON repair reports describe work that has now been reversed. NOTICE includes the current disposition so those historical sections are not mistaken for the active header state.
+The previous modified header is preserved under `debug/json-upstream-restoration-20261004/json-before-restoration.hpp`, a local archive on the maintainer's machine that is gitignored and not published with the repository. The earlier ObjectType replacement and JSON repair reports describe work that has now been reversed. NOTICE includes the current disposition so those historical sections are not mistaken for the active header state.
 
 ## Scope and verification
 
@@ -17,4 +18,4 @@ The restored file's bytes and Git blob hash are verified against the retained or
 
 Other application, shader and palette repairs and their license files are unchanged. Existing acknowledgements outside the vendor header remain. The earlier Boost detector license is retained as part of the repair history; this restoration does not claim that detector is present in the current header. No historical audit evidence is erased or rewritten.
 
-The restoration does not rebuild the executable, shader binaries, release bundle or source archive. A recorded release rebuild and use of the verified GMP library with its matching source remain separate distribution work. Evidence, the backup and restoration hashes are retained under `debug/json-upstream-restoration-20261004/`.
+The restoration does not rebuild the executable, shader binaries, release bundle or source archive. A recorded release rebuild and use of the verified GMP library with its matching source remain separate distribution work. Evidence, the backup and restoration hashes are retained under `debug/json-upstream-restoration-20261004/`, in the same local, unpublished archive.

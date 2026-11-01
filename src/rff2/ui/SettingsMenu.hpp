@@ -4,11 +4,12 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-27, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-26, 2026-08-27
 // Modified by GPT-6 on 2026-09-14, 2026-09-17, 2026-09-23
-// Modified by Opus 5.5 on 2026-09-29
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01
 //
 
 #pragma once
 #include "MenuModel.hpp"
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -18,6 +19,7 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include <windef.h>
@@ -58,6 +60,8 @@ namespace merutilm::rff2 {
             // the item: the display type has to be rewritten whole to switch owner-draw on and off,
             // and this is the one flag beside it that must survive being rewritten.
             bool rightJustified = false;
+            // A dividing line, which the system draws itself and the theme switch leaves alone.
+            bool separator = false;
             // The size the system itself gave this bar item, read off the live bar before the item
             // was ever made owner-drawn. Guessing the padding back put the dark bar visibly wider
             // than the light one; this is the width it actually had. Zero until captured.
@@ -78,14 +82,36 @@ namespace merutilm::rff2 {
         std::vector<HMENU> childMenus = {};
         std::vector<std::function<void(SettingsMenu &, RenderScene &)>> callbacks = {};
         std::function<void(int, int)> workspaceNavigation;
+        std::function<void()> timelineEditor;
         std::vector<bool> hasCheckboxes = {};
         // The user's menu-visibility.json, every caption the menus offer, and the caption path of each popup.
         MenuVisibilityIO::Json menuVisibility = MenuVisibilityIO::Json::object();
         MenuVisibilityIO::Json menuVisibilityTemplate = MenuVisibilityIO::Json::object();
         std::unordered_map<HMENU, std::vector<std::string>> menuCaptionPaths = {};
+        // Menus a separator has been asked for in, still waiting on a visible item to follow it.
+        std::unordered_set<HMENU> pendingSeparators = {};
         // AI features, left off until menu-visibility.json sets them to true.
         inline static const std::vector<std::string> LOCAL_AI_FEATURE = {"Shader", "Local AI appearance"};
         inline static const std::vector<std::string> AI_EDIT_FEATURE = {"Timeline Editor", "AI Edit"};
+        // Menu items renamed after the panel or section they open, each with the caption it had before.
+        static constexpr std::array<std::pair<std::string_view, std::string_view>, 16> RENAMED_CAPTIONS{{
+            {"Lighting & Relief", "Slope"},
+            {"Animated Materials", "Effects"},
+            {"Color Correction", "Color"},
+            {"HDR & Tone Mapping", "HDR"},
+            {"Resolution & Quality", "Render Properties"},
+            {"Keyframes", "Data Settings"},
+            {"Color Animation", "Animation Settings"},
+            {"Video Encoding", "Export Settings"},
+            {"Export Video", "Export Zooming Video"},
+            {"Cancel Render", "Cancel"},
+            {"Reset Settings (Keep Appearance)", "Reset"},
+            {"Save Settings As", "Save Location / Settings"},
+            {"Two-Color Preview", "2-Color Preview Mode"},
+            {"Use GPU Perturbation", "GPU Perturbation"},
+            {"Generate Keyframes", "Generate Video Keyframe"},
+            {"Smooth Navigation", "Smooth Zooming"},
+        }};
         std::vector<std::optional<std::function<bool*(RenderScene &, bool)>>> checkboxActions = {};
         // What part of the attribute a panel is bound to - all the closers below need to tell them
         // apart by. A shader preset replaces the whole shader, a KFR color file only its palette,
@@ -131,6 +157,10 @@ namespace merutilm::rff2 {
 
         HMENU addChildCheckbox(HMENU target, std::string_view child,
                                const std::function<bool*(RenderScene &, bool)> &checkboxAction);
+
+        // A line before the next visible item added to target. None goes in first, last or twice
+        // when menu-visibility.json hides the items around it.
+        void addSeparator(HMENU target);
 
         template<typename P> requires std::is_base_of_v<Preset, P>
         HMENU addPresetExecutor(HMENU target, P preset);

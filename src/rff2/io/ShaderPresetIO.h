@@ -6,7 +6,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
 //
 
 #pragma once
@@ -118,6 +118,167 @@ namespace merutilm::rff2 {
         static void writeChaosAverage(std::ostream &out, const ShaderAttribute &shader);
 
         static void readChaosAverage(std::ifstream &in, ShaderAttribute &shader);
+
+        static void writeChaosInterior(std::ostream &out, const ShaderAttribute &shader);
+
+        static void readChaosInterior(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the palette's Escape Angle block: uint32 mode, then float32 amount in cycles.
+        static constexpr uint32_t ESCAPE_ANGLE_MAGIC = 0x31434145; // "EAC1"
+
+        static void writeEscapeAngle(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the coloring off; a wrong marker or a cut-short block fails the stream.
+        static void readEscapeAngle(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Waves on Clear Coat Only block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t WAVES_COAT_ONLY_MAGIC = 0x314F4357; // "WCO1"
+
+        static void writeWavesCoatOnly(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readWavesCoatOnly(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Coat Softbox block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t COAT_SOFTBOX_MAGIC = 0x31425343; // "CSB1"
+
+        static void writeCoatSoftbox(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readCoatSoftbox(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Chaos Edge Protection block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t CHAOS_EDGES_MAGIC = 0x31504543; // "CEP1"
+
+        static void writeChaosEdges(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readChaosEdges(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Chaos Bokeh block: uint32 shape, float32 rotation in degrees, float32 aspect.
+        static constexpr uint32_t CHAOS_BOKEH_MAGIC = 0x314B4243; // "CBK1"
+
+        static void writeChaosBokeh(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads Circle, 0 and 1; a wrong marker, a cut-short block or a value out of range fails the stream.
+        static void readChaosBokeh(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Smooth Focus Across Keyframes block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t FOCUS_SMOOTH_MAGIC = 0x314B5346; // "FSK1"
+
+        static void writeFocusSmooth(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readFocusSmooth(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the palette's Orbit Trap block: uint32 mode, then float32 amount, width and density.
+        static constexpr uint32_t ORBIT_TRAP_MAGIC = 0x3150544F; // "OTP1"
+
+        static void writeOrbitTrap(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the coloring off; a wrong marker or a cut-short block fails the stream.
+        static void readOrbitTrap(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap Inside Set block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t ORBIT_TRAP_INTERIOR_MAGIC = 0x3149544F; // "OTI1"
+
+        static void writeOrbitTrapInterior(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch on; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readOrbitTrapInterior(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap region block: one uint32 region (0 outside, 1 both, 2 inside), written only for Inside Only.
+        static constexpr uint32_t ORBIT_TRAP_REGION_MAGIC = 0x3152544F; // "OTR1"
+
+        static void writeOrbitTrapRegion(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block OTI1's region stands; another marker is left unread, a cut-short block or a region above two fails the stream.
+        static void readOrbitTrapRegion(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap shape extension block: uint32 shape (5 to ORBIT_TRAP_SHAPE_LAST), then uint32 sides
+        // (3 to 64), written only for a shape past Line, which OTS1 stores as the nearest of Point to Line.
+        static constexpr uint32_t ORBIT_TRAP_SHAPE_EXTENSION_MAGIC = 0x3158544F; // "OTX1"
+
+        static void writeOrbitTrapShapeExtension(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block OTS1's shape stands and the sides load 5; another marker is left unread, a cut-short
+        // block or a value out of range fails the stream.
+        static void readOrbitTrapShapeExtension(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap look block: float32 offset and speed, four float32 glow color, float32 strength
+        // and sharpness, uint32 blend, then float32 border width and border darkness.
+        static constexpr uint32_t ORBIT_TRAP_LOOK_MAGIC = 0x324C544F; // "OTL2"
+        // The same block with a trailing float32 inside amount, a setting since removed; read and discarded.
+        static constexpr uint32_t ORBIT_TRAP_LOOK_V1_MAGIC = 0x314C544F; // "OTL1"
+
+        static void writeOrbitTrapLook(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads the defaults; a wrong marker or a cut-short block fails the stream.
+        static void readOrbitTrapLook(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap Shape block: uint32 shape, then float64 center real, center imaginary, radius and angle.
+        static constexpr uint32_t ORBIT_TRAP_SHAPE_MAGIC = 0x3153544F; // "OTS1"
+
+        static void writeOrbitTrapShape(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads a Point at the origin; a wrong marker or a cut-short block fails the stream.
+        static void readOrbitTrapShape(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Effect Styles block: per layer, uint32 Flame, Embers, Mist, Ripples, Flow Light and Aurora styles.
+        static constexpr uint32_t EFFECT_STYLES_MAGIC = 0x31534645; // "EFS1"
+
+        static void writeEffectStyles(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads every style as Classic; a wrong marker or a cut-short block fails the stream.
+        static void readEffectStyles(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap hold block: one uint32 flag, 0 or 1, for holding the trap still under color animation.
+        static constexpr uint32_t ORBIT_TRAP_HOLD_MAGIC = 0x3148544F; // "OTH1"
+
+        static void writeOrbitTrapHold(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readOrbitTrapHold(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Smooth Grooves block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t GROOVE_SMOOTH_MAGIC = 0x314D5347; // "GSM1"
+
+        static void writeGrooveSmooth(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readGrooveSmooth(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Rounded Bands block: one uint32 flag, 0 or 1.
+        static constexpr uint32_t GROOVE_ROUNDED_MAGIC = 0x31425247; // "GRB1"
+
+        static void writeGrooveRounded(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads with the switch off; a wrong marker, a cut-short block or a flag above one fails the stream.
+        static void readGrooveRounded(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Crease Blur block: one float32 width, 0 to GROOVE_CREASE_BLUR_MAX.
+        static constexpr uint32_t GROOVE_CREASE_BLUR_MAGIC = 0x31424347; // "GCB1"
+
+        static void writeGrooveCreaseBlur(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads 0; a wrong marker, a cut-short block or a width out of range fails the stream.
+        static void readGrooveCreaseBlur(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap mapping block: uint32 mapping, uint32 arms (1 to ORBIT_TRAP_ARMS_MAX), uint32 relief flag.
+        static constexpr uint32_t ORBIT_TRAP_MAPPING_MAGIC = 0x314D544F; // "OTM1"
+
+        static void writeOrbitTrapMapping(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads Distance, 3 arms and no relief; a wrong marker, a cut-short block or a value out of range fails the stream.
+        static void readOrbitTrapMapping(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Environment Source block: uint32 source, float32 brightness, then four float32 position, r, g, b stops.
+        static constexpr uint32_t STUDIO_ENVIRONMENT_MAGIC = 0x314E4553; // "SEN1"
+
+        static void writeStudioEnvironment(std::ostream &out, const ShaderAttribute &shader);
+
+        // A file without the block loads Two Colors and the default stops; a wrong marker, a cut-short block or a value out of range fails the stream.
+        static void readStudioEnvironment(std::ifstream &in, ShaderAttribute &shader);
 
         static void writeSurfaceReplacement(std::ostream &out, const ShaderAttribute &shader);
 

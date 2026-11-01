@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-10-01
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -9,31 +10,6 @@
 #include "../attr/ShdPaletteAttribute.h"
 
 namespace merutilm::rff2 {
-    // Approximate display color of a frozen iteration value. Computed in double precision so a
-    // large iteration value keeps the correct cycle phase (float getMidColor would lose it).
-    inline COLORREF freezeSwatchColor(const ShdPaletteAttribute &pal, const double iter) {
-        const int n = static_cast<int>(pal.colors.size());
-        if (n == 0) {
-            return RGB(0, 0, 0);
-        }
-        auto chan = [&](const int ch, const float interval) -> float {
-            double ratio = std::fmod(iter / static_cast<double>(interval) + pal.offsetRatio, 1.0);
-            if (ratio < 0.0) {
-                ratio += 1.0;
-            }
-            const double f = ratio * static_cast<double>(n);
-            const int i0 = static_cast<int>(f) % n;
-            const int i1 = (i0 + 1) % n;
-            const float d = static_cast<float>(f - std::floor(f));
-            return std::lerp(pal.colors[i0][ch], pal.colors[i1][ch], d);
-        };
-        return RGB(
-            static_cast<BYTE>(std::round(std::clamp(chan(0, pal.iterationInterval.r), 0.0f, 1.0f) * 255.0f)),
-            static_cast<BYTE>(std::round(std::clamp(chan(1, pal.iterationInterval.g), 0.0f, 1.0f) * 255.0f)),
-            static_cast<BYTE>(std::round(std::clamp(chan(2, pal.iterationInterval.b), 0.0f, 1.0f) * 255.0f)));
-    }
-
-
     // Palette interpolation retains the implementation and color-space provenance recorded in NOTICE.
     inline void drawPalettePreview(const HDC hdc, const RECT &rc, const ShdPaletteAttribute &pal,
                                    const ShdPalColorSmoothingMethod method,

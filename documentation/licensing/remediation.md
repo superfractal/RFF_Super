@@ -1,5 +1,5 @@
 <!-- Modified by GPT-6 on 2026-10-03, 2026-10-04. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-11-01. -->
 # RFF_Super licensing remediation
 
 The available source and notice repairs are applied to **eight code files**, with **five full license texts** added to both source and distribution notice folders. MFR-HDR, Lustre and the owner's commissioned AI material remain unchanged. This report supersedes the earlier audit's status for these changes; it does not claim that all historical permissions or distribution questions are cleared.
@@ -36,7 +36,7 @@ The focused C++20 compile-only check passes for the replacement detection aliase
 
 Source checks establish that palette, norm and memory-loop tokens are unchanged; after substituting renamed local coefficients, the complete shader code tokens are unchanged. Descriptor declarations and unrelated shader code remain identical. In JSON, executable-source changes are confined to the detector, ADL macro and endian helper, plus two required standard includes. RFC prose removal and additional notices do not change decoder operations. All five grants match the retained original license bytes and their two installed copies and manifest hashes. Nine retained source/license files match the pinned Git tree blobs. Both icons match the original Git blobs and current asset bytes. All 179 present historical assets remain unchanged, as do the checked MFR/Lustre sources and guide documents.
 
-Evidence is retained under `debug/license-remediation-20261003/`, including the original local source backups, `verified-source-pairs.json`, `source-remediation-record.json`, `grant-installation-record.json`, `icon-correspondence.json` and `remediation-verification.json`. This new repair snapshot supplements the historical 930-file audit; that audit is not rerun or represented as a hash check of the subsequently changed source.
+Evidence is retained under `debug/license-remediation-20261003/`, including the original local source backups, `verified-source-pairs.json`, `source-remediation-record.json`, `grant-installation-record.json`, `icon-correspondence.json` and `remediation-verification.json`. That folder is a local archive on the maintainer's machine; it is gitignored and not published with the repository. This new repair snapshot supplements the historical 930-file audit; that audit is not rerun or represented as a hash check of the subsequently changed source.
 
 Historical acquisition, earlier author permission and first-creator questions are not all solved by adding a licensed counterpart or mathematical explanation. In particular, the retained ObjectType technique and earlier palette/coefficient history retain explicit limits. The showcase-image creator concern is resolved by the owner's 2026-10-04 clarification. No blanket rights-clearance conclusion follows from these edits. The earlier count of 15 is a historical count of grouped questions, not a count of confirmed violations or a new completion percentage.
 

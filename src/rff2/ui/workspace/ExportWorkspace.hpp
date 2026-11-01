@@ -1,6 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by GPT-6 on 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01, 2026-10-07
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-12, 2026-10-18, 2026-10-21, 2026-11-01
 //
 
 #pragma once
@@ -25,6 +25,11 @@ namespace merutilm::rff2::workspace {
             };
             if (entry.id == "export.peak") entry.enabled = [encodingFields](const FormDraft &draft) {
                 return FormValues(encodingFields, draft).number<int>("export.transfer").value_or(0) == int(VidHdrTransfer::PQ);
+            };
+            if (entry.id == "export.mfrPeak") entry.enabled = [encodingFields](const FormDraft &draft) {
+                const auto method = FormValues(encodingFields, draft).number<int>("export.toneMap").value_or(int(ShdToneMapMethod::CLIP));
+                return method == int(ShdToneMapMethod::MFR_SHOULDER) || method == int(ShdToneMapMethod::MFR_LOG) ||
+                       method == int(ShdToneMapMethod::MFR_LINEAR) || method == int(ShdToneMapMethod::MFR_FALSE_COLOR);
             };
         }
     }
@@ -264,10 +269,12 @@ namespace merutilm::rff2::workspace {
                 limit);
             model->numeric(
                 "export.ssaa", 2, L"Supersampling",
-                L"1 to 8. Computes extra samples and downsamples the output.",
+                L"1 to 8 per axis: N x N samples per pixel, so 2 = 4x and 4 = 16x SSAA. Downsamples the output.",
                 [](auto &a) -> auto & { return a.render.ssaa; }, uint32_t(1), uint32_t(8));
-            model->choice("export.interpolation", 2, L"Linear Interpolation", L"Smooths the final image.",
-                          [](auto &a) -> auto & { return a.render.linearInterpolation; });
+            model->choice("export.ssaaFilter", 2, L"SSAA Filter",
+                L"Mitchell (Linear) keeps thin filaments at their true brightness; Box (Gamma) is the plain mean "
+                L"older files open with.",
+                [](auto &a) -> auto & { return a.render.ssaaFilter; });
             model->choice("export.dither", 2, L"Dither", L"Reduces banding in smooth 8-bit gradients.",
                           [](auto &a) -> auto & { return a.render.dither; });
             model->numeric(
@@ -278,6 +285,16 @@ namespace merutilm::rff2::workspace {
                 "export.bitrate", 3, L"Video Bitrate (kbps)", L"1 to 1000000. Ignored for lossless output.",
                 [](auto &a) -> auto & { return a.video.exportation.bitrate; }, uint32_t(1),
                 uint32_t(1000000));
+            model->numeric(
+                "export.outputWidth", 3, L"Video Output Width",
+                L"0 to 16384. Resizes only the finished frames; 0 keeps the keyframe width or follows the aspect.",
+                [](auto &a) -> auto & { return a.video.exportation.outputWidth; }, uint32_t(0),
+                VidExportAttribute::MAX_OUTPUT_SIDE);
+            model->numeric(
+                "export.outputHeight", 3, L"Video Output Height",
+                L"0 to 16384. Resizes only the finished frames; 0 keeps the keyframe height or follows the aspect.",
+                [](auto &a) -> auto & { return a.video.exportation.outputHeight; }, uint32_t(0),
+                VidExportAttribute::MAX_OUTPUT_SIDE);
             model->choice("export.lossless", 3, L"Lossless Video",
                           L"SDR RGB video in MKV. HDR uses the selected HDR transfer.",
                           [](auto &a) -> auto & { return a.video.exportation.lossless; });
@@ -305,13 +322,13 @@ namespace merutilm::rff2::workspace {
                 "export.exposure", 4, L"Exposure", L"Exposure adjustment in stops.",
                 [](auto &a) -> auto & { return a.shader.hdr.exposure; }, NumericSettingLimits::hdrExposure.minimum, NumericSettingLimits::hdrExposure.maximum);
             model->numeric(
+                "export.headroom", 4, L"Highlight Headroom", L"Linear highlight range before tone mapping.",
+                [](auto &a) -> auto & { return a.shader.hdr.headroom; }, NumericSettingLimits::hdrHeadroom.minimum, NumericSettingLimits::hdrHeadroom.maximum);
+            model->numeric(
                 "export.mfrPeak", 4, L"MFR Mastering Peak (nits)",
                 L"MFR display metadata: reference white is 203 nits. Does not change source light. 100 to "
                 L"10000.",
                 [](auto &a) -> auto & { return a.shader.hdr.mfrPeakNits; }, 100.f, 10000.f);
-            model->numeric(
-                "export.headroom", 4, L"Highlight Headroom", L"Linear highlight range before tone mapping.",
-                [](auto &a) -> auto & { return a.shader.hdr.headroom; }, NumericSettingLimits::hdrHeadroom.minimum, NumericSettingLimits::hdrHeadroom.maximum);
             model->choice("export.compress", 5, L"Compress Keyframes",
                           L"Saves lossless RFMZ maps during keyframe generation.",
                           [](auto &a) -> auto & { return a.video.exportation.compressKeyframes; });
@@ -426,6 +443,8 @@ namespace merutilm::rff2::workspace {
             auto result =
                 model->form(L"Export", {L"Image", L"Video", L"Resolution & Quality", L"Video Encoding",
                                         L"HDR & Tone Mapping", L"Keyframe Output"});
+            result.groupInUse.resize(result.groups.size());
+            result.groupInUse[4] = [self] { return self->scene.getAttribute().shader.hdr.use; };
             const auto field = [&](const char *id, int group, const wchar_t *label, const wchar_t *hint,
                                    auto read) {
                 result.fields.push_back({id, group, label, hint, read, {}});
@@ -464,9 +483,9 @@ namespace merutilm::rff2::workspace {
                     return false;
                 }
                 const auto rank = [](std::string_view id) {
-                    constexpr std::array<std::string_view, 6> ids{"export.width",         "export.height",
-                                                                  "export.clarity",       "export.ssaa",
-                                                                  "export.interpolation", "export.dither"};
+                    constexpr std::array<std::string_view, 6> ids{"export.width",   "export.height",
+                                                                  "export.clarity", "export.ssaa",
+                                                                  "export.ssaaFilter", "export.dither"};
                     return std::find(ids.begin(), ids.end(), id) - ids.begin();
                 };
                 return rank(a.id) < rank(b.id);

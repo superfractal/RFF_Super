@@ -7,16 +7,53 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-13, 2026-10-20, 2026-10-23
 //
 
 #include "GPCSlope.hpp"
 
 #include "RCC1.hpp"
 #include "SharedDescriptorTemplate.hpp"
+#include "../../vulkan_helper/impl/GraphicsPipeline.hpp"
 #include "../../vulkan_helper/repo/GlobalSamplerRepo.hpp"
+#include "../../vulkan_helper/util/BarrierUtils.hpp"
 #include "../constants/VulkanWindowConstants.hpp"
 
 namespace merutilm::rff2 {
+    GPCSlope::~GPCSlope() {
+        if (pipeline != nullptr && pipeline->isDeferred()) {
+            vkh::PipelinePreparation::trace("surface renderer dropped while compiling; kept aside");
+            vkh::PipelinePreparation::keepAliveWhileDeferred(std::shared_ptr<vkh::PipelineAbstract>(std::move(pipeline)));
+            vkh::PipelinePreparation::keepAliveWhileDeferred(std::shared_ptr<vkh::PipelineAbstract>(std::move(fallback)));
+        }
+    }
+
+    void GPCSlope::configure() {
+        GeneralPostProcessGraphicsPipelineConfigurator::configure();
+        if (!pipeline->allowDeferral()) {
+            return;
+        }
+        // Same layout and descriptors as the full shader, so the frame binds and pushes exactly as it would.
+        auto manager = vkh::factory::create<vkh::PipelineManager>(pipeline->getLayout());
+        manager->attachDescriptor(std::vector<vkh::DescriptorPtr>(pipeline->descriptors));
+        manager->attachShader(&vertexShader);
+        manager->attachShader(&pickFromGlobalRepository<vkh::GlobalShaderModuleRepo, vkh::ShaderModuleRef>(
+            std::string(FALLBACK_FRAGMENT)));
+        fallback = vkh::factory::create<vkh::GraphicsPipeline>(wc, pipeline->getLayout(), getVertexBuffer(),
+                                                              getIndexBuffer(), renderContextIndex,
+                                                              primarySubpassIndex, std::move(manager));
+    }
+
+    void GPCSlope::cmdRender(const VkCommandBuffer cbh, const uint32_t frameIndex, vkh::DescIndexPicker &&descIndices) {
+        if (fallback == nullptr || !pipeline->isDeferred()) {
+            GeneralPostProcessGraphicsPipelineConfigurator::cmdRender(cbh, frameIndex, std::move(descIndices));
+            return;
+        }
+        fallback->cmdBindAll(cbh, frameIndex, std::move(descIndices));
+        cmdPushAll(cbh);
+        cmdDraw(cbh, frameIndex, 0);
+    }
+
     void GPCSlope::updateQueue(vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
 
         //no operation
@@ -38,7 +75,7 @@ namespace merutilm::rff2 {
             host.set<glm::vec4>(layerVector + 3, {e.distortion, e.glow, e.seed, e.period});
             host.set<glm::vec4>(layerVector + 4, e.color);
             host.set<glm::vec4>(layerVector + 5, e.secondary);
-            host.set<glm::vec4>(FIRST_RAIN_VECTOR + i, {float(e.rainShape), e.dropSize, 0.0f, 0.0f});
+            host.set<glm::vec4>(FIRST_RAIN_VECTOR + i, {float(e.rainShape), e.dropSize, float(e.styleIndex()), 0.0f});
         }
         host.set<glm::vec4>(CONTEXT_VECTOR, {sceneLinear ? 1.0f : 0.0f, hasIterations ? 1.0f : 0.0f, 0.0f, 0.0f});
         ubo.update();
@@ -126,6 +163,17 @@ namespace merutilm::rff2 {
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_RELIEF_WAVES, slope.reliefWaves);
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_WAVE_FREQUENCY, slope.waveFrequency);
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_INVERT_RELIEF, slope.invertRelief ? 1.0f : 0.0f);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_WAVES_COAT_ONLY, slope.reliefWavesCoatOnly ? 1.0f : 0.0f);
+        slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_COAT_SOFTBOX, slope.coatSoftbox ? 1.0f : 0.0f);
+        slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_ENVIRONMENT_SOURCE, float(slope.studioEnvironmentSource));
+        slopeUBOHost.set<float>(DescSlope::TARGET_ENVIRONMENT_BRIGHTNESS, slope.environmentBrightness);
+        const auto stops = slope.environmentStops();
+        for (uint32_t i = 0; i < DescSlope::ENVIRONMENT_STOP_COUNT; ++i) {
+            slopeUBOHost.set<float>(DescSlope::TARGET_ENVIRONMENT_STOP_POSITION_1 + i, *stops[i].position);
+            for (uint32_t channel = 0; channel < 3; ++channel) {
+                slopeUBOHost.set<float>(DescSlope::TARGET_ENVIRONMENT_STOP_COLOR_1_R + i * 3 + channel, (*stops[i].color)[channel]);
+            }
+        }
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_BOUNDARY_GUARD, slope.boundaryGuard);
 
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_STYLE, float(slope.surfaceStyle));
@@ -228,6 +276,9 @@ namespace merutilm::rff2 {
         host.set<float>(DescSlope::TARGET_GROOVE_WIDTH, palette.grooveWidth);
         host.set<float>(DescSlope::TARGET_GROOVE_AUTO, palette.grooveAuto ? 1.0f : 0.0f);
         host.set<float>(DescSlope::TARGET_GROOVE_COUNT, float(palette.bandLineCount));
+        host.set<float>(DescSlope::TARGET_GROOVE_SMOOTH, palette.grooveSmooth ? 1.0f : 0.0f);
+        host.set<float>(DescSlope::TARGET_GROOVE_ROUNDED, palette.grooveRounded ? 1.0f : 0.0f);
+        host.set<float>(DescSlope::TARGET_GROOVE_CREASE_BLUR, palette.grooveCreaseBlur);
         ubo->update();
     }
 
@@ -261,6 +312,7 @@ namespace merutilm::rff2 {
                 break;
             }
             case Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX:
+            case Constants::VulkanWindow::VIDEO_WARMUP_WINDOW_ATTACHMENT_INDEX:
             case Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX: {
                 const auto &input = sic.getImageContextMF(SharedImageContextIndices::MF_VIDEO_RENDER_IMAGE_PRIMARY);
                 inputDesc.get<vkh::CombinedImageSampler>(0, BINDING_PREV_RESULT_SAMPLER)->setImageContextMF(input);
@@ -316,5 +368,22 @@ namespace merutilm::rff2 {
         appendDescriptor<DescPalette>(SET_PALETTE, descriptors);
         descriptors.push_back(paletteTextures);
         appendDescriptor<DescTime>(SET_PALETTE_TIME, descriptors);
+    }
+
+    const vkh::BufferContext &GPCSlope::reliefCacheBuffer() const {
+        using namespace SharedDescriptorTemplate;
+        return getDescriptor(SET_ITERATION).get<vkh::ShaderStorage>(0, DescIteration::BINDING_SSBO_RELIEF_CACHE)->getBufferContext();
+    }
+
+    void GPCSlope::cmdReliefCacheBeforeWrite(const VkCommandBuffer cbh) const {
+        vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                                                  VK_ACCESS_SHADER_WRITE_BIT, reliefCacheBuffer().buffer, 0, VK_WHOLE_SIZE,
+                                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    }
+
+    void GPCSlope::cmdReliefCacheAfterWrite(const VkCommandBuffer cbh) const {
+        vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                                  reliefCacheBuffer().buffer, 0, VK_WHOLE_SIZE,
+                                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
     }
 }

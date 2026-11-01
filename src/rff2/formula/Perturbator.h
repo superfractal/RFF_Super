@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-08-06
 // Modified by GPT-6 on 2026-09-30
+// Modified by Opus 5.5 on 2026-10-07
 //
 
 #pragma once
@@ -17,6 +18,11 @@ namespace merutilm::rff2 {
         virtual ~Perturbator() = default;
 
         static int logZoomToExp10(float logZoom);
+
+        // The angle of z where the orbit crossed the bailout, in radians from -pi to pi; it feeds the Escape Angle coloring.
+        static float escapeAngleOf(const double zr, const double zi) {
+            return static_cast<float>(std::atan2(zi, zr));
+        }
 
         static double getDoubleValueIteration(uint64_t iteration, double prevIterDistance,
                                               double currIterDistance,

@@ -1,5 +1,5 @@
 <!-- Modified by GPT-6 on 2026-10-04. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-11-01. -->
 # ObjectType and palette license archive investigation
 
 This investigation uses Internet Archive captures, official source APIs and the previously verified Git history to separate publication, permission and actual acquisition. The missing original-author MIT grant for Quilez's cosine palette shader is now established. ObjectType's acquisition history is clearer, but a separate MIT grant is still unestablished. The rainbow table appears in an earlier archived website; its first creator and RFF donor remain unknown. These are provenance findings, not three confirmed infringements.
@@ -66,7 +66,7 @@ Bonet's earlier matching mathematical publication remains a comparison reference
 
 ## Evidence preservation and limits
 
-Raw archive responses, CDX indices, decoded HTML/JSON, source and license extraction, official API comments, targeted search results and before-edit backups are retained in `debug/license-archive-investigation-20261004/`. The review records twelve selected raw captures: three articles, two shader views, two embeds, one shader API response, three author profiles and one rainbow page. All twelve match their selected CDX SHA-1 digest, using the original compressed bytes where the archive digest describes compressed content. Raw and decoded SHA-256 hashes are recorded separately. The decisive shader API and rainbow replay both match the indexed payload directly.
+Raw archive responses, CDX indices, decoded HTML/JSON, source and license extraction, official API comments, targeted search results and before-edit backups are retained in `debug/license-archive-investigation-20261004/`, a local archive on the maintainer's machine that is gitignored and not published with the repository. The review records twelve selected raw captures: three articles, two shader views, two embeds, one shader API response, three author profiles and one rainbow page. All twelve match their selected CDX SHA-1 digest, using the original compressed bytes where the archive digest describes compressed content. Raw and decoded SHA-256 hashes are recorded separately. The decisive shader API and rainbow replay both match the indexed payload directly.
 
 These checks establish evidence integrity and the license extraction; they execute no application implementation. All 292 existing dependency-manifest entries remain unchanged, and the new grant adds one entry. The two installed grant copies contain identical extracted notice text. Source differences in this pass contain only dated provenance comments and the palette file's modification date; palette and norm implementation tokens are unchanged. The report supplies the new current conclusions while older dated audit reports remain historical records. No release artifact is produced or legal determination of every possible jurisdiction made.
 

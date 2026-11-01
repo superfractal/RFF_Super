@@ -1,8 +1,10 @@
 //
 // Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12
 //
 
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <ostream>
@@ -10,6 +12,15 @@
 #include <string>
 
 namespace merutilm::rff2::workspace {
+    // Other came after workspace ids 17 to 20 were taken, so the appearance workspaces are listed rather than ranged.
+    inline constexpr int OTHER_WORKSPACE = 21;
+    inline constexpr int ORBIT_TRAP_WORKSPACE = 22;
+    inline constexpr std::array APPEARANCE_WORKSPACES{10, 11, 12, 13, 14, 15, 16, OTHER_WORKSPACE, ORBIT_TRAP_WORKSPACE};
+
+    inline bool isAppearanceWorkspace(const int id) {
+        return std::ranges::find(APPEARANCE_WORKSPACES, id) != APPEARANCE_WORKSPACES.end();
+    }
+
     struct AppearancePanelLayout {
         struct Slot {
             bool open = false;
@@ -73,7 +84,7 @@ namespace merutilm::rff2::workspace {
                 int side;
                 if (input >> parsedValue >> module >> side && parsedValue >= 0 &&
                     parsedValue < static_cast<int>(slots.size()) &&
-                    (module == 1 || (module >= 10 && module <= 16)) &&
+                    (module == 1 || isAppearanceWorkspace(module)) &&
                     side >= 0 && side <= 2) {
                     slots[parsedValue] = {true, module, side};
                 }

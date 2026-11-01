@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-17, 2026-09-20, 2026-09-22
+// Modified by Opus 5.5 on 2026-10-14
 //
 
 #pragma once
@@ -314,6 +315,15 @@ namespace merutilm::rff2::workspace {
                 SetTextColor(reinterpret_cast<HDC>(wParam), self->theme.foreground);
                 SetBkColor(reinterpret_cast<HDC>(wParam), self->theme.field);
                 return reinterpret_cast<LRESULT>(self->fieldBrush);
+            case WM_CTLCOLORBTN:
+                // The owner-drawn clear button fills with this brush before WM_DRAWITEM; the default one flashed white.
+                if (reinterpret_cast<HWND>(lParam) == self->clear) {
+                    const bool pressed = (SendMessageW(self->clear, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0;
+                    SetDCBrushColor(reinterpret_cast<HDC>(wParam),
+                                    self->clearHovered || pressed ? self->theme.selected : self->theme.field);
+                    return reinterpret_cast<LRESULT>(GetStockObject(DC_BRUSH));
+                }
+                break;
             case WM_DRAWITEM: {
                 const auto *item = reinterpret_cast<DRAWITEMSTRUCT *>(lParam);
                 if (item->hwndItem == self->clear) {

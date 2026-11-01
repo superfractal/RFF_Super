@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-24, 2026-09-03
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-14, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -17,10 +18,9 @@ namespace merutilm::rff2 {
     struct CallbackFile {
         static const std::function<void(SettingsMenu &, RenderScene &)> SAVE_MAP;
         static const std::function<void(SettingsMenu &, RenderScene &)> SAVE_IMAGE;
-        static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_MAP;
-        static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_IMAGE;
         static const std::function<void(SettingsMenu &, RenderScene &)> SAVE_CONFIG;
-        static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_CONFIG;
+        // Every load behind one dialog: map, image, settings, location or appearance, told apart by extension.
+        static const std::function<void(SettingsMenu &, RenderScene &)> LOAD_FILE;
         static const std::function<void(SettingsMenu &, RenderScene &)> NEW_CONFIG;
         static bool saveCurrentConfig(RenderScene &scene);
         static bool saveConfigTo(RenderScene &scene, const std::filesystem::path &path);

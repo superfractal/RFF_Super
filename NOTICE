@@ -1,7 +1,7 @@
 RFF Super - Third-Party Notices
 
 Notice mappings updated by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-03, 2026-10-04.
-Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04.
+Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-26, 2026-10-29, 2026-10-31, 2026-11-01.
 
 RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
 GNU General Public License v3; see LICENSE. This file records the third-party
@@ -12,13 +12,12 @@ byte-for-byte to upstream v3.12.0. Later descriptions of local JSON repairs
 and the ObjectType rewrite are historical and no longer describe that file.
 Rainbow and historical ObjectType permission are accepted by the owner with
 no further investigation or remediation requested. See the final owner
-disposition section below and documentation/license-owner-disposition-2026-10-04.md.
+disposition section below and documentation/licensing/owner-disposition.md.
 
 The shared legacy/workspace palette preview in src/rff2/ui/PalettePreview.hpp
 uses the existing ShdPaletteAttribute.h interpolation implementation. Its Oklab,
 sRGB and smootherstep provenance remains as recorded below; no new color-space
-implementation is introduced by the UI preview. The same header also shares the
-existing frozen-color swatch sampler from CallbackShader.cpp with the workspace.
+implementation is introduced by the UI preview.
 
 Copyright (C) 2025-2026 Merutilm     - original RFF-2.0
 Copyright (C) 2025-2026 SuperFractal - RFF Super, modifications from 2026-07-05 onward
@@ -48,6 +47,30 @@ in a distribution. Old local models/ directories are not part of the product.
 Bio Explorer and its lightweight heuristic controller were removed on 2026-09-25.
 
 FFmpeg is neither linked nor distributed; see the FFmpeg entry below.
+
+GPU perturbation ported from RFF 2.3.0 (2026-10-06)
+---------------------------------------------------
+GPU Perturbation is adapted from Merutilm's RFF 2.3.0 source, GPL-3.0, the same
+author and license as the RFF-2.0 base recorded above. The public repository is
+https://github.com/Merutilm/RFF-2.0 (shaders/src/vk_iterate.comp there matched
+the local 2.3.0 copy when checked on 2026-10-06). Adapted files and their donors:
+- shdsrc/vk_light_perturbation.comp: shaders/src/vk_iterate_double.comp
+- shdsrc/vk_light_perturbation_isolated.comp: shaders/src/vk_interpolate_isolated.comp
+- shdsrc/vk_light_perturbation_single.comp: shaders/src/vk_iterate.comp (single precision)
+- shdsrc/light_perturbation.glsl: shaders/include/desc_render_meta_double.glsl
+  and desc_batch_result.glsl
+- src/rff2/vulkan/GpuLightPerturbator.*: src/rff2/vulkan/CPCIterate.hpp,
+  src/rff2/app/ComputeShaderRenderManager.hpp and RFF2::fillIterationComputeShader
+- src/rff2/attr/RndComputeShaderAttribute.h: src/rff2/settings/RndComputeShader.hpp
+Each file keeps Merutilm's Created by line and carries a Modified by notice.
+RFF_Super's changes: iteration follows RFF_Super's LightMandelbrotPerturbator
+loop in double precision instead of float/fex; smoothing is finished on the CPU;
+the MPA table keeps RFF_Super's own layout and index compression; an
+interpolated neighbor does not count as finished; Interpolate Isolated Pixels
+is off by default. The shader's hypot_approx repeats the 0.428 norm
+approximation recorded under "Inherited mathematics" below. The perturbation
+recurrence and the |z| < |dz| rebase are the published techniques already used
+by the CPU perturbator; no third-party code beyond Merutilm's was copied.
 
 Local custom-formula perturbation experiment (2026-10-01)
 --------------------------------------------------------
@@ -131,7 +154,7 @@ The dithering noise constants follow "Next Generation Post Processing in Call
 of Duty: Advanced Warfare", presented at SIGGRAPH 2014. What is taken is the
 three published constants and the fract() form around them, in
 shdsrc/vk_linear_interpolation.frag, shdsrc/vk_2_map_iter_stripe.comp and
-shdsrc/vk_fog.frag. The
+shdsrc/chaos_defocus.glsl (moved there from shdsrc/vk_fog.frag on 2026-10-09). The
 presentation attaches no license statement to the technique. The current
 implementation's separate Alan Wolfe MIT grant is identified in the
 "Interleaved Gradient Noise - licensed replacement expression" entry below.
@@ -157,9 +180,12 @@ https://doi.org/10.1145/566654.566575
 
 Peter Markstein - FMA division correction
 
-The correctly rounded double division built from a hoisted reciprocal, in
+The correctly rounded double division built from a hoisted reciprocal - div_r in
 shdsrc/vk_2_map_iter_stripe.comp and shdsrc/palette_sampling.glsl (included by
-shdsrc/vk_iteration_palette.frag), is the
+shdsrc/vk_iteration_palette.frag and shdsrc/vk_slope.frag), and div_by_reciprocal in
+shdsrc/div_reciprocal.glsl, which the relief heights of shdsrc/vk_slope.frag,
+shdsrc/lustre_relief.glsl and shdsrc/fog_iteration.glsl (included by shdsrc/vk_fog.frag
+and shdsrc/vk_chaos_irregularity.comp) use - is the
 two-FMA residual-and-correction step Markstein published in "Computation of
 elementary functions on the IBM RISC System/6000 processor", IBM Journal of
 Research and Development 34(1), 1990, and restated with Alan H. Karp in
@@ -167,6 +193,27 @@ Research and Development 34(1), 1990, and restated with Alan H. Karp in
 attach no license statement to the technique.
 https://doi.org/10.1147/rd.341.0111
 https://doi.org/10.1145/279232.279237
+
+Ping Tak Peter Tang - table-driven logarithm
+
+The double-precision ln(1+x) in shdsrc/log1p_d.glsl (included by
+shdsrc/vk_2_map_iter_stripe.comp and shdsrc/palette_sampling.glsl) follows the
+table-driven method of "Table-driven implementation of the logarithm function
+in IEEE floating-point arithmetic", ACM TOMS 16(4), 1990: a 128-entry table of
+reciprocals and their logarithms, then a short series on the small remainder.
+The code is an independent implementation and its table was generated for this
+project; the paper attaches no license statement to the technique.
+https://doi.org/10.1145/98267.98294
+
+Sun Microsystems fdlibm - ln2 split constants
+
+The same file uses the two-part ln2 constants (ln2_hi, ln2_lo) published in
+fdlibm's e_log.c and s_log1p.c. No fdlibm code is copied. fdlibm carries this
+notice: "Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+Developed at SunSoft, a Sun Microsystems, Inc. business. Permission to use,
+copy, modify, and distribute this software is freely granted, provided that
+this notice is preserved."
+https://www.netlib.org/fdlibm/
 
 Chris Wellons - lowbias32
 
@@ -200,9 +247,20 @@ Edwin Catmull and Raphael Rom - uniform cubic interpolation
 
 src/rff2/video/TimelineSchedule.cpp (catmullRom) and
 src/rff2/video/TimelineEvaluator.cpp (cubic) evaluate the standard uniform
-Catmull-Rom polynomial, with endpoint tangents (p2-p0)/2 and (p3-p1)/2.
-Mathematical reference: "A Class of Local Interpolating Splines", Computer
-Aided Geometric Design, 1974, pp. 317-326. Historical reference and derivation:
+Catmull-Rom polynomial between p1 and p2, with tangents (p2-p0)/2 at p1 and
+(p3-p1)/2 at p2.
+shdsrc/vk_2_map_iter_stripe.comp (catmull_rom_weights, cubic_map_height) uses
+the same polynomial in two dimensions for the relief height of an enlarged
+keyframe, clamped to the range of its middle four texels.
+src/rff2/ui/RenderScene.cpp (catmullRomWeights, cubicSourceValue,
+cubicTrapDistances) applies it the same way to the iteration counts and orbit
+trap distances when the live 360 view is reprojected from its padded source.
+Mathematical reference: Edwin Catmull and Raphael Rom, "A Class of Local
+Interpolating Splines", in R. E. Barnhill and R. F. Riesenfeld (eds.),
+Computer Aided Geometric Design, Academic Press, 1974, pp. 317-326.
+Historical reference and derivation: Alvy Ray Smith, "Spline Tutorial Notes",
+Lucasfilm Technical Memo 77 (1983), and Microsoft's D3DXVec3CatmullRom
+documentation:
 https://alvyray.com/Memos/CG/Pixar/spline77.pdf
 https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dxvec3catmullrom
 These references identify the mathematics; they do not assert that Microsoft
@@ -211,10 +269,8 @@ or Lucasfilm source code is incorporated or supply a separate code license.
 Quintic smootherstep - mathematical reference to Ken Perlin
 
 The eased_cycle functions in shdsrc/palette_sampling.glsl and
-shdsrc/vk_2_map_iter_stripe.comp, samplePaletteStops in
-src/rff2/attr/ShdPaletteAttribute.h and iterationColoringCurve in
-src/rff2/ui/workspace/ChoiceEditors.hpp (which draws the Iteration Coloring
-tiles) use 6*t^5 - 15*t^4 + 10*t^3. Ken Perlin's
+shdsrc/vk_2_map_iter_stripe.comp, and samplePaletteStops in
+src/rff2/attr/ShdPaletteAttribute.h use 6*t^5 - 15*t^4 + 10*t^3. Ken Perlin's
 "Improving Noise" (2002), section 3, describes this interpolation polynomial:
 https://mrl.cs.nyu.edu/~perlin/paper445.pdf
 It also follows from endpoint values 0 and 1 with zero first and second
@@ -230,17 +286,76 @@ or change the licenses of independently written project implementations.
 - ExpressionParser.cpp uses an operator-stack/postfix parsing approach related
   to Edsger W. Dijkstra's "ALGOL 60 Translation" (1961), shunting-yard parsing:
   https://ir.cwi.nl/pub/9251
+- The Mitchell (Linear) SSAA Filter (shdsrc/ssaa_resolve.glsl, used by
+  vk_smooth_present.frag and vk_image_rgba2bgr.comp, and
+  src/rff2/ui/SsaaResolve.hpp) uses the cubic with B = C = 1/3 from Don P.
+  Mitchell and Arun N. Netravali, "Reconstruction Filters in Computer Graphics",
+  Computer Graphics 22(4) (SIGGRAPH 1988), pp. 221-228:
+  https://history.siggraph.org/?p=119580
+  The polynomial coefficients were derived from the paper's general B, C form;
+  no third-party resampling code was copied.
+- Escape Angle coloring (vk_iteration_palette.frag escape_angle_offset; angles
+  from Perturbator::escapeAngleOf and light_perturbation.glsl store_pixel) uses
+  arg z at escape. Binary Decomposition, splitting escaped points by the sign of
+  Im z, is a long-standing technique documented in H.-O. Peitgen and D. Saupe
+  (eds.), "The Science of Fractal Images" (Springer, 1988), and described in
+  Robert P. Munafo's Mu-Ency (text CC BY-NC 4.0, cited only, nothing copied):
+  https://mrob.com/pub/muency/binarydecomposition.html
+  The idea of adding angle-based modes was prompted by a survey of GMT-fractals
+  (GPL-3.0); no GMT code was copied.
+- Orbit Trap coloring (src/rff2/formula/OrbitTrap.h, the perturbators'
+  sampling, light_perturbation.glsl sample_trap, vk_iteration_palette.frag
+  apply_orbit_trap and, for video export, vk_2_map_iter_stripe.comp
+  orbit_trap_color). Cross Glow takes the nearest approach to the two axes, the
+  "epsilon cross" of Clifford A. Pickover that names Pickover stalks:
+  https://en.wikipedia.org/wiki/Pickover_stalk
+  Coloring by nearest approach to a shape is the general orbit-trap technique
+  (background: https://en.wikipedia.org/wiki/Orbit_trap). Cellular combines the
+  nearest and second nearest distance, the F1/F2 idea of Steven Worley, "A
+  Cellular Texture Basis Function", SIGGRAPH 1996, applied to orbit points; the
+  mode was prompted by the Mandelbrot-Cellular Fragmentarium example bundled with
+  GMT-fractals (GPL-3.0). Both were written independently from these
+  descriptions; no GMT, Fragmentarium or other third-party code was copied.
+  Shape (src/rff2/formula/OrbitTrapShape.h, light_perturbation.glsl
+  trap_shape_distance) measures the distance to a point, a circle's rim, a
+  turned cross or a line through a user-set center: a 2D reading of the
+  geometric orbit trap (Point, Sphere, Cross, Plane) described in the
+  GMT-fractals documentation (GPL-3.0). The distances are the textbook point,
+  circle and line formulas, written independently; no GMT code was copied.
+  Grid Points, Grid Lines, Rings, Polygon, Star and Spiral (the same files)
+  are textbook plane geometry written for RFF_Super: the nearest lattice
+  point or line, the nearest of evenly spaced circles, the distance to a
+  line segment after folding a regular polygon or star into one half sector
+  of its symmetry, and the radial distance to an Archimedean spiral. The GPU's double-precision
+  arctangent in light_perturbation.glsl (trap_atan2) is the Taylor series of
+  atan after reducing the argument by tan(k pi / 12). No third-party code
+  was copied.
+  Orbit Trap Mapping and Relief (orbit_trap_relief.glsl) are original
+  RFF_Super shading of those distances (GPL-3.0-or-later). Angle colors by
+  arg(z - c) at the nearest approach; Relief treats the log2 distance as the
+  radius of a round tube lit with a Blinn half vector (see below). Both were
+  written independently; no third-party code was copied.
 - Perturbator.h implements log-log escape smoothing, with bailout normalization
   and a locally estimated degree in the general-formula variant. Background:
   Linas Vepstas, "Renormalizing the Mandelbrot Escape" (1997):
   https://linas.org/art-gallery/escape/escape.html
+- BuddhabrotPerturbator.cpp/.h draw the Buddhabrot: the density of the orbits
+  of escaping z^2+c points, the technique Melinda Green described in 1993
+  (https://superliminal.com/fractals/bbrot/). It was written from that
+  description; no Buddhabrot program's code was copied. The cardioid and
+  period-2 disc tests are the standard closed forms for those components.
+  Starting points come from SplitMix64 (Sebastiano Vigna, 2015:
+  https://prng.di.unimi.it/splitmix64.c), applied to a sample counter; its
+  three mixing constants match that file. The file dedicates its code to the
+  public domain; earlier copies pointed to CC0 1.0, and the current copy adds
+  a 0BSD-style permission grant. Both terms are GPL-compatible.
 - The Burning Ship examples/RIABS operation in ExpressionParser.cpp/.h and
   CallbackFractal.cpp refer to Michael Michelitsch and Otto E. Roessler,
   "The burning ship and its quasi-Julia sets" (1992):
   https://doi.org/10.1016/0097-8493(92)90032-Q
   CallbackFractal.cpp also explains the smoothing used by Perturbator.h.
-- effects.glsl uses a normal/half-vector power highlight. vk_slope.frag uses
-  an artistic variation. Background: Jim Blinn, "Models of Light Reflection
+- effects.glsl and orbit_trap_relief.glsl use a normal/half-vector power
+  highlight. vk_slope.frag uses an artistic variation. Background: Jim Blinn, "Models of Light Reflection
   for Computer Synthesized Pictures" (1977); these are not claims of a complete
   physically based model:
   https://www.microsoft.com/en-us/research/publication/models-of-light-reflection-for-computer-synthesized-pictures/
@@ -282,7 +397,7 @@ This is a mathematical reference, not a claim that NIST code was copied.
 
 Short mathematical references and unresolved code permissions
 
-The Hable, Jimenez, Quilez and Markstein entries identify limited formulas,
+The Hable, Jimenez, Quilez, Markstein and Tang entries identify limited formulas,
 constants or numerical methods. Attribution does not create a missing license
 for protected source code. Express code-reuse terms have not been established
 for all of those references; do not interpret their inclusion here as such a
@@ -329,13 +444,22 @@ endorses, sponsors, or certifies this program.
                               shdsrc/vk_2_map_iter_stripe.comp.
                               shdsrc/vk_smooth_present.frag decodes display
                               values for an sRGB swapchain attachment.
+                              The SSAA Filter decodes and re-encodes with it in
+                              shdsrc/ssaa_resolve.glsl and
+                              src/rff2/ui/SsaaResolve.hpp.
   SMPTE ST 2084 (PQ)          Inverse EOTF in vk_linear_interpolation.frag and
-                              src/rff2/ui/VideoWindow.cpp. Also published as
+                              src/rff2/video/HdrTransfer.hpp (moved from
+                              src/rff2/ui/VideoWindow.cpp, which uses it). The
+                              SSAA Filter decodes and re-encodes with the EOTF
+                              and its inverse in shdsrc/ssaa_resolve.glsl and,
+                              through HdrTransfer.hpp, in
+                              src/rff2/ui/SsaaResolve.hpp. Also published as
                               ITU-R BT.2100.
   SMPTE ST 2086               Form of the master-display metadata the PQ export
                               passes to the encoder.
-  ARIB STD-B67 (HLG)          OETF in the same two files, developed by the BBC
-                              and NHK and also published as ITU-R BT.2100.
+  ARIB STD-B67 (HLG)          OETF in the same files, and its inverse wherever
+                              PQ is decoded above, developed by the BBC and NHK
+                              and also published as ITU-R BT.2100.
 
 The "HDR10 (PQ)" option is named for the profile it targets - 10-bit BT.2020
 with the ST 2084 transfer and static ST 2086 metadata. HDR10 is an open profile
@@ -361,6 +485,22 @@ lowbias32 routine. No external implementation source has been established
 for this mixer; the source's originality statement is retained, not treated
 as an independently verified reconstruction of its creation history.
 
+The Effect Styles in shdsrc/effects.glsl (Flame, Embers, Mist, Ripples, Flow
+Light and Aurora styles other than Classic) are original project code written
+for RFF_Super. effect_periodic_noise is value noise on the same integer mixer,
+with lattice coordinates wrapped by a period before hashing so the band and
+aspect seams stay continuous; effect_fbm sums its octaves with doubled
+frequency, doubled period and halved amplitude, the fractional Brownian motion
+construction (background: David S. Ebert, F. Kenton Musgrave et al., "Texturing and Modeling: A
+Procedural Approach"). Caustics uses effect_cell_edge, the F2 - F1 distance of
+Steven Worley, "A Cellular Texture Basis Function", SIGGRAPH 1996. Its moving
+feature points use the short idiom 0.5 + a * sin(time + 2 pi * point), which also
+appears in the cellular-noise examples of "The Book of Shaders" by Patricio
+Gonzalez Vivo and Jen Lowe (https://thebookofshaders.com/12/); here the
+amplitude is 0.4 and each point has its own rate. No code from that book, from
+Shadertoy or from any other shader collection was copied; a web search on
+2026-10-20 found no matching implementation of these styles.
+
 Chaos blur in shdsrc/vk_fog.frag is the project-labelled circular-aperture
 gather: texture samples placed on a per-pixel rotated golden-angle spiral are
 weighted by radial smoothstep and normalized by their weight sum, and its
@@ -369,7 +509,34 @@ Average in Gamma Space the samples are averaged after a 1/2.2 power and the
 mean is raised back by 2.2; Average in Linear Space averages them as they are.
 This generic display-gamma round trip is written here, not taken from a
 source. The name does not identify a third-party library or a claim to
-implement a particular published chaos algorithm.
+implement a particular published chaos algorithm. Since 2026-10-05 the
+per-pixel irregularity the region mask is feathered from is computed once per
+frame by shdsrc/vk_chaos_irregularity.comp, with the measure itself moved from
+shdsrc/vk_fog.frag into shdsrc/fog_iteration.glsl; the method is unchanged.
+Since 2026-10-09 ign(), vogel_disc() and the feathered region mask live in
+shdsrc/chaos_defocus.glsl, shared by shdsrc/vk_fog.frag and
+shdsrc/vk_chaos_irregularity.comp; the method is unchanged.
+
+Chaos Edge Protection (shdsrc/vk_fog.frag, chaos_blur_protected) weights each
+aperture tap by whether that tap's own blur radius reaches the pixel being
+shaded. This is the scatter-as-gather idea used by post-process depth of field,
+described for example in GPU Gems 3 chapter 28 (Earl Hammon Jr., "Practical
+Post-Process Depth of Field", NVIDIA, 2007) and in Jorge Jimenez, "Next
+Generation Post Processing in Call of Duty: Advanced Warfare", SIGGRAPH 2014
+Advances in Real-Time Rendering course. The idea only is followed; the weight
+ramp, its width and the narrow-feather per-tap selection are written here and
+no code was copied from those publications.
+
+Chaos Bokeh Shape (shdsrc/vk_fog.frag, bokeh_shape and chaos_blur_shaped) maps
+the golden-angle disc onto a regular polygon whose corners lie on the unit
+circle. The edge distance cos(pi/n)/cos(phi) and the area-preserving angle
+warp tan(phi) = tan(pi/n) * t / (pi/n) are derived here from the polygon's
+geometry. The option of polygonal, rotated and stretched bokeh was prompted by
+a survey of GMT-fractals (GPL-3.0, engine-gmt/shaders/chunks/ray.ts); GMT's
+own sampler uses a different, non-area-preserving remap and no GMT code was
+copied. Pick Focus Depth was likewise prompted by GMT's Pick Focus control;
+its RFF_Super implementation reads the clicked pixel's iteration count and
+shares no code with GMT.
 
 The golden-angle spiral is related to the point arrangement published by H. Vogel,
 "A better way to construct the sunflower head", Mathematical Biosciences 44
@@ -502,7 +669,9 @@ against OpenCV 4.13, resolved by find_package, and uses only the core,
 imgcodecs, and imgproc modules.)
 
 The attribution notices below are reproduced from opencv-4.13.0/COPYRIGHT in the
-OpenCV source archive (third-party/sources/mingw-w64-opencv-4.13.0-3):
+OpenCV source archive third-party/sources/mingw-w64-opencv-4.13.0-3.src.tar.zst,
+stored as .part001 to .part006 beside its .sig and restored as described in
+third-party/README.md and third-party/sources/archive-parts.json:
 
     Copyright (C) 2000-2022, Intel Corporation, all rights reserved.
     Copyright (C) 2009-2011, Willow Garage Inc., all rights reserved.
@@ -633,6 +802,26 @@ against Romain Guy and Mathias Agopian's Filament documentation, sections 4.4,
 https://google.github.io/filament/main/filament.html
 https://github.com/google/filament/blob/main/LICENSE
 
+2026-10-08: with Coat Softbox on, the clear coat lights its key and fill as rectangular softboxes with
+the representative-point method of Brian Karis, "Real Shading in Unreal Engine 4"
+(SIGGRAPH 2013 course notes, section "Area Lights"):
+https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+The light comes from the box point nearest the mirror ray, and the lobe is
+renormalized by its widening as in that paper's sphere-light normalization, here
+applied per box axis. The box frame, clamp and per-axis factor are original
+GPL-3.0-only code; no Epic Games code is used. Wicked Engine (MIT) documents a
+similar rectangle-light approach; none of its code is used either.
+
+2026-10-08: Environment Source (shdsrc/studio_environment.glsl and studio_panorama in
+shdsrc/vk_slope.frag) lets the Studio reflection read a four-stop gradient or a
+texture layer as an equirectangular panorama. The idea of separate gradient/image
+sources, and of blurring by the wider of roughness and pixel footprint rather than
+their sum, was prompted by a survey of GMT-fractals (GPL-3.0, its env.ts and
+materials.ts; see documentation/GMT_to_RFF_Shader_Adoption_EN.md section G). No GMT
+code or constants were copied. The equirectangular mapping (polar angle from acos y,
+azimuth from atan) and the 1-4-6-4-1 binomial blur are textbook; the spread-to-mip
+conversion and gradient evaluation are original GPL-3.0-only code.
+
 ================================================================================
 Lustre surface - mathematical references
 ================================================================================
@@ -662,6 +851,20 @@ The three artistic wavelength samples come from the supplied Lustre guide.
 
 The 2026-09-24 base-material correction initializes the existing cycle and gradient
 inputs for ordered lighting; it adds no third-party formulas or constants.
+The 2026-10-05 Relief Waves change reduces the centre's wave phase once per Sobel
+stencil and adds each tap's offset to it; it adds no third-party formulas or constants.
+The 2026-10-08 Waves on Clear Coat Only switch evaluates the same Lustre stencil a
+second time without its waves for the shading and gives the clear coat the waved
+normal; it is original code and adds no third-party formulas or constants. Giving a
+clear coat its own normal is an established idea, documented for example as Filament's
+clearCoatNormal (https://google.github.io/filament/main/materials.html), the glTF
+KHR_materials_clearcoat clearcoatNormalTexture
+(https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_clearcoat)
+and Unreal Engine's clear coat dual normal; none of their code is used.
+A later 2026-10-08 change computes both reliefs from one read of each stencil tap,
+keeping the wave term apart from the base height, and reuses a Sobel ring whose
+clamped radius was already evaluated; it is original code, adds no third-party
+formulas or constants, and leaves every output bit unchanged.
 
 ================================================================================
 JSON for Modern C++ - MIT License
@@ -690,7 +893,7 @@ Embedded components retained in that header include:
   and little_endianness cites answer 1001328 (line 9830). These sites publish
   contributions under CC BY-SA terms; no separate code grant is asserted here.
   The earlier replacements of these parts were removed by the restoration; see
-  documentation/license-owner-disposition-2026-10-04.md.
+  documentation/licensing/owner-disposition.md.
   https://en.cppreference.com/w/cpp/experimental/is_detected
   https://stackoverflow.com/a/26745591
   https://stackoverflow.com/a/1001328
@@ -794,8 +997,8 @@ https://stackoverflow.com/a/9860911
 
 Interleaved Gradient Noise - licensed replacement expression
 
-The IGN expressions in shdsrc/vk_fog.frag, shdsrc/vk_linear_interpolation.frag
-and shdsrc/vk_2_map_iter_stripe.comp are adapted anew from Alan Wolfe's IGNLDS
+The IGN expressions in shdsrc/chaos_defocus.glsl (formerly in shdsrc/vk_fog.frag),
+shdsrc/vk_linear_interpolation.frag and shdsrc/vk_2_map_iter_stripe.comp are adapted anew from Alan Wolfe's IGNLDS
 main.py, MIT, Copyright (c) 2021 Alan Wolfe. The GLSL adaptation keeps fract,
 the project's seed parameter and the prior arithmetic order. Coefficient names
 are explicit; no output policy or dither amplitude changes. Jimenez remains
@@ -849,7 +1052,7 @@ precision form. The source grant is retained in LICENSE. The earlier selection
 of 0.428 is undocumented; neither numerical behavior nor precision is changed.
 https://github.com/Merutilm/RFF-2.0/blob/cc0fe08c63236af48f4e761f7f87d8a77963c4be/src/rff2/calc/rff_math.h
 
-For vogel_disc in vk_fog.frag, the angular arrangement is attributed to Vogel
+For vogel_disc in chaos_defocus.glsl (formerly vk_fog.frag), the angular arrangement is attributed to Vogel
 above. Independently, annulus i has squared-radius bounds i/n and (i+1)/n;
 its midpoint is (i+0.5)/n, giving radius sqrt((i+0.5)/n). This explains the
 mathematical half-offset without attributing it to the 1979 paper or asserting
@@ -880,7 +1083,7 @@ At the owner's request, MFR-HDR and commissioned AI material, including the
 Lustre guide/material and AI guide/README images, are excluded from this repair.
 Those files and assets are unchanged. The owner statement records creation
 history; it is not a third-party license or a guarantee about all generation inputs.
-See documentation/license-remediation-2026-10-03.md for the bounded repair record.
+See documentation/licensing/remediation.md for the bounded repair record.
 
 ================================================================================
 Additional source-history evidence - 2026-10-04
@@ -925,7 +1128,7 @@ The current GMP check distinguishes the prepared verified package library from
 the differing installed default library. A new clean tagged distribution build
 with recorded exact dependencies and corresponding sources can establish the
 new binary's source correspondence; it does not establish older EXE provenance.
-See documentation/license-history-followup-2026-10-04.md for the file hashes,
+See documentation/licensing/history-followup.md for the file hashes,
 source history, existing build selection and remaining limitations.
 
 ================================================================================
@@ -977,7 +1180,7 @@ third-party permission problem is demonstrated by that match alone. The source
 inheritance is still Merutilm's RFF-2.0 GPL implementation, and arithmetic is
 unchanged. No contemporaneous private author record is inspected in this pass.
 
-See documentation/license-archive-investigation-2026-10-04.md for the detailed
+See documentation/licensing/archive-investigation.md for the detailed
 timeline, original-author grant, actual-donor limits and preserved archive data.
 
 ================================================================================

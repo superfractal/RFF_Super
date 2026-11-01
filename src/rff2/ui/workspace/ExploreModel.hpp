@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-24, 2026-09-29, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-26
 //
 
 #pragma once
@@ -272,6 +273,17 @@ namespace merutilm::rff2::workspace {
                                     a.customFormula = *value;
                                     return true;
                                 }});
+            if constexpr (BUDDHABROT_AVAILABLE) {
+                numeric(
+                    "explore.buddhabrotSamples", 4, L"Samples per Pixel",
+                    L"Buddhabrot only. Random orbits per buffer pixel, 1 to 4096.",
+                    [](auto &a) -> auto & { return a.buddhabrotSamples; }, uint32_t(1), uint32_t(4096));
+                numeric(
+                    "explore.buddhabrotMinIteration", 4, L"Min Iteration",
+                    L"Buddhabrot only. Orbits escaping within this many iterations are left out.",
+                    [](auto &a) -> auto & { return a.buddhabrotMinIteration; }, uint64_t(0),
+                    std::numeric_limits<uint64_t>::max());
+            }
             choice("explore.projection", 5, L"Projection", L"Planar or a 360-degree view.",
                    [](auto &a) -> auto & { return a.projectionMethod; });
             choice("explore.panoramaLayout", 5, L"Layout", L"Ground and Sky or Full Sphere.",
@@ -336,10 +348,11 @@ namespace merutilm::rff2::workspace {
                 }
                 after.center = fp_complex(*r, *i, Perturbator::logZoomToExp10(after.logZoom));
             }
-            if (after.formulaType == FractalFormulaType::CUSTOM) {
+            if (after.formulaType != FractalFormulaType::MANDELBROT) {
                 const auto automatic = draft.find("explore.autoIterations");
                 if (automatic != draft.end() && automatic->second != L"0") {
-                    return L"Custom formulas require Automatic Iterations to be off.";
+                    return BUDDHABROT_AVAILABLE ? L"Custom and Buddhabrot require Automatic Iterations to be off."
+                                                : L"Custom formulas require Automatic Iterations to be off.";
                 }
                 after.autoMaxIteration = false;
             }
@@ -391,6 +404,15 @@ namespace merutilm::rff2::workspace {
                     field.dependencies.push_back("explore.autoIterations");
                     field.enabled = [self, automatic](const FormDraft &) {
                         return self->attribute().autoMaxIteration == automatic;
+                    };
+                }
+                if (field.id == "explore.buddhabrotSamples" || field.id == "explore.buddhabrotMinIteration") {
+                    field.dependencies.push_back("explore.formulaType");
+                    field.enabled = [self](const FormDraft &draft) {
+                        const auto type = draft.find("explore.formulaType");
+                        return type != draft.end()
+                                   ? type->second == number(int(FractalFormulaType::BUDDHABROT))
+                                   : self->attribute().formulaType == FractalFormulaType::BUDDHABROT;
                     };
                 }
                 if (!field.validate) {

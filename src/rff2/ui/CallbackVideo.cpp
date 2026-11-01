@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
@@ -23,6 +23,7 @@
 #include "TimelineWindow.hpp"
 #include "VideoWindow.hpp"
 #include "../io/RFFStaticMapBinary.h"
+#include "../io/RFFOrbitTrapBinary.h"
 #include "../io/MapLimits.hpp"
 #include "../preset/shader/bloom/ShdBloomPresets.h"
 #include "../preset/shader/fog/ShdFogPresets.h"
@@ -33,8 +34,8 @@ namespace merutilm::rff2 {
 
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackVideo::TIMELINE_EDITOR =
         [](SettingsMenu &settingsMenu, RenderScene &scene) {
-            if (settingsMenu.workspaceNavigation && !PreferencesIO::legacySettingsUI()) {
-                settingsMenu.workspaceNavigation(2, 3);
+            if (settingsMenu.timelineEditor && !PreferencesIO::legacySettingsUI()) {
+                settingsMenu.timelineEditor();
                 return;
             }
             TimelineWindow::open(settingsMenu, scene, GetActiveWindow());
@@ -84,7 +85,7 @@ namespace merutilm::rff2 {
                                                                                                    settingsMenu,
                                                                                                RenderScene
                                                                                                    &scene) {
-        auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale] =
+        auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast] =
             scene.getAttribute().video.data;
         auto window = std::make_unique<SettingsWindow>(L"Set Data");
 
@@ -204,7 +205,8 @@ namespace merutilm::rff2 {
                                                                                                      &scene) {
         auto window = std::make_unique<SettingsWindow>(L"Set Export");
         auto &[fps, bitrate, lossless, keyframeAA, colorAA, autoCreateVideo, pauseMainPreview,
-               pauseKeyframePreview, compressKeyframes, hdrTransfer, hdrPeakNits, showExportPreview, gpuSubmitSplit] =
+               pauseKeyframePreview, compressKeyframes, hdrTransfer, hdrPeakNits, showExportPreview, gpuSubmitSplit,
+               outputWidth, outputHeight, upscaleFilter] =
             scene.getAttribute().video.exportation;
         window->registerSectionHeader(L"Video Output", false);
         window->registerTextInput<float>(
@@ -232,6 +234,19 @@ namespace merutilm::rff2 {
             L"browsers and the Windows player will not open them. Best used as a master to "
             L"re-encode from.");
         window->setRowEnabled(bitrateRow, !lossless);
+        window->registerTextInput<uint32_t>(
+            L"Output Width", &outputWidth, Unparser::U_LONG, Parser::U_LONG, VidExportAttribute::validOutputSide,
+            Callback::NOTHING, L"Set Output Width",
+            L"Width of the video file in pixels, 0 to 16384. Every frame is rendered at the keyframe size - "
+            L"shading, stripes and palette included - and only the finished frame is resized to this size, "
+            L"so 480p keyframes can be delivered as a 1080p file that still looks like 480p. 0 keeps the "
+            L"keyframe width, or follows the aspect ratio when only Output Height is set.");
+        window->registerTextInput<uint32_t>(
+            L"Output Height", &outputHeight, Unparser::U_LONG, Parser::U_LONG, VidExportAttribute::validOutputSide,
+            Callback::NOTHING, L"Set Output Height",
+            L"Height of the video file in pixels, 0 to 16384. 0 keeps the keyframe height, or follows the "
+            L"aspect ratio when only Output Width is set. Setting both to a different aspect ratio stretches "
+            L"the picture. Lossy and HDR video round each side down to an even number.");
         window->registerSectionHeader(L"HDR Output");
         // The nits row only means anything under PQ, whose code values are absolute brightness.
         auto peakRow = std::make_shared<HWND>(nullptr);
@@ -573,6 +588,22 @@ namespace merutilm::rff2 {
                     message(nullptr, L"Cannot save the keyframe map.",
                                            L"Keyframe generation", MB_OK | MB_ICONERROR);
                     return;
+                }
+                // The traps ride beside the map only while Orbit Trap Coloring is on; a stale file under this number is removed so it never pairs with the new map.
+                const auto trapPath = RFFOrbitTrapBinary::keyframePath(dir, id);
+                const auto trapPlanes = settings.shader.palette.orbitTrapColoring != ShdPalOrbitTrapColoring::NONE
+                                            ? scene.generateOrbitTrapPlanes() : std::vector<float>{};
+                if (!trapPlanes.empty()) {
+                    if (!RFFOrbitTrapBinary::write(trapPath, trapPlanes, map.getMatrix().getWidth(),
+                                                   map.getMatrix().getHeight(),
+                                                   TrapShapeParams::of(settings.shader.palette))) {
+                        message(nullptr, L"Cannot save the keyframe orbit traps.",
+                                               L"Keyframe generation", MB_OK | MB_ICONERROR);
+                        return;
+                    }
+                } else {
+                    std::error_code trapError;
+                    std::filesystem::remove(trapPath, trapError);
                 }
             }
             if (!ConfigIO::save(configPath, frameSettings, frameSize.cx, frameSize.cy)) {

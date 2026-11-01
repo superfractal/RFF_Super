@@ -6,6 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-30
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23
 //
 
 #version 450
@@ -35,6 +36,11 @@ layout (set = 1, binding = 0) uniform IterUBO {
 layout (set = 1, binding = 1) buffer IterSSBO {
     double iterations[];
 } iteration_attr;
+
+// Lustre relief per pixel, written once by the INITIALIZE stage and read back by every later ordered stage of that frame.
+layout (set = 1, binding = 2) buffer ReliefCacheSSBO {
+    float relief[];
+} relief_cache;
 
 layout (set = 2, binding = 0) uniform SlopeUBO {
     float depth;
@@ -210,7 +216,32 @@ layout (set = 2, binding = 0) uniform SlopeUBO {
     float studio_environment_rotation;
     float studio_environment_follow;
     float replace_surface_style;
-
+    float surface_waves_coat_only;
+    float studio_coat_softbox;
+    float studio_environment_source;
+    float environment_stop_1_position;
+    float environment_stop_2_position;
+    float environment_stop_3_position;
+    float environment_stop_4_position;
+    float environment_stop_1_r;
+    float environment_stop_1_g;
+    float environment_stop_1_b;
+    float environment_stop_2_r;
+    float environment_stop_2_g;
+    float environment_stop_2_b;
+    float environment_stop_3_r;
+    float environment_stop_3_g;
+    float environment_stop_3_b;
+    float environment_stop_4_r;
+    float environment_stop_4_g;
+    float environment_stop_4_b;
+    float environment_brightness;
+    // 1 draws the grooves with symmetric walls, a soft shadow limit, hue-keeping shadows and pixel-filtered slopes.
+    float groove_smooth;
+    // 1 draws each band between two lines as a rounded cord instead of carving a groove.
+    float groove_rounded;
+    // Rounded Bands crease blur in 720-line pixels; 0 keeps the one-pixel slope filter.
+    float groove_crease_blur;
 
 } slope_attr;
 
@@ -289,7 +320,18 @@ double get_iteration(uvec2 iter_coord, ivec2 offset){
 // bands. Every term below is reached from x by multiplication alone, so the relative accuracy holds
 // however small x gets, and at x = 1e-8 the second term is already 1e-8 of the first.
 float log2_1p(float x) {
-    return x * (1.0 - x * (0.5 - x * (1.0 / 3.0 - x * (0.25 - x * 0.2)))) * 1.4426950408889634;
+    // The series to x^11, which |x| <= 0.25 leaves within 2.3e-8 relative, inside float's own rounding.
+    float p = 1.0 / 11.0;
+    p = 1.0 / 10.0 - x * p;
+    p = 1.0 / 9.0 - x * p;
+    p = 1.0 / 8.0 - x * p;
+    p = 1.0 / 7.0 - x * p;
+    p = 1.0 / 6.0 - x * p;
+    p = 0.2 - x * p;
+    p = 0.25 - x * p;
+    p = 1.0 / 3.0 - x * p;
+    p = 0.5 - x * p;
+    return x * (1.0 - x * p) * 1.4426950408889634;
 }
 
 // Shading height of one tap in doublings, measured against the centre pixel instead of against
@@ -323,10 +365,24 @@ float height_rel(double it, double center) {
     return log2(float(a)) - log2(float(b));
 }
 
+
+#include "div_reciprocal.glsl"
+
+// height_rel with the centre's clamp and reciprocal taken once for all the taps around it.
+float height_rel_hoisted(double it, double b, double invB) {
+    double a = max(it, 1.0);
+    double dr = div_by_reciprocal(a - b, b, invB);
+    if (abs(dr) <= 0.25) {
+        return log2_1p(float(dr));
+    }
+    return log2(float(a)) - log2(float(b));
+}
+
 // One 8-tap Sobel taken at radius r, divided by r so it estimates the same gradient whatever
 // the stencil width is. That normalisation is what lets different radii be averaged against
 // each other, and what keeps the macro term continuous when r has to shrink near a border.
 vec2 macro_sobel(uvec2 iter_coord, int r, double center) {
+    // Hoisting the reciprocal out of these taps measured slower on 2026-10-08, so each tap keeps its own division.
     float s_ld = height_rel(get_iteration(iter_coord, ivec2(-r, -r)), center);
     float s_d  = height_rel(get_iteration(iter_coord, ivec2( 0, -r)), center);
     float s_rd = height_rel(get_iteration(iter_coord, ivec2( r, -r)), center);
@@ -453,8 +509,28 @@ vec3 shade_composite(vec3 base, float shade) {
     );
 }
 
+// Waves on Clear Coat Only: the coat's slope with the waves.
+vec2 coat_wave_slope = vec2(0.0);
+#include "studio_environment.glsl"
 #include "studio_surface.glsl"
 #include "lustre_relief.glsl"
+
+// The ordered stages share one Lustre evaluation per pixel: three floats per pixel, indexed like the iteration buffer.
+uint relief_cache_index(uvec2 coord) {
+    return (coord.y * iteration_info_attr.extent.x + coord.x) * 3u;
+}
+
+void store_relief_cache(uvec2 coord, vec3 detail) {
+    uint i = relief_cache_index(coord);
+    relief_cache.relief[i] = detail.x;
+    relief_cache.relief[i + 1u] = detail.y;
+    relief_cache.relief[i + 2u] = detail.z;
+}
+
+vec3 load_relief_cache(uvec2 coord) {
+    uint i = relief_cache_index(coord);
+    return vec3(relief_cache.relief[i], relief_cache.relief[i + 1u], relief_cache.relief[i + 2u]);
+}
 #include "effects.glsl"
 #define PALETTE_EXTERNAL_ITERATION
 #define PALETTE_LIBRARY
@@ -467,6 +543,22 @@ vec3 shade_composite(vec3 base, float shade) {
 #define oklab_to_linear palette_oklab_to_linear
 #include "palette_sampling.glsl"
 #undef srgb_to_linear
+
+// A texture layer as an equirectangular panorama: +y is straight up and +z faces the viewer; the mip level matches the spread in radians.
+vec3 studio_panorama(sampler2D image, vec3 ray, float spread) {
+    vec2 uv = vec2(atan(ray.x, ray.z) * 0.15915494309 + 0.5, acos(clamp(ray.y, -1.0, 1.0)) * 0.31830988618);
+    float texelsPerRadian = float(textureSize(image, 0).x) * 0.15915494309;
+    return srgb_to_linear(textureLod(image, uv, log2(max(spread * texelsPerRadian, 1.0))).rgb);
+}
+
+vec3 studio_environment_image(int layer, vec3 ray, float spread) {
+    switch (layer) {
+        case 1: return studio_panorama(exterior_texture_1, ray, spread);
+        case 2: return studio_panorama(exterior_texture_2, ray, spread);
+        case 3: return studio_panorama(exterior_texture_3, ray, spread);
+        default: return studio_panorama(exterior_texture_0, ray, spread);
+    }
+}
 #undef linear_to_srgb
 #undef linear_to_oklab
 #undef oklab_to_linear
@@ -507,6 +599,27 @@ struct PendingSurface {
 };
 PendingSurface pendingSurface;
 
+// shade_surface's off switch: no relief, no style replacement and no effect, so the pass only copies the canvas.
+bool surface_pass_off() {
+    return (slope_attr.depth == 0 || slope_attr.opacity <= 0.0) && !(replace_surface_style() && slope_attr.studio_use > 0.5) && !effects_enabled();
+}
+
+// The pixel a relief stencil is centred on; shade_surface explains why it is kept one pixel off the border.
+uvec2 relief_center(uvec2 iter_coord) {
+    return uvec2(clamp(int(iter_coord.x), 1, max(int(iteration_info_attr.extent.x) - 2, 1)),
+                 clamp(int(iter_coord.y), 1, max(int(iteration_info_attr.extent.y) - 2, 1)));
+}
+
+// INITIALIZE stage: evaluates Lustre once per pixel for every later ordered stage of this frame to read back.
+void fill_relief_cache(uvec2 coord) {
+    if (!(slope_attr.surface_lustre_relief > 0.5) || surface_pass_off() || !(effects_attr.context.y > 0.5) ||
+        coord.x >= iteration_info_attr.extent.x || coord.y >= iteration_info_attr.extent.y) {
+        return;
+    }
+    uvec2 center = relief_center(coord);
+    store_relief_cache(coord, lustre_relief(center, get_iteration(center, ivec2(0, 0))));
+}
+
 void shade_surface() {
 
     pendingSurface.enabled = false;
@@ -514,7 +627,7 @@ void shade_surface() {
 
 
     // depth and opacity are the layer's off switches; reflection_ratio only raises the ambient floor.
-    if((slope_attr.depth == 0 || slope_attr.opacity <= 0.0) && !(replace_surface_style() && slope_attr.studio_use > 0.5) && !effects_enabled()){
+    if (surface_pass_off()) {
         color = texelFetch(canvas, ivec2(iter_coord), 0);
         if (slope_attr.studio_use > 0.5 && !ordered_layers()) color.rgb = srgb_to_linear(color.rgb);
         return;
@@ -527,10 +640,7 @@ void shade_surface() {
     float zRad = radians(slope_attr.zenith);
 
     // Relief is read at the nearest pixel that still has a full 3x3 stencil, because an out-of-bounds tap comes back mirrored and cancels that axis of the Sobel; zeroing the gradient on the border instead left it a flat plane at cos(zenith) and drew a one-pixel frame around the image.
-    uvec2 relief_coord = uvec2(
-        clamp(int(iter_coord.x), 1, max(int(iteration_info_attr.extent.x) - 2, 1)),
-        clamp(int(iter_coord.y), 1, max(int(iteration_info_attr.extent.y) - 2, 1))
-    );
+    uvec2 relief_coord = relief_center(iter_coord);
 
     double ld = get_iteration(relief_coord, ivec2(-1, -1));
     double d = get_iteration(relief_coord, ivec2(0, -1));
@@ -544,14 +654,16 @@ void shade_surface() {
 
     // Heights relative to the centre pixel, which is what keeps the fractional part of a large
     // iteration count alive. h_c is therefore zero by construction.
-    float h_ld = height_rel(ld, centerIt);
-    float h_d  = height_rel(d, centerIt);
-    float h_rd = height_rel(rd, centerIt);
-    float h_l  = height_rel(l, centerIt);
-    float h_r  = height_rel(r, centerIt);
-    float h_lu = height_rel(lu, centerIt);
-    float h_u  = height_rel(u, centerIt);
-    float h_ru = height_rel(ru, centerIt);
+    double centerClamped = max(centerIt, 1.0);
+    double invCenter = 1.0 / centerClamped;
+    float h_ld = height_rel_hoisted(ld, centerClamped, invCenter);
+    float h_d  = height_rel_hoisted(d, centerClamped, invCenter);
+    float h_rd = height_rel_hoisted(rd, centerClamped, invCenter);
+    float h_l  = height_rel_hoisted(l, centerClamped, invCenter);
+    float h_r  = height_rel_hoisted(r, centerClamped, invCenter);
+    float h_lu = height_rel_hoisted(lu, centerClamped, invCenter);
+    float h_u  = height_rel_hoisted(u, centerClamped, invCenter);
+    float h_ru = height_rel_hoisted(ru, centerClamped, invCenter);
 
     // Use larger Sobel operator to grab a slightly wider average for less micro-jitter
     float dx = (h_rd - h_ld) + 2.0 * (h_r - h_l) + (h_ru - h_lu);
@@ -598,8 +710,19 @@ void shade_surface() {
 
     // atan()+cos/sin round trip folded to one inversesqrt: expanding cos(aRad + aspect) cancels the gradient length exactly.
     if(slope_attr.surface_lustre_relief>0.5) {
-        vec3 detail=lustre_relief(relief_coord,centerIt);
-        dzDx=detail.x; dzDy=detail.y; aoFactor=detail.z;
+        // The shading and the material layers take the relief without its waves; only the clear coat keeps them.
+        bool coatOnlyWaves = slope_attr.surface_waves_coat_only > 0.5 && slope_attr.surface_relief_waves > 0.0;
+        vec3 detail, calm;
+        if (ordered_layers()) {
+            detail = load_relief_cache(iter_coord);
+            calm = coatOnlyWaves ? lustre_relief_calm(relief_coord, centerIt) : detail;
+        } else {
+            // Both reliefs come from one read of the stencil taps.
+            lustre_relief_pair(relief_coord, centerIt, true, detail, calm);
+        }
+        coat_wave_slope = detail.xy;
+        vec3 shading = coatOnlyWaves ? calm : detail;
+        dzDx = shading.x; dzDy = shading.y; aoFactor = shading.z;
     }
     SurfaceEffects surfaceEffects = surface_effects(centerIt, vec2(dx, dy), vec2(dzDx, dzDy));
     vec3 beforeEffectNormal = normalize(vec3(-dzDx, -dzDy, 1));
@@ -648,6 +771,8 @@ void shade_surface() {
     }
     vec3 normalDx=dFdx(materialNormal), normalDy=dFdy(materialNormal);
     float normalVariance=min(0.12,0.19*(dot(normalDx,normalDx)+dot(normalDy,normalDy)))*slope_attr.surface_specular_aa;
+    // The reflected direction turns twice as far as the normal, so this is its spread across one pixel in radians.
+    float reflectionFootprint = 2.0 * sqrt(max(dot(normalDx, normalDx), dot(normalDy, normalDy)));
     float invSlopeLen = inversesqrt(1.0 + dzDx * dzDx + dzDy * dzDy);
 
     // Diffuse shading. This expands to dot(N, L) for N = normalize(vec3(-dzDx, -dzDy, 1)), so the
@@ -900,7 +1025,7 @@ void shade_surface() {
         // That experiment is reverted after visual regressions; the established studio view below is retained.
         vec3 v = normalize(vec3((uv - 0.5) * vec2(-0.1, -0.06), 1));
         float boundaryMask=boundary_reflection_mask(iter_coord);
-        vec3 radiance = studio_surface(baseLinear, srgb_to_linear(max(baseColor, 0.0)), n, v, aoFactor, normalVariance, boundaryMask, surfaceEffects.wetness);
+        vec3 radiance = studio_surface(baseLinear, srgb_to_linear(max(baseColor, 0.0)), n, v, aoFactor, normalVariance, reflectionFootprint, boundaryMask, surfaceEffects.wetness);
         pendingSurface.enabled = true;
         pendingSurface.ordered = false;
         pendingSurface.material = slope_attr.surface_style > 0.5 || surface_layers_enabled();
@@ -994,6 +1119,7 @@ void shade_layers() {
         if (layer_is(100)) {
             color = texelFetch(canvas, ivec2(coord), 0);
             color.rgb = srgb_to_linear(color.rgb);
+            fill_relief_cache(coord);
             return;
         }
         if (shader_layer.control.x >= 1 && shader_layer.control.x <= 9 &&
@@ -1038,7 +1164,7 @@ void shade_layers() {
         if (layer_is(1)) {
             g_interval = dvec4(palette_attr.interval);
             g_inv_interval = 1.0 / g_interval;
-            color.rgb *= grooveLight;
+            color.rgb = groove_shade(color.rgb, grooveLight);
         } else if (layer_is(11) && slope_attr.studio_use < 0.5) {
             color.rgb = srgb_to_linear(color.rgb);
         }
@@ -1050,9 +1176,9 @@ void shade_layers() {
         g_inv_interval = 1.0 / g_interval;
         float light = grooveLight;
         if (slope_attr.studio_use > 0.5) {
-            color.rgb = clamp(color.rgb * light, 0.0, 60000.0);
+            color.rgb = clamp(groove_shade(color.rgb, light), 0.0, 60000.0);
         } else {
-            color.rgb = clamp(linear_to_srgb(srgb_to_linear(color.rgb) * light), 0.0, 1.0);
+            color.rgb = clamp(linear_to_srgb(groove_shade(srgb_to_linear(color.rgb), light)), 0.0, 1.0);
         }
     }
     if (effects_attr.context.x > 0.5 && slope_attr.studio_use < 0.5) {

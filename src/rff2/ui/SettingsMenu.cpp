@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
@@ -30,6 +30,7 @@
 #include "CallbackFractal.hpp"
 #include "CallbackRender.hpp"
 #include "CallbackShader.hpp"
+#include "workspace/AppearancePanelLayout.hpp"
 #include "CallbackVideo.hpp"
 #include "RenderScene.hpp"
 #include "../preset/render/RenderPresets.h"
@@ -226,6 +227,10 @@ namespace merutilm::rff2 {
         SetMenuInfo(menubar, &menuInfo);
 
         for (MenuEntry &entry : menuEntries) {
+            // Rewriting the type below would turn a separator into an empty item.
+            if (entry.separator) {
+                continue;
+            }
             // MIIM_FTYPE cannot move an item between MFT_STRING and MFT_OWNERDRAW - the display
             // type is fixed once the item exists, and asking through it silently leaves the item
             // owner-drawn, which is what kept the menu drawing itself after a switch back to light.
@@ -433,19 +438,17 @@ namespace merutilm::rff2 {
         const auto visibilityStatus = MenuVisibilityIO::load(menuVisibility);
 
         currentMenu = addChildMenu(menubar, "File");
+        // New, open and the two settings saves in the order every other program has them, then the
+        // appearance part of the settings and what the render produced. One load opens them all.
         addChildItem(currentMenu, "New Document", CallbackFile::NEW_CONFIG);
+        addChildItem(currentMenu, "Load File", CallbackFile::LOAD_FILE);
         addChildItem(currentMenu, "Save Settings",
                      [](SettingsMenu &, RenderScene &scene) { CallbackFile::saveCurrentConfig(scene); });
-        // Every save first, then every load, each group in the same order of kind:
-        // the map, the picture, then the settings.
+        addChildItem(currentMenu, "Save Settings As", CallbackFile::SAVE_CONFIG);
+        addSeparator(currentMenu);
+        addChildItem(currentMenu, "Save Appearance Settings", CallbackShader::SAVE_PRESET);
         addChildItem(currentMenu, "Save Map", CallbackFile::SAVE_MAP);
         addChildItem(currentMenu, "Save Image", CallbackFile::SAVE_IMAGE);
-        addChildItem(currentMenu, "Save Location / Settings", CallbackFile::SAVE_CONFIG);
-        addChildItem(currentMenu, "Save Appearance Settings", CallbackShader::SAVE_PRESET);
-        addChildItem(currentMenu, "Load Map", CallbackFile::LOAD_MAP);
-        addChildItem(currentMenu, "Load Image", CallbackFile::LOAD_IMAGE);
-        addChildItem(currentMenu, "Load Location / Settings", CallbackFile::LOAD_CONFIG);
-        addChildItem(currentMenu, "Load Appearance Settings", CallbackShader::LOAD_PRESET);
 
         currentMenu = addChildMenu(menubar, "Fractal");
         addWorkspaceItem(currentMenu, "Reference", 0, 2, CallbackFractal::REFERENCE);
@@ -458,14 +461,16 @@ namespace merutilm::rff2 {
         // Projection is now available in every build.
         addWorkspaceItem(currentMenu, "Projection", 0, 5, CallbackFractal::PROJECTION);
 
+        // Items that open a workspace are named after the section they open, which is what its header shows.
         currentMenu = addChildMenu(menubar, "Render");
-        addWorkspaceItem(currentMenu, "Render Properties", 3, 2, CallbackRender::SET_CLARITY);
-        addWorkspaceItem(currentMenu, "Rendering FPS", 20, 0, CallbackRender::SET_CLARITY);
+        addWorkspaceItem(currentMenu, "Resolution & Quality", 3, 2, CallbackRender::SET_CLARITY);
+        addWorkspaceItem(currentMenu, "Render & Preview", 20, 0, CallbackRender::SET_CLARITY);
         addChildCheckbox(currentMenu, "Linear Interpolation", CallbackRender::LINEAR_INTERPOLATION);
         addChildCheckbox(currentMenu, "Boundary Trace Fill", CallbackRender::BOUNDARY_TRACE_FILL);
-        addChildCheckbox(currentMenu, "2-Color Preview Mode", CallbackRender::PREVIEW_2COLOR);
+        addChildCheckbox(currentMenu, "Two-Color Preview", CallbackRender::PREVIEW_2COLOR);
         addChildCheckbox(currentMenu, "Coarse Preview", CallbackRender::COARSE_PREVIEW);
-        addChildCheckbox(currentMenu, "Smooth Zooming", CallbackRender::SMOOTH_ZOOM);
+        addChildCheckbox(currentMenu, "Use GPU Perturbation", CallbackRender::GPU_PERTURBATION);
+        addChildCheckbox(currentMenu, "Smooth Navigation", CallbackRender::SMOOTH_ZOOM);
         addChildCheckbox(currentMenu, "Dither", CallbackRender::DITHER);
         currentMenu = addChildMenu(menubar, "Shader");
         addWorkspaceItem(currentMenu, "Palette", 16, 0, CallbackShader::PALETTE);
@@ -473,15 +478,18 @@ namespace merutilm::rff2 {
         addWorkspaceItem(currentMenu, "Pattern", 12, 0, CallbackShader::PATTERN);
         addWorkspaceItem(currentMenu, "Warp", 13, 0, CallbackShader::WARP);
         addWorkspaceItem(currentMenu, "Stripe", 13, 1, CallbackShader::STRIPE);
-        addWorkspaceItem(currentMenu, "Slope", 10, 0, CallbackShader::SLOPE);
-        addWorkspaceItem(currentMenu, "Color", 14, 0, CallbackShader::COLOR);
-        addWorkspaceItem(currentMenu, "Effects", 15, 0, CallbackShader::EFFECTS);
+        addWorkspaceItem(currentMenu, "Lighting & Relief", 10, 0, CallbackShader::SLOPE);
+        addWorkspaceItem(currentMenu, "Color Correction", 14, 0, CallbackShader::COLOR);
+        addWorkspaceItem(currentMenu, "Animated Materials", 15, 0, CallbackShader::EFFECTS);
         addWorkspaceItem(currentMenu, "Fog", 14, 2, CallbackShader::FOG);
         addWorkspaceItem(currentMenu, "Bloom", 14, 1, CallbackShader::BLOOM);
-        addWorkspaceItem(currentMenu, "HDR", 3, 4, CallbackShader::HDR);
+        addWorkspaceItem(currentMenu, "HDR & Tone Mapping", 3, 4, CallbackShader::HDR);
         addWorkspaceItem(currentMenu, "Shader Layers", 18, 0, CallbackShader::LAYERS);
+        addWorkspaceItem(currentMenu, "Orbit Trap", workspace::ORBIT_TRAP_WORKSPACE, 0, CallbackShader::ORBIT_TRAP);
+        addWorkspaceItem(currentMenu, "Other", workspace::OTHER_WORKSPACE, 0, CallbackShader::OTHER);
         addWorkspaceItem(currentMenu, "Load KFR Color", 16, 5, CallbackShader::LOAD_KFR_PALETTE);
-        addWorkspaceItem(currentMenu, "Import Color", 16, 5, CallbackShader::IMPORT_COLOR);
+        // KFR files and RFC/RFSP files have a palette section each, both read first and then applied.
+        addWorkspaceItem(currentMenu, "Import Color", 16, 6, CallbackShader::IMPORT_COLOR);
         addChildItem(currentMenu, "Local AI appearance",
                      [](SettingsMenu &menu, RenderScene &scene) { LocalAiWindow::open(menu, scene); });
 
@@ -580,12 +588,12 @@ namespace merutilm::rff2 {
             }
         }
         currentMenu = addChildMenu(menubar, "Video");
-        addWorkspaceItem(currentMenu, "Data Settings", 2, 4, CallbackVideo::DATA_SETTINGS);
-        addWorkspaceItem(currentMenu, "Animation Settings", 2, 0, CallbackVideo::ANIMATION_SETTINGS);
-        addWorkspaceItem(currentMenu, "Timeline Editor", 2, 3, CallbackVideo::TIMELINE_EDITOR);
-        addWorkspaceItem(currentMenu, "Export Settings", 3, 3, CallbackVideo::EXPORT_SETTINGS);
-        addChildItem(currentMenu, "Generate Video Keyframe", CallbackVideo::GENERATE_VID_KEYFRAME);
-        addChildItem(currentMenu, "Export Zooming Video", CallbackVideo::EXPORT_ZOOM_VID);
+        addWorkspaceItem(currentMenu, "Keyframes", 2, 3, CallbackVideo::DATA_SETTINGS);
+        addWorkspaceItem(currentMenu, "Color Animation", 2, 0, CallbackVideo::ANIMATION_SETTINGS);
+        addChildItem(currentMenu, "Timeline Editor", CallbackVideo::TIMELINE_EDITOR);
+        addWorkspaceItem(currentMenu, "Video Encoding", 3, 3, CallbackVideo::EXPORT_SETTINGS);
+        addChildItem(currentMenu, "Generate Keyframes", CallbackVideo::GENERATE_VID_KEYFRAME);
+        addChildItem(currentMenu, "Export Video", CallbackVideo::EXPORT_ZOOM_VID);
         currentMenu = addChildMenu(menubar, "View");
         const auto languageMenu = addChildMenu(currentMenu, "Language / 言語 (restart required)");
         for (const auto language : {Language::English, Language::Japanese}) {
@@ -623,8 +631,8 @@ namespace merutilm::rff2 {
                          });
         currentMenu = addChildMenu(menubar, "Explore");
         addChildItem(currentMenu, "Recompute", CallbackExplore::RECOMPUTE);
-        addChildItem(currentMenu, "Cancel", CallbackExplore::CANCEL_RENDER);
-        addChildItem(currentMenu, "Reset", CallbackExplore::RESET);
+        addChildItem(currentMenu, "Cancel Render", CallbackExplore::CANCEL_RENDER);
+        addChildItem(currentMenu, "Reset Settings (Keep Appearance)", CallbackExplore::RESET);
         addChildItem(currentMenu, "Find Center", CallbackExplore::FIND_CENTER);
         addChildItem(currentMenu, "Locate Minibrot", CallbackExplore::LOCATE_MINIBROT);
 #ifndef NDEBUG
@@ -715,6 +723,10 @@ namespace merutilm::rff2 {
         return add(target, child, [](SettingsMenu &, RenderScene &) {}, false, true, checkboxAction);
     }
 
+    void SettingsMenu::addSeparator(const HMENU target) {
+        pendingSeparators.insert(target);
+    }
+
     HMENU SettingsMenu::add(const HMENU target, const std::string_view child,
                             const std::function<void(SettingsMenu &, RenderScene &)> &callback,
                             const bool hasChild, const bool hasCheckbox,
@@ -737,7 +749,15 @@ namespace merutilm::rff2 {
         const bool shownByDefault = captions != LOCAL_AI_FEATURE;
         (*slot)[captions.back()] =
             hasChild ? MenuVisibilityIO::Json::object() : MenuVisibilityIO::Json(shownByDefault);
-        const bool visible = MenuVisibilityIO::visible(menuVisibility, captions, shownByDefault);
+        bool visible = MenuVisibilityIO::visible(menuVisibility, captions, shownByDefault);
+        // An item renamed to match the panel it opens stays hidden by a file written under its old caption.
+        if (const auto renamed = std::ranges::find(RENAMED_CAPTIONS, std::string_view(captions.back()),
+                                                   &std::pair<std::string_view, std::string_view>::first);
+            renamed != RENAMED_CAPTIONS.end()) {
+            auto old = captions;
+            old.back() = renamed->second;
+            visible = visible && MenuVisibilityIO::visible(menuVisibility, old, shownByDefault);
+        }
         if (hmenu != nullptr) {
             menuCaptionPaths[hmenu] = std::move(captions);
         }
@@ -747,6 +767,15 @@ namespace merutilm::rff2 {
                 childMenus.push_back(hmenu);
             }
             return hmenu;
+        }
+
+        // Put in only now that a visible item follows it, and only after one, so a hidden
+        // neighbour never leaves a line at either end of the menu or two in a row.
+        if (pendingSeparators.erase(target) > 0 && GetMenuItemCount(target) > 0) {
+            AppendMenuW(target, MF_SEPARATOR, 0, nullptr);
+            const auto separatorPosition = static_cast<UINT>(GetMenuItemCount(target) - 1);
+            menuEntries.push_back(MenuEntry{target, separatorPosition, std::string(), false, false});
+            menuEntries.back().separator = true;
         }
 
         if (hasChild) {

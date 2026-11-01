@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-21
 //
 
 #pragma once
@@ -12,6 +13,7 @@
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
 #include "../data/GraphicsMatrixStagingBuffer.h"
 #include "../vulkan/CPCBoxBlur.hpp"
+#include "../vulkan/CPCChaosIrregularity.hpp"
 #include "../vulkan/GPCBloom.hpp"
 #include "../vulkan/GPCBloomThreshold.hpp"
 #include "../vulkan/GPCColor.hpp"
@@ -41,6 +43,7 @@ namespace merutilm::rff2 {
         GPCColor *rendererColor = nullptr;
         GPCDownsampleForBlur *rendererDownsampleForBlur = nullptr;
         CPCBoxBlur *rendererBoxBlur = nullptr;
+        CPCChaosIrregularity *rendererChaosIrregularity = nullptr;
         GPCFog *rendererFog = nullptr;
         GPCBloomThreshold *rendererBloomThreshold = nullptr;
         GPCBloom *rendererBloom = nullptr;
@@ -52,6 +55,10 @@ namespace merutilm::rff2 {
         ShaderAnimationPhases lastShadedPhases;
 
         std::unique_ptr<GraphicsMatrixBuffer<double> > iterationStagingBufferContext = nullptr;
+        // Each pixel's escape angle, laid out as the iteration staging buffer is and copied to the GPU beside it every frame.
+        std::unique_ptr<GraphicsMatrixBuffer<float> > escapeAngleStagingBufferContext = nullptr;
+        // Each pixel's OrbitTrap, plane-major (OrbitTrap::PLANE_COUNT planes of the iteration buffer's size), copied beside the angles.
+        std::unique_ptr<GraphicsMatrixBuffer<float> > orbitTrapStagingBufferContext = nullptr;
 
         // Off unless the Debug menu turns it on, and pushed in by RenderScene before each frame: the
         // renderer is thrown away and rebuilt on every resize, so the switch cannot live here.
@@ -164,7 +171,9 @@ namespace merutilm::rff2 {
             };
             setLayerStage(ShaderLayerControl::INITIALIZE);
             copyShaderLayerImage(cbh, secondary, primary);
+            rendererSlope->cmdReliefCacheBeforeWrite(cbh);
             surfacePass();
+            rendererSlope->cmdReliefCacheAfterWrite(cbh);
             for (const auto layer : layerShader.layerOrder.layers) {
                 if (!shaderLayerActive(layerShader, layer)) {
                     continue;
@@ -224,6 +233,8 @@ namespace merutilm::rff2 {
 
             rendererBoxBlur = vkh::PipelineConfiguratorAbstract::createShaderProgram<CPCBoxBlur>(
                 configurators, engine, wc.getAttachmentIndex());
+            rendererChaosIrregularity = vkh::PipelineConfiguratorAbstract::createShaderProgram<CPCChaosIrregularity>(
+                configurators, engine, wc.getAttachmentIndex());
 
             rendererFog = vkh::PipelineConfiguratorAbstract::createShaderProgram<GPCFog>(
                 configurators, engine, wc.getAttachmentIndex(), RCC3::CONTEXT_INDEX, RCC3::SUBPASS_FOG_INDEX);
@@ -261,6 +272,8 @@ namespace merutilm::rff2 {
                 passTimer.collect(frameIndex);
             }
             vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), iterationStagingBufferContext->getContext());
+            vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), escapeAngleStagingBufferContext->getContext());
+            vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), orbitTrapStagingBufferContext->getContext());
         }
 
 
@@ -295,13 +308,21 @@ namespace merutilm::rff2 {
             }
 
             rendererIteration->cmdRefreshIterations(
-                wc.getCommandBuffer().getCommandBufferHandle(frameIndex), iterationStagingBufferContext->getContext());
+                wc.getCommandBuffer().getCommandBufferHandle(frameIndex), iterationStagingBufferContext->getContext(),
+                escapeAngleStagingBufferContext->getContext(), orbitTrapStagingBufferContext->getContext());
 
             auto &ctx = rendererIteration->getResultIterationBuffer();
             vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, ctx.buffer, 0, ctx.bufferSize,
                                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            auto &angleCtx = rendererIteration->getResultEscapeAngleBuffer();
+            vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, angleCtx.buffer, 0, angleCtx.bufferSize,
+                                                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            auto &trapCtx = rendererIteration->getResultOrbitTrapBuffer();
+            vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, trapCtx.buffer, 0, trapCtx.bufferSize,
+                                                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
             // [BARRIER] Safe-copy iteration buffer
+            rendererChaosIrregularity->cmdFill(cbh, frameIndex);
 
             vkh::RenderPassFullscreenRecorder::cmdFullscreenInternalRenderPass<RCC0>(
                 wc, frameIndex, {rendererIteration}, {{}});
@@ -516,6 +537,8 @@ namespace merutilm::rff2 {
 
         void destroy() override {
             iterationStagingBufferContext = nullptr;
+            escapeAngleStagingBufferContext = nullptr;
+            orbitTrapStagingBufferContext = nullptr;
         }
     };
 }

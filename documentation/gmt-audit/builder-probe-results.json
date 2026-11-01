@@ -1,0 +1,22 @@
+{
+  "scope": "Actual ShaderBuilder class executed with imported shader chunks replaced by inert sentinels. Validates assembly state only, not complete GLSL compilation. Other values are source-guarded arithmetic.",
+  "repeatedBuild": {
+    "firstShadingDefinitions": 1,
+    "secondShadingDefinitions": 2,
+    "productionFactoryAllocatesFreshBuilder": true
+  },
+  "uniformCollision": {
+    "declarations": 2
+  },
+  "normalMapping": {
+    "histogramFixedUp": 1,
+    "sidewaysSurface": 0.5,
+    "downwardSurface": 0
+  },
+  "orthographicExample": {
+    "orthoScale": 4,
+    "mainHalfHeight": 2,
+    "histogramHalfHeightAt45Degrees": 0.41421356237309503
+  },
+  "histogramMarchSeed": 0
+}

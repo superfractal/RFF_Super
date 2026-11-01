@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-15
 // Modified by GPT-5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -33,7 +34,7 @@ namespace merutilm::rff2 {
     // ends without shutting down - or is given up on partway - is not lost. A live session holds a
     // lock file naming its process; a lock whose process is gone is what a crash leaves behind, and
     // the settings file beside it is what is offered back. The snapshot is an ordinary config file
-    // (see ConfigIO), so it can also be opened by hand through Load Location / Settings.
+    // (see ConfigIO), so it can also be opened by hand through Load File.
     struct RecoveryIO {
         RecoveryIO() = delete;
 

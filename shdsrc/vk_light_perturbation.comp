@@ -1,0 +1,113 @@
+//
+// Created by Merutilm on 8/24/26.
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-12
+//
+
+// Derived from Merutilm RFF 2.3.0 shaders/src/vk_iterate_double.comp, GPL-3.0; see NOTICE.
+// Runs LightMandelbrotPerturbator::iterate in batches, keeping its double precision and its order of operations.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "light_perturbation.glsl"
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Inherited from Merutilm RFF-2.0 rff_math::hypot_approx, GPL-3.0; see NOTICE for the 0.428 provenance.
+double hypot_approx(double x, double y) {
+    x = abs(x);
+    y = abs(y);
+    const double lo = min(x, y);
+    const double hi = max(x, y);
+    if (lo == 0) {
+        return hi;
+    }
+    if (hi == 0) {
+        return 0;
+    }
+    precise double result = hi + 0.428LF * lo / hi * lo;
+    return result;
+}
+
+// Mirrors LightMPATable::lookup; returns the table entry index or -1.
+int lookup(const uint64_t ref_iteration, const double dzr, const double dzi) {
+    const TableMapper m = table_slot(ref_iteration);
+    if (m.levels == 0) {
+        return -1;
+    }
+    const double r = hypot_approx(dzr, dzi);
+    switch (params.selection_method) {
+        case MSM_LOWEST: {
+            int found = -1;
+            for (uint i = 0; i < m.levels; ++i) {
+                if (r < table.pa[m.offset + i].radius) {
+                    found = int(m.offset + i);
+                } else {
+                    return found;
+                }
+            }
+            return found;
+        }
+        case MSM_HIGHEST: {
+            if (!(r < table.pa[m.offset].radius)) {
+                return -1;
+            }
+            for (uint j = m.levels; j > 0; --j) {
+                if (r < table.pa[m.offset + j - 1].radius) {
+                    return int(m.offset + j - 1);
+                }
+            }
+            return int(m.offset);
+        }
+        default: return -1;
+    }
+}
+
+// Skips ahead with an MPA entry when one is valid for dz; false leaves s untouched.
+bool skip_with_table(inout PixelState s, const dvec2 dc) {
+    const int found = lookup(s.ref_iteration, s.dzr, s.dzi);
+    if (found < 0) {
+        return false;
+    }
+    const LightPA pa = table.pa[found];
+    precise const double dzr = pa.anr * s.dzr - pa.ani * s.dzi + pa.bnr * dc.x - pa.bni * dc.y;
+    precise const double dzi = pa.anr * s.dzi + pa.ani * s.dzr + pa.bnr * dc.y + pa.bni * dc.x;
+    s.dzr = dzr;
+    s.dzi = dzi;
+    s.iteration += pa.skip;
+    s.ref_iteration += pa.skip;
+    ++s.abs_iteration;
+    if (s.iteration >= params.max_iteration) {
+        s.status = STATUS_FINISHED;
+    } else {
+        // The skip's endpoint is the only point of its interval the trap sees.
+        const dvec2 z = reference.orbit[uint(s.ref_iteration)] + dvec2(s.dzr, s.dzi);
+        sample_trap(s, z.x, z.y, z.x * z.x + z.y * z.y);
+    }
+    return true;
+}
+
+void main() {
+    uint index;
+    PixelState s;
+    if (!load_running_pixel(index, s)) {
+        return;
+    }
+    const dvec2 dc = offsets.dc[index];
+    if (isnan(dc.x)) {
+        s.status = STATUS_SKY;
+    }
+    const bool use_table = batch.ignore_mpa == 0 && params.mapper_length != 0;
+
+    for (uint step = 0; s.status == STATUS_RUNNING && step < batch.batch_size; ++step) {
+        if (s.iteration >= params.max_iteration) {
+            s.status = STATUS_FINISHED;
+            break;
+        }
+        if (use_table && skip_with_table(s, dc)) {
+            continue;
+        }
+        step_double(s, dc);
+    }
+
+    store_pixel(index, s);
+}

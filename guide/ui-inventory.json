@@ -95,8 +95,8 @@
       },
       {
         "choices": [
-          "Current",
-          "Centered",
+          "Current Reference",
+          "Centered Reference",
           "Disabled"
         ],
         "group": 2,
@@ -430,7 +430,7 @@
           "Off"
         ],
         "group": 4,
-        "hint": "Generates larger planar keyframes for camera movement.",
+        "hint": "Generates larger planar keyframes for camera movement. A 360 preview also computes this padding once, so turning the camera reprojects instead of recomputing.",
         "id": "animation.cameraPadding",
         "label": "Rotation / 360 Padding",
         "value": "0"
@@ -1192,11 +1192,11 @@
       },
       {
         "group": 5,
-        "label": "Read Color File"
+        "label": "Load KFR File"
       },
       {
         "group": 5,
-        "label": "Apply Imported Colors"
+        "label": "Apply KFR Colors"
       }
     ],
     "fields": [
@@ -1398,14 +1398,44 @@
         ],
         "group": 1,
         "hint": "Select a value, then Apply & Render.",
-        "id": "palette.grooveAuto",
-        "label": "Auto Groove",
+        "id": "palette.grooveRounded",
+        "label": "Rounded Bands",
         "value": "1"
       },
       {
         "choices": [],
         "group": 1,
-        "hint": "0 to 5",
+        "hint": "0 to 24",
+        "id": "palette.grooveCreaseBlur",
+        "label": "Crease Blur",
+        "value": "6"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.grooveAuto",
+        "label": "Auto Groove",
+        "value": "1"
+      },
+      {
+        "choices": [
+          "On",
+          "Off"
+        ],
+        "group": 1,
+        "hint": "Select a value, then Apply & Render.",
+        "id": "palette.grooveSmooth",
+        "label": "Smooth Grooves",
+        "value": "1"
+      },
+      {
+        "choices": [],
+        "group": 1,
+        "hint": "0 to 20",
         "id": "palette.grooveDepth",
         "label": "Groove Depth",
         "value": "1.5"
@@ -1419,9 +1449,13 @@
         "value": "0.05"
       },
       {
-        "choices": [],
+        "choices": [
+          "Linear",
+          "Smoothstep",
+          "Smootherstep"
+        ],
         "group": 2,
-        "hint": "0 Linear, 1 Smoothstep, 2 Smootherstep.",
+        "hint": "How colors blend between neighboring stops.",
         "id": "palette.stopEasing",
         "label": "Stop Easing",
         "value": "1"
@@ -1587,21 +1621,10 @@
       {
         "choices": [],
         "group": 5,
-        "hint": "RFC, RFSP, KFR or KFP. Read first, then apply.",
-        "id": "source.path",
-        "label": "Color Settings File",
+        "hint": "The colors Load KFR File read, ready for Apply KFR Colors.",
+        "id": "source.loaded",
+        "label": "Loaded KFR File",
         "value": ""
-      },
-      {
-        "choices": [
-          "Off",
-          "On"
-        ],
-        "group": 5,
-        "hint": "Also imports Gamma, Exposure, Hue, Saturation, Brightness and Contrast.",
-        "id": "source.correction",
-        "label": "Include Color Correction",
-        "value": "0"
       }
     ],
     "groups": [
@@ -1627,7 +1650,7 @@
       },
       {
         "image": "palette-5.png",
-        "label": "Import Colors"
+        "label": "KFR Color"
       }
     ],
     "title": "Palette"
@@ -3454,6 +3477,14 @@
         "value": "0"
       },
       {
+        "choices": [],
+        "group": 4,
+        "hint": "Blurs areas that reach Max Iterations, such as the black interior of the Mandelbrot set. Zero leaves them sharp; higher values select them more strongly.",
+        "id": "fog.chaosInterior",
+        "label": "Chaos Interior",
+        "value": "0"
+      },
+      {
         "choices": [
           "Average in Gamma Space",
           "Average in Linear Space"
@@ -4598,12 +4629,12 @@
           "Pattern 4",
           "Stripe",
           "Lighting & Base Material",
-          "Metal",
+          "Liquid Metal",
           "Cyber Sigilism",
           "PHONK",
-          "Frost",
-          "Sea",
-          "Print Material",
+          "Black Metal",
+          "Deep Sea",
+          "Ukiyo-e",
           "Material Color & Rim",
           "Effect 1",
           "Effect 2",
@@ -4612,7 +4643,7 @@
           "Color Correction",
           "Fog",
           "Bloom",
-          "HDR / Tone Mapping",
+          "HDR & Tone Mapping",
           "Print Color Quantization",
           "VHS Finish",
           "Monochrome Finish"

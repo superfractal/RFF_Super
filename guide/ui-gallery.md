@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-09, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-11-01. -->
 # Actual UI gallery and form inventory
 
 [Manual](user-manual.md) · [Explanations and dependencies](settings-reference.md)
@@ -9,7 +9,7 @@ These are actual production Windows form controls captured on **September 24, 20
 
 The standalone form images omit application-wired transport/exploration actions where these are attached by the enclosing workspace. The full timeline image includes its real editor shell; no source folder is loaded. Local AI requests and timers are disabled for its two images. No model output is simulated.
 
-Some captured UI text is imperfect: Location calls base-10 zoom natural-log; Reference hints can ambiguously describe zero compression threshold; old boolean selectors show O/X. The current Location control is corrected to **Log Zoom (10)**, and Max Multiplier Between Levels now accepts **2–255**. Animated Materials Band Period now accepts up to **1,000,000,000**. Use the current ranges in the [field reference](settings-reference.md). Two Local AI zoom section headings in the captures are Japanese: they mean Exploration settings and After exploration.
+Some captured UI text is imperfect: Location calls base-10 zoom natural-log; Reference hints can ambiguously describe zero compression threshold; old boolean selectors show O/X. The current Location control is corrected to **Log Zoom (10)**, and Max Multiplier Between Levels now accepts **2–255**. Animated Materials Band Period now accepts up to **1,000,000,000**. Effect Type no longer offers Heat Haze; Rain Shape is now part of Effect Type as Rain (Raindrops) and Rain (Water Streaks), and the other types add styles in parentheses. Use the current ranges in the [field reference](settings-reference.md). Two Local AI zoom section headings in the captures are Japanese: they mean Exploration settings and After exploration.
 
 ## Contents
 
@@ -79,7 +79,7 @@ Some captured UI text is imperfect: Location calls base-10 zoom natural-log; Ref
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Reuse Reference | Current, Centered, Disabled |
+| Reuse Reference | Current Reference, Centered Reference, Disabled |
 | Compression Criteria | Minimum reference batch; 0 disables compression. |
 | Compression Threshold | Reference matching exponent. Set Compression Criteria to 0 to explicitly disable compression. |
 | Disable Normalization | O, X |
@@ -201,6 +201,8 @@ Captured section name; the section is now Color Animation.
 | Timeline Enabled | On, Off |
 | Estimated Keyframes | Preview length before loading keyframes: 1 to 100000. |
 
+Captured section; the Animation workspace no longer has it. Use Video → Timeline Editor or Open Timeline Editor in Export > Video instead.
+
 ### Keyframe Generation
 
 Captured section name; the section is now Keyframes, and it also has a Generate Keyframes button.
@@ -221,7 +223,7 @@ Captured section name; the section is now Keyframes, and it also has a Generate 
 
 ### Camera
 
-Captured section name; the section is now Video Camera, and it also has a Match Planar Framing button.
+Captured section; the Animation workspace no longer has it. These controls and Match Planar Framing are in the Timeline Editor's Camera / Rotation / 360° panel and camera tracks.
 
 <details>
 <summary>Show actual Animation / Camera panel</summary>
@@ -258,7 +260,7 @@ Captured section name; the section is now Video Camera, and it also has a Match 
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Rendering FPS | Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. Video export has a separate FPS setting. |
+| Rendering FPS | Live rendering limit: 0 to 1000 frames per second; 0 pauses the preview. Lower values reduce rendering load. Video export has a separate FPS setting. |
 | Calculation Threads | 1 up to this computer's logical core count. Applied to the next calculation. |
 
 ### Calculation Preview
@@ -399,7 +401,7 @@ Captured section name; the section is now Video Camera, and it also has a Match 
 | Control | Available choices / input guidance |
 | --- | --- |
 | Rim Intensity | 0 to 1 |
-| Rim Power | 1 to 64 |
+| Rim Power | 0.1 to 64 |
 | Rim Color | Choose a color, enter #RRGGBB, or R, G, B in 0–1. |
 
 ### Gloss
@@ -492,8 +494,11 @@ Actions: **Use Current Zoom**.
 | Line Softness | 0 to 1 |
 | Line Color | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Recessed Grooves | On, Off |
+| Rounded Bands | On, Off |
+| Crease Blur | 0 to 24 |
 | Auto Groove | On, Off |
-| Groove Depth | 0 to 5 |
+| Smooth Grooves | On, Off |
+| Groove Depth | 0 to 20 |
 | Groove Width | 0 to 0.5 |
 | Spine Amount | Uses Band Line color, width and opacity. Independent of Studio and materials. |
 | Spine Length | Uses Band Line color, width and opacity. Independent of Studio and materials. |
@@ -518,7 +523,7 @@ Actions: **Use Current Zoom**.
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Stop Easing | 0 Linear, 1 Smoothstep, 2 Smootherstep. |
+| Stop Easing | How colors blend between neighboring stops. |
 | Selected Stop | Apply the selection before editing its color or position. |
 | Stop Position | Ordered position from 0 up to, but excluding, 1. |
 | Stop Color | #RRGGBB or R, G, B, A in 0–1. |
@@ -552,21 +557,28 @@ Actions: **Add Stop**, **Remove Selected Stop**, **Equal Spacing**, **Reverse Co
 
 Actions: **Apply Palette Preset**.
 
-### Import Colors
+### KFR Color
 
 <details>
-<summary>Show actual Palette / Import Colors panel</summary>
+<summary>Show actual Palette / KFR Color panel</summary>
 
-![Palette — Import Colors](ui/palette-5.png)
+![Palette — KFR Color](ui/palette-5.png)
 
 </details>
 
 | Control | Available choices / input guidance |
 | --- | --- |
-| Color Settings File | RFC, RFSP, KFR or KFP. Read first, then apply. |
-| Include Color Correction | Off, On |
+| Loaded KFR File | The colors Load KFR File read, ready for Apply KFR Colors. |
 
-Actions: **Read Color File**, **Apply Imported Colors**.
+Actions: **Load KFR File**, **Apply KFR Colors**.
+
+### Colors from Settings
+
+| Control | Available choices / input guidance |
+| --- | --- |
+| Loaded Settings File | The colors Load Settings File read from an RFC or RFSP, ready to apply. |
+
+Actions: **Load Settings File**, **Apply Colors**, **Apply Colors and Color Correction**.
 
 ## Textures
 
@@ -937,6 +949,7 @@ Actions: **Reset Layer**, **Move Toward Bottom**.
 | --- | --- |
 | Focus Amount | 0 to 1 |
 | Focus Depth | 0 to 1 |
+| Pick Focus Depth | Press this, then click a spot on the fractal: Focus Depth moves to that pixel's iteration, so the sharp band runs through it. The black interior has no iteration and leaves the value as it is. |
 | Focus Range | 0.01 to 1 |
 | Focus Falloff | 0.1 to 4 |
 | Focus Blur | Blur radius in pixels relative to 1280 width. |
@@ -959,7 +972,12 @@ Actions: **Reset Layer**, **Move Toward Bottom**.
 | Chaos Feather | Softens the detected region boundary, in pixels at 1280 width. Detection follows the current zoom and location. |
 | Chaos Blur Radius | Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality controls sampling. |
 | Chaos Shade | Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, fully selected regions turn black whatever Chaos Amount is. |
+| Chaos Interior | Blurs areas that reach Max Iterations, such as the black interior of the Mandelbrot set. Zero leaves them sharp; higher values select them more strongly. |
 | Chaos Blur Averaging | Average in Gamma Space, Average in Linear Space |
+| Chaos Bokeh Shape | Circle, Triangle, Square, Pentagon, Hexagon, Heptagon, Octagon |
+| Chaos Bokeh Rotation | Turns the polygon outline, in degrees. With Circle it turns the stretch set by Chaos Bokeh Aspect. |
+| Chaos Bokeh Aspect | Height over width of the outline. 1 keeps it even; above 1 stretches it vertically, below 1 horizontally, at the same area. |
+| Chaos Edge Protection | On keeps smooth surfaces next to blurred regions from bleeding into the blur, so their outlines stay crisp. Off blurs every neighbouring pixel into the region, as earlier versions did. |
 
 ## Animated Materials
 
@@ -1157,7 +1175,7 @@ Actions: **Reset Layer**, **Move Toward Bottom**.
 | Control | Available choices / input guidance |
 | --- | --- |
 | Custom Layer Order | Off, On |
-| Selected Layer | Band Line, Texture 1, Texture 2, Texture 3, Texture 4, Pattern 1, Pattern 2, Pattern 3, Pattern 4, Stripe, Lighting & Base Material, Metal, Cyber Sigilism, PHONK, Frost, Sea, Print Material, Material Color & Rim, Effect 1, Effect 2, Effect 3, Effect 4, Color Correction, Fog, Bloom, HDR / Tone Mapping, Print Color Quantization, VHS Finish, Monochrome Finish |
+| Selected Layer | Band Line, Texture 1, Texture 2, Texture 3, Texture 4, Pattern 1, Pattern 2, Pattern 3, Pattern 4, Stripe, Lighting & Base Material, Liquid Metal, Cyber Sigilism, PHONK, Black Metal, Deep Sea, Ukiyo-e, Material Color & Rim, Effect 1, Effect 2, Effect 3, Effect 4, Color Correction, Fog, Bloom, HDR & Tone Mapping, Print Color Quantization, VHS Finish, Monochrome Finish |
 
 Actions: **Open Layer List**, **Move Up**, **Move Down**, **Bring to Front**, **Send to Back**, **Restore Original Order**.
 
@@ -1194,7 +1212,7 @@ Actions: **Choose Image File**, **Export Image**, **Cancel Export**.
 | Keyframe Folder | Uses existing RFM, RFMZ or PNG keyframes. |
 | Video File | MP4 for normal video; lossless SDR uses MKV. |
 
-Actions: **Choose Keyframe Folder**, **Choose Video File**, **Export Video**, **Cancel Export**.
+Actions: **Open Timeline Editor**, **Choose Keyframe Folder**, **Choose Video File**, **Export Video**, **Open Encoder Log**, **Cancel Export**.
 
 ### Resolution & Quality
 
@@ -1264,6 +1282,7 @@ Actions: **Choose Keyframe Folder**, **Choose Video File**, **Export Video**, **
 | Compress Keyframes | On, Off |
 | Create Video After Keyframes | On, Off |
 | Show Video Export Preview | On, Off |
+| GPU Work Split | 0 = off, 1 = per pass, 2 to 64 = also fractal bands. Prevents VK_ERROR_DEVICE_LOST on long, high-resolution exports. Added after this capture. |
 | Pause Preview During Export | On, Off |
 | Pause Preview During Generation | On, Off |
 

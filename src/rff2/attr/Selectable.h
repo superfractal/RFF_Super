@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01
 //
 
 #pragma once
@@ -17,9 +17,11 @@
 #include "ShdPalColorSmoothingMethod.h"
 #include "ShdPalColorInterpolationMethod.h"
 #include "ShdChaosBlurAverage.h"
+#include "ShdChaosBokehShape.h"
 #include "ShdFogBlurQuality.h"
 #include "ShdToneMapMethod.h"
 #include "ShdSlopeGlossSource.h"
+#include "ShdStudioEnvironmentSource.h"
 #include "ShdSurfaceStyle.h"
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
@@ -33,6 +35,14 @@
 #include "ShdPaletteAnimationMode.h"
 #include "ShdPaletteCycleCurve.h"
 #include "ShdPalIterationColoringMode.h"
+#include "ShdPalEscapeAngleColoring.h"
+#include "ShdPalOrbitTrapBlend.h"
+#include "ShdPalOrbitTrapColoring.h"
+#include "ShdPalOrbitTrapMapping.h"
+#include "ShdPalOrbitTrapRegion.h"
+#include "ShdPalOrbitTrapShape.h"
+#include "RndSsaaFilter.h"
+#include "VidUpscaleFilter.h"
 #include "ShdPatternInkMode.h"
 #include "ShdPatternLayerSelection.h"
 #include "ShdEffectsAttribute.h"
@@ -129,6 +139,18 @@ namespace merutilm::rff2 {
                     LINEAR
                 };
             }
+            if constexpr (std::is_same_v<E, ShdChaosBokehShape>) {
+                using enum ShdChaosBokehShape;
+                return {
+                    CIRCLE,
+                    TRIANGLE,
+                    SQUARE,
+                    PENTAGON,
+                    HEXAGON,
+                    HEPTAGON,
+                    OCTAGON
+                };
+            }
             if constexpr (std::is_same_v<E, ShdToneMapMethod>) {
                 using enum ShdToneMapMethod;
                 return {
@@ -148,6 +170,14 @@ namespace merutilm::rff2 {
                     SDR,
                     PQ,
                     HLG
+                };
+            }
+            if constexpr (std::is_same_v<E, VidUpscaleFilter>) {
+                using enum VidUpscaleFilter;
+                return {
+                    LANCZOS,
+                    BICUBIC,
+                    NEAREST
                 };
             }
             if constexpr (std::is_same_v<E, ShdSlopeShadingBlend>) {
@@ -199,6 +229,17 @@ namespace merutilm::rff2 {
                     ASPECT
                 };
             }
+            if constexpr (std::is_same_v<E, ShdStudioEnvironmentSource>) {
+                using enum ShdStudioEnvironmentSource;
+                return {
+                    TWO_COLOR,
+                    GRADIENT,
+                    TEXTURE_LAYER_1,
+                    TEXTURE_LAYER_2,
+                    TEXTURE_LAYER_3,
+                    TEXTURE_LAYER_4
+                };
+            }
             if constexpr (std::is_same_v<E, ShdPaletteAnimationMode>) {
                 using enum ShdPaletteAnimationMode;
                 return {
@@ -213,6 +254,70 @@ namespace merutilm::rff2 {
                 return {
                     POWER,
                     WAVE
+                };
+            }
+            if constexpr (std::is_same_v<E, RndSsaaFilter>) {
+                using enum RndSsaaFilter;
+                return {
+                    BOX_GAMMA,
+                    MITCHELL_LINEAR
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalEscapeAngleColoring>) {
+                using enum ShdPalEscapeAngleColoring;
+                return {
+                    NONE,
+                    BINARY_DECOMPOSITION,
+                    TWIST
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapColoring>) {
+                using enum ShdPalOrbitTrapColoring;
+                return {
+                    NONE,
+                    CROSS_GLOW,
+                    CELLULAR,
+                    SHAPE
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapShape>) {
+                using enum ShdPalOrbitTrapShape;
+                return {
+                    POINT,
+                    CIRCLE,
+                    CROSS,
+                    LINE,
+                    GRID_POINTS,
+                    GRID_LINES,
+                    RINGS,
+                    POLYGON,
+                    STAR,
+                    SPIRAL
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapMapping>) {
+                using enum ShdPalOrbitTrapMapping;
+                return {
+                    DISTANCE,
+                    ANGLE,
+                    BANDS
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapRegion>) {
+                using enum ShdPalOrbitTrapRegion;
+                return {
+                    BOTH,
+                    OUTSIDE,
+                    INSIDE
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapBlend>) {
+                using enum ShdPalOrbitTrapBlend;
+                return {
+                    MIX,
+                    MULTIPLY,
+                    SCREEN,
+                    ADD
                 };
             }
             if constexpr (std::is_same_v<E, ShdPalIterationColoringMode>) {
@@ -282,7 +387,6 @@ namespace merutilm::rff2 {
                     FLAME,
                     EMBERS,
                     MIST,
-                    HEAT,
                     RIPPLES,
                     FLOW,
                     AURORA
@@ -301,6 +405,30 @@ namespace merutilm::rff2 {
                 return {
                     ShdRainShape::DROPS,
                     ShdRainShape::STREAKS
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdEffectVariant>) {
+                using enum ShdEffectVariant;
+                return {
+                    RAIN_DROPS,
+                    RAIN_STREAKS,
+                    FLAME,
+                    FLAME_TURBULENT,
+                    FLAME_BURNING_EDGE,
+                    EMBERS,
+                    EMBERS_RISING,
+                    EMBERS_BURST,
+                    MIST,
+                    MIST_DRIFTING,
+                    MIST_POOLED,
+                    RIPPLES,
+                    RIPPLES_INTERFERENCE,
+                    RIPPLES_CAUSTICS,
+                    FLOW,
+                    FLOW_CHASE,
+                    AURORA,
+                    AURORA_CURTAIN,
+                    AURORA_RIBBONS
                 };
             }
             if constexpr (std::is_same_v<E, ShdEffectMask>) {
@@ -362,9 +490,13 @@ namespace merutilm::rff2 {
             }
             if constexpr (std::is_same_v<E, FractalFormulaType>) {
                 using enum FractalFormulaType;
+                if constexpr (!BUDDHABROT_AVAILABLE) {
+                    return {MANDELBROT, CUSTOM};
+                }
                 return {
                     MANDELBROT,
-                    CUSTOM
+                    CUSTOM,
+                    BUDDHABROT
                 };
             }
             if constexpr (std::is_same_v<E, bool>) {
@@ -384,8 +516,9 @@ namespace merutilm::rff2 {
             if constexpr (std::is_same_v<E, FrtReuseReferenceMethod>) {
                 switch (value) {
                     using enum FrtReuseReferenceMethod;
-                    case CURRENT_REFERENCE: return L"Current";
-                    case CENTERED_REFERENCE: return L"Centered";
+                    // Named in full so the translation table keeps them apart from the comparison view's Current.
+                    case CURRENT_REFERENCE: return L"Current Reference";
+                    case CENTERED_REFERENCE: return L"Centered Reference";
                     case DISABLED: return L"Disabled";
                     default: break;
                 }
@@ -470,6 +603,19 @@ namespace merutilm::rff2 {
                     default: break;
                 }
             }
+            if constexpr (std::is_same_v<E, ShdChaosBokehShape>) {
+                switch (value) {
+                    using enum ShdChaosBokehShape;
+                    case CIRCLE: return L"Circle";
+                    case TRIANGLE: return L"Triangle";
+                    case SQUARE: return L"Square";
+                    case PENTAGON: return L"Pentagon";
+                    case HEXAGON: return L"Hexagon";
+                    case HEPTAGON: return L"Heptagon";
+                    case OCTAGON: return L"Octagon";
+                    default: break;
+                }
+            }
             if constexpr (std::is_same_v<E, ShdToneMapMethod>) {
                 switch (value) {
                     using enum ShdToneMapMethod;
@@ -490,6 +636,15 @@ namespace merutilm::rff2 {
                     case SDR: return L"SDR";
                     case PQ: return L"HDR10 (PQ)";
                     case HLG: return L"HLG";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, VidUpscaleFilter>) {
+                switch (value) {
+                    using enum VidUpscaleFilter;
+                    case LANCZOS: return L"Lanczos (Sharp)";
+                    case BICUBIC: return L"Bicubic (Soft)";
+                    case NEAREST: return L"Nearest (Pixelated)";
                     default: break;
                 }
             }
@@ -546,6 +701,18 @@ namespace merutilm::rff2 {
                     default: break;
                 }
             }
+            if constexpr (std::is_same_v<E, ShdStudioEnvironmentSource>) {
+                switch (value) {
+                    using enum ShdStudioEnvironmentSource;
+                    case TWO_COLOR: return L"Two Colors";
+                    case GRADIENT: return L"Gradient";
+                    case TEXTURE_LAYER_1: return L"Texture Layer 1";
+                    case TEXTURE_LAYER_2: return L"Texture Layer 2";
+                    case TEXTURE_LAYER_3: return L"Texture Layer 3";
+                    case TEXTURE_LAYER_4: return L"Texture Layer 4";
+                    default: break;
+                }
+            }
             if constexpr (std::is_same_v<E, ShdPaletteAnimationMode>) {
                 switch (value) {
                     using enum ShdPaletteAnimationMode;
@@ -561,6 +728,77 @@ namespace merutilm::rff2 {
                     using enum ShdPaletteCycleCurve;
                     case POWER: return L"Power";
                     case WAVE: return L"Wave";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, RndSsaaFilter>) {
+                switch (value) {
+                    using enum RndSsaaFilter;
+                    case BOX_GAMMA: return L"Box (Gamma)";
+                    case MITCHELL_LINEAR: return L"Mitchell (Linear)";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalEscapeAngleColoring>) {
+                switch (value) {
+                    using enum ShdPalEscapeAngleColoring;
+                    case NONE: return L"None";
+                    case BINARY_DECOMPOSITION: return L"Binary Decomposition";
+                    case TWIST: return L"Angle Twist";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapColoring>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapColoring;
+                    case NONE: return L"None";
+                    case CROSS_GLOW: return L"Cross Glow";
+                    case CELLULAR: return L"Cellular";
+                    case SHAPE: return L"Shape";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapShape>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapShape;
+                    case POINT: return L"Point";
+                    case CIRCLE: return L"Circle";
+                    case CROSS: return L"Cross";
+                    case LINE: return L"Line";
+                    case GRID_POINTS: return L"Grid Points";
+                    case GRID_LINES: return L"Grid Lines";
+                    case RINGS: return L"Rings";
+                    case POLYGON: return L"Polygon";
+                    case STAR: return L"Star";
+                    case SPIRAL: return L"Spiral";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapMapping>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapMapping;
+                    case DISTANCE: return L"Distance";
+                    case ANGLE: return L"Angle";
+                    case BANDS: return L"Bands";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapRegion>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapRegion;
+                    case BOTH: return L"Inside and Outside";
+                    case OUTSIDE: return L"Outside Only";
+                    case INSIDE: return L"Inside Only";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapBlend>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapBlend;
+                    case MIX: return L"Mix";
+                    case MULTIPLY: return L"Multiply";
+                    case SCREEN: return L"Screen";
+                    case ADD: return L"Add";
                     default: break;
                 }
             }
@@ -648,7 +886,6 @@ namespace merutilm::rff2 {
                     case FLAME: return L"Flame";
                     case EMBERS: return L"Embers";
                     case MIST: return L"Mist";
-                    case HEAT: return L"Heat Haze";
                     case RIPPLES: return L"Ripples";
                     case FLOW: return L"Flow Light";
                     case AURORA: return L"Aurora";
@@ -669,6 +906,31 @@ namespace merutilm::rff2 {
                 switch (value) {
                     case ShdRainShape::STREAKS: return L"Water Streaks";
                     case ShdRainShape::DROPS: return L"Raindrops";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdEffectVariant>) {
+                switch (value) {
+                    using enum ShdEffectVariant;
+                    case RAIN_DROPS: return L"Rain (Raindrops)";
+                    case RAIN_STREAKS: return L"Rain (Water Streaks)";
+                    case FLAME: return L"Flame (Classic)";
+                    case FLAME_TURBULENT: return L"Flame (Turbulent)";
+                    case FLAME_BURNING_EDGE: return L"Flame (Burning Edge)";
+                    case EMBERS: return L"Embers (Classic)";
+                    case EMBERS_RISING: return L"Embers (Rising Sparks)";
+                    case EMBERS_BURST: return L"Embers (Spark Bursts)";
+                    case MIST: return L"Mist (Classic)";
+                    case MIST_DRIFTING: return L"Mist (Drifting)";
+                    case MIST_POOLED: return L"Mist (Pooled)";
+                    case RIPPLES: return L"Ripples (Classic)";
+                    case RIPPLES_INTERFERENCE: return L"Ripples (Interference)";
+                    case RIPPLES_CAUSTICS: return L"Ripples (Caustics)";
+                    case FLOW: return L"Flow Light (Classic)";
+                    case FLOW_CHASE: return L"Flow Light (Band Chase)";
+                    case AURORA: return L"Aurora (Classic)";
+                    case AURORA_CURTAIN: return L"Aurora (Ray Curtain)";
+                    case AURORA_RIBBONS: return L"Aurora (Ribbons)";
                     default: break;
                 }
             }
@@ -716,6 +978,7 @@ namespace merutilm::rff2 {
                     using enum FractalFormulaType;
                     case MANDELBROT: return L"Mandelbrot";
                     case CUSTOM: return L"Custom";
+                    case BUDDHABROT: return L"Buddhabrot";
                     default: break;
                 }
             }

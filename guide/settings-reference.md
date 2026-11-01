@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01. -->
 # RFF_Super complete field reference
 
 Read the [shader feature overview](shader-overview.md) for an explanation of each group, and use the [coverage checklist](shader-coverage.md) to locate features by their source panel. Surface editor names can differ from the registry labels below; see [Surface editor display names](#surface-editor-display-names).
@@ -18,6 +18,8 @@ Field names, choices, and defaults were read from current production form models
 - [Finishing](#finishing)
 - [Animated Materials](#animated-materials)
 - [Palette](#palette)
+- [Orbit Trap](#orbit-trap)
+- [Other](#other)
 - [Render & Preview](#render--preview)
 - [Explore](#explore)
 - [Animation](#animation)
@@ -25,6 +27,8 @@ Field names, choices, and defaults were read from current production form models
 - [Max Iterations Display](#max-iterations-display)
 - [Surface Effects](#surface-effects)
 - [Export and timeline controls](#export-and-timeline-controls)
+- [Supersampling filter](#supersampling-filter)
+- [Video export load](#video-export-load)
 - [Surface editor display names](#surface-editor-display-names)
 - [HDR and tone mapping](#hdr-and-tone-mapping)
 - [Shader layer controls](#shader-layer-controls)
@@ -102,7 +106,7 @@ Field names, choices, and defaults were read from current production form models
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Rim Intensity | 0 | Strength of edge/rim light; 0 disables it. | 0 to 1 |
-| Rim Power | 3 | Concentrates the rim highlight as it increases. | 1 to 64 |
+| Rim Power | 3 | Concentrates the rim highlight as it increases; below 1 the rim spreads further across the surface. | 0.1 to 64 |
 | Rim Color | 1, 1, 1 | Tints the rim; requires nonzero Rim Intensity. | Choose a color, enter #RRGGBB, or R, G, B in 0–1. |
 
 ### Gloss
@@ -130,6 +134,7 @@ Field names, choices, and defaults were read from current production form models
 | Boundary Reflection Guard | 0 | Suppresses unwanted reflections near iteration boundaries. | 0 to 1 |
 | Relief Waves | 0 | Adds wave modulation to relief; 0 disables it. | 0 to 1 |
 | Wave Frequency | 0.5 | Frequency of relief waves; requires Relief Waves above zero. | 0.03 to 1.5 |
+| Waves on Clear Coat Only | Off | Relief Waves shape only the Studio clear-coat highlights, leaving the shading free of their lines and dark bands. | Off / On |
 | Zoom Reference | -1 | Reference zoom for compensation. Use Current Zoom binds it; -1 is unbound. | Saved reference zoom: 0 to 16777216, or -1 for an unbound reference. |
 
 ### Material Presets
@@ -260,9 +265,11 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | --- | --- | --- | --- |
 | Focus Amount | 0 | Strength of iteration-depth focus blur; 0 disables it. | 0 to 1 |
 | Focus Depth | 0.5 | Sharp-band center as a fraction of maximum iteration count. | 0 to 1 |
+| Pick Focus Depth | - | Press, then click the fractal: Focus Depth moves to that pixel's iteration count. The black interior leaves it unchanged. | Button (classic Fog window); Finishing workspace action |
 | Focus Range | 0.25 | Half-width of the sharp band; larger values keep more depth sharp. | 0.01 to 1 |
 | Focus Falloff | 1 | Transition out of the sharp band; larger values retain more sharpness. | 0.1 to 4 |
 | Focus Blur | 10 | Maximum defocus blur radius, relative to 1280 image width. | Blur radius in pixels relative to 1280 width. |
+| Smooth Focus Across Keyframes | On | Video only: the band's maximum-iteration reference glides between the two keyframes instead of jumping where Auto Max Iteration changes Max Iterations. Off keeps the stepped reference. Older files open with it off. | On / Off |
 
 ### Chaos Blur
 
@@ -275,6 +282,11 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Chaos Feather | 6 | Softens the selected region boundary, relative to 1280 image width. | Softens the detected region boundary, in pixels at 1280 width. Detection follows the current zoom and location. |
 | Chaos Blur Radius | 4 | Circular blur radius in the selected regions, relative to 1280 width. | Circular aperture radius in pixels at 1280 width. Scales with output size; Blur Quality controls sampling. |
 | Chaos Shade | 0 | Darkens selected intricate/defocused regions by the selection alone, up to black at 1 whatever Chaos Amount is. | Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, fully selected regions turn black whatever Chaos Amount is. |
+| Chaos Interior | 0 | Selection strength for areas that reach Max Iterations, such as the black interior; 0 keeps them sharp. Areas where interior and exterior mix are selected regardless. | Blurs areas that reach Max Iterations, such as the black interior of the Mandelbrot set. Zero leaves them sharp; higher values select them more strongly. |
+| Chaos Edge Protection | On (older files: Off) | Keeps smooth surfaces next to blurred regions out of the blur, so their outlines stay crisp; Off blurs every neighbouring pixel into the region as earlier versions did. Costs about 20% more frame time at 2560 x 1440 with Chaos Blur on. | On, Off |
+| Chaos Bokeh Shape | Circle | Outline of the Chaos Blur aperture; bright specks in blurred regions take this shape. Polygons stand on a flat edge at 0 degrees. Circle at aspect 1 is the original round blur. | Circle, Triangle, Square, Pentagon, Hexagon, Heptagon, Octagon |
+| Chaos Bokeh Rotation | 0 | Turns the outline, in degrees; with Circle it turns the stretch set by Chaos Bokeh Aspect. | 0 to 360 |
+| Chaos Bokeh Aspect | 1 | Height over width of the outline at the same area; above 1 stretches it vertically, below 1 horizontally. | 0.25 to 4 |
 | Chaos Blur Averaging | Average in Gamma Space | Where the circular blur averages its samples. Gamma Space keeps dark gaps between bright details dark; Linear Space lets bright detail spread and brightens blurred regions. | Average in Gamma Space, Average in Linear Space |
 
 ## Animated Materials
@@ -286,10 +298,9 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Enabled | Off | Enables this contribution while retaining its settings when off. | On, Off |
-| Effect Type | Rain | Selects the material effect; controls behave according to its type. | Rain, Flame, Embers, Mist, Heat Haze, Ripples, Flow Light, Aurora |
+| Effect Type | Rain (Raindrops) | Selects the material effect and, in parentheses, its Rain Shape or style; controls behave according to its type. Classic is each type's original look. Flame (Turbulent) rises from each band's base with smoke above; Flame (Burning Edge) moves a burning front that leaves char. Embers (Rising Sparks) rise and cool from white to the Secondary color; Embers (Spark Bursts) fly outward from a point. Mist (Drifting) covers the surface in the Primary color with two moving cloud layers; Mist (Pooled) settles at each band's base. Ripples (Interference) overlaps waves from four drifting sources; Ripples (Caustics) lights the palette with a moving net of Primary light. Flow Light (Band Chase) lights the bands one after another with an afterglow. Aurora (Ray Curtain) has a sharp Primary hem fading into Secondary with fine rays; Aurora (Ribbons) draws three soft ribbons. | Rain (Raindrops), Rain (Water Streaks), Flame (Classic), Flame (Turbulent), Flame (Burning Edge), Embers (Classic), Embers (Rising Sparks), Embers (Spark Bursts), Mist (Classic), Mist (Drifting), Mist (Pooled), Ripples (Classic), Ripples (Interference), Ripples (Caustics), Flow Light (Classic), Flow Light (Band Chase), Aurora (Classic), Aurora (Ray Curtain), Aurora (Ribbons) |
 | Blend | Screen | Normal composite, additive light, screen, or multiplication. | Normal, Add, Screen, Multiply |
 | Mask | Surface | Restricts coverage to Surface, Exterior, No Surface, Bands, or Iteration Edges. | Surface, Exterior, No Surface, Bands, Iteration Edges |
-| Rain Shape | Raindrops | Raindrops versus Water Streaks; used by Rain. | Raindrops, Water Streaks |
 | Drop Size | 1 | Raindrop size in the drop-shaped Rain mode. | 0.1 to 8 |
 | Opacity | 0.65 | Strength of the layer; 0 makes its other visual controls ineffective. | 0 to 1 |
 | Surface Scale | 1 | Spatial scale of the procedural surface. | 0.1 to 100 |
@@ -339,8 +350,11 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Line Softness | 0 | Edge softness: 0 crisp, 1 fully softened swell. | 0 to 1 |
 | Line Color | 0, 0, 0, 1 | Band-line color. | Choose a color, enter #RRGGBB, or R, G, B, A in 0–1. |
 | Recessed Grooves | Off | Turns band lines into recessed relief grooves. | On, Off |
+| Rounded Bands | On (older files: Off) | Swells each band between two lines into a rounded cord, so the lines become the creases between cords instead of carved grooves. Groove Depth sets how far the bands swell; Auto Groove, Smooth Grooves and Groove Width apply only with it off. Off carves grooves. | On, Off |
+| Crease Blur | 6 (older files: 0) | With Rounded Bands, softens the crease between two bands over this many pixels (at 720 lines) so it does not read as a thin line; the bands keep their full swell. 0 leaves the crease sharp. | 0 to 24 |
 | Auto Groove | On | Derives groove shape automatically from the band-line setup. | On, Off |
-| Groove Depth | 1.5 | Depth of the recessed groove response. | 0 to 5 |
+| Smooth Grooves | On (older files: Off) | Symmetric walls, a softer and hue-keeping shadow, and smoothed narrow grooves, so grooves do not read as thin black lines. Off draws the original grooves. | On, Off |
+| Groove Depth | 1.5 | Depth of the recessed groove response; above 5 the shading range widens too. | 0 to 20 |
 | Groove Width | 0.05 | Width of the manual recessed groove response. | 0 to 0.5 |
 | Spine Amount | 0 | Strength of spine decoration; 0 disables it. | Uses Band Line color, width and opacity. Independent of Studio and materials. |
 | Spine Length | 1 | Length of spine decoration. | Uses Band Line color, width and opacity. Independent of Studio and materials. |
@@ -358,7 +372,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Stop Easing | 1 | Interpolation shape between explicit color stops; see the numeric choices in the panel. | 0 Linear, 1 Smoothstep, 2 Smootherstep. |
+| Stop Easing | Smoothstep | How colors blend between neighboring stops. | Linear, Smoothstep, Smootherstep |
 | Selected Stop | 0 | Selects an existing stop starting at 1. Apply selection before changing its color/position. | Apply the selection before editing its color or position. |
 | Stop Position | 0 | Position in the cycle from 0 up to, but excluding, 1; stops remain ordered. | Ordered position from 0 up to, but excluding, 1. |
 | Stop Color | 0, 0, 0, 1 | Color of the selected stop. | #RRGGBB or R, G, B, A in 0–1. |
@@ -370,13 +384,83 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Palette Preset | LongRandom64 [Recommend] | Complete palette recipe; applying it can replace more than the color array. | Palette library; Apply Palette Preset applies the chosen recipe. |
 | Seed | 1 | Unsigned seed for repeatable palette generation; same preset and seed regenerate the same recipe. | Whole number from 0 to 4294967295 for repeatable generation. |
 
-### Import Colors
+### KFR Color
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Color Settings File | (empty) | External RFC, RFSP, KFR, or KFP supplying colors. Read first, then apply. | RFC, RFSP, KFR or KFP. Read first, then apply. |
-| Palette Preview | (display only) | Shows the current palette drawn with each Color Smoothing and each Color Interpolation choice, before color correction, so the choices can be compared without applying them. A chosen Color Settings File also shows its colors before they are applied. | Not saved; nothing to edit. |
-| Include Color Correction | Off | Also imports Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. | Off, On |
+| Loaded KFR File | (empty) | Names the KFR file Load KFR File last read and shows its colors before they are applied. | Display only; Load KFR File fills it. |
+
+### Colors from Settings
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Loaded Settings File | (empty) | Names the RFC or RFSP that Load Settings File last read and shows its colors before they are applied. | Display only; Load Settings File fills it. |
+| Palette Preview | (display only) | Shows the current palette drawn with each Color Smoothing and each Color Interpolation choice, before color correction, so the choices can be compared without applying them. | Not saved; nothing to edit. |
+
+## Orbit Trap
+
+Opened by **Shader > Orbit Trap**. Every setting except Coloring is greyed out while Coloring is None. Iterations that MPA skips are not sampled, so the trap can differ slightly from the exact orbit; Ignore MPA on GPU gives the exact one on the GPU. A view opened from a map file draws as None until it is recalculated. Keyframes generated with Coloring on save their traps beside each map as a numbered `.rftz` file, which the Timeline Editor preview and video export read.
+
+### Trap
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Coloring | None | What the palette follows besides the iteration count. Cross Glow: nearest approach to the real and imaginary axes (Pickover stalks). Cellular: nearest and second nearest approach to the origin, each cell colored by the iteration of its nearest approach and darkened toward its border. Shape: nearest approach to the trap set below. | None, Cross Glow, Cellular, Shape |
+| Shape | Point | Shape coloring only. Circle measures the distance to its rim. Grid Points and Grid Lines measure to the nearest point or line of a square lattice, Rings to the nearest of evenly spaced circles around the center, Polygon and Star to their outline, and Spiral along the radius to a spiral. Changing it recalculates the view. | Point, Circle, Cross, Line, Grid Points, Grid Lines, Rings, Polygon, Star, Spiral |
+| Center Real | 0 | Shape coloring only: real part of the trap's center. Recalculates. | −4 to 4 |
+| Center Imaginary | 0 | Shape coloring only: imaginary part of the trap's center. Recalculates. | −4 to 4 |
+| Radius | 0.5 | The size of Circle, Polygon and Star, the spacing of Grid Points, Grid Lines and Rings, and the step per turn of Spiral; 0 measures as Point (Grid Lines as Cross). Point, Cross and Line do not use it. Recalculates. | 0 to 4 |
+| Angle | 0 | Degrees the trap turns about its center; Point, Circle and Rings do not use it. At 0 a Polygon or Star has a corner on the positive real axis. Recalculates. | −180 to 180 |
+| Sides | 5 | Polygon and Star only: the polygon's sides or the star's points; a star's inner corners sit at half its size. Recalculates. | 3 to 64 |
+
+### Palette
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Color Mapping | Distance | Shape coloring only. Distance runs the palette along the distance to the trap. Angle turns it with the direction the orbit came from at its nearest approach, Arms times per turn. Bands lays rings of equal distance, a quarter cycle per halving times Density, with a dark seam between them. No recalculation is needed. | Distance, Angle, Bands |
+| Arms | 3 | Angle color mapping only: palette turns per revolution. | 1 to 64 |
+| Density | 1 | Palette cycles across the trap; unused under Angle color mapping. | −16 to 16 |
+| Offset | 0 | Shifts the trap's colors along the palette, in cycles. | −1 to 1 |
+| Animation Speed | 0 | Runs the trap's colors on their own, in palette cycles per second; 0 holds still. | −4 to 4 |
+| Hold in Color Animation | Off | Keeps the trap's colors still while the palette animates, so only the iteration bands move; Animation Speed still runs. | On, Off |
+
+### Glow
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Width | −5 | log2 of the distance where the glow halves; lower it at deep zooms. With Relief, the tube's radius. | −100000 to 8 |
+| Glow Sharpness | 1 | Higher draws thinner lines. Unused with Relief. | 0.1 to 8 |
+| Glow Color | 1, 1, 1 | Color of the light where the orbit nearly hits the trap; with Relief, the tube's highlight. | Choose a color, enter #RRGGBB, or R, G, B in 0–1. |
+| Glow Strength | 0.6 | Brightness of that light. | 0 to 4 |
+| Relief | Off | Cross Glow and Shape only: draws the trap as a round, glossy tube lit by the Lighting & Relief light direction; outside the tube the picture takes only its shadow. | On, Off |
+
+### Blending
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Amount | 0.8 | Share of the trap coloring over the iteration palette. | 0 to 1 |
+| Blend Mode | Mix | How the trap is laid over the palette; Screen only brightens, so the palette keeps its colors under the glow. | Mix, Multiply, Screen, Add |
+| Apply To | Inside and Outside | Which pixels the trap colors. Inside means the pixels that reach Max Iterations. Outside Only leaves them in Mandelbrot Color; Inside Only leaves the escaping pixels on the iteration palette. | Inside and Outside, Outside Only, Inside Only |
+
+### Cell Border
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Border Width | 1 | Cellular only: how far the dark border reaches into each cell. | 0.1 to 8 |
+| Border Darkness | 0.85 | Cellular only: how dark the border gets. | 0 to 1 |
+
+Settings files and shader presets retain these values; older files open with None, Point at 0, 0, Radius 0.5, Angle 0, Distance, Arms 3, Relief Off and Hold in Color Animation Off.
+
+## Other
+
+Opened by **Shader > Other**.
+
+### Escape Angle
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Escape Angle Coloring | None | Shifts the palette by the angle at which each orbit escaped. Binary Decomposition moves the half of every band that escaped below the real axis by Escape Angle Amount cycles, drawing a checkerboard along the external rays. Angle Twist moves every pixel by Escape Angle Amount cycles per full turn; whole-number amounts leave no seam. Live view and image export only: a view opened from a map file, and video export, draw as None. | None, Binary Decomposition, Angle Twist |
+| Escape Angle Amount | 0.5 | Palette cycles; greyed out while Escape Angle Coloring is None. | −4 to 4 |
 
 ## Render & Preview
 
@@ -384,7 +468,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Rendering FPS | 60 | Live display limit, independent of video export rate. Lower values can reduce preview GPU load. | Live rendering limit: 0 to 1000 frames per second; 0 means no limit. Lower values reduce rendering load. Video export has a separate FPS setting. |
+| Rendering FPS | 60 | Live display limit, independent of video export rate. Lower values can reduce preview GPU load; 0 pauses the preview, keeping the last frame while settings and calculations still apply. | Live rendering limit: 0 to 1000 frames per second; 0 pauses the preview. Lower values reduce rendering load. Video export has a separate FPS setting. |
 | Calculation Threads | Logical core count | CPU calculation workers, limited to logical cores; applies to the next calculation. | 1 up to this computer's logical core count. Applied to the next calculation. |
 
 ### Calculation Preview
@@ -394,6 +478,20 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Boundary Trace Fill | Off | Fills qualifying regions through boundary tracing; bypassed in Absolute Iteration Mode. | On, Off |
 | Two-Color Preview | Off | Two-color calculation preview; return to ordinary coloring to judge appearance edits. | On, Off |
 | Coarse Preview | On | Shows a coarse first result while the full calculation proceeds. | On, Off |
+
+### GPU Perturbation
+
+Set in the **GPU Perturbation** group of the Render & Preview panel, opened by **Render > Render & Preview**; **Render > Use GPU Perturbation** toggles the first row. Render presets keep these values.
+
+| Setting | Fresh default | What changing it does / dependency | Choices or input note |
+| --- | --- | --- | --- |
+| Use GPU Perturbation | Off | Iterates on the GPU in double precision down to zoom 1e290. Deeper zooms, custom formulas, compressed references and GPUs without 64-bit shader integers stay on the CPU. Boundary Trace Fill, Two-Color Preview and Coarse Preview apply only to CPU calculation. | On, Off |
+| Single Precision | On | Iterates in float down to zoom 1e30, as RFF 2.3.0 did: on GeForce GPUs often more than 10 times faster, but iteration values drift from the double-precision result, by hundreds of iterations in sensitive views. Deeper zooms, and MPA tables beyond float range, use double. | On, Off |
+| Batch Duration (s) | 0.1 | Target time of each GPU batch; the batch length doubles or halves toward it. | 0.01 to 1 second |
+| Allowed Unfinished Pixels | 0 | Ends the GPU calculation with up to this many pixels still iterating; they keep the iteration reached. | 0 or more; 0 finishes every pixel |
+| Ignore MPA on GPU | Off | Iterates every step without MP-Approximation skips. | On, Off |
+| Stop MPA After Batches | 0 | After this many batches, the remaining pixels iterate without MP-Approximation. | 0 or more; 0 keeps MPA |
+| Interpolate Isolated Pixels | Off | An unfinished pixel with four finished neighbors takes their mean; faster, but approximated. | On, Off |
 
 ## Explore
 
@@ -421,7 +519,7 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
-| Reuse Reference | Disabled | Disabled creates an independent reference; Current/Centered select reuse where a compatible reference exists. | Current, Centered, Disabled |
+| Reuse Reference | Disabled | Disabled creates an independent reference; Current Reference/Centered Reference select reuse where a compatible reference exists. | Current Reference, Centered Reference, Disabled |
 | Compression Criteria | 0 | Repeated-reference batch threshold; 0 disables reference compression. | Minimum reference batch; 0 disables compression. |
 | Compression Threshold | 0 | Positive N sets relative threshold 10^-N; higher is stricter. Zero gives zero tolerance; explicitly disable with Compression Criteria 0. | 0 to 255; see reference-compression discussion in the main guide. |
 | Disable Normalization | Off | Disables reference-compressor normalization; advanced storage tuning. | On, Off |
@@ -483,38 +581,20 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Extra Final Zoom-in | 2 | Extra zoom-in beyond the ordinary final saved stage. | Additional zoom at the end of the video; 0 to 8. |
 | Show Zoom Ratio | On | Displays the zoom readout in preview and video. | On, Off |
 
-### Timeline
-
-| Setting | Fresh default | What changing it does / dependency | Choices or input note |
-| --- | --- | --- | --- |
-| Timeline Enabled | On | Applies saved tracks without deleting them when off. | On, Off |
-| Estimated Keyframes | 100 | Length estimate before folder loading; export counts actual files. | Preview length before loading keyframes: 1 to 100000. |
-
 ### Keyframes
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
 | Zoom Step per Keyframe | 2 | Magnification ratio of neighboring maps; 2 means 2 times. Its log10 becomes the stored log-zoom increment. | Greater than 1; a magnification ratio. |
-| Rotation / 360 Padding | Off | Generates larger planar maps for rotation/panorama; requires regenerating keyframes. | On, Off |
+| Rotation / 360 Padding | Off | Generates larger planar maps for rotation/panorama; requires regenerating keyframes. A 360 live view is also calculated once over the padded area, so turning the camera or changing Pitch, Field of View, Panorama Range or Layout redraws without recalculating; the picture is resampled from that area. Keyframe generation and video export always calculate directly. | On, Off |
 | Camera Padding Scale | 4 | Linear padding factor; doubling quadruples source pixels and associated storage. | 2 to 64. Memory and disk use grow with the square of this value. |
 | Render from PNG Images | Off | Uses already-colored PNGs; iteration-dependent effects require maps instead. | On, Off |
 
 ### Video Camera
 
-| Setting | Fresh default | What changing it does / dependency | Choices or input note |
-| --- | --- | --- | --- |
-| Rotation Mode | Keyframes | Keyframes follows rotation keys; Constant Period replaces them with continuous rotation, even during zoom holds. | Keyframes, Constant Period |
-| Seconds per Turn | 10 | Seconds per turn in Constant Period mode; larger means slower. | Duration of one complete turn, 0.01 to 86400 seconds. Used by Constant Period. |
-| Rotation Direction | Clockwise | Direction of continuous rotation. | Clockwise, Counterclockwise |
-| Rotation Start Angle | 0 | Angle at video time zero for continuous rotation. | Angle at video time zero, in degrees. Used by Constant Period. |
-| Camera Rotation | 0 | Rotates the saved source view; values beyond 360 allow multiple turns. | Degrees, -360000 to 360000. Values beyond 360 allow multiple turns. |
-| Camera Projection | Planar | Playback/export projection; needs sufficient saved source coverage. | Planar, 360° Equirectangular, 360° Camera |
-| Camera Pitch | -90 | Vertical aim in the perspective video camera. | -90 to 90 degrees. |
-| Camera Field of View | 100 | Horizontal field of view of the perspective video camera. | 1 to 179 degrees. |
-| Camera Panorama Range | 0 | Log10 radius limit; detail remains limited by saved source coverage. | Log10 radius limit, 0 to 6. Available detail depends on saved padding. |
-| Camera Layout | Ground and Sky | Ground and Sky versus Full Sphere video mapping. | Ground and Sky, Full Sphere |
+Rotation Mode, Seconds per Turn, Rotation Direction, Rotation Start Angle and the camera's Rotation, Projection, Pitch, Field of View, Panorama Range and Layout are set in the Timeline Editor (Camera / Rotation / 360° panel and camera tracks), not in the Animation workspace.
 
-**Match Planar Framing** (action in this section, in the legacy Video Camera window, and on a camera track's right-click menu) writes keys at the playhead for 360 Camera projection, Pitch −90, a Field of View calculated from the loaded keyframes' aspect ratio, Ground and Sky layout, and a Panorama Range that covers the frame, keeping rotation. It needs keyframes loaded in the Timeline Editor that were generated with Rotation / 360 Padding. Undo restores all of them together.
+**Match Planar Framing** (in the Timeline Editor and on a camera track's right-click menu) writes keys at the playhead for 360 Camera projection, Pitch −90, a Field of View calculated from the loaded keyframes' aspect ratio, Ground and Sky layout, and a Panorama Range that covers the frame, keeping rotation. It needs keyframes loaded in the Timeline Editor that were generated with Rotation / 360 Padding. Undo restores all of them together.
 
 ## Zoom Overlay
 
@@ -594,7 +674,12 @@ Studio enables Studio materials. Base Style selects a recipe; related parameter 
 | Direct Light | 0.8 | Strength of direct Studio illumination. | 0 to 8 |
 | Studio Reflections | 0.7 | Strength of Studio environment reflections. | 0 to 8 |
 | Clearcoat | 0.3 | Strength of an additional clear coating. | 0 to 1 |
-| Coat Roughness | 0.15 | Roughness of the coating; requires Clearcoat above zero. | 0.04 to 1 |
+| Coat Roughness | 0.15 | Roughness of the coating; requires Clearcoat above zero. With Coat Softbox on, lower values give the softbox reflections sharper edges down to 0.04. | 0.04 to 1 |
+| Environment Source | Two Colors | What the base and coat reflect: the original sky/ground light, a four-stop Gradient, or Texture Layer 1-4 read as a 360-degree equirectangular panorama (the layer need not be on). | Two Colors / Gradient / Texture Layer 1-4 |
+| Environment Brightness | 6 | How bright a white gradient stop or image pixel reflects, multiplied by Studio Reflections; above 1 shines like a lit softbox. Requires a source other than Two Colors. | 0 to 32 |
+| Gradient Stop 1-4 Position | 0 / 0.55 / 0.68 / 0.82 | Where each stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up. Requires Gradient. | 0 to 1 |
+| Gradient Stop 1-4 Color | dark / slate / white / blue | Color reflected at each stop. Requires Gradient. | Color |
+| Coat Softbox | On | The coating reflects the key and fill lights as small rectangular softboxes, crisp window shapes that bend with the relief; Off keeps round highlights. Older files open with it off. Requires Clearcoat above zero. | Off / On |
 | Environment Rotation | 0 | Rotates the Studio environment independently. | 0 up to, but excluding, 360 degrees |
 | Follow Light Direction | 1 | How much the environment follows Light Direction: 0 independent, 1 full follow. | 0 to 1 |
 | Specular Antialiasing | 0 | Reduces harsh specular aliasing by adjusting highlight response. | 0 to 1 |
@@ -735,7 +820,7 @@ The Surface inspector deliberately shortens some labels. These are alternate nam
 
 ## HDR and tone mapping
 
-These controls are available through Shader → HDR / the **HDR & Tone Mapping** output group. Defaults below are the declared defaults for these fields; a loaded file or preset can replace them.
+These controls are available through Shader → HDR & Tone Mapping, which opens the **HDR & Tone Mapping** output group. Defaults below are the declared defaults for these fields; a loaded file or preset can replace them.
 
 | Setting | Default | Effect | Choices / range |
 | --- | --- | --- | --- |
@@ -750,6 +835,31 @@ These controls are available through Shader → HDR / the **HDR & Tone Mapping**
 [Curve overview](shader-overview.md#hdr-and-tone-mapping) · [Detailed MFR behavior](../documentation/notes/mfr-hdr-preview.md)
 
 The ACES choice is a curve approximation, not a full ACES transform; see the attribution in [NOTICE](../NOTICE).
+
+## Video output size
+
+These controls are in Export Settings (Video Output), which the Timeline Editor opens too. Output Width and Output Height are also in the Export workspace. Every frame is still rendered at the keyframe size, shading, stripes and palette included; only the finished frame is resized, with a Lanczos filter, when the file is encoded.
+
+| Setting | Default | Effect | Choices / range |
+| --- | --- | --- | --- |
+| Output Width | 0 | Width of the video file. 0 keeps the keyframe width, or follows the aspect ratio when only Output Height is set. | 0 to 16384 |
+| Output Height | 0 | Height of the video file. 0 keeps the keyframe height, or follows the aspect ratio when only Output Width is set. Both set to another aspect ratio stretches the picture. Lossy and HDR video round each side down to an even number. | 0 to 16384 |
+
+## Video export load
+
+**GPU Work Split** is in Export > Keyframe Output and in Export Settings, which the Timeline Editor opens too. It applies to video export only, not to keyframe generation, image export or the live view.
+
+| Setting | Fresh default | Effect | Choices / range |
+| --- | --- | --- | --- |
+| GPU Work Split | 16 | Sends each video frame to the GPU in smaller parts, so a long export at a high resolution or Supersampling is not stopped when Windows resets a GPU that stays busy with one piece of work for about 2 seconds. 0 sends each frame as one part, 1 sends each shader pass separately, 2 to 64 also cut the fractal pass into that many horizontal bands. The video is identical at every value; higher values export slightly slower. A settings file keeps its saved value; files from before the setting existed open with 0. | 0 to 64 |
+
+## Supersampling filter
+
+**SSAA Filter** sits beside Supersampling in Export > Resolution & Quality (the Render Properties window with Use Legacy Settings UI). It applies to the live view, image export and video export, SDR and HDR alike; with Supersampling 1 nothing changes.
+
+| Setting | Fresh default | Effect | Choices |
+| --- | --- | --- | --- |
+| SSAA Filter | Mitchell (Linear) | Mitchell (Linear) combines the samples with a Mitchell-Netravali filter in linear light, so thin dark filaments keep their true brightness and edges alias less. Box (Gamma) takes the plain mean of the stored values, which darkens fine detail. Settings files saved before this setting existed open with Box (Gamma); render presets leave it as it is. | Mitchell (Linear), Box (Gamma) |
 
 ## Shader layer controls
 
@@ -776,13 +886,14 @@ The ACES choice is a curve approximation, not a full ACES transform; see the att
 | Equal Spacing | Redistributes the stop positions uniformly. |
 | Reverse Colors | Reverses the stop colors. |
 | Apply Palette Preset | Applies the selected complete palette recipe and seed. |
-| Read Color File / Apply Imported Colors | Reads the chosen color source, then applies it with optional Color Correction. |
+| Load KFR File / Apply KFR Colors | Load KFR File chooses a `.kfr` file and reads its colors at once; Apply KFR Colors puts them on the palette. Undo restores the previous palette. |
+| Load Settings File / Apply Colors / Apply Colors and Color Correction | Load Settings File chooses an `.rfc` or `.rfsp` and reads its palette at once; Apply Colors puts the palette on, and Apply Colors and Color Correction also sets Gamma, Exposure, Hue, Saturation, Brightness, and Contrast. |
 | Use Current Zoom | Binds Lustre's Zoom Reference to the current fractal zoom. |
 | Clear Image | Textures only: removes that layer's image and turns the layer off, leaving its other settings. Choosing an image turns the layer on. |
 | Reset Layer | Restores the selected Texture, Pattern, or Animated Materials layer to its defaults. |
 | Copy to Next Layer | Overwrites the next layer with the current layer's settings. |
 | Move Toward Bottom / Move Toward Top | Swaps neighboring layer slots; available directions depend on the selected slot. |
-| Save Appearance Settings / Load Appearance Settings | Saves/restores appearance settings in `.rfsp`; full location/configuration uses `.rfc`. |
+| Save Appearance Settings / Load File | Saves appearance settings in `.rfsp`; Load File restores them from an `.rfsp`. Full location/configuration uses `.rfc`. |
 | Surface: Reset selected value/color | Restores the selected control's default. |
 | Surface: Reset effect | Restores the selected effect category's controls. |
 | Clear added effects (keep base style) | Clears additional surface effect contributions while keeping the base style. |

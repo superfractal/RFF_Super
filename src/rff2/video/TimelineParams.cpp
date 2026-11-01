@@ -3,7 +3,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-17
 //
 
 #include "TimelineParams.hpp"
@@ -259,7 +259,7 @@ namespace merutilm::rff2 {
             NESTED_VALUE(SLOPE_SPECULAR_INTENSITY, L"Slope", L"Specular Intensity", FLOAT, SLOPE, 0.0f, 1.0f, slope, specularIntensity),
             NESTED_VALUE(SLOPE_SPECULAR_POWER, L"Slope", L"Specular Power", FLOAT, SLOPE, 1.0f, 100000.0f, slope, specularPower),
             NESTED_VALUE(SLOPE_RIM_INTENSITY, L"Slope", L"Rim Intensity", FLOAT, SLOPE, 0.0f, 1.0f, slope, rimIntensity),
-            NESTED_VALUE(SLOPE_RIM_POWER, L"Slope", L"Rim Power", FLOAT, SLOPE, 1.0f, 64.0f, slope, rimPower),
+            NESTED_VALUE(SLOPE_RIM_POWER, L"Slope", L"Rim Power", FLOAT, SLOPE, 0.1f, 64.0f, slope, rimPower),
             NESTED_VALUE(SLOPE_BRIGHTNESS, L"Slope", L"Brightness", FLOAT, SLOPE, NumericSettingLimits::slopeBrightness.minimum, NumericSettingLimits::slopeBrightness.maximum, slope, brightness),
             NESTED_VALUE(SLOPE_GAMMA, L"Slope", L"Gamma", FLOAT, SLOPE, NumericSettingLimits::gamma.minimum, NumericSettingLimits::gamma.maximum, slope, gamma),
             NESTED_COLOR(SLOPE_RIM_COLOR, L"Slope", L"Rim Color", SLOPE, slope, rimColor),
@@ -311,6 +311,7 @@ namespace merutilm::rff2 {
             NESTED_VALUE(FOG_CHAOS_FEATHER, L"Chaos Blur", L"Chaos Feather", FLOAT, FOG, 0.0f, 32.0f, fog, chaosFeather),
             NESTED_VALUE(FOG_CHAOS_BLUR, L"Chaos Blur", L"Chaos Blur Radius", FLOAT, FOG, 0.0f, 32.0f, fog, chaosBlur),
             NESTED_VALUE(FOG_CHAOS_SHADE, L"Chaos Blur", L"Chaos Shade", FLOAT, FOG, 0.0f, 1.0f, fog, chaosShade),
+            NESTED_VALUE(FOG_CHAOS_INTERIOR, L"Chaos Blur", L"Chaos Interior", FLOAT, FOG, 0.0f, 1.0f, fog, chaosInterior),
 
 
             NESTED_VALUE(BLOOM_THRESHOLD, L"Bloom", L"Threshold", FLOAT, BLOOM, 0.0f, 1.0f, bloom, threshold),
@@ -410,6 +411,7 @@ namespace merutilm::rff2 {
             case FOG_CHAOS_FEATHER:
             case FOG_CHAOS_BLUR:
             case FOG_CHAOS_SHADE:
+            case FOG_CHAOS_INTERIOR:
                 return false;
             default:
                 return true;

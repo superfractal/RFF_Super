@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-05
 //
 
 // Original RFF_Super sigil coverage adapted independently of material lighting, GPL-3.0-only; see NOTICE.
@@ -153,6 +154,14 @@ vec3 apply_band_decoration(uvec2 coord, vec3 inputColor, bool linearInput) {
     vec3 coverage = vec3(0);
     vec3 glow = vec3(0);
     [[dont_unroll]] for (int channel = 0; channel < 3; ++channel) {
+        // A channel whose interval bits match an earlier one's draws the same band from the same inputs, so it reuses that result.
+        int twin = channel == 0 ? -1 : same_bits(g_interval[channel], g_interval[0]) ? 0 :
+                   channel == 2 && same_bits(g_interval[2], g_interval[1]) ? 1 : -1;
+        if (twin >= 0) {
+            glow[channel] = glow[twin];
+            coverage[channel] = coverage[twin];
+            continue;
+        }
         vec3 alpha = vec3(0);
         [[dont_unroll]] for (int sampleIndex = 0; sampleIndex < 2; ++sampleIndex) {
             float weight = sampleIndex == 0 ? 1.0 - frozen : frozen;

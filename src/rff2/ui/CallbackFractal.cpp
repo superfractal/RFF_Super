@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-13, 2026-08-16, 2026-08-31, 2026-09-04
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30
+// Modified by Opus 5.5 on 2026-10-26
 //
 
 // Burning Ship and log-log smoothing descriptions share the mathematical references in NOTICE; project license unchanged.
@@ -219,10 +220,13 @@ namespace merutilm::rff2 {
         // Custom formulas have no period structure, so auto-iteration cannot
         // estimate a max iteration. Reject the toggle (executeMode is only set
         // on an actual click, not on a menu-state refresh) and keep it disabled.
-        if (executeMode && calc.formulaType == FractalFormulaType::CUSTOM) {
+        if (executeMode && calc.formulaType != FractalFormulaType::MANDELBROT) {
             NativeDialogs::message(nullptr,
-                                   "Automatic Iterations is not available for custom formulas.\n"
-                                   "The manually-set Max Iteration is used instead.",
+                                   BUDDHABROT_AVAILABLE
+                                       ? "Automatic Iterations is not available for Custom or Buddhabrot.\n"
+                                         "The manually-set Max Iteration is used instead."
+                                       : "Automatic Iterations is not available for custom formulas.\n"
+                                         "The manually-set Max Iteration is used instead.",
                                    "Caution", MB_OK | MB_ICONWARNING);
             // Route the caller's toggle to a throwaway flag so autoMaxIteration
             // stays off. Pre-set it so that after the caller flips it the menu
@@ -254,7 +258,27 @@ namespace merutilm::rff2 {
                 scene.getRequests().requestResize();
                 scene.getRequests().requestRecompute();
             },
-            L"Formula Type", L"Mandelbrot: Standard z^2+c\nCustom: Use custom formula string");
+            L"Formula Type",
+            BUDDHABROT_AVAILABLE ? L"Mandelbrot: Standard z^2+c\nCustom: Use custom formula string\n"
+                                   L"Buddhabrot: Where the escaping z^2+c orbits travel"
+                                 : L"Mandelbrot: Standard z^2+c\nCustom: Use custom formula string");
+
+        if constexpr (BUDDHABROT_AVAILABLE) {
+        window->registerSectionHeader(L"Buddhabrot");
+        window->registerTextInput<uint32_t>(
+            L"Samples per Pixel", &calc.buddhabrotSamples, Unparser::U_LONG, Parser::U_LONG,
+            [](const uint32_t &v) { return v >= 1 && v <= 4096; },
+            [&scene] { scene.getRequests().requestRecompute(); }, L"Buddhabrot Samples per Pixel",
+            L"Random orbits started for each pixel of the iteration buffer, 1 to 4096.\n"
+            L"More samples give a smoother picture and take proportionally longer.");
+        window->registerTextInput<uint64_t>(
+            L"Min Iteration", &calc.buddhabrotMinIteration, Unparser::U_LONG_LONG, Parser::U_LONG_LONG,
+            [](const uint64_t &) { return true; }, [&scene] { scene.getRequests().requestRecompute(); },
+            L"Buddhabrot Min Iteration",
+            L"Orbits that escape within this many iterations are left out.\n"
+            L"Raising it removes the haze of short orbits and keeps the long, thin filaments.\n"
+            L"Max Iteration sets the longest orbit drawn.");
+        }
 
         window->registerSectionHeader(L"Custom Expression");
         auto formulaPtr = std::make_shared<std::string>(calc.customFormula);
@@ -294,16 +318,20 @@ namespace merutilm::rff2 {
                                    L"=== Examples ===\n"
                                    L"z^3+c (3rd Power Mandelbrot)\n"
                                    L"riabs(z)^2+conj(c) (Burning Ship)");
-        window->registerHelpButton(
-            L"Formula Guide",
-            {
-                {L"Mandelbrot is the easiest starting point.",
-                 L"Switch to Custom only when you want to experiment with formula strings."},
-                {L"Click chips to insert examples.",
-                 L"After editing the formula field, press Enter to apply the new expression."},
-                {L"Smooth coloring reads the formula's degree.",
-                 L"A formula that grows like a power of z — z^2+c, riabs(z)^2+c, z*conj(z)+c — is colored exactly. One that grows faster, such as exp(z)+c or sin(z)+c, has no single degree to read, so its bands are only placed approximately and can sit up to several iterations out. Decimalize Iteration set to None colors those by whole iterations instead."},
-            });
+        std::vector<std::pair<std::wstring, std::wstring>> formulaNotes{
+            {L"Mandelbrot is the easiest starting point.",
+             L"Switch to Custom only when you want to experiment with formula strings."},
+            {L"Click chips to insert examples.",
+             L"After editing the formula field, press Enter to apply the new expression."},
+            {L"Smooth coloring reads the formula's degree.",
+             L"A formula that grows like a power of z — z^2+c, riabs(z)^2+c, z*conj(z)+c — is colored exactly. One that grows faster, such as exp(z)+c or sin(z)+c, has no single degree to read, so its bands are only placed approximately and can sit up to several iterations out. Decimalize Iteration set to None colors those by whole iterations instead."},
+        };
+        if constexpr (BUDDHABROT_AVAILABLE) {
+            formulaNotes.insert(formulaNotes.begin() + 2,
+                {L"Buddhabrot draws orbit density, not escape time.",
+                 L"Each pixel counts how often escaping z^2+c orbits pass through it, so the palette colors density. It is drawn on the flat plane in double precision and suits the whole set and moderate zooms: only orbits that pass through the view count, so noise grows as the view narrows; raise Samples per Pixel to smooth it. Escape Angle, Orbit Trap and GPU Perturbation have nothing to read in it."});
+        }
+        window->registerHelpButton(L"Formula Guide", formulaNotes);
 
         window->setWindowCloseFunction([&settingsMenu, formulaPtr, &calc, &scene] {
             calc.customFormula = *formulaPtr;

@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-13.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -13,8 +14,6 @@ namespace merutilm::vkh {
         Instance instance = nullptr;
         PhysicalDeviceLoader physicalDevice = nullptr;
         LogicalDevice logicalDevice = nullptr;
-
-        std::chrono::high_resolution_clock::time_point startTime;
 
     public:
         explicit CoreImpl();
@@ -40,8 +39,6 @@ namespace merutilm::vkh {
         [[nodiscard]] LogicalDeviceRef getLogicalDevice() const {
             return *logicalDevice;
         }
-
-        [[nodiscard]] float getTime() const;
 
     private:
         void init() override;

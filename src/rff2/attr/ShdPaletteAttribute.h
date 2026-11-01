@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-27
 // Modified by ox-alpha on 2026-08-22
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-19, 2026-09-23, 2026-09-30
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
 //
 
 #pragma once
@@ -16,6 +17,12 @@
 
 #include "ShdPaletteCycleCurve.h"
 #include "ShdPalIterationColoringMode.h"
+#include "ShdPalEscapeAngleColoring.h"
+#include "ShdPalOrbitTrapBlend.h"
+#include "ShdPalOrbitTrapColoring.h"
+#include "ShdPalOrbitTrapMapping.h"
+#include "ShdPalOrbitTrapRegion.h"
+#include "ShdPalOrbitTrapShape.h"
 #include "ShdPaletteAnimationMode.h"
 #include "ShdPalColorSmoothingMethod.h"
 #include "ShdPalColorInterpolationMethod.h"
@@ -135,8 +142,17 @@ namespace merutilm::rff2 {
 
         bool bandLineGroove = false;
         float grooveDepth = 1.5f;
+        // Depths above 5 widen the groove's shading range too; 5 and below draw as before.
+        static constexpr float GROOVE_DEPTH_MAX = 20.0f;
         float grooveWidth = 0.05f;
         bool grooveAuto = true;
+        // Symmetric walls, a soft shadow limit, hue-keeping shadows and pixel-filtered slopes; off draws the original grooves.
+        bool grooveSmooth = true;
+        // Draws each band between two lines as a rounded cord, so the lines become the creases between cords; off carves grooves.
+        bool grooveRounded = true;
+        // Width in 720-line pixels over which Rounded Bands soften the crease between cords; 0 keeps it one pixel sharp.
+        float grooveCreaseBlur = 6.0f;
+        static constexpr float GROOVE_CREASE_BLUR_MAX = 24.0f;
         // Lines in one full cycle. Matching the color count puts one on every color boundary.
         uint32_t bandLineCount = 16;
         // Thickness as a fraction of one band, measured across the boundary the line sits on.
@@ -170,6 +186,58 @@ namespace merutilm::rff2 {
         // cycle, widening the bands as the count climbs. Linear is the straight count every earlier
         // version drew. Each curve is normalized so one Cycle Length is still the first cycle's width.
         ShdPalIterationColoringMode iterationColoring = ShdPalIterationColoringMode::LINEAR;
+
+        // Escape Angle: palette shift from arg z at escape, Amount in cycles (may be negative); None draws as before.
+        ShdPalEscapeAngleColoring escapeAngleColoring = ShdPalEscapeAngleColoring::NONE;
+        float escapeAngleAmount = 0.5f;
+        static constexpr float ESCAPE_ANGLE_AMOUNT_LIMIT = 4.0f;
+
+        // Orbit Trap: palette from each orbit's nearest approach to a trap shape, mixed in by Amount; None draws as before.
+        ShdPalOrbitTrapColoring orbitTrapColoring = ShdPalOrbitTrapColoring::NONE;
+        float orbitTrapAmount = 0.8f;
+        // log2 of the trap distance where the glow falls to half; deep zooms need it far below 0.
+        float orbitTrapWidth = -5.0f;
+        // Palette cycles per halving of the distance (Cross Glow) or per 12 iterations (Cellular).
+        float orbitTrapDensity = 1.0f;
+        // Which pixels the trap colors: Outside leaves the black inside of the set in Mandelbrot Color, Inside leaves the escaping pixels on the palette.
+        ShdPalOrbitTrapRegion orbitTrapRegion = ShdPalOrbitTrapRegion::BOTH;
+        // Palette cycles added to the trap's color, and the cycles per second it runs on its own.
+        float orbitTrapOffset = 0.0f;
+        float orbitTrapAnimationSpeed = 0.0f;
+        // On keeps the trap's colors out of the palette animation; its own Animation Speed still runs.
+        bool orbitTrapHoldColorAnimation = false;
+        // The highlight drawn where the orbit nearly hits the trap, its strength, and how steeply it falls off.
+        glm::vec4 orbitTrapGlowColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        float orbitTrapGlowStrength = 0.6f;
+        float orbitTrapGlowSharpness = 1.0f;
+        ShdPalOrbitTrapBlend orbitTrapBlend = ShdPalOrbitTrapBlend::MIX;
+        // Cellular only: how far the dark border reaches into a cell, and how dark it gets.
+        float orbitTrapCellBorderWidth = 1.0f;
+        float orbitTrapCellBorderDarkness = 0.85f;
+        // Shape coloring only: the trap's shape, its center c on the complex plane, the radius, spacing or size, the angle in
+        // degrees, and the polygon's sides or the star's points.
+        ShdPalOrbitTrapShape orbitTrapShape = ShdPalOrbitTrapShape::POINT;
+        double orbitTrapCenterReal = 0.0;
+        double orbitTrapCenterImag = 0.0;
+        double orbitTrapRadius = 0.5;
+        double orbitTrapAngle = 0.0;
+        uint32_t orbitTrapSides = 5;
+        // Shape coloring only: what the trap's palette follows, and the palette turns per revolution under Angle.
+        ShdPalOrbitTrapMapping orbitTrapMapping = ShdPalOrbitTrapMapping::DISTANCE;
+        uint32_t orbitTrapArms = 3;
+        // Cross Glow and Shape: draws the trap as a round tube of radius 2^Width lit from Slope's light; off draws as before.
+        bool orbitTrapRelief = false;
+        static constexpr uint32_t ORBIT_TRAP_ARMS_MAX = 64;
+        static constexpr double ORBIT_TRAP_CENTER_LIMIT = 4.0;
+        static constexpr double ORBIT_TRAP_RADIUS_MAX = 4.0;
+        static constexpr double ORBIT_TRAP_ANGLE_LIMIT = 180.0;
+        static constexpr float ORBIT_TRAP_SPEED_LIMIT = 4.0f;
+        static constexpr float ORBIT_TRAP_GLOW_STRENGTH_MAX = 4.0f;
+        static constexpr float ORBIT_TRAP_SHAPE_MIN = 0.1f;
+        static constexpr float ORBIT_TRAP_SHAPE_MAX = 8.0f;
+        static constexpr float ORBIT_TRAP_WIDTH_MIN = -100000.0f;
+        static constexpr float ORBIT_TRAP_WIDTH_MAX = 8.0f;
+        static constexpr float ORBIT_TRAP_DENSITY_LIMIT = 16.0f;
 
         glm::vec4 getMidColor(float rat) const;
 

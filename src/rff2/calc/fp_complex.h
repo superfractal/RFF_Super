@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-04.
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -17,12 +18,6 @@ namespace merutilm::rff2 {
         fp_complex(const std::string &re, const std::string &im, int exp10);
 
         explicit fp_complex(const fp_complex_calculator& calc);
-
-        fp_decimal &get_real();
-
-        fp_decimal &get_imag();
-
-        std::string to_string() const;
 
         fp_complex addCenterDouble(dex re, dex im, int exp10) const;
 

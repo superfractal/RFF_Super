@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-26, 2026-09-27, 2026-09-30. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-11-01. -->
 # Local AI: appearance and exploration
 
 [Manual](user-manual.md) · [Timeline AI exchange](animation-and-export.md#timeline-ai-edit)
@@ -49,6 +49,8 @@ Keep **`{{SETTINGS_CATALOG}}` exactly once** in the system prompt. The program r
 Copy [the server configuration example](../example/local-ai-server.example.json) to `config/local-ai-server.json` and replace its executable/model paths, which are relative to the project root. Local connection and server configuration files are excluded from Git; supply them separately on each machine.
 
 After supplying compatible server/model files and the configuration, run [tools/start-rff-local-ai.ps1](../tools/start-rff-local-ai.ps1) from the project. The script validates the paths and port, starts its dedicated server, waits for readiness, and launches RFF_Super. Its connection must use `127.0.0.1` and match the configured server port. It refuses an occupied port and reports startup failures in `debug/local_ai/managed-server-error.log`. The launcher stops the server it started when its application process exits.
+
+With `vision: true` in `local-ai.json`, also add `"mmproj"` to `config/local-ai-server.json`: the path, relative to the project root, of the vision projector file that matches the model. The launcher refuses to start without it or when the file is missing.
 
 AI zoom and automatic video require a running compatible API. **Connection information** displays available model/context/speed information; an unavailable measurement is not zero tokens per second. Model loading, prompt processing, and output generation are separate phases, so the first response can take longer than later tokens. Manual RandomSmooth palette generation works without an API.
 

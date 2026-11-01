@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-23
-// Modified by Opus 5.5 on 2026-09-29
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-25
 //
 
 #include "TimelineWindow.hpp"
@@ -50,31 +50,6 @@ namespace merutilm::rff2 {
             MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), int(text.size()), result.data(), n);
             return result;
         }
-        void copyText(HWND window, const std::string &text) {
-            const auto value = wide(text);
-            Clipboard clipboard(window);
-            clipboard.clear();
-            clipboard.put(CF_UNICODETEXT, value.c_str(), (value.size() + 1) * sizeof(wchar_t));
-        }
-        std::string clipboardText(HWND window) {
-            Clipboard clipboard(window);
-            const HANDLE memory = GetClipboardData(CF_UNICODETEXT);
-            if (!memory) throw std::runtime_error("Copy a complete timeline JSON document first");
-            const size_t bytes = GlobalSize(memory);
-            if (!bytes || bytes > TimelineJsonIO::maximumBytes * 2 + 2)
-                throw std::runtime_error("Clipboard text exceeds 16 MiB");
-            const auto *data = static_cast<const wchar_t *>(GlobalLock(memory));
-            if (!data) throw std::runtime_error("Cannot read clipboard");
-            const size_t length = wcsnlen(data, bytes / sizeof(wchar_t));
-            std::wstring value(data, length);
-            GlobalUnlock(memory);
-            if (length == bytes / sizeof(wchar_t)) throw std::runtime_error("Invalid clipboard text");
-            const int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), int(value.size()), nullptr, 0, nullptr, nullptr);
-            if (!n || size_t(n) > TimelineJsonIO::maximumBytes) throw std::runtime_error("Invalid or oversized clipboard JSON");
-            std::string text(n, '\0');
-            WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value.data(), int(value.size()), text.data(), n, nullptr, nullptr);
-            return text;
-        }
         void copyImage(HWND window, const cv::Mat &image) {
             cv::Mat bgra;
             cv::cvtColor(image, bgra, cv::COLOR_BGR2BGRA);
@@ -103,6 +78,7 @@ namespace merutilm::rff2 {
     void TimelineWindow::importTimelineJson(const std::string &text, const std::filesystem::path &document) {
         if (exporting) return;
         auto loaded = TimelineJsonIO::parse(text);
+        loaded.enabled = true;
         if (!document.empty()) AudioTimelineIO::resolvePaths(loaded.audio, document);
         if (frameSource && loaded.estimateKeyframes != float(frameSource->getFrameCount()))
             throw std::runtime_error("estimateKeyframes does not match the current folder. Copy its current JSON and keep estimateKeyframes unchanged.");
@@ -150,28 +126,6 @@ namespace merutilm::rff2 {
             return;
         }
     }
-    void TimelineWindow::requestAiImages() {
-        if (!frameSource || !previewScene || !previewWorker.joinable() || aiImagesBusy.exchange(true)) return;
-        aiImagesCancel = std::stop_source{};
-        aiSavedPages = 0;
-        aiTotalPages = 0;
-        setPlaying(false);
-        if (sourceAttribute) attribute.shader = sourceAttribute->shader;
-        {
-            std::scoped_lock lock(previewRequestMutex);
-            requestedAiImageSide = aiImageSide;
-            requestedAiImagePage = aiImagePage;
-            requestedPreviewDepth = previewDepth;
-            requestedPreviewSec = previewSeconds();
-            requestedPreviewTimeline = attribute.video.timeline;
-            requestedPreviewShader = attribute.shader;
-            requestedPreviewSchedule = previewScheduleSnapshot;
-            ++previewRequestGeneration;
-        }
-        previewRequestCondition.notify_one();
-        InvalidateRect(window, nullptr, FALSE);
-    }
-
     void TimelineWindow::saveAiBundle() {
         if (!frameSource || !previewScene || !previewWorker.joinable() || aiImagesBusy.load()) return;
         const auto parent = IOUtilities::ioDirectoryDialog(L"Choose where to create the AI exchange folder");

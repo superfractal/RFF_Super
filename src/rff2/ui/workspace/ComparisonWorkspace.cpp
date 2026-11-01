@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-21, 2026-09-22, 2026-09-29
+// Modified by Opus 5.5 on 2026-10-26
 //
 
 #include "ComparisonWorkspace.hpp"
@@ -425,12 +426,16 @@ namespace merutilm::rff2::workspace {
                 comparison.revision = comparison.scene.getPreviewRevision();
                 comparison.stale = false;
                 comparison.invalidate();
-                comparison.message = (comparison.source == ReferenceSource::BeforeLastEdit
-                                          ? L"Before edit: " + comparison.edits->reference()->label + L". "
-                                          : L"A is fixed. ") +
-                                     std::wstring(L"Both share view, quality and time (") +
-                                     AttributeFormModel::number(comparison.seconds) +
-                                     L" s). Export uses current settings.";
+                // Translated as whole sentences; # marks where the edit label and the time go.
+                auto source = UiLanguage::text(comparison.source == ReferenceSource::BeforeLastEdit
+                                                      ? L"Before edit: #."
+                                                      : L"A is fixed.");
+                if (const auto mark = source.find(L'#'); mark != std::wstring::npos) {
+                    source.replace(mark, 1, UiLanguage::text(comparison.edits->reference()->label));
+                }
+                auto shared = UiLanguage::text(L"Both share view, quality and time (# s). Export uses current settings.");
+                shared.replace(shared.find(L'#'), 1, AttributeFormModel::number(comparison.seconds));
+                comparison.message = source + (UiLanguage::current() == Language::Japanese ? L"" : L" ") + shared;
             } catch (const std::exception &) {
                 comparison.hide();
                 comparison.mode = ComparisonMode::LivePreview;

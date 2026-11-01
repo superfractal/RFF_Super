@@ -1,124 +1,158 @@
-# RFF_Super 配布準備
+# RFF_Super Distribution Preparation
 
 Modified by GPT-6 on 2026-09-24, 2026-09-25, 2026-10-01.
+Modified by Opus 5.5 on 2026-10-18, 2026-10-28, 2026-11-01.
 
-## GitHubリポジトリ内で公開する資料
+## Materials published in the GitHub repository
 
-第三者ライセンス原文と対応ソース・パッチは、Git除外の `build/` から
-[third-party/](../third-party/README.md) へ移動しています。このフォルダーは本体の
-`LICENSE`・`NOTICE` と合わせてコミット・pushしてください。
-ソースパッケージ23個を収録し、大きな5個は24 MiB以下に分割しています。
-全パーツと復元スクリプトを公開することで、利用者は外部ダウンロードなしで復元できます。
-今回、全23個の復元と元のSHA-256との一致を確認しています。
+The third-party license texts and the corresponding sources and patches have been moved from the
+Git-ignored `build/` to [third-party/](../third-party/README.md). Commit and push this folder together
+with the program's `LICENSE` and `NOTICE`.
+It holds 23 source packages; the five large ones are split into parts of 24 MiB or less.
+Because every part and the restore script are published, anyone can restore them without an external download.
+All 23 have been restored this time and matched against their original SHA-256.
 
-これは第三者資料の公開準備です。現在の本体EXEと本体ソースの対応を確定する作業は別途必要です。
-以下の `build/` 内での候補作成手順は、依存更新時の再収集・再確認に使用できます。
+This prepares the third-party materials for publication. Establishing the correspondence between the
+current program EXE and the program source is separate work.
+The candidate-building steps inside `build/` below can be used to recollect and recheck when dependencies are updated.
 
-## 今回の構成
+## Current configuration
 
-RFF_Super は GPLv3 のままです。商用利用・販売も許可されます。
-静的リンクに変更しても、ライセンス表示や対応するソースの提供が不要になるわけではありません。
+RFF_Super remains GPLv3. Commercial use and sale are also permitted.
+Switching to static linking does not remove the need for license notices or for supplying the corresponding source.
 
-| 対象 | 配布構成 | 根拠・扱い |
+| Component | Distribution form | Basis / handling |
 | --- | --- | --- |
-| RFF_Super | EXE | GPLv3。ビルドしたタグのソース・ビルド手順をセットで提供 |
-| GMP 6.3.0 | 静的リンク | GPLv2以降の選択肢からGPLv3を選択。同版のソースとMSYS2パッチ・ビルド条件を提供。GMP自体の上流の選択肢は維持 |
-| OpenCV core/imgproc/imgcodecs | DLL | Apache-2.0と同梱部分の条件。画像形式の対応を維持 |
-| zstd、画像コーデック、数値ライブラリ | DLL | EXEから再帰的に必要なDLLだけを選択。版・ハッシュ・原文を記録 |
-| GCC runtime、libgfortran | DLL | GPLv3以降とGCC Runtime Library Exception。DLL自体の再配布義務も確認 |
-| libquadmath | DLL | LGPLv2.1以降。GCC例外と一括扱いしない |
-| MinGW runtime、GLM、stb_image、nlohmann/json | 静的・ヘッダー | 各著作権表示と条件を保持 |
-| Vulkan loader/driver | 利用者のGPUドライバー | 作業用binからコピーしない |
-| FFmpeg、ローカルAIサーバー・モデル | 利用者が別途用意 | この配布候補には含めない |
-| FlyWire、全脳モデル、PyArrow | 削除 | ソース、UI、導入ツール、専用モデルフォルダーを削除 |
+| RFF_Super | EXE | GPLv3. Supply the source and build instructions of the tag that was built, together |
+| GMP 6.3.0 | Static link | GPLv3 chosen from the GPLv2-or-later option. Supply the same version's source, MSYS2 patches and build conditions. GMP's own upstream alternatives remain |
+| OpenCV core/imgproc/imgcodecs | DLL | Apache-2.0 and the terms of the bundled parts. Image-format support is kept |
+| zstd, image codecs, numerical libraries | DLL | Only the DLLs the EXE needs recursively are selected. Versions, hashes and original texts are recorded |
+| GCC runtime, libgfortran | DLL | GPLv3-or-later with the GCC Runtime Library Exception. Redistribution obligations for the DLLs themselves were also checked |
+| libquadmath | DLL | LGPLv2.1-or-later. Not lumped in with the GCC exception |
+| MinGW runtime, GLM, stb_image, nlohmann/json | Static / header | Each copyright notice and its terms are retained |
+| Vulkan loader/driver | The user's GPU driver | Not copied from the working bin |
+| FFmpeg, local AI server and models | Supplied separately by the user | Not included in this distribution candidate |
+| FlyWire, whole-brain models, PyArrow | Removed | Source, UI, installer tools and the dedicated model folder were removed |
 
-確認した構成では、本体1個と必要なDLL31個になります。作業用 `bin/` の多数の
-開発ツール・別用途のDLLは配布対象にしません。OpenCVの画像読み込みを維持するため、
-そのコーデック依存を単に削除してDLL数だけを減らすことはしていません。
-正確な版は `tools/release-license-review.json`、個々のファイルは生成する
-`DEPENDENCIES.json` に記録します。依存の版が変わると梱包ツールは停止します。
+The checked configuration is the program plus 31 required DLLs. The many development-tool and
+unrelated DLLs in the working `bin/` are not distributed. To keep OpenCV's image loading, its codec
+dependencies were not simply removed just to reduce the DLL count.
+Exact versions are recorded in `tools/release-license-review.json`, and individual files in the generated
+`DEPENDENCIES.json`. The packaging tool stops if a dependency version changes.
 
-## 原文で再確認した注意点
+## Points rechecked against the original texts
 
-* JBIG-KIT のMSYS2メタデータは `GPL-2.0` と省略されていますが、取得した
-  2.1の `libjbig/jbig.c` は「version 2 ... or ... any later version」と明記します。
-  GPLv2限定と誤認せず、GPLv3を選択できることを確認しています。
-* XZパッケージ全体の表示にはGPL/LGPLも含まれますが、`COPYING` は
-  配布対象のliblzmaを0BSDと説明しています。xzのコマンド類は同梱しません。
-* OpenCVの主ライセンス、GMPのCOPYING類は、インストール済みライセンスフォルダー
-  だけでは不足します。対応するソースアーカイブ内の原文も同梱します。
-* JPEGの文書用表示：This software is based in part on the work of the Independent JPEG Group.
-* OpenStaxのCC BY-NC-SA 4.0は教科書コンテンツの条件です。該当シェーダーは物理式の
-  独立実装で、教科書本文・図・サンプルコードの収録は確認されていません。
-  出典はNOTICEに残しています。Lustreの元HTMLは所有者の依頼によるAI生成との申告を記録しています。
+* The MSYS2 metadata for JBIG-KIT abbreviates its license to `GPL-2.0`, but the obtained
+  2.1 `libjbig/jbig.c` states "version 2 ... or ... any later version".
+  It was confirmed that this is not GPLv2-only and that GPLv3 can be chosen.
+* The XZ package as a whole also lists GPL/LGPL, but `COPYING` describes the
+  distributed liblzma as 0BSD. The xz command-line tools are not bundled.
+* For OpenCV's main license and GMP's COPYING files, the installed license folder
+  alone is not enough. The original texts from the corresponding source archives are bundled too.
+* JPEG notice for documentation: This software is based in part on the work of the Independent JPEG Group.
+* OpenStax's CC BY-NC-SA 4.0 covers textbook content. The shaders concerned are independent
+  implementations of physical formulas; no textbook prose, figures or sample code were found in them.
+  The source remains cited in NOTICE. The owner's statement that the original Lustre HTML was AI-generated at their request is recorded.
 
-確認は二段階です。まず実ファイルとインストール済みパッケージのハッシュを照合し、
-公式の同版ソース・パッチ・ライセンスを確認します。次に、別実装の `objdump` で
-DLL依存を照合し、梱包後の全ファイルのハッシュを記録します。
-これは確認した版とファイルに関する技術的な監査記録です。
+The check has two stages. First, the actual files are matched against the hashes of the installed packages,
+and the official same-version sources, patches and licenses are confirmed. Next, DLL dependencies are
+cross-checked with an independent `objdump`, and the hashes of all files after packaging are recorded.
+This is a technical audit record for the versions and files checked.
 
-## 候補フォルダーの作成
+## Running the distribution build in one step
 
-必要なもの：Windows x64、MSYS2 MINGW64、Python 3.10以降、Windowsの `tar.exe`、
-MSYS2の `gpgv` と `msys2-keyring`。Pythonは配布準備用で、アプリの実行には不要です。
-ビルドの基本手順は [BUILDING.md](BUILDING.md) にあります。
+The distribution build is done with `tools/release_build.ps1`. Tag the release commit first, then
+run it from the project root.
 
-PowerShellでMINGW64のbinをPathに加え、配布用の独立したビルド先を使います。
-GMPはMSYS2の正規パッケージの静的ライブラリを使います。独自GMPを使う場合は、
-そのソース・パッチ・ビルド条件も別途記録し、現在の照合ツールを更新してください。
+```powershell
+git tag v3.1.0
+powershell -ExecutionPolicy Bypass -File tools/release_build.ps1 -Ref v3.1.0
+```
+
+The script performs the following in order and stops as soon as any step fails.
+
+1. Matches the SHA-256 of the GMP static library against the recorded value for MSYS2 GMP 6.3.0-2. It uses `build/release-deps/mingw64` if present,
+   otherwise `C:/msys64/mingw64` (changeable with `-GmpPrefix`)
+2. Checks out the tagged commit cleanly into `build/release/<tag>/source` (git worktree)
+3. Builds the distribution (EXE and shaders) from that checkout. CMake rechecks the GMP hash as well
+4. Confirms after the build that the checkout was not modified
+5. Builds the candidate with the matching, fetching and packaging tools contained in that tag
+6. Stores the program source, `git archive`d from the tag, as `candidate/sources/RFF_Super-source.tar.gz`
+7. Removes `NOT-FOR-DISTRIBUTION.txt` and regenerates `SHA256SUMS.json`
+8. Records the commit, tool versions, and the GMP, EXE and source hashes in `build-record.json`
+
+When someone else runs it, every MSYS2 package must exactly match the version recorded in
+`tools/release-license-review.json`. A different version stops at the packaging stage. Because MSYS2 is
+updated continually, when releasing with newer versions, recheck the licenses before updating the versions in this file.
+
+The distributable output is `build/release/<tag>/candidate`. To try it without a tag, use
+`-Ref HEAD -Candidate`. In that case the marker is kept and the output is not for distribution.
+The working `bin/RFF_Super.exe` is built with `-march=native` and an unverified GMP, so it is not distributed.
+
+## Building the candidate folder (manual)
+
+Requirements: Windows x64, MSYS2 MINGW64, Python 3.10 or later, Windows `tar.exe`,
+and MSYS2's `gpgv` and `msys2-keyring`. Python is for distribution preparation only and is not needed to run the application.
+The basic build steps are in [BUILDING.md](BUILDING.md).
+
+In PowerShell, add the MINGW64 bin to Path and use a separate build directory for distribution.
+GMP uses the static library from the official MSYS2 package. CMake stops at configuration if its SHA-256 differs from the recorded value.
+`C:/msys64/mingw64/lib/libgmp.a` was restored to the official package on 2026-10-28 and matches the recorded value.
+Before using it, confirm with `pacman -Qkk mingw-w64-x86_64-gmp` that it is unmodified. When using a custom GMP,
+also record its source, patches and build conditions separately, and update the current matching tool.
 
 ```powershell
 $env:Path = "C:\msys64\mingw64\bin;" + $env:Path
-cmake -S . -B build/distribution -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DRFF_DISTRIBUTION=ON -DRFF_ASAN=OFF
+cmake -S . -B build/distribution -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -DRFF_DISTRIBUTION=ON -DRFF_ASAN=OFF -DRFF_GMP_PREFIX=build/release-deps/mingw64
 cmake --build build/distribution --parallel 6
-python tools/release_inventory.py --exe build/distribution/runtime/bin/RFF_Super.exe --static-gmp C:/msys64/mingw64/lib/libgmp.a --output build/release-inventory.json
+python tools/release_inventory.py --exe build/distribution/runtime/bin/RFF_Super.exe --static-gmp build/release-deps/mingw64/lib/libgmp.a --output build/release-inventory.json
 python tools/release_sources.py --inventory build/release-inventory.json --output build/release-sources
 python tools/release_stage.py --inventory build/release-inventory.json --sources build/release-sources --shaders build/distribution/runtime/shaders --output build/release-candidate
 ```
 
-コマンドは `documentation` 内ではなく、`CMakeLists.txt` があるプロジェクトルートで実行します。
-別の場所にMSYS2を導入した場合はPathと `-DRFF_DEPENDENCY_PREFIX=...` を合わせ、
-GMPの参照先も変更してください。ビルド先はシェーダー生成のためプロジェクト内に置きます。
-Pythonは上記のMINGW64版、`tar.exe` はWindows版を使います。
-依存パッケージの更新で版が変わった場合は、以前の監査一覧をそのまま流用せず再確認します。
+Run the commands from the project root, where `CMakeLists.txt` is, not from inside `documentation`.
+If MSYS2 is installed elsewhere, adjust Path and `-DRFF_DEPENDENCY_PREFIX=...` to match,
+and change the GMP location too. The build directory stays inside the project for shader generation.
+Use the MINGW64 Python above and the Windows `tar.exe`.
+When a dependency update changes a version, recheck rather than reusing the previous audit list as is.
 
-非標準のGMP配置は `-DRFF_GMP_PREFIX=...` で指定します。監査時には
-MSYS2キャッシュの正規GMPパッケージから `build/release-deps/mingw64` に取り出した
-ヘッダーと静的ライブラリを使い、パッケージ記録とのハッシュ一致を確認しています。
-その場合、inventoryの `--static-gmp` にも同じ実ファイルを指定します。
+A non-standard GMP location is given with `-DRFF_GMP_PREFIX=...`. The audit used the
+headers and static library extracted from the official GMP package in the MSYS2 cache into
+`build/release-deps/mingw64`, and confirmed their hashes against the package record.
+In that case, pass the same actual file to the inventory's `--static-gmp` as well.
 
-配布用ビルドのシェーダーは `build/distribution/runtime/shaders` に生成します。
-通常版の `shaders` は更新しないため、別ビルドの実行ファイルと混在しません。
+The distribution build generates its shaders in `build/distribution/runtime/shaders`.
+The regular `shaders` folder is not updated, so it never mixes with the executable of another build.
 
-候補フォルダーにはEXE/DLL、シェーダー、著作権表示、23個の第三者ソースパッケージ
-（ビルドレシピ・パッチを含む）、署名検証記録が入ります。
-出力先は空の新しい名前を使います。既存フォルダーは上書きしません。
-取得済みソースは再利用できます。`SHA256SUMS.json` は候補全体の照合用です。
+The candidate folder contains the EXE/DLLs, shaders, copyright notices, 23 third-party source packages
+(including build recipes and patches), and signature-verification records.
+Use a new, empty name for the output. An existing folder is never overwritten.
+Already fetched sources can be reused. `SHA256SUMS.json` is for verifying the whole candidate.
 
-## 実際に配布する前の最終手順
+## Final steps before actual distribution
 
-候補には `NOT-FOR-DISTRIBUTION.txt` を付けています。作業ツリーの本体ソースを
-ZIPにすることはありません。変更をコミットしたリリースタグを用意し、そのタグの
-クリーンなチェックアウトから再ビルドして、上の照合・梱包を実行します。
-ソースはそのタグからのみ作成します。
+The candidate carries `NOT-FOR-DISTRIBUTION.txt`. The program source in the working tree is never
+zipped. Prepare a release tag with the changes committed, rebuild from a clean checkout of that tag,
+and run the matching and packaging above.
+The source is created only from that tag.
 
 ```powershell
 git status --short
 git archive --format=tar.gz --prefix=RFF_Super-source/ --output=build/RFF_Super-source.tar.gz <release-tag>
 ```
 
-タグがビルドしたコミットを指すことと、追跡対象に未コミット変更がないことを確認します。
-本体ソース、第三者ソース、ビルド手順、ライセンス表示をバイナリと一緒に提供し、
-ダウンロード配布なら対応ソースも同じ場所で取得できるようにします。
-候補マーカーはこの確認後に外します。FFmpegやAIモデルを将来同梱する場合は、
-その実ファイルとビルド構成を新たに確認してください。
+Confirm that the tag points to the commit that was built and that no tracked file has uncommitted changes.
+Supply the program source, third-party sources, build instructions and license notices together with the binary,
+and for download distribution make the corresponding source available from the same place.
+Remove the candidate marker after this check. If FFmpeg or AI models are ever bundled,
+check those actual files and their build configuration anew.
 
-## 一次資料
+## Primary sources
 
-* [GPLv3本文](https://www.gnu.org/licenses/gpl-3.0.html)
-* [GMPの選択可能なライセンス](https://gmplib.org/manual/Copying)
+* [GPLv3 text](https://www.gnu.org/licenses/gpl-3.0.html)
+* [GMP's selectable licenses](https://gmplib.org/manual/Copying)
 * [GCC Runtime Library Exception](https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html)
-* [JBIG-KIT公式ソース](https://www.cl.cam.ac.uk/~mgk25/jbigkit/)
-* [MSYS2公式ソースパッケージ](https://repo.msys2.org/mingw/sources/)
-* [MSYS2のライセンス情報の範囲](https://www.msys2.org/license/)
-* [CC BY-NC-SA 4.0の原文](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en)
+* [JBIG-KIT official source](https://www.cl.cam.ac.uk/~mgk25/jbigkit/)
+* [MSYS2 official source packages](https://repo.msys2.org/mingw/sources/)
+* [Scope of MSYS2 license information](https://www.msys2.org/license/)
+* [CC BY-NC-SA 4.0 legal code](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en)

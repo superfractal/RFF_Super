@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-18
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
 //
 
 #include "DeepMandelbrotPerturbator.h"
@@ -45,7 +46,9 @@ namespace merutilm::rff2 {
     }
 
 
-    double DeepMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci) const {
+    double DeepMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const {
+        if (escapeAngle != nullptr) *escapeAngle = 0.0f;
+        if (trap != nullptr) *trap = OrbitTrap{};
         if (state.interruptRequested()) return 0.0;
 
         const dex dcr1 = dcr + offR;
@@ -74,6 +77,27 @@ namespace merutilm::rff2 {
         // every pixel would come back as max iteration.
         const double bailout2 = static_cast<double>(bailout) * static_cast<double>(bailout);
         auto temps = std::array<dex, 4>();
+        // Sampled in dex: an orbit point passing the origin at deep zoom is far below double range.
+        OrbitTrapAccumulator<dex> traps(trap != nullptr ? &trapShape : nullptr);
+        const auto finish = [&](const double value) {
+            if (trap != nullptr) *trap = traps.result();
+            return value;
+        };
+        const auto sampleTrap = [&](const dex &r, const dex &i, const double norm) {
+            if (trap == nullptr || !(norm <= bailout2)) return;
+            const dex ar = r.sgn() < 0 ? -r : r;
+            const dex ai = i.sgn() < 0 ? -i : i;
+            dex rr;
+            dex ii;
+            dex::mul(&rr, r, r);
+            dex::mul(&ii, i, i);
+            dex::add(&rr, rr, ii);
+            dex::normalize(&rr);
+            dex cross = ai < ar ? ai : ar;
+            dex::normalize(&cross);
+            traps.sample(cross, rr, iteration);
+            if (traps.measuresShape()) traps.sampleShape(r - trapShape.centerReal, i - trapShape.centerImag, iteration);
+        };
 
 
         while (iteration < maxIteration) {
@@ -102,7 +126,18 @@ namespace merutilm::rff2 {
                     ++absIteration;
 
                     if (iteration >= maxIteration) {
-                        return static_cast<double>(isAbs ? absIteration : maxIteration);
+                        return finish(static_cast<double>(isAbs ? absIteration : maxIteration));
+                    }
+                    // The skip's endpoint is the only point of its interval the trap sees.
+                    if (trap != nullptr) {
+                        const uint64_t index = ArrayCompressor::compress(reference->compressor, refIteration);
+                        dex sr;
+                        dex si;
+                        dex::add(&sr, reference->refReal[index], dzr);
+                        dex::add(&si, reference->refImag[index], dzi);
+                        const auto r0 = static_cast<double>(sr);
+                        const auto i0 = static_cast<double>(si);
+                        sampleTrap(sr, si, r0 * r0 + i0 * i0);
                     }
                     continue;
                 }
@@ -155,7 +190,7 @@ namespace merutilm::rff2 {
             if (zi.sgn() == 0 && temps[0].sgn() != -1 && temps[1].sgn() != -1) {
                 //IT IS NOT SATISFIED MPA SKIP RADIUS CONDITION.
                 //WHEN THE MAX ITERATION IS HIGH, REPEATS SEMI-INFINITELY.
-                return static_cast<double>(maxIteration);
+                return finish(static_cast<double>(maxIteration));
             }
 
             const auto zr0 = static_cast<double>(zr);
@@ -165,6 +200,7 @@ namespace merutilm::rff2 {
 
             pd = cd;
             cd = zr0 * zr0 + zi0 * zi0;
+            sampleTrap(zr, zi, cd);
 
             if (refIteration == maxRefIteration || cd < dzr0 * dzr0 + dzi0 * dzi0) {
                 refIteration = 0;
@@ -174,22 +210,25 @@ namespace merutilm::rff2 {
 
             dzr.try_normalize();
             dzi.try_normalize();
-            if (cd > bailout2) break;
+            if (cd > bailout2) {
+                if (escapeAngle != nullptr) *escapeAngle = escapeAngleOf(zr0, zi0);
+                break;
+            }
             if (absIteration % Constants::Fractal::EXIT_CHECK_INTERVAL == 0 && state.interruptRequested()) return 0.0;
         }
 
         if (isAbs) {
-            return absIteration;
+            return finish(absIteration);
         }
 
         if (iteration >= maxIteration) {
-            return static_cast<double>(maxIteration);
+            return finish(static_cast<double>(maxIteration));
         }
 
         const double fpd = sqrt(pd);
         const double fcd = sqrt(cd);
 
-        return getQuadraticDoubleValueIteration(iteration, fpd, fcd, calc.decimalizeIterationMethod, bailout);
+        return finish(getQuadraticDoubleValueIteration(iteration, fpd, fcd, calc.decimalizeIterationMethod, bailout));
     }
 
 

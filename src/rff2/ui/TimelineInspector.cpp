@@ -1,6 +1,6 @@
 //
-// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
+// Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01
 //
 
 #include "TimelineWindow.hpp"
@@ -59,6 +59,8 @@ namespace merutilm::rff2 {
             const auto *parameter = TimelineParams::find(target);
             return parameter && offered(*parameter, staticSource);
         }
+        // Groups 1 to 6 are the Settings tab's sections; Add Parameter pages follow from here.
+        constexpr int firstSettingsPage = 1, firstParameterPage = 7;
         std::vector<std::wstring> inspectorGroups(bool staticSource) {
             std::vector<std::wstring> groups{L"Selection", L"Audio", L"Zoom Display", L"Max Iterations Display", L"Panel Layout", L"Preview Guide", L"Zoom Holds"};
             for (const auto &parameter : TimelineParams::all()) {
@@ -164,6 +166,31 @@ namespace merutilm::rff2 {
         workspace::AccessibleControl::describe(inspectorToggle, L"Timeline Settings",
                                                L"Show or hide the right-hand settings inspector.",
                                                L"timeline.inspector");
+        inspectorNav = std::make_unique<workspace::TimelineInspectorNav>(
+            window, bodyFont, inspectorTheme, uiDpi / 96.f,
+            workspace::TimelineInspectorNav::Callbacks{
+                [this] {
+                    if (inspector && !inspector->applyPending()) {
+                        inspector->focus();
+                        return false;
+                    }
+                    return true;
+                },
+                [this](int group) {
+                    if (inspector) {
+                        inspector->selectGroup(group);
+                    }
+                },
+                [this] { layoutWorkspaceDock(); },
+                [this](int direction) {
+                    if (direction < 0) {
+                        SetFocus(inspectorToggle);
+                    } else if (inspector && !inspectorNav->listingSections()) {
+                        inspector->focus();
+                    } else {
+                        SetFocus(window);
+                    }
+                }});
         inspectorSplitter = std::make_unique<workspace::PaneSplitter>(
             window, false, L"Resize timeline settings",
             [this] {
@@ -216,7 +243,8 @@ namespace merutilm::rff2 {
         const int left = std::max(0, width - inspectorReservedWidth);
         const int panelLeft = dockState.inspectorLeft ? 0 : left + divider;
         const int dividerLeft = dockState.inspectorLeft ? panel : left;
-        const int header = px(44);
+        // The toggle takes the header buttons' row, 8 to 40 in the editor's 48-pixel header.
+        const int header = px(48);
         SendMessageW(inspectorToggle, WM_SETFONT, reinterpret_cast<WPARAM>(smallFont), FALSE);
         const wchar_t *captionKey = L"Hide Settings";
         if (!panel) {
@@ -229,17 +257,32 @@ namespace merutilm::rff2 {
             SetWindowTextW(inspectorToggle, caption);
         }
         SetWindowPos(inspectorToggle, HWND_TOP, panelLeft + px(4), px(8),
-                     std::max(1, (panel ? panel : rail) - px(8)), px(28), SWP_NOACTIVATE);
+                     std::max(1, (panel ? panel : rail) - px(8)), px(32), SWP_NOACTIVATE);
         inspectorSplitter->layout(panel ? RECT{dividerLeft, 0, dividerLeft + divider, height} : RECT{},
                                   uiDpi / 96.f);
-        if (inspector) {
+        // The tabs sit under the toggle; a section list fills the pane, otherwise the form follows the tabs.
+        int formTop = header;
+        const bool listing = inspectorNav && inspectorNav->listingSections();
+        if (inspectorNav) {
+            inspectorNav->setScale(uiDpi / 96.f, bodyFont);
+            const int navHeight = listing ? std::max(1, height - header) : inspectorNav->formOffset();
             if (panel) {
-                inspector->layoutAt(panelLeft, header, panel, std::max(1, height - header), true);
+                SetWindowPos(inspectorNav->handle(), nullptr, panelLeft, header, panel, navHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(inspectorNav->handle(), panel ? SW_SHOWNA : SW_HIDE);
+            formTop += navHeight;
+        }
+        if (inspector) {
+            const bool shown = panel > 0 && !listing;
+            if (shown) {
+                inspector->hideTitle(inspectorNav && inspectorNav->showsTitle());
+                inspector->layoutAt(panelLeft, formTop, panel, std::max(1, height - formTop), false);
                 if (restoreScroll >= 0) {
                     inspector->restoreScrollPosition(restoreScroll);
                 }
             }
-            inspector->show(panel > 0);
+            inspector->show(shown);
         }
         return left;
     }
@@ -253,6 +296,9 @@ namespace merutilm::rff2 {
         refreshInspector();
         if (inspector) {
             inspector->selectGroup(section);
+        }
+        if (inspectorNav) {
+            inspectorNav->sync(section);
         }
         layoutWorkspaceDock();
         saveWorkspaceDock();
@@ -268,12 +314,16 @@ namespace merutilm::rff2 {
         if (inspector && inspector->hasPending()) {
             return;
         }
+        if (inspectorNav && inspectorListRequest >= 0) {
+            inspectorNav->showList(std::exchange(inspectorListRequest, -1));
+        }
         const auto signature = documentKey(attribute.video.timeline);
         if (!force && inspectorSectionRequest < 0 && inspector && inspectorTarget == selectedTrackTarget &&
             inspectorKey == selectedTrackKey && signature == inspectorDocumentKey) {
             return;
         }
         int group = 0;
+        const bool requested = inspectorSectionRequest >= 0 || !inspector;
         if (inspectorSectionRequest >= 0) {
             group = std::exchange(inspectorSectionRequest, -1);
         } else if (inspector) {
@@ -282,6 +332,7 @@ namespace merutilm::rff2 {
         const int savedScroll =
             inspector && inspector->selectedGroup() == group ? inspector->scrollPosition() : 0;
         const bool hadFocus = inspector && IsChild(inspector->handle(), GetFocus());
+        const auto sections = inspector ? inspector->sectionState() : std::map<std::string, bool>{};
         inspectorTarget = selectedTrackTarget;
         inspectorKey = selectedTrackKey;
         inspectorDocumentKey = signature;
@@ -537,6 +588,12 @@ namespace merutilm::rff2 {
         }, true});
         if (audioId) form.actions.push_back({1, L"Remove Audio Clip", [this] { removeAudioClip(); }});
         for (auto &field : form.fields) {
+            if (field.id.starts_with("overlay.") || field.id.starts_with("iterationOverlay.")) {
+                const auto member = std::string_view(field.id).substr(field.id.find('.') + 1);
+                field.divider = member == "visible" || member == "custom" ||
+                                (field.id == "iterationOverlay.anchor") ||
+                                member == "family" || member == "outline" || member == "shadow";
+            }
             if (field.id == "overlay.anchor" || field.id == "iterationOverlay.anchor") {
                 const wchar_t *labels[]{L"Top Left",    L"Top Center",    L"Top Right",
                                         L"Middle Left", L"Center",        L"Middle Right",
@@ -648,7 +705,7 @@ namespace merutilm::rff2 {
                  }});
         }
         form.actions.push_back({0, L"Add Parameter", [this] {
-                                    inspectorSectionRequest = 7;
+                                    inspectorListRequest = workspace::TimelineInspectorNav::ADD;
                                 }});
         if (found != snapshot->video.timeline.tracks.end()) {
             if (supported) {
@@ -772,10 +829,6 @@ namespace merutilm::rff2 {
                 return std::format(L"Source length: {:.3f} s. Clip length: {:.3f} s. Apply edits before selecting another clip. Playback previews the audio with clip volume and fades.",
                     double(found->sourceDuration) / 1000000, double(found->duration()) / 1000000);
             }
-            if (inspector && inspector->selectedGroup() == 2 && !attribute.video.timeline.zoomOverlay.custom) {
-                return std::wstring(L"Custom Appearance is Off, so the dimmed rows keep the legacy look. "
-                                    L"Editing one of them turns Custom Appearance on.");
-            }
             if (inspector && (inspector->selectedGroup() == 2 || inspector->selectedGroup() == 3)) {
                 return std::wstring{};
             }
@@ -855,14 +908,39 @@ namespace merutilm::rff2 {
                                     saveWorkspaceDock();
                                 }});
         dimLegacyAppearanceRows(form.fields);
+        workspace::organizeTimelineOverlay(form);
         inspector = std::make_unique<workspace::FormWorkspace>(
             window, std::move(form), bodyFont, inspectorTheme, uiDpi / 96.f,
             [] {
             },
-            [this](int) {
-                SetFocus(window);
+            [this](int direction) {
+                if (direction < 0 && inspectorNav && IsWindowVisible(inspectorNav->handle())) {
+                    inspectorNav->focus();
+                } else {
+                    SetFocus(window);
+                }
             });
+        inspector->restoreSectionState(sections);
         inspector->selectGroup(group);
+        if (inspectorNav) {
+            const auto &groups = inspector->groups();
+            std::vector<workspace::TimelineInspectorNav::Entry> settingsEntries, parameterEntries;
+            for (int i = firstSettingsPage; i < std::min(firstParameterPage, int(groups.size())); ++i) {
+                settingsEntries.push_back({i, groups[i]});
+            }
+            constexpr std::wstring_view prefix = L"Add Parameter: ";
+            for (int i = firstParameterPage; i < int(groups.size()); ++i) {
+                std::wstring_view name = groups[i];
+                if (name.starts_with(prefix)) {
+                    name.remove_prefix(prefix.size());
+                }
+                parameterEntries.push_back({i, std::wstring(name)});
+            }
+            inspectorNav->setEntries(std::move(settingsEntries), std::move(parameterEntries));
+            if (requested) {
+                inspectorNav->sync(group);
+            }
+        }
         RECT client{};
         GetClientRect(window, &client);
         layoutInspector(client.right, client.bottom, savedScroll);
@@ -941,7 +1019,7 @@ namespace merutilm::rff2 {
 
     void TimelineWindow::showParameterCatalog(std::wstring_view prefix) {
         const auto groups = inspectorGroups(attribute.video.data.isStatic);
-        for (size_t i = 7; i < groups.size(); ++i) {
+        for (size_t i = firstParameterPage; i < groups.size(); ++i) {
             if (std::wstring_view(groups[i])
                     .substr(std::wstring_view(L"Add Parameter: ").size())
                     .starts_with(prefix)) {

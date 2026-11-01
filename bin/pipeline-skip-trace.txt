@@ -1,0 +1,22 @@
+    0.000s  [ui] scene init begins
+    0.012s  [ui] renderer build begins
+    0.066s  [ui] batch finish begins (16 jobs)
+    2.594s  [ui] handed off to the background: ../shaders/vk_slope.frag.spv
+    2.608s  [ui] batch finish ends
+    2.625s  [ui] batch finish begins (16 jobs)
+    2.658s  [ui] handed off to the background: ../shaders/vk_slope.frag.spv
+    2.659s  [ui] batch finish ends
+    2.680s  [ui] batch finish begins (14 jobs)
+    2.703s  [ui] handed off to the background: ../shaders/vk_slope.frag.spv
+    2.704s  [ui] batch finish ends
+    2.715s  [ui] renderer build ends
+    2.780s  [ui] scene init ends
+    3.330s  [ui] first scene render
+    4.176s  [ui] await begins: ../shaders/vk_slope.frag.spv
+   30.068s  [ui] await ends: ../shaders/vk_slope.frag.spv
+   30.071s  [ui] await begins: ../shaders/vk_slope.frag.spv
+   30.072s  [ui] await ends: ../shaders/vk_slope.frag.spv
+   30.099s  [ui] await begins: ../shaders/vk_slope.frag.spv
+   30.099s  [ui] await ends: ../shaders/vk_slope.frag.spv
+   30.119s  [ui] pipeline cache save begins
+   30.143s  [ui] pipeline cache save ends

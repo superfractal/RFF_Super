@@ -1,5 +1,5 @@
 <!-- Modified by GPT-6 on 2026-09-24. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-11-01. -->
 # Project file layout
 
 Run build and release commands from the project root, even when reading a document in `documentation/`.
@@ -33,6 +33,6 @@ CMake uses `tools/compile.ps1`; rerun CMake configuration if an old generated bu
 
 Git excludes local preferences, timeline/workspace state, local AI connection/server configuration, logs, dumps, backups, and build products. These files remain on the developer's machine. Use [the server configuration example](../example/local-ai-server.example.json) when setting up another machine.
 
-`bin/` remains excluded from source control. The cleaned local folder contains `RFF_Super.exe` and its 31 required DLLs; FFmpeg and developer tools are stored in `debug/backup/` rather than included. Video/audio export requires a separately installed FFmpeg on PATH. Vulkan uses the installed GPU driver's loader.
+`bin/` is tracked in Git and contains `RFF_Super.exe` and its 31 required DLLs; FFmpeg and developer tools are not included. Video/audio export requires a separately installed FFmpeg on PATH. Vulkan uses the installed GPU driver's loader.
 
 The bin cleanup is not a release build: the current executable differs from the executable in the earlier release inventory. Follow [the distribution instructions](DISTRIBUTION.md) to rebuild from a committed tag and prepare the matching source, shader, dependency, and notice bundle before publishing binaries. Removing files from Git tracking does not remove them from existing commits.

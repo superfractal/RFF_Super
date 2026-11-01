@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-21
 //
 
 #pragma once
@@ -46,6 +47,18 @@ namespace merutilm::rff2::workspace {
                           [getState = getState, member](auto &attribute) -> auto & {
                               return getState(attribute).*member;
                           });
+        }
+
+        template<class T, class Read, class Write>
+        void derivedChoice(const char *id, const wchar_t *label, Read read, Write write,
+                           const wchar_t *hint = L"Select a value, then Apply & Render.") {
+            model->template derivedChoice<T>(prefix + id, group, label, hint,
+                                             [getState = getState, read](const Attribute &attribute) {
+                                                 return read(getState(attribute));
+                                             },
+                                             [getState = getState, write](Attribute &attribute, T value) {
+                                                 write(getState(attribute), value);
+                                             });
         }
 
         void color(const char *id, glm::vec4 State::*member, const wchar_t *label) {

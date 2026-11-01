@@ -2,7 +2,7 @@
 // Modified by Opus 5 on 2026-08-07, 2026-08-08, 2026-08-12, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-23
 // Modified by GPT-5 on 2026-08-16, 2026-08-23
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-23, 2026-10-03
-// Modified by Opus 5.5 on 2026-10-02, 2026-10-03
+// Modified by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-08, 2026-10-09
 //
 
 #version 450
@@ -39,6 +39,16 @@ layout (set = 1, binding = 0) uniform FogUBO {
     float chaos_shade;
     // 0 = average the aperture in display gamma, 1 = in linear light.
     float chaos_linear;
+    float chaos_interior;
+    // 1 = Chaos Edge Protection: each aperture tap counts only as far as its own defocus reaches the pixel.
+    float chaos_edges;
+    // Bokeh shape: 0 = circle, otherwise the blade count; rotation in radians; aspect is height over width.
+    float chaos_bokeh_blades;
+    float chaos_bokeh_rotation;
+    float chaos_bokeh_aspect;
+    // Smooth Focus Across Keyframes, and the keyframe depth a video frame is drawn at (0 outside a video).
+    float focus_smooth;
+    float focus_frame;
 
 } fog_attr;
 
@@ -59,6 +69,16 @@ layout (set = 2, binding = 0) uniform IterUBO {
 layout (set = 2, binding = 1) buffer IterSSBO {
     double iterations[];
 } iteration_attr;
+
+// chaos_irregularity() at every pixel, filled by vk_chaos_irregularity.comp ahead of this pass.
+layout (set = 2, binding = 3) buffer ChaosSSBO {
+    float irregularity[];
+} chaos_cache;
+
+// Each pixel's defocus with a narrow feather, filled by vk_chaos_irregularity.comp's second stage while Chaos Edge Protection is on.
+layout (set = 2, binding = 5) buffer ChaosDefocusSSBO {
+    float defocus[];
+} chaos_defocus_cache;
 
 // Mirrors vk_slope.frag's block (and DescSlope's reserve order) so the mask can reuse the
 // slope pass's own rim shape instead of approximating it.
@@ -105,102 +125,13 @@ float grayScale(vec3 c) {
     return c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
 }
 
-// Bounds-checked fetch in buffer (top-left origin) coordinates. Returns -1 as a
-// sentinel for out-of-bounds so callers can substitute.
-double fetch_buffer(ivec2 bcoord){
-    if (bcoord.x < 0 || bcoord.y < 0 ||
-        bcoord.x >= int(iteration_info_attr.extent.x) ||
-        bcoord.y >= int(iteration_info_attr.extent.y)) {
-        return -1.0;
-    }
-    return iteration_attr.iterations[bcoord.y * iteration_info_attr.extent.x + bcoord.x];
-}
-
-double get_iteration_raw(ivec2 coord){
-    coord.y = int(iteration_info_attr.extent.y) - 1 - coord.y; // -> buffer coords
-    int cx = int(iteration_info_attr.extent.x) / 2;
-    int cy = int(iteration_info_attr.extent.y) / 2;
-    bool onCol = (coord.x == cx);
-    bool onRow = (coord.y == cy);
-    if (onCol && onRow) {
-        double a = fetch_buffer(ivec2(cx - 1, cy - 1));
-        double b = fetch_buffer(ivec2(cx + 1, cy - 1));
-        double c = fetch_buffer(ivec2(cx - 1, cy + 1));
-        double d = fetch_buffer(ivec2(cx + 1, cy + 1));
-        if (a >= 0.0 && b >= 0.0 && c >= 0.0 && d >= 0.0) return (a + b + c + d) * 0.25;
-    } else if (onCol) {
-        double a = fetch_buffer(ivec2(cx - 1, coord.y));
-        double b = fetch_buffer(ivec2(cx + 1, coord.y));
-        if (a >= 0.0 && b >= 0.0) return (a + b) * 0.5;
-    } else if (onRow) {
-        double a = fetch_buffer(ivec2(coord.x, cy - 1));
-        double b = fetch_buffer(ivec2(coord.x, cy + 1));
-        if (a >= 0.0 && b >= 0.0) return (a + b) * 0.5;
-    }
-
-    return fetch_buffer(coord);
-}
-
-double get_iteration(uvec2 iter_coord, ivec2 offset){
-    ivec2 coord = ivec2(iter_coord) + offset;
-    double value = get_iteration_raw(coord);
-
-    if (value >= 0.0) {
-        return value;
-    }
-
-    ivec2 mirror_coord = ivec2(iter_coord) - offset;
-    double mirror_value = get_iteration_raw(mirror_coord);
-    if (mirror_value >= 0.0) {
-        return mirror_value;
-    }
-
-    // Both sides OOB (image smaller than 3 pixels in this axis). Fall back to
-    // the center pixel.
-    ivec2 center = ivec2(iter_coord);
-    center.y = int(iteration_info_attr.extent.y) - 1 - center.y;
-    if (center.x >= 0 && center.y >= 0 &&
-        center.x < int(iteration_info_attr.extent.x) &&
-        center.y < int(iteration_info_attr.extent.y)) {
-        return iteration_attr.iterations[center.y * iteration_info_attr.extent.x + center.x];
-    }
-    return 0.0;
-}
-
-// log2(1 + x), as a series rather than through log(). Vulkan pins log() to an ABSOLUTE error of
-// 2^-21 for arguments in [0.5, 2], so for an argument a hair above 1 - which is every tap in a
-// deep, smooth view - it is allowed to be wrong by more than the answer itself. See the slope
-// pass for the full account. Every term below is reached from x by multiplication alone, so the
-// relative accuracy holds however small x gets.
-float log2_1p(float x) {
-    return x * (1.0 - x * (0.5 - x * (1.0 / 3.0 - x * (0.25 - x * 0.2)))) * 1.4426950408889634;
-}
-
-// Shading height of one tap in doublings, measured against the centre pixel instead of against
-// zero. Mirrors the slope pass, including why: only differences of heights are taken from here,
-// so the shared log2(centre) cancels, and leaving it out is what holds the precision. Taking log2
-// of the absolute count meant casting a double count down to a float, which past about 8.4 million
-// iterations quantises away the whole fractional part the gradient is made of, turning the height
-// field into a staircase that the Sobel reads as spikes along each riser.
-float height_rel(double it, double center) {
-    double a = max(it, 1.0);
-    double b = max(center, 1.0);
-    // Sterbenz: while the two are within a factor of two the subtraction is exact in double, so
-    // the ratio reaches float as a small number carrying its full relative precision.
-    double dr = (a - b) / b;
-    // 0.25 rather than 0.5: the five-term series is worth 0.45% at 0.5 and the switch would hand
-    // that over as a step. Mirrors the slope pass, where the same bound is set out in full.
-    if (abs(dr) <= 0.25) {
-        return log2_1p(float(dr));
-    }
-    // Far apart, which happens where an interior tap sits beside an exterior one.
-    return log2(float(a)) - log2(float(b));
-}
+#include "fog_iteration.glsl"
 
 // One 8-tap Sobel taken at radius r, divided by r so it estimates the same gradient whatever
 // the stencil width is. That normalisation is what lets different radii be averaged against
 // each other, and what keeps the macro term continuous when r has to shrink near a border.
 vec2 macro_sobel(uvec2 iter_coord, int r, double center) {
+    // Hoisting the reciprocal out of these taps measured slower on 2026-10-08, so each tap keeps its own division.
     float s_ld = height_rel(get_iteration(iter_coord, ivec2(-r, -r)), center);
     float s_d  = height_rel(get_iteration(iter_coord, ivec2( 0, -r)), center);
     float s_rd = height_rel(get_iteration(iter_coord, ivec2( r, -r)), center);
@@ -283,14 +214,17 @@ float rim_shape(uvec2 iter_coord) {
     float multiplier = float(iteration_info_attr.extent.x) / 1280;
     // Heights relative to the centre pixel; see height_rel() for why the absolute form cannot hold
     // its precision at depth.
-    float h_ld = height_rel(ld, centerIter);
-    float h_d  = height_rel(d, centerIter);
-    float h_rd = height_rel(rd, centerIter);
-    float h_l  = height_rel(l, centerIter);
-    float h_r  = height_rel(r, centerIter);
-    float h_lu = height_rel(lu, centerIter);
-    float h_u  = height_rel(u, centerIter);
-    float h_ru = height_rel(ru, centerIter);
+    // The centre's clamp and reciprocal, taken once for all eight taps.
+    double centerClamped = max(centerIter, 1.0);
+    double invCenter = 1.0 / centerClamped;
+    float h_ld = height_rel_hoisted(ld, centerClamped, invCenter);
+    float h_d  = height_rel_hoisted(d, centerClamped, invCenter);
+    float h_rd = height_rel_hoisted(rd, centerClamped, invCenter);
+    float h_l  = height_rel_hoisted(l, centerClamped, invCenter);
+    float h_r  = height_rel_hoisted(r, centerClamped, invCenter);
+    float h_lu = height_rel_hoisted(lu, centerClamped, invCenter);
+    float h_u  = height_rel_hoisted(u, centerClamped, invCenter);
+    float h_ru = height_rel_hoisted(ru, centerClamped, invCenter);
     float dx = (h_rd - h_ld) + 2.0 * (h_r - h_l) + (h_ru - h_lu);
     float dy = (h_lu - h_ld) + 2.0 * (h_u - h_d) + (h_ru - h_rd);
 
@@ -315,6 +249,23 @@ float rim_shape(uvec2 iter_coord) {
     return pow(boostedFactor, slope_attr.rim_power);
 }
 
+// The maximum iteration the focus band's ends are fractions of. A video draws each frame from two
+// keyframes, and max_value is the larger of their two counts, so with Auto Max Iteration it steps at
+// every keyframe switch and the band jumps with it. Smoothed, the reference glides from the zoomed
+// keyframe's count to the normal one's across the interval, geometrically because the counts grow by
+// factors, and meets the next interval's start exactly. Interior tests keep max_value.
+double focus_reference(double mv) {
+    if (fog_attr.focus_smooth < 0.5 || fog_attr.focus_frame < 1.0) {
+        return mv;
+    }
+    float zoomed = float(iteration_info_attr.max_value_zoomed);
+    float normal = float(iteration_info_attr.max_value_normal);
+    if (zoomed <= 0.0 || normal <= 0.0) {
+        return mv;
+    }
+    return double(exp(mix(log(zoomed), log(normal), fract(fog_attr.focus_frame))));
+}
+
 // How far out of focus this pixel is, in 0..1. The band is measured on the iteration count rather
 // than on the screen, so the sharp part is a depth of the fractal itself and not a place in the
 // frame: it holds the same structure as the view zooms, which a screen-space falloff cannot. The
@@ -329,8 +280,9 @@ float focus_defocus(uvec2 iter_coord) {
     if (it <= 0.0 || it >= mv || mv <= 0.0) {
         return 0.0;
     }
-    double focus = double(clamp(fog_attr.focus_ratio, 0.0, 1.0)) * mv;
-    double range = double(max(fog_attr.focus_range, 1.0e-4)) * mv;
+    double ref = focus_reference(mv);
+    double focus = double(clamp(fog_attr.focus_ratio, 0.0, 1.0)) * ref;
+    double range = double(max(fog_attr.focus_range, 1.0e-4)) * ref;
     // Kept in double up to the ratio: the difference of two counts is exact there, and past about
     // 8.4 million iterations a float cannot hold the counts themselves closely enough to subtract.
     float d = clamp(float(abs(it - focus) / range), 0.0, 1.0);
@@ -398,26 +350,92 @@ int blur_rings() {
     return fog_attr.blur_quality > 0.5 ? 16 : 8;
 }
 
-// Interleaved Gradient Noise (Jorge Jimenez, SIGGRAPH 2014), same as vk_linear_interpolation.frag; no code license, see NOTICE.
-// Adapted from Alan Wolfe, IGNLDS main.py at a9f3ab9, MIT; GLSL fract and the project seed are retained, see NOTICE.
-float ign(vec2 p, float seed) {
-    const float ignScale = 52.9829189;
-    const float ignX = 0.06711056;
-    const float ignY = 0.00583715;
-    return fract(ignScale * fract(ignX * p.x + ignY * p.y + seed));
+#include "chaos_defocus.glsl"
+
+// The stored defocus at a pixel, edge-clamped like chaos_cached().
+float chaos_defocus_stored(ivec2 p) {
+    ivec2 q = clamp(p, ivec2(0), ivec2(iteration_info_attr.extent) - 1);
+    return chaos_defocus_cache.defocus[q.y * int(iteration_info_attr.extent.x) + q.x];
 }
 
-// Golden-angle spiral from H. Vogel, Math. Biosci. 44 (1979); formula only, written here, no code copied, see NOTICE.
-// The half-offset is the midpoint in squared radius of each equal-area annulus; Vogel supplies the angular arrangement, see NOTICE.
-vec2 vogel_disc(int i, int n, float rotation) {
-    float angle = float(i) * 2.39996323 + rotation;
-    return sqrt((float(i) + 0.5) / float(n)) * vec2(cos(angle), sin(angle));
+// Chaos Edge Protection's gather: chaos_blur() with each tap weighted by how far its own stored defocus reaches.
+// Kept apart from chaos_blur() so the Off path compiles exactly as before; floorRadius is the focus or rim radius the gather also serves.
+vec3 chaos_blur_protected(vec2 coord, float radius, float floorRadius) {
+    vec2 texel = 1.0 / vec2(textureSize(fog_canvas, 0));
+    int taps = fog_attr.blur_quality > 0.5 ? 160 : 48;
+    float rotation = ign(gl_FragCoord.xy, 0.0) * 6.28318531;
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    bool linearAverage = fog_attr.chaos_linear > 0.5;
+    float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
+    [[dont_unroll]] for (int i = 0; i < taps; ++i) {
+        vec2 aperture = vogel_disc(i, taps, rotation);
+        float w = 1.0 - smoothstep(0.85, 1.0, length(aperture));
+        if (i > 0) {
+            // Scatter-as-gather: a tap whose own radius falls short of this pixel drops out, so sharp surfaces do not bleed into the blur; see NOTICE.
+            float reach = max(blur_radius(fog_attr.chaos_blur * chaos_defocus_stored(ivec2(gl_FragCoord.xy + aperture * radius)) * scale), floorRadius);
+            w *= clamp((reach - length(aperture) * radius) / max(0.25 * radius, 1.0) + 1.0, 0.0, 1.0);
+        }
+        vec3 tap = texture(fog_canvas, coord + aperture * radius * texel).rgb;
+        sum += (linearAverage ? tap : pow(max(tap, vec3(0.0)), vec3(1.0 / 2.2))) * w;
+        weight += w;
+    }
+    return linearAverage ? sum / weight : pow(sum / weight, vec3(2.2));
+}
+
+// Maps a point of the unit disc onto the bokeh: a regular polygon with its corners on the unit circle, stretched to the aspect ratio, then turned.
+// Area-preserving polar remap written here from the polygon's own geometry: tan(phi) = tan(h) * t / h keeps the taps evenly spread; see NOTICE, Chaos blur.
+vec2 bokeh_shape(vec2 disc) {
+    float r = length(disc);
+    float angle = atan(disc.y, disc.x);
+    if (fog_attr.chaos_bokeh_blades >= 3.0) {
+        float half_segment = 3.14159265 / fog_attr.chaos_bokeh_blades;
+        // Measured from an edge centre straight down, so at 0 degrees every polygon stands on a flat edge.
+        float local = mod(angle + 1.57079633 + half_segment, 2.0 * half_segment) - half_segment;
+        float phi = atan(tan(half_segment) * local / half_segment);
+        angle += phi - local;
+        r *= cos(half_segment) / cos(phi);
+    }
+    float stretch = sqrt(max(fog_attr.chaos_bokeh_aspect, 0.01));
+    vec2 p = r * vec2(cos(angle) / stretch, sin(angle) * stretch);
+    float c = cos(fog_attr.chaos_bokeh_rotation);
+    float s = sin(fog_attr.chaos_bokeh_rotation);
+    return vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+
+// The gather for a polygonal or stretched bokeh, with or without Chaos Edge Protection; the circle keeps its own loops so it draws exactly as before.
+vec3 chaos_blur_shaped(vec2 coord, float radius, float floorRadius, bool edges) {
+    vec2 texel = 1.0 / vec2(textureSize(fog_canvas, 0));
+    int taps = fog_attr.blur_quality > 0.5 ? 160 : 48;
+    float rotation = ign(gl_FragCoord.xy, 0.0) * 6.28318531;
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    bool linearAverage = fog_attr.chaos_linear > 0.5;
+    float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
+    [[dont_unroll]] for (int i = 0; i < taps; ++i) {
+        vec2 disc = vogel_disc(i, taps, rotation);
+        // The rim softening follows the disc radius, so every blade edge fades the same way.
+        float w = 1.0 - smoothstep(0.85, 1.0, length(disc));
+        vec2 aperture = bokeh_shape(disc);
+        if (edges && i > 0) {
+            float reach = max(blur_radius(fog_attr.chaos_blur * chaos_defocus_stored(ivec2(gl_FragCoord.xy + aperture * radius)) * scale), floorRadius);
+            w *= clamp((reach - length(aperture) * radius) / max(0.25 * radius, 1.0) + 1.0, 0.0, 1.0);
+        }
+        vec3 tap = texture(fog_canvas, coord + aperture * radius * texel).rgb;
+        sum += (linearAverage ? tap : pow(max(tap, vec3(0.0)), vec3(1.0 / 2.2))) * w;
+        weight += w;
+    }
+    return linearAverage ? sum / weight : pow(sum / weight, vec3(2.2));
 }
 
 // Original RFF_Super artistic circular-aperture gather, GPL-3.0-only; see NOTICE, Chaos blur.
-vec3 chaos_blur(vec2 coord, float radius) {
+vec3 chaos_blur(vec2 coord, float radius, float floorRadius) {
     if (radius <= 0.0) return texture(fog_canvas, coord).rgb;
     radius = min(radius, 4096.0);
+    if (fog_attr.chaos_bokeh_blades >= 3.0 || fog_attr.chaos_bokeh_aspect != 1.0) {
+        return chaos_blur_shaped(coord, radius, floorRadius, fog_attr.chaos_edges > 0.5);
+    }
+    if (fog_attr.chaos_edges > 0.5) return chaos_blur_protected(coord, radius, floorRadius);
     vec2 texel = 1.0 / vec2(textureSize(fog_canvas, 0));
     int taps = fog_attr.blur_quality > 0.5 ? 160 : 48;
     float rotation = ign(gl_FragCoord.xy, 0.0) * 6.28318531;
@@ -437,67 +455,14 @@ vec3 chaos_blur(vec2 coord, float radius) {
 
 vec3 blend_chaos_blur(vec2 coord, float legacyRadius, float chaosRadius) {
     float blend = smoothstep(0.0, max(legacyRadius, 1.0), chaosRadius);
-    if (blend >= 1.0) return chaos_blur(coord, max(legacyRadius, chaosRadius));
+    if (blend >= 1.0) return chaos_blur(coord, max(legacyRadius, chaosRadius), legacyRadius);
     return mix(local_blur(coord, legacyRadius, blur_rings()),
-               chaos_blur(coord, max(legacyRadius, chaosRadius)), blend);
-}
-
-// Relative double-precision iteration differences preserve local structure even at very deep zoom.
-float chaos_irregularity(uvec2 coord, int radius) {
-    ivec2 extent = ivec2(iteration_info_attr.extent);
-    if (min(extent.x, extent.y) < 3) return 0.0;
-    radius = min(radius, (min(extent.x, extent.y) - 1) / 2);
-    int inset = min(radius + 2, (min(extent.x, extent.y) - 1) / 2);
-    coord = uvec2(clamp(ivec2(coord), ivec2(inset), extent - inset - 1));
-    double center = get_iteration(coord, ivec2(0));
-    if (center <= 0.0 || center >= iteration_info_attr.max_value) return 0.0;
-    float h[9];
-    float energy = 0.0;
-    [[dont_unroll]] for (int y = -1; y <= 1; ++y) {
-        [[dont_unroll]] for (int x = -1; x <= 1; ++x) {
-            double iteration = get_iteration(coord, ivec2(x, y) * radius);
-            if (iteration <= 0.0 || iteration >= iteration_info_attr.max_value) return 0.0;
-            float value = height_rel(iteration, center);
-            h[(y + 1) * 3 + x + 1] = value;
-            energy += abs(value);
-        }
-    }
-    vec2 gradient = vec2(h[5] - h[3], h[7] - h[1]) * 0.5;
-    float residual = 0.0;
-    [[dont_unroll]] for (int y = -1; y <= 1; ++y) {
-        [[dont_unroll]] for (int x = -1; x <= 1; ++x) {
-            residual += abs(h[(y + 1) * 3 + x + 1] - dot(gradient, vec2(x, y)));
-        }
-    }
-    return energy > 0.0 ? clamp(residual / energy, 0.0, 1.0) : 0.0;
+               chaos_blur(coord, max(legacyRadius, chaosRadius), legacyRadius), blend);
 }
 
 float chaos_defocus() {
     if (fog_attr.chaos_amount <= 0.0) return 0.0;
-    float scale = float(iteration_info_attr.canvas_extent.x) / 1280.0;
-    int radius = max(int(fog_attr.chaos_scale * scale + 0.5), 1);
-    int feather = max(int(fog_attr.chaos_feather * scale + 0.5), 0);
-    float complexity = 0.0;
-    if (feather == 0) {
-        complexity = chaos_irregularity(uvec2(gl_FragCoord.xy), radius);
-    } else {
-        // A round Gaussian footprint; the old 3x3 grid stamped each edge nine times and squared the holes off.
-        int taps = fog_attr.blur_quality > 0.5 ? 16 : 10;
-        float rotation = ign(gl_FragCoord.xy, 0.5) * 6.28318531;
-        float total = 0.0;
-        [[dont_unroll]] for (int i = 0; i < taps; ++i) {
-            vec2 offset = vogel_disc(i, taps, rotation);
-            ivec2 p = clamp(ivec2(gl_FragCoord.xy + offset * float(feather)),
-                            ivec2(0), ivec2(iteration_info_attr.extent) - 1);
-            float weight = exp(-2.0 * dot(offset, offset));
-            complexity += chaos_irregularity(uvec2(p), radius) * weight;
-            total += weight;
-        }
-        complexity /= total;
-    }
-    float depth = smoothstep(fog_attr.chaos_threshold,
-                            fog_attr.chaos_threshold + max(fog_attr.chaos_transition, 0.01), complexity);
-    return depth * fog_attr.chaos_amount;
+    return chaos_defocus_at(gl_FragCoord.xy, -1);
 }
 
 void main() {

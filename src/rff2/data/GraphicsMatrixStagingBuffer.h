@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-05-08.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-07
 //
 
 #pragma once
@@ -55,7 +56,7 @@ namespace merutilm::rff2 {
             vkh::BufferContext::set(context, getIndex(x, y), value);
         }
 
-        void fill(const std::vector<double> &values) const {
+        void fill(const std::vector<T> &values) const {
             vkh::BufferContext::fill(context, values);
         }
 

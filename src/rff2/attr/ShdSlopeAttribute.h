@@ -6,10 +6,12 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-10-08
 //
 
 #pragma once
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <glm/glm.hpp>
 #include "ShdSurfaceStyle.h"
@@ -17,6 +19,7 @@
 #include "ShdSlopeGlossSource.h"
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
+#include "ShdStudioEnvironmentSource.h"
 #include "ShdSlopeTintBlend.h"
 
 namespace merutilm::rff2 {
@@ -107,6 +110,8 @@ namespace merutilm::rff2 {
         float reliefWaves = 0.0f;
         float waveFrequency = 0.5f;
         bool invertRelief = false;
+        bool reliefWavesCoatOnly = false;      // Relief Waves shape only the clear coat, not the shading or material layers
+        bool coatSoftbox = true;               // The clear coat reflects key and fill as rectangular softboxes instead of points
         float boundaryGuard = 0.0f;
         bool reliefAutoZoom = true;
         float reliefZoomReference = -1.0f;
@@ -188,6 +193,34 @@ namespace merutilm::rff2 {
 
         float studioEnvironmentRotation = 0.0f;
         float studioEnvironmentFollow = 1.0f;
+        ShdStudioEnvironmentSource studioEnvironmentSource = ShdStudioEnvironmentSource::TWO_COLOR;
+        // Radiance of a white gradient stop or image pixel; above 1 they shine like lit softboxes. Two Colors keeps its own fixed level.
+        float environmentBrightness = 6.0f;
+        // Environment Gradient: four stops along the reflected direction, 0 straight down and 1 straight up.
+        float environmentStop1Position = 0.0f;
+        float environmentStop2Position = 0.55f;
+        float environmentStop3Position = 0.68f;
+        float environmentStop4Position = 0.82f;
+        glm::vec4 environmentStop1Color = {0.08f, 0.07f, 0.07f, 1.0f};
+        glm::vec4 environmentStop2Color = {0.12f, 0.13f, 0.16f, 1.0f};
+        glm::vec4 environmentStop3Color = {1.0f, 1.0f, 1.0f, 1.0f};
+        glm::vec4 environmentStop4Color = {0.2f, 0.28f, 0.42f, 1.0f};
+
+        template<class Position, class Color> struct EnvironmentStop {
+            Position *position;
+            Color *color;
+        };
+
+        // The four gradient stops in order, for code that walks them instead of naming each one.
+        [[nodiscard]] std::array<EnvironmentStop<const float, const glm::vec4>, 4> environmentStops() const {
+            return {{{&environmentStop1Position, &environmentStop1Color}, {&environmentStop2Position, &environmentStop2Color},
+                     {&environmentStop3Position, &environmentStop3Color}, {&environmentStop4Position, &environmentStop4Color}}};
+        }
+
+        [[nodiscard]] std::array<EnvironmentStop<float, glm::vec4>, 4> environmentStops() {
+            return {{{&environmentStop1Position, &environmentStop1Color}, {&environmentStop2Position, &environmentStop2Color},
+                     {&environmentStop3Position, &environmentStop3Color}, {&environmentStop4Position, &environmentStop4Color}}};
+        }
 
         [[nodiscard]] float reliefZoomLog2(float logZoom) const {
             if (!lustreRelief || !reliefAutoZoom || reliefZoomReference < 0.0f) {

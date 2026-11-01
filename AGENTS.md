@@ -1,4 +1,4 @@
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-13. -->
 # Project Overview
 
 **RFF-2.0** is a fast Mandelbrot set rendering application, built with C++20, the Vulkan API, and GMP.
@@ -72,6 +72,8 @@ ignored folders can contain third-party binaries, headers, and build products.
 - **Compressed maps** (`.rfmz`) carry a fixed versioned header naming the stream mode: never
   renumber a mode, never make one lossy (video keyframes read this path), and keep `streamSize` in
   step with `preprocess`. See [documentation/notes/compressed-map-format.md](documentation/notes/compressed-map-format.md).
+- **Keyframe orbit traps** (`.rftz`) sit beside a keyframe map under its number: keep the plane
+  order in step with `OrbitTrap` and the merge shader. See [documentation/notes/orbit-trap-file-format.md](documentation/notes/orbit-trap-file-format.md).
 
 ## Changelog
 

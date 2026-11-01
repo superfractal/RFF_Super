@@ -1,0 +1,66 @@
+{
+  "scope": "Actual water feature injection with recording builder; source guards and illustrative vector arithmetic, no GPU execution.",
+  "variantHooks": {
+    "Main": [
+      "addDefine",
+      "addFunction",
+      "addPostMapCode",
+      "addPostDistCode",
+      "addMaterialLogic"
+    ],
+    "Physics": [],
+    "Histogram": [],
+    "Mesh": []
+  },
+  "reflectedMaterial": {
+    "waterSentinel": 10,
+    "fastReflectionChannel": 0,
+    "waterOverrideApplied": false
+  },
+  "coordinateExample": {
+    "sceneSpacePoint": [
+      0,
+      1,
+      0
+    ],
+    "sceneSpaceCamera": [
+      0,
+      3,
+      0
+    ],
+    "cameraUniform": [
+      0,
+      0,
+      0
+    ],
+    "currentViewDirection": [
+      0,
+      -1,
+      0
+    ],
+    "consistentViewDirection": [
+      0,
+      1,
+      0
+    ],
+    "upNormalTintCurrent": 1,
+    "upNormalTintConsistent": 0.4
+  },
+  "normalContractExample": {
+    "hypotheticalHeightGradient": [
+      1,
+      0.5,
+      0
+    ],
+    "implicitSurfaceNormal": [
+      -0.8944271909999159,
+      0.4472135954999579,
+      0
+    ],
+    "heightFieldAssumptionNormal": [
+      -0.7071067811865475,
+      0.7071067811865475,
+      0
+    ]
+  }
+}

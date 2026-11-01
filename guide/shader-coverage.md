@@ -1,5 +1,5 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
-<!-- Modified by Opus 5.5 on 2026-10-04. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-28. -->
 # Shader documentation coverage
 
 [Shader overview](shader-overview.md) · [Main guide](SETTINGS_GUIDE.md) · [Field reference](settings-reference.md)
@@ -8,7 +8,7 @@ Checked against the workspace source on **September 24, 2026**. This is a docume
 
 ## Scope
 
-- All **15 Shader menu entries** have a destination and explanation in the overview. Save and Load Appearance Settings moved to the File menu on October 1.
+- All **17 Shader menu entries** have a destination and explanation in the overview. Save and Load Appearance Settings moved to the File menu on October 1; loading is now part of File → Load File.
 - All **29 shader layer slots** are named and described, with shared Texture/Pattern/Effect slots grouped as 1–4.
 - The seven appearance/palette forms are checked against their captured field inventory; current AppearanceForms source labels are also checked directly.
 - Surface numeric/color registries and display-name overrides are checked against both the overview and the field reference. Identical names and repeated layer fields are not separate feature claims.
@@ -47,7 +47,7 @@ The count is the number of field definitions in that group, not the number of ef
 | Palette / Color Stops | 4 | [Overview](shader-overview.md#palette-and-band-lines) · [Fields/actions](settings-reference.md#color-stops) |
 | Palette / Arrange Stops | 0 | [Overview](shader-overview.md#palette-and-band-lines) · [Fields/actions](settings-reference.md#palette-and-layer-actions) |
 | Palette / Preset Library | 2 | [Overview](shader-overview.md#palette-and-band-lines) · [Fields/actions](settings-reference.md#preset-library) |
-| Palette / Import Colors | 2 | [Overview](shader-overview.md#imports-and-presets) · [Fields/actions](settings-reference.md#import-colors) |
+| Palette / KFR Color | 1 | [Overview](shader-overview.md#imports-and-presets) · [Fields/actions](settings-reference.md#kfr-color) |
 
 Total with repeated layers counted once: **200 field definitions**. The Surface registries, aliases, HDR/output fields, and action controls are additional sources below.
 

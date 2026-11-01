@@ -2,6 +2,7 @@
 // Created by Opus 5 on 2026-09-03.
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-22
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -13,7 +14,7 @@
 #include <opencv2/core/mat.hpp>
 
 namespace merutilm::rff2 {
-    // The picture Load Image puts on the canvas. It is a child of the main window sitting exactly over
+    // The picture Load File puts on the canvas when it opens a .png. It is a child of the main window sitting exactly over
     // the Vulkan canvas, which is why the picture is inside the main window rather than beside it in
     // one of its own: the canvas carries WS_CLIPSIBLINGS, so what it presents stops at the edge of
     // this. The fractal is left untouched underneath and comes back the moment this is taken away.

@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <format>
 #include <memory>
 #include <optional>
 #include <string>
@@ -511,6 +512,9 @@ namespace merutilm::rff2 {
             HWND grooveDepth = nullptr;
             HWND grooveWidth = nullptr;
             HWND grooveAuto = nullptr;
+            HWND grooveSmooth = nullptr;
+            HWND grooveRounded = nullptr;
+            HWND grooveCreaseBlur = nullptr;
             HWND count = nullptr;
             HWND width = nullptr;
             HWND opacity = nullptr;
@@ -547,14 +551,39 @@ namespace merutilm::rff2 {
             L"Carves softly rounded grooves while preserving the underlying color. Grooves follow the "
             L"red-channel palette cycle, including color animation and warp. Requires iteration data; PNG "
             L"video sources carry no surface geometry.");
+        bandControls->grooveRounded = window->registerCheckboxInput(
+            L"Rounded Bands", &palette.grooveRounded,
+            [refreshBandLine, updateBandEnabled] {
+                refreshBandLine();
+                (*updateBandEnabled)();
+            },
+            L"Rounded Bands",
+            L"Swells each band between two lines into a rounded cord, so the lines become the creases between "
+            L"cords instead of carved grooves. Groove Depth sets how far the bands swell; bands too narrow to "
+            L"show a curve stay flat. Off carves grooves as before.");
+        bandControls->grooveCreaseBlur = window->registerSliderInput(
+            L"Crease Blur", &palette.grooveCreaseBlur, 0.0f, ShdPaletteAttribute::GROOVE_CREASE_BLUR_MAX,
+            Unparser::floatFixed(1), Parser::FLOAT,
+            ValidCondition::floatInRange(0.0f, ShdPaletteAttribute::GROOVE_CREASE_BLUR_MAX), refreshBandLine,
+            L"Crease Blur",
+            L"Softens the crease between two rounded bands over this many pixels (at 720 lines), so it no longer "
+            L"reads as a thin line. The bands keep their full swell. 6.0 is the default; 0 leaves the crease sharp.");
         bandControls->grooveAuto = window->registerCheckboxInput(
             L"Auto Groove", &palette.grooveAuto, refreshBandLine, L"Auto Groove",
             L"Limits overly wide grooves and reduces depth in narrow bands automatically as the view "
             L"changes. Enabled by default.");
+        bandControls->grooveSmooth = window->registerCheckboxInput(
+            L"Smooth Grooves", &palette.grooveSmooth, refreshBandLine, L"Smooth Grooves",
+            L"Gives both walls of the groove the same width, softens the deepest shadow and keeps the band's "
+            L"color in it, and smooths grooves only a few pixels wide, so they no longer read as thin black "
+            L"lines. Off draws the grooves exactly as before.");
         bandControls->grooveDepth = window->registerSliderInput(
-            L"Groove Depth", &palette.grooveDepth, 0.0f, 5.0f, Unparser::floatFixed(2), Parser::FLOAT,
-            [](float v) { return std::isfinite(v) && v >= 0 && v <= 5; }, refreshBandLine, L"Groove Depth",
-            L"Strength of the recessed surface shading. 1.50 is the soft default; 0 removes the groove.");
+            L"Groove Depth", &palette.grooveDepth, 0.0f, ShdPaletteAttribute::GROOVE_DEPTH_MAX, Unparser::floatFixed(2),
+            Parser::FLOAT, ValidCondition::floatInRange(0.0f, ShdPaletteAttribute::GROOVE_DEPTH_MAX), refreshBandLine,
+            L"Groove Depth",
+            L"Strength of the recessed surface shading. 1.50 is the soft default; 0 removes the groove. Above 5.00 "
+            L"the shadow and the lit wall grow darker and brighter still. With Rounded Bands it sets how far the "
+            L"bands swell.");
         bandControls->grooveWidth = window->registerSliderInput(
             L"Groove Width", &palette.grooveWidth, 0.0f, 0.5f, Unparser::floatFixed(3), Parser::FLOAT,
             [](float v) { return std::isfinite(v) && v >= 0 && v <= 0.5f; }, refreshBandLine, L"Groove Width",
@@ -661,9 +690,12 @@ namespace merutilm::rff2 {
         *updateBandEnabled = [winPtr = window.get(), bandControls, &palette] {
             winPtr->setRowEnabled(bandControls->count, palette.bandLineEnabled);
             winPtr->setRowEnabled(bandControls->groove, palette.bandLineEnabled);
-            for (const HWND control :
-                 {bandControls->grooveAuto, bandControls->grooveDepth, bandControls->grooveWidth}) {
-                winPtr->setRowEnabled(control, palette.bandLineEnabled && palette.bandLineGroove);
+            winPtr->setRowEnabled(bandControls->grooveRounded, palette.bandLineEnabled && palette.bandLineGroove);
+            winPtr->setRowEnabled(bandControls->grooveDepth, palette.bandLineEnabled && palette.bandLineGroove);
+            winPtr->setRowEnabled(bandControls->grooveCreaseBlur,
+                                  palette.bandLineEnabled && palette.bandLineGroove && palette.grooveRounded);
+            for (const HWND control : {bandControls->grooveAuto, bandControls->grooveSmooth, bandControls->grooveWidth}) {
+                winPtr->setRowEnabled(control, palette.bandLineEnabled && palette.bandLineGroove && !palette.grooveRounded);
             }
             for (const HWND control :
                  {bandControls->width, bandControls->opacity, bandControls->softness, bandControls->color}) {
@@ -679,6 +711,241 @@ namespace merutilm::rff2 {
         settingsMenu.setCurrentActiveSettingsWindow(std::move(window),
                                                     SettingsMenu::SettingsWindowKind::SHADER_PALETTE);
     };
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::OTHER = [](SettingsMenu &settingsMenu,
+                                                                                            RenderScene &scene) {
+        auto &palette = scene.getAttribute().shader.palette;
+        auto window = std::make_unique<SettingsWindow>(L"Other");
+        window->registerSectionHeader(L"Escape Angle", false);
+        window->registerSelectionInput<ShdPalEscapeAngleColoring>(
+            L"Escape Angle Coloring", &palette.escapeAngleColoring,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Escape Angle Coloring",
+            L"Shifts the palette by the angle of z at the moment each orbit escaped, a value the iteration "
+            L"count does not hold.\nBinary Decomposition splits every band in two along the angle's sign: the "
+            L"half where z escaped below the real axis moves by Escape Angle Amount cycles, which draws the "
+            L"classic checkerboard of the external rays.\nAngle Twist moves every pixel by Escape Angle Amount "
+            L"cycles per full turn of the angle, twisting the bands along the rays. A whole-number amount "
+            L"joins the bands where the angle wraps; any other leaves a seam there.\nThe angles come from the "
+            L"render of the current view. A view opened from a map file has none and is drawn as with None "
+            L"until it is recalculated, and video export does not use them yet.");
+        window->registerSliderInput(
+            L"Escape Angle Amount", &palette.escapeAngleAmount, -ShdPaletteAttribute::ESCAPE_ANGLE_AMOUNT_LIMIT,
+            ShdPaletteAttribute::ESCAPE_ANGLE_AMOUNT_LIMIT, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(-ShdPaletteAttribute::ESCAPE_ANGLE_AMOUNT_LIMIT,
+                                         ShdPaletteAttribute::ESCAPE_ANGLE_AMOUNT_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Escape Angle Amount",
+            L"How far Escape Angle Coloring moves the palette, in color cycles. 0.50 sets the two halves of "
+            L"Binary Decomposition half a cycle apart; negative values move the other way.");
+        window->setWindowCloseFunction([&settingsMenu] { settingsMenu.setCurrentActiveSettingsWindow(nullptr); });
+        settingsMenu.setCurrentActiveSettingsWindow(std::move(window), SettingsMenu::SettingsWindowKind::SHADER);
+    };
+    const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::ORBIT_TRAP = [](SettingsMenu &settingsMenu,
+                                                                                                 RenderScene &scene) {
+        auto &palette = scene.getAttribute().shader.palette;
+        auto window = std::make_unique<SettingsWindow>(L"Orbit Trap");
+        window->registerSectionHeader(L"Orbit Trap", false);
+        window->registerSelectionInput<ShdPalOrbitTrapColoring>(
+            L"Orbit Trap Coloring", &palette.orbitTrapColoring,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Coloring",
+            L"Colors each pixel by how close its orbit came to a trap shape, inside the set as well as outside.\n"
+            L"Cross Glow takes the nearest approach to the real and imaginary axes: the palette runs along that "
+            L"distance and the closest approaches glow.\nCellular takes the nearest and second nearest approach "
+            L"to the origin: each cell is colored by the iteration of its nearest approach and darkens toward "
+            L"the border where the two tie.\nShape takes the nearest approach to the Orbit Trap Shape set below and "
+            L"glows along that distance as Cross Glow does.\nThe traps come from the render of the current view. A view opened "
+            L"from a map file has none and is drawn as with None until it is recalculated. Keyframes generated "
+            L"with this on save their traps beside each map (.rftz), so the Timeline Editor preview and video "
+            L"export draw them too; keyframes generated with None draw as with None. Iterations skipped by MPA "
+            L"are not sampled; turn MPA off for the exact orbit.");
+        // The scene recalculates on its own when a shader change leaves the shape it measured behind.
+        const auto trapDouble = [](std::wstring &s) {
+            size_t parsed = 0;
+            const double value = std::stod(s, &parsed);
+            Parser::requireComplete(s, parsed);
+            return value;
+        };
+        const auto trapDoubleText = [](const double &v) { return std::format(L"{}", v); };
+        const auto trapRange = [](const double limit, const double low) {
+            return [limit, low](const double &v) { return std::isfinite(v) && v >= low && v <= limit; };
+        };
+        window->registerSelectionInput<ShdPalOrbitTrapShape>(
+            L"Orbit Trap Shape", &palette.orbitTrapShape,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Shape",
+            L"The trap Shape coloring measures each orbit point against, centered on Orbit Trap Center.\n"
+            L"Point is the distance to the center. Circle is the distance to the rim of a circle of Orbit Trap "
+            L"Radius. Cross is the distance to the nearer of two perpendicular lines, and Line the distance to "
+            L"one line, both turned by Orbit Trap Angle.\nGrid Points and Grid Lines measure to the nearest point "
+            L"or line of a square lattice Orbit Trap Radius apart, drawing tiles and mosaics. Rings measures to the "
+            L"nearest of the circles Orbit Trap Radius apart around the center. Polygon and Star measure to the "
+            L"outline of a regular polygon of Orbit Trap Sides sides, or a star of that many points, reaching "
+            L"Orbit Trap Radius from the center. Spiral measures along the radius to a spiral that moves out by "
+            L"Orbit Trap Radius per turn. All of these turn by Orbit Trap Angle except Rings, and with Radius 0 "
+            L"they measure as Point (Grid Lines as Cross).\nChanging the shape recalculates the view.");
+        window->registerTextInput<double>(
+            L"Orbit Trap Center Real", &palette.orbitTrapCenterReal, trapDoubleText, trapDouble,
+            trapRange(ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT, -ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Center Real",
+            L"Real part of the trap's center c on the complex plane, from -4 to 4. Shape only.");
+        window->registerTextInput<double>(
+            L"Orbit Trap Center Imaginary", &palette.orbitTrapCenterImag, trapDoubleText, trapDouble,
+            trapRange(ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT, -ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Center Imaginary",
+            L"Imaginary part of the trap's center c on the complex plane, from -4 to 4. Shape only.");
+        window->registerTextInput<double>(
+            L"Orbit Trap Radius", &palette.orbitTrapRadius, trapDoubleText, trapDouble,
+            trapRange(ShdPaletteAttribute::ORBIT_TRAP_RADIUS_MAX, 0.0),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Radius",
+            L"The circle's radius, the spacing of Grid Points, Grid Lines and Rings, the size of Polygon and Star, "
+            L"and the step per turn of Spiral, from 0 to 4. 0 measures exactly as Point. Point, Cross and Line do "
+            L"not use it.");
+        window->registerTextInput<double>(
+            L"Orbit Trap Angle", &palette.orbitTrapAngle, trapDoubleText, trapDouble,
+            trapRange(ShdPaletteAttribute::ORBIT_TRAP_ANGLE_LIMIT, -ShdPaletteAttribute::ORBIT_TRAP_ANGLE_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Angle",
+            L"Degrees the trap turns about its center, from -180 to 180; Point, Circle and Rings do not use it. "
+            L"The orbit itself is not turned.");
+        window->registerTextInput<uint32_t>(
+            L"Orbit Trap Sides", &palette.orbitTrapSides, Unparser::U_LONG, Parser::U_LONG,
+            [](const uint32_t &v) { return v >= ORBIT_TRAP_SIDES_MIN && v <= ORBIT_TRAP_SIDES_MAX; },
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Sides",
+            L"Polygon and Star only: the polygon's sides or the star's points, from 3 to 64. Changing it "
+            L"recalculates the view.\nUp/Down arrows nudge by 1 (Shift = 10).",
+            1.0);
+        window->registerSelectionInput<ShdPalOrbitTrapMapping>(
+            L"Orbit Trap Mapping", &palette.orbitTrapMapping,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Mapping",
+            L"Shape only: what the trap's colors follow.\nDistance runs the palette along the distance to the "
+            L"trap, as before. Angle turns the palette with the direction the orbit came from when it was nearest "
+            L"the trap, Orbit Trap Arms times per turn, drawing petals and rays. Bands lays the palette in rings "
+            L"of equal distance, a quarter cycle per halving times Orbit Trap Density, with a dark seam between "
+            L"rings.\nNo recalculation is needed.");
+        window->registerTextInput<uint32_t>(
+            L"Orbit Trap Arms", &palette.orbitTrapArms, Unparser::U_LONG, Parser::U_LONG,
+            [](const uint32_t &v) { return v >= 1 && v <= ShdPaletteAttribute::ORBIT_TRAP_ARMS_MAX; },
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Arms",
+            L"Shape with Angle mapping only: how many times the palette runs around one full turn, from 1 to 64. "
+            L"Whole numbers leave no seam where the angle wraps.\nUp/Down arrows nudge by 1 (Shift = 10).",
+            1.0);
+        window->registerCheckboxInput(
+            L"Orbit Trap Relief", &palette.orbitTrapRelief,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Relief",
+            L"Cross Glow and Shape only: draws the trap as a round, glossy tube instead of a glow. Orbit Trap Width "
+            L"sets the tube's radius, the trap's colors paint it, Orbit Trap Glow Color and Glow Strength set its "
+            L"highlight, and it is lit from the Slope light's Azimuth and Zenith. Outside the tube the picture "
+            L"only takes the tube's shadow.\nA Cross trap draws tubes along the Pickover stalks, a Circle draws "
+            L"rings and a Point draws spheres. Off draws exactly as before.");
+        window->registerSliderInput(
+            L"Orbit Trap Amount", &palette.orbitTrapAmount, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(0.0f, 1.0f),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Amount",
+            L"How much of the trap coloring is mixed over the iteration palette. 1.00 shows the trap alone.");
+        window->registerSliderInput(
+            L"Orbit Trap Width", &palette.orbitTrapWidth, -64.0f, ShdPaletteAttribute::ORBIT_TRAP_WIDTH_MAX,
+            Unparser::floatFixed(1), Parser::FLOAT,
+            ValidCondition::floatInRange(ShdPaletteAttribute::ORBIT_TRAP_WIDTH_MIN,
+                                         ShdPaletteAttribute::ORBIT_TRAP_WIDTH_MAX),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Width",
+            L"The trap distance where the glow falls to half, as a power of two: -5.0 is 1/32. Deep zooms bring "
+            L"the orbits far closer to the trap, so lower it there until the glow thins to lines again; values "
+            L"down to -100000 can be typed.");
+        window->registerSliderInput(
+            L"Orbit Trap Density", &palette.orbitTrapDensity, -ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT,
+            ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(-ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT,
+                                         ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Density",
+            L"How fast the palette runs across the trap: color cycles per ten halvings of the distance for "
+            L"Cross Glow, and per twelve iterations for Cellular.");
+        window->registerSelectionInput<ShdPalOrbitTrapRegion>(
+            L"Orbit Trap Region", &palette.orbitTrapRegion,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Region",
+            L"Which pixels the trap colors. Inside and Outside draws it everywhere. Outside Only leaves the pixels "
+            L"that reach Max Iterations, the black inside of the Mandelbrot set, in Mandelbrot Color. Inside Only "
+            L"draws it on those pixels alone and leaves the escaping ones on the iteration palette.");
+        window->registerSelectionInput<ShdPalOrbitTrapBlend>(
+            L"Orbit Trap Blend", &palette.orbitTrapBlend,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Blend",
+            L"How the trap is laid over the iteration palette, in the share Orbit Trap Amount sets.\nMix replaces "
+            L"the colors. Multiply darkens them by the trap. Screen only brightens, so the palette keeps its "
+            L"colors under the glow. Add adds the trap's light on top.");
+        window->registerSliderInput(
+            L"Orbit Trap Offset", &palette.orbitTrapOffset, -1.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(-1.0f, 1.0f),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Offset",
+            L"Moves the trap's colors along the palette, in color cycles.");
+        window->registerSliderInput(
+            L"Orbit Trap Animation Speed", &palette.orbitTrapAnimationSpeed,
+            -ShdPaletteAttribute::ORBIT_TRAP_SPEED_LIMIT, ShdPaletteAttribute::ORBIT_TRAP_SPEED_LIMIT,
+            Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(-ShdPaletteAttribute::ORBIT_TRAP_SPEED_LIMIT,
+                                         ShdPaletteAttribute::ORBIT_TRAP_SPEED_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Animation Speed",
+            L"Runs the trap's colors along the palette on their own, in color cycles per second, on top of the "
+            L"palette animation. 0 holds them still.");
+        window->registerCheckboxInput(
+            L"Orbit Trap Holds in Color Animation", &palette.orbitTrapHoldColorAnimation,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Holds in Color Animation",
+            L"Keeps the trap's colors still while the palette animates, so only the iteration bands move. Orbit "
+            L"Trap Animation Speed still runs them on their own.");
+        auto colorToColorRef = [](const glm::vec4 *color) {
+            return RGB(static_cast<BYTE>(std::round(std::clamp(color->r, 0.0f, 1.0f) * 255.0f)),
+                       static_cast<BYTE>(std::round(std::clamp(color->g, 0.0f, 1.0f) * 255.0f)),
+                       static_cast<BYTE>(std::round(std::clamp(color->b, 0.0f, 1.0f) * 255.0f)));
+        };
+        auto openColorPicker = [&scene, winPtr = window.get()](glm::vec4 *color) {
+            static COLORREF customColors[16] = {};
+            CHOOSECOLORW cc = {};
+            cc.lStructSize = sizeof(cc);
+            cc.hwndOwner = winPtr->getWindow();
+            cc.lpCustColors = customColors;
+            cc.rgbResult = RGB(static_cast<BYTE>(std::round(std::clamp(color->r, 0.0f, 1.0f) * 255.0f)),
+                               static_cast<BYTE>(std::round(std::clamp(color->g, 0.0f, 1.0f) * 255.0f)),
+                               static_cast<BYTE>(std::round(std::clamp(color->b, 0.0f, 1.0f) * 255.0f)));
+            cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+            if (NativeDialogs::chooseColor(&cc)) {
+                color->r = static_cast<float>(GetRValue(cc.rgbResult)) / 255.0f;
+                color->g = static_cast<float>(GetGValue(cc.rgbResult)) / 255.0f;
+                color->b = static_cast<float>(GetBValue(cc.rgbResult)) / 255.0f;
+                scene.getRequests().requestShader();
+            }
+        };
+        window->registerColorButton(
+            L"Orbit Trap Glow Color", L"Set Color...",
+            [colorToColorRef, colorPtr = &palette.orbitTrapGlowColor] { return colorToColorRef(colorPtr); },
+            [openColorPicker, colorPtr = &palette.orbitTrapGlowColor] { openColorPicker(colorPtr); },
+            L"Set Orbit Trap Glow Color",
+            L"Opens a color picker for the light drawn where the orbit nearly hits the trap.",
+            &palette.orbitTrapGlowColor);
+        window->registerSliderInput(
+            L"Orbit Trap Glow Strength", &palette.orbitTrapGlowStrength, 0.0f,
+            ShdPaletteAttribute::ORBIT_TRAP_GLOW_STRENGTH_MAX, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(0.0f, ShdPaletteAttribute::ORBIT_TRAP_GLOW_STRENGTH_MAX),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Glow Strength",
+            L"How bright that light is. 0 leaves only the palette colors of the trap.");
+        window->registerSliderInput(
+            L"Orbit Trap Glow Sharpness", &palette.orbitTrapGlowSharpness, ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN,
+            ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN,
+                                         ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Glow Sharpness",
+            L"How steeply the glow falls off around Orbit Trap Width. Higher values draw thin, crisp lines; "
+            L"lower values a wide, soft haze.");
+        window->registerSliderInput(
+            L"Orbit Trap Cell Border Width", &palette.orbitTrapCellBorderWidth,
+            ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN, ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX,
+            Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MIN,
+                                         ShdPaletteAttribute::ORBIT_TRAP_SHAPE_MAX),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Cell Border Width",
+            L"Cellular only: how far the dark border reaches in from the edge of each cell.");
+        window->registerSliderInput(
+            L"Orbit Trap Cell Border Darkness", &palette.orbitTrapCellBorderDarkness, 0.0f, 1.0f,
+            Unparser::floatFixed(2), Parser::FLOAT, ValidCondition::floatInRange(0.0f, 1.0f),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Cell Border Darkness",
+            L"Cellular only: how dark the border gets. 0 draws no border.");
+        window->setWindowCloseFunction([&settingsMenu] { settingsMenu.setCurrentActiveSettingsWindow(nullptr); });
+        settingsMenu.setCurrentActiveSettingsWindow(std::move(window), SettingsMenu::SettingsWindowKind::SHADER);
+    };
+
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::TEXTURE = [](SettingsMenu
                                                                                               &settingsMenu,
                                                                                           RenderScene
@@ -1563,6 +1830,44 @@ namespace merutilm::rff2 {
                      L"fill light.");
         studioSlider(L"Follow Light Direction", &slope_attr.studioEnvironmentFollow, 0.0f, 1.0f,
                      L"1 follows the specular light direction; 0 uses only Environment Rotation.");
+        window->registerSelectionInput<ShdStudioEnvironmentSource>(
+            L"Environment Source", &slope_attr.studioEnvironmentSource, [requestSlopeShader] { requestSlopeShader(); },
+            L"Environment Source",
+            L"What the base and clearcoat reflect. Two Colors is the original sky and ground light. Gradient "
+            L"lays four color stops from straight down to straight up, so the relief catches bright bands. "
+            L"A texture layer is read as a 360-degree panorama, its middle facing the viewer; the layer "
+            L"does not have to be on. Roughness blurs both.");
+        studioSlider(L"Environment Brightness", &slope_attr.environmentBrightness, 0.0f, 32.0f,
+                     L"How bright a white gradient stop or image pixel reflects, multiplied by Studio Reflections. "
+                     L"Values above 1 shine like lit softboxes. Two Colors keeps its own level.");
+        studioSlider(L"Gradient Stop 1 Position", &slope_attr.environmentStop1Position, 0.0f, 1.0f,
+                     L"Where this stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up.");
+        window->registerColorButton(
+            L"Gradient Stop 1 Color", L"Pick Color",
+            [colorToColorRef, colorPtr = &slope_attr.environmentStop1Color] { return colorToColorRef(colorPtr); },
+            [openColorPicker, colorPtr = &slope_attr.environmentStop1Color] { openColorPicker(colorPtr); },
+            L"Set Gradient Stop 1 Color", L"Color reflected at this stop.", &slope_attr.environmentStop1Color);
+        studioSlider(L"Gradient Stop 2 Position", &slope_attr.environmentStop2Position, 0.0f, 1.0f,
+                     L"Where this stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up.");
+        window->registerColorButton(
+            L"Gradient Stop 2 Color", L"Pick Color",
+            [colorToColorRef, colorPtr = &slope_attr.environmentStop2Color] { return colorToColorRef(colorPtr); },
+            [openColorPicker, colorPtr = &slope_attr.environmentStop2Color] { openColorPicker(colorPtr); },
+            L"Set Gradient Stop 2 Color", L"Color reflected at this stop.", &slope_attr.environmentStop2Color);
+        studioSlider(L"Gradient Stop 3 Position", &slope_attr.environmentStop3Position, 0.0f, 1.0f,
+                     L"Where this stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up.");
+        window->registerColorButton(
+            L"Gradient Stop 3 Color", L"Pick Color",
+            [colorToColorRef, colorPtr = &slope_attr.environmentStop3Color] { return colorToColorRef(colorPtr); },
+            [openColorPicker, colorPtr = &slope_attr.environmentStop3Color] { openColorPicker(colorPtr); },
+            L"Set Gradient Stop 3 Color", L"Color reflected at this stop.", &slope_attr.environmentStop3Color);
+        studioSlider(L"Gradient Stop 4 Position", &slope_attr.environmentStop4Position, 0.0f, 1.0f,
+                     L"Where this stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up.");
+        window->registerColorButton(
+            L"Gradient Stop 4 Color", L"Pick Color",
+            [colorToColorRef, colorPtr = &slope_attr.environmentStop4Color] { return colorToColorRef(colorPtr); },
+            [openColorPicker, colorPtr = &slope_attr.environmentStop4Color] { openColorPicker(colorPtr); },
+            L"Set Gradient Stop 4 Color", L"Color reflected at this stop.", &slope_attr.environmentStop4Color);
         studioSlider(L"Clearcoat", &slope_attr.studio.clearcoat, 0.0f, 1.0f,
                      L"Strength of a separate dielectric reflection layer, with attenuation of the base "
                      L"underneath. It uses the actual relief normal and remains visible at Specular "
@@ -1570,6 +1875,10 @@ namespace merutilm::rff2 {
         studioSlider(L"Coat Roughness", &slope_attr.studio.clearcoatRoughness, 0.04f, 1.0f,
                      L"Width of the clearcoat highlight and its studio reflection, independent of the base "
                      L"roughness.");
+        window->registerCheckboxInput(
+            L"Coat Softbox", &slope_attr.coatSoftbox, requestSlopeShader, L"Coat Softbox",
+            L"On reflects the key and fill lights in the clearcoat as small rectangular softboxes, so the "
+            L"highlights become crisp window shapes that bend with the relief. Off keeps round highlights.");
 
         studioSlider(L"Iridescence", &slope_attr.iridescence, 0, 1,
                      L"Artistic three-band thin-film tint on the base reflection; not spectral rendering.");
@@ -1978,6 +2287,9 @@ namespace merutilm::rff2 {
         controls->lustre.push_back(window->registerCheckboxInput(
             L"Invert Relief", &slope_attr.invertRelief, requestSlopeShader, L"Invert Relief",
             L"Inverts the Lustre height field before normal and AO evaluation."));
+        controls->lustre.push_back(window->registerCheckboxInput(
+            L"Waves on Clear Coat Only", &slope_attr.reliefWavesCoatOnly, requestSlopeShader, L"Waves on Clear Coat Only",
+            L"Relief Waves shape only the Studio clear-coat highlights, so they leave no dark bands in the shading."));
 
         // 0 to 10000 to six decimals, 0 being the shader's own off switch.
         auto reliefDepthValidCondition = [](const float &v) { return v >= 0.0f && v <= 10000.0f; };
@@ -2280,8 +2592,8 @@ namespace merutilm::rff2 {
             L"Set Rim Intensity", L"Sets the intensity of rim lighting (Fresnel effect).");
 
         controls->rimPower = window->registerSliderInput(
-            L"Rim Power", &slope_attr.rimPower, 1.0f, 64.0f, Unparser::floatFixed(0), Parser::FLOAT,
-            ValidCondition::floatInRange(1.0f, 64.0f), [requestSlopeShader] { requestSlopeShader(); },
+            L"Rim Power", &slope_attr.rimPower, 0.1f, 64.0f, Unparser::floatFixed(1), Parser::FLOAT,
+            ValidCondition::floatInRange(0.1f, 64.0f), [requestSlopeShader] { requestSlopeShader(); },
             L"Set Rim Power", L"Sets the falloff of rim lighting. Lower = wider rim.");
 
         // Rim color reuses the shared color-picker helpers defined at the top of this window.
@@ -2546,7 +2858,9 @@ namespace merutilm::rff2 {
             ShdEffectAttribute editingLayer;
             HWND enabled = nullptr;
             HWND syncColor = nullptr;
-            std::vector<HWND> type, blend, mask, rainShape;
+            ShdEffectVariant variant = ShdEffectVariant::RAIN_DROPS;
+            HWND type = nullptr;
+            std::vector<HWND> blend, mask;
             std::vector<std::pair<HWND, float *>> sliders;
             std::vector<HWND> swatches;
         };
@@ -2562,10 +2876,12 @@ namespace merutilm::rff2 {
         auto refreshEffectControls = [editor, panel] {
             panel->setCheckboxValue(editor->enabled, editor->editingLayer.enabled);
             panel->setCheckboxValue(editor->syncColor, editor->editingLayer.syncColorAnimation);
-            panel->setRadioValueByGroup(editor->type, std::any(editor->editingLayer.type));
+            editor->variant = effectVariantOf(editor->editingLayer);
+            const auto variants = Selectable::values<ShdEffectVariant>();
+            const auto selected = std::ranges::find(variants, editor->variant);
+            SendMessageW(editor->type, CB_SETCURSEL, selected == variants.end() ? 0 : selected - variants.begin(), 0);
             panel->setRadioValueByGroup(editor->blend, std::any(editor->editingLayer.blend));
             panel->setRadioValueByGroup(editor->mask, std::any(editor->editingLayer.mask));
-            panel->setRadioValueByGroup(editor->rainShape, std::any(editor->editingLayer.rainShape));
             for (auto [field, value] : editor->sliders) {
                 panel->setFloatValueByField(field, *value);
             }
@@ -2629,11 +2945,18 @@ namespace merutilm::rff2 {
         editor->enabled = window->registerCheckboxInput(
             L"Enabled", &editor->editingLayer.enabled, [commitEffect] { commitEffect(); }, L"Enable Effect",
             L"Apply this material to the fractal surface. The interior and empty background are untouched.");
-        editor->type = window->registerRadioButtonInput<ShdEffectType>(
-            L"Type", &editor->editingLayer.type, [commitEffect] { commitEffect(); }, L"Effect Type",
-            L"Rain creates moving rounded droplets or wet streaks on the fractal surface. Flame, Embers and "
-            L"Flow Light emit along its structure. Heat Haze and Ripples animate surface normals. Every type "
-            L"requires iteration-map data.");
+        editor->variant = effectVariantOf(editor->editingLayer);
+        editor->type = window->registerSelectionInput<ShdEffectVariant>(
+            L"Type", &editor->variant,
+            [editor, commitEffect] {
+                applyEffectVariant(editor->editingLayer, editor->variant);
+                commitEffect();
+            },
+            L"Effect Type",
+            L"The material and, in parentheses, its shape or style; Classic is each type's original look. "
+            L"Rain creates rounded droplets or wet streaks on the fractal surface. Flame, Embers and Flow "
+            L"Light emit along its structure. Ripples animate surface normals. Every type requires "
+            L"iteration-map data.");
         editor->blend = window->registerRadioButtonInput<ShdEffectBlend>(
             L"Blend", &editor->editingLayer.blend, [commitEffect] { commitEffect(); }, L"Blend",
             L"Normal replaces relief; Add accumulates relief and emission; Screen accumulates luminous "
@@ -2651,11 +2974,7 @@ namespace merutilm::rff2 {
             editor->sliders.emplace_back(field, value);
         };
         auto &effect = editor->editingLayer;
-        window->registerSectionHeader(L"Rain Shape");
-        editor->rainShape = window->registerRadioButtonInput<ShdRainShape>(
-            L"Rain Shape", &effect.rainShape, [commitEffect] { commitEffect(); }, L"Rain Shape",
-            L"Raindrops form rounded wet beads on the fractal surface. Water Streaks form elongated "
-            L"channels. Both follow the surface instead of falling across the screen.");
+        window->registerSectionHeader(L"Rain");
         slider(L"Drop Size", &effect.dropSize, 0.1f, 8.0f,
                L"Raindrop radius multiplier. 1 is approximately a 3-pixel surface radius at 720p, with "
                L"smaller and larger beads mixed together. Slope foreshortens the drops; dense surface detail "
@@ -2668,11 +2987,11 @@ namespace merutilm::rff2 {
                L"geometry.");
         slider(L"Density", &effect.density, 0, 1, L"Particle count or coverage. Zero removes the layer.");
         slider(L"Shape Length", &effect.length, 0.05f, 2,
-               L"Water Streaks and Embers: particle length. Flame: tongue extension. Mist and Heat Haze: "
+               L"Water Streaks and Embers: particle length. Flame: tongue extension. Mist: "
                L"cloud stretch. Ripples: ring spacing. Flow Light: lit segment length. Aurora: curtain "
                L"waviness. Raindrops use Drop Size instead.");
         slider(L"Shape Width", &effect.width, 0.1f, 10,
-               L"Water Streaks and Embers: particle thickness. Flame: tongue width. Mist and Heat Haze: "
+               L"Water Streaks and Embers: particle thickness. Flame: tongue width. Mist: "
                L"cloud spread. Ripples: ring thickness. Flow Light: band width. Aurora: curtain thickness. "
                L"Raindrops use Drop Size instead.");
         slider(L"Surface Depth", &effect.distortion, 0, 4,
@@ -2740,8 +3059,9 @@ namespace merutilm::rff2 {
                                                                                       RenderScene &scene) {
         auto &fog_attr = scene.getAttribute().shader.fog;
         auto &[radius, opacity, centerStart, centerInvert, rimMask, rimMaskBoost, rimBlur, focusAmount,
-               focusRatio, focusRange, focusFalloff, focusBlur, blurQuality, chaosAmount, chaosScale,
-               chaosThreshold, chaosTransition, chaosFeather, chaosBlur, chaosShade, chaosBlurAverage] =
+               focusRatio, focusRange, focusFalloff, focusBlur, focusSmoothKeyframes, blurQuality, chaosAmount, chaosScale,
+               chaosThreshold, chaosTransition, chaosFeather, chaosBlur, chaosShade, chaosBlurAverage, chaosInterior,
+               chaosEdgeProtection, chaosBokehShape, chaosBokehRotation, chaosBokehAspect] =
             fog_attr;
         auto window = std::make_unique<SettingsWindow>(L"Fog");
         window->registerTextInput<float>(
@@ -2810,6 +3130,7 @@ namespace merutilm::rff2 {
             HWND range = nullptr;
             HWND falloff = nullptr;
             HWND blur = nullptr;
+            HWND smooth = nullptr;
         };
         auto controls = std::make_shared<FocusControls>();
         auto updateEnabled = std::make_shared<std::function<void()>>();
@@ -2837,6 +3158,17 @@ namespace merutilm::rff2 {
             L"outside, 1 the last band before the interior.\nIt is a fraction rather than a count so the "
             L"band stays where you put it as the zoom deepens and the count grows with it. Animating it "
             L"across a video sends the focus through the structure.");
+        window->registerButton(
+            L"Pick Focus Depth", L"Pick",
+            [&scene, &fog_attr, winPtr = window.get(), controls] {
+                scene.beginFocusPick(winPtr->getWindow(), [&fog_attr, winPtr, controls] {
+                    winPtr->setFloatValueByField(controls->ratio, fog_attr.focusRatio);
+                });
+            },
+            L"Pick Focus Depth",
+            L"Press this, then click a spot on the fractal: Focus Depth moves to that pixel's iteration, so "
+            L"the sharp band runs through it. The black interior has no iteration and leaves the value as "
+            L"it is.");
 
         controls->range = window->registerSliderInput(
             L"Focus Range", &focusRange, 0.01f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
@@ -2863,6 +3195,13 @@ namespace merutilm::rff2 {
             L"outside the band is softened rather than half-replaced.\nUp/Down arrows nudge by 1 (Shift = "
             L"10).",
             1.0);
+
+        controls->smooth = window->registerCheckboxInput(
+            L"Smooth Focus Across Keyframes", &focusSmoothKeyframes, [requestFogShader] { requestFogShader(); },
+            L"Smooth Focus Across Keyframes",
+            L"Video only. With Auto Max Iteration the maximum iteration can change several times over at a "
+            L"keyframe, and the band, being a fraction of it, jumped there in one frame. On glides it between "
+            L"the two keyframes instead. Off keeps the band where earlier versions put it.");
 
         window->registerSectionHeader(L"Chaos Blur");
         window->registerSliderInput(
@@ -2905,11 +3244,39 @@ namespace merutilm::rff2 {
             L"Chaos Shade",
             L"Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, "
             L"fully selected regions turn black whatever Chaos Amount is.");
+        window->registerSliderInput(
+            L"Chaos Interior", &fog_attr.chaosInterior, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(0.0f, 1.0f), [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Interior",
+            L"Blurs areas that reach Max Iterations, such as the black interior of the Mandelbrot set. "
+            L"Zero leaves them sharp; higher values select them more strongly.");
         window->registerRadioButtonInput<ShdChaosBlurAverage>(
             L"Chaos Blur Averaging", &fog_attr.chaosBlurAverage, [&scene] { scene.getRequests().requestShader(); },
             L"Chaos Blur Averaging",
             L"Gamma Space keeps the dark gaps between bright details dark. Linear Space averages light "
             L"physically, so bright detail spreads and blurred regions come out brighter.");
+        window->registerCheckboxInput(
+            L"Chaos Edge Protection", &fog_attr.chaosEdgeProtection, [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Edge Protection",
+            L"On keeps smooth surfaces next to blurred regions from bleeding into the blur, so their "
+            L"outlines stay crisp. Off blurs every neighbouring pixel into the region, as earlier versions did.");
+        window->registerSelectionInput<ShdChaosBokehShape>(
+            L"Chaos Bokeh Shape", &fog_attr.chaosBokehShape, [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Bokeh Shape",
+            L"The outline of the blur: Circle, or a polygon with three to eight straight edges. Bright "
+            L"specks in blurred regions take this shape.");
+        window->registerSliderInput(
+            L"Chaos Bokeh Rotation", &fog_attr.chaosBokehRotation, 0.0f, 360.0f, Unparser::floatFixed(1),
+            Parser::FLOAT, ValidCondition::floatInRange(0.0f, 360.0f), [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Bokeh Rotation",
+            L"Turns the polygon outline, in degrees. With Circle it turns the stretch set by Chaos "
+            L"Bokeh Aspect.");
+        window->registerSliderInput(
+            L"Chaos Bokeh Aspect", &fog_attr.chaosBokehAspect, 0.25f, 4.0f, Unparser::floatFixed(2),
+            Parser::FLOAT, ValidCondition::floatInRange(0.25f, 4.0f), [&scene] { scene.getRequests().requestShader(); },
+            L"Chaos Bokeh Aspect",
+            L"Height over width of the outline. 1 keeps it even; above 1 stretches it vertically, below "
+            L"1 horizontally, at the same area.");
 
         *updateEnabled = [winPtr = window.get(), controls, &fog_attr] {
             const bool focusActive = fog_attr.focusAmount > 0.0f;
@@ -2922,6 +3289,7 @@ namespace merutilm::rff2 {
             enable(controls->range, focusActive);
             enable(controls->falloff, focusActive);
             enable(controls->blur, focusActive);
+            enable(controls->smooth, focusActive);
         };
         (*updateEnabled)();
 
@@ -3009,18 +3377,12 @@ namespace merutilm::rff2 {
             }
             struct ImportState {
                 ShdPaletteAttribute palette;
-                ShdColorAttribute color;
                 std::optional<ShdPaletteAttribute> previousPalette;
-                ShdColorAttribute previousColor{};
-                bool includeColor = false;
-                bool appliedColor = false;
                 HWND apply = nullptr;
                 HWND undo = nullptr;
-                HWND grade = nullptr;
             };
             auto state = std::make_shared<ImportState>();
             state->palette = std::move(scratch.palette);
-            state->color = scratch.color;
             auto window = std::make_unique<SettingsWindow>(L"Import Color - " + path->filename().wstring());
             auto *panel = window.get();
             window->registerSectionHeader(L"Palette preview");
@@ -3032,10 +3394,6 @@ namespace merutilm::rff2 {
                 drawPalettePreview(hdc, rc, state->palette, state->palette.colorSmoothing,
                                    state->palette.colorInterpolation);
             });
-            state->grade = window->registerCheckboxInput(
-                L"Color Correction", &state->includeColor, [] {}, L"Include Color Correction",
-                L"Also imports Gamma, Exposure, Hue, Saturation, Brightness and Contrast. Off imports only "
-                L"the palette.");
             state->apply = window->registerButton(
                 L"Import", L"Apply",
                 [state, panel, &settingsMenu, &scene] {
@@ -3046,14 +3404,8 @@ namespace merutilm::rff2 {
                     settingsMenu.closeShaderSettingsWindows();
                     auto &shader = scene.getAttribute().shader;
                     state->previousPalette.emplace(std::move(shader.palette));
-                    state->previousColor = shader.color;
-                    state->appliedColor = state->includeColor;
                     shader.palette = std::move(nextPalette);
-                    if (state->appliedColor) {
-                        shader.color = state->color;
-                    }
                     panel->setRowEnabled(state->apply, false);
-                    panel->setRowEnabled(state->grade, false);
                     panel->setRowEnabled(state->undo, true);
                     scene.getRequests().requestShader();
                 },
@@ -3070,17 +3422,13 @@ namespace merutilm::rff2 {
                     auto &shader = scene.getAttribute().shader;
                     shader.palette = std::move(*state->previousPalette);
                     state->previousPalette.reset();
-                    if (state->appliedColor) {
-                        shader.color = state->previousColor;
-                    }
                     panel->setRowEnabled(state->apply, true);
-                    panel->setRowEnabled(state->grade, true);
                     panel->setRowEnabled(state->undo, false);
                     scene.getRequests().requestShader();
                 },
                 L"Undo Color Import",
-                L"Restores the palette and any color correction replaced by this import. Later edits to "
-                L"those imported settings are also replaced. Available while this panel remains open.");
+                L"Restores the palette replaced by this import. Later edits to the imported palette are also "
+                L"replaced. Available while this panel remains open.");
             window->setRowEnabled(state->undo, false);
             window->registerButton(
                 L"Close", L"Close", [hwnd = window->getWindow()] { PostMessageW(hwnd, WM_CLOSE, 0, 0); },
@@ -3115,22 +3463,16 @@ namespace merutilm::rff2 {
                                        MB_OK | MB_ICONERROR);
             }
         };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::LOAD_PRESET =
-        [](SettingsMenu &settingsMenu, RenderScene &scene) {
-            // Every shader panel is bound to the values this replaces, so none of them can stay open.
-            settingsMenu.closeShaderSettingsWindows();
-            const auto path =
-                IOUtilities::ioFileDialog(L"Load Appearance Settings", Constants::Extension::DESC_SHADER_PRESET,
-                                          IOUtilities::OPEN_FILE, Constants::Extension::SHADER_PRESET);
-            if (path == nullptr) {
-                return;
-            }
-            if (ShaderPresetIO::load(*path, scene.getAttribute().shader)) {
-                scene.getRequests().requestShader();
-                CallbackFile::warnMissingTextureImages(scene.getAttribute().shader);
-            } else {
-                NativeDialogs::message(nullptr, L"Failed to load shader preset", L"Error",
-                                       MB_OK | MB_ICONERROR);
-            }
-        };
+    void CallbackShader::loadPreset(SettingsMenu &settingsMenu, RenderScene &scene,
+                                    const std::filesystem::path &path) {
+        // Every shader panel is bound to the values this replaces, so none of them can stay open.
+        settingsMenu.closeShaderSettingsWindows();
+        if (ShaderPresetIO::load(path, scene.getAttribute().shader)) {
+            scene.getRequests().requestShader();
+            CallbackFile::warnMissingTextureImages(scene.getAttribute().shader);
+        } else {
+            NativeDialogs::message(nullptr, L"Failed to load shader preset", L"Error",
+                                   MB_OK | MB_ICONERROR);
+        }
+    }
 } // namespace merutilm::rff2

@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-18.
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12
 //
 
 #pragma once
@@ -29,7 +30,9 @@ namespace merutilm::rff2 {
                                            const dex &offR = dex::ZERO, const dex &offI = dex::ZERO);
 
 
-        [[nodiscard]] double iterate(const dex &dcr, const dex &dci) const override;
+        using MandelbrotPerturbator::iterate;
+
+        [[nodiscard]] double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const override;
 
         std::unique_ptr<DeepMandelbrotPerturbator> reuse(const FractalAttribute &calc, const dex &dcMax,
                                                          ApproxTableCache &tableRef);

@@ -5,7 +5,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-24, 2026-08-25, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-24, 2026-10-25
 //
 
 #pragma once
@@ -32,6 +32,10 @@ namespace merutilm::rff2 {
         static constexpr uint32_t TARGET_I2MAP_SSBO_NORMAL_ITERATION = 0;
         static constexpr uint32_t BINDING_I2MAP_SSBO_ZOOMED = 1;
         static constexpr uint32_t TARGET_I2MAP_SSBO_ZOOMED_ITERATION = 0;
+        // Each keyframe's orbit traps, plane-major as OrbitTrapMatrix lays them out; one element long when the keyframe has none.
+        static constexpr uint32_t BINDING_I2MAP_SSBO_NORMAL_TRAP = 2;
+        static constexpr uint32_t BINDING_I2MAP_SSBO_ZOOMED_TRAP = 3;
+        static constexpr uint32_t TARGET_I2MAP_SSBO_TRAP = 0;
         static constexpr uint32_t SET_VIDEO = 1;
         static constexpr uint32_t SET_PALETTE = 2;
         static constexpr uint32_t SET_TIME = 3;
@@ -82,7 +86,8 @@ namespace merutilm::rff2 {
 
         void setCurrentFrame(float currentFrame, uint32_t frameIndex) const;
 
-        void setPalette(const ShdPaletteAttribute &palette);
+        // The slope supplies only the light the orbit trap relief is lit from.
+        void setPalette(const ShdPaletteAttribute &palette, const ShdSlopeAttribute &slope);
 
         void setPaletteDynamic(const ShdPaletteAttribute &palette);
 
@@ -114,6 +119,9 @@ namespace merutilm::rff2 {
 
         void setAllIterations(const std::vector<double> &normal, const std::vector<double> &zoomed) const;
 
+        // Null or a wrongly sized plane set leaves that keyframe without traps, which the shader draws as with the trap off.
+        void setAllTraps(const std::vector<float> *normal, const std::vector<float> *zoomed) const;
+
         void set2MapSize(const VkExtent2D &extent);
 
         void setInfo(double maxIteration, double normalMaxIteration, double zoomedMaxIteration) const;
@@ -124,8 +132,6 @@ namespace merutilm::rff2 {
         // Call it before the timeline replaces any of them, or the new speed is charged for time
         // it was not running. A backwards or long jump is a seek, and re-derives them instead.
         void advanceAnimationTo(double sec);
-
-        void seekAnimationTo(float sec) { phases.seekTo(sec); }
 
         void setTimelinePhases(const std::array<double, ShaderAnimationPhases::TIMELINE_AXIS_COUNT> &values,
                                double sec) { phases.setTimelinePhases(values, sec); }

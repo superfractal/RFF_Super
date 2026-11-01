@@ -1,5 +1,6 @@
 //
 // Created by Merutilm on 2025-05-18.
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -30,10 +31,6 @@ namespace merutilm::rff2 {
                                                                          actionPerRefCalcIteration);
 
 
-
-        dex real(uint64_t refIteration) const;
-
-        dex imag(uint64_t refIteration) const;
 
         size_t length() const override;
 

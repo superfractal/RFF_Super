@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25, 2026-10-28
 //
 
 #include "CustomMenu.hpp"
@@ -63,7 +64,8 @@ namespace merutilm::rff2 {
     struct CustomMenu::Impl {
         struct Popup {
             HWND window = nullptr;
-            int parent = 0, selected = -1, scroll = 0, capacity = 0, row = 0, edge = 0, scrollBand = 0;
+            int parent = 0, selected = -1, scroll = 0, capacity = 0, row = 0, separatorRow = 0, edge = 0,
+                scrollBand = 0;
             RECT bounds{};
             std::vector<int> items;
             std::unique_ptr<Bitmap> surface;
@@ -404,9 +406,32 @@ namespace merutilm::rff2 {
             }
             return {};
         }
+        int rowHeight(const Popup &p, int index) const {
+            return model.at(p.items[index]).separator ? p.separatorRow : p.row;
+        }
         RECT rowRect(const Popup &p, int index) const {
-            const int y = p.bounds.top + p.edge + p.scrollBand + (index - p.scroll) * p.row;
-            return {p.bounds.left + p.edge, y, p.bounds.right - p.edge, y + p.row};
+            int y = p.bounds.top + p.edge + p.scrollBand;
+            for (int i = p.scroll; i < index; ++i) {
+                y += rowHeight(p, i);
+            }
+            for (int i = index; i < p.scroll; ++i) {
+                y -= rowHeight(p, i);
+            }
+            return {p.bounds.left + p.edge, y, p.bounds.right - p.edge, y + rowHeight(p, index)};
+        }
+        // The row under a point this far below the first visible one, or past the end when none is.
+        int rowAt(const Popup &p, int y) const {
+            if (y < 0) {
+                return -1;
+            }
+            int index = p.scroll;
+            for (; index < int(p.items.size()); ++index) {
+                y -= rowHeight(p, index);
+                if (y < 0) {
+                    break;
+                }
+            }
+            return index;
         }
         bool present(Popup &p) {
             const int w = p.bounds.right - p.bounds.left, h = p.bounds.bottom - p.bounds.top;
@@ -505,14 +530,23 @@ namespace merutilm::rff2 {
             SelectObject(dc, old);
             ReleaseDC(bar, dc);
             const int maxHeight = monitor.rcWork.bottom - monitor.rcWork.top;
-            candidate.capacity = std::max(1, (maxHeight - 2 * candidate.edge) / candidate.row);
-            if (int(node.children.size()) > candidate.capacity) {
+            // A separator takes half a row, as a native one is far shorter than an item. A popup too
+            // long for the screen scrolls a whole row at a time, so there it keeps a full row.
+            candidate.separatorRow = candidate.row / 2;
+            int content = 0;
+            for (int i = 0; i < int(candidate.items.size()); ++i) {
+                content += rowHeight(candidate, i);
+            }
+            int h = 2 * candidate.edge + content;
+            candidate.capacity = int(node.children.size());
+            if (h > maxHeight) {
+                candidate.separatorRow = candidate.row;
                 candidate.scrollBand = px(18);
                 candidate.capacity =
                     std::max(1, (maxHeight - 2 * candidate.edge - 2 * candidate.scrollBand) / candidate.row);
+                candidate.capacity = std::min(candidate.capacity, int(node.children.size()));
+                h = 2 * candidate.edge + 2 * candidate.scrollBand + candidate.capacity * candidate.row;
             }
-            candidate.capacity = std::min(candidate.capacity, int(node.children.size()));
-            const int h = 2 * candidate.edge + 2 * candidate.scrollBand + candidate.capacity * candidate.row;
             candidate.bounds = MenuLayout::place(anchor, w, h, monitor.rcWork, depth > 0);
             if (selectFirst) {
                 for (int i = 0; i < int(candidate.items.size()); ++i) {
@@ -552,6 +586,7 @@ namespace merutilm::rff2 {
             popup->items = std::move(candidate.items);
             popup->selected = candidate.selected;
             popup->row = candidate.row;
+            popup->separatorRow = candidate.separatorRow;
             popup->edge = candidate.edge;
             popup->capacity = candidate.capacity;
             popup->scrollBand = candidate.scrollBand;
@@ -738,7 +773,7 @@ namespace merutilm::rff2 {
                     }
                     return true;
                 }
-                const int index = p.scroll + (localY - p.scrollBand) / p.row;
+                const int index = rowAt(p, localY - p.scrollBand);
                 if (index < 0 || index >= int(p.items.size()) || !selectable(p.items[index])) {
                     return true;
                 }
@@ -1139,9 +1174,6 @@ namespace merutilm::rff2 {
     }
     int CustomMenu::height() const {
         return impl->barHeight;
-    }
-    void CustomMenu::cancel() {
-        impl->cancel();
     }
     bool CustomMenu::requested() {
         wchar_t value[8]{};

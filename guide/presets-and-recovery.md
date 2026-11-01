@@ -1,5 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-25, 2026-10-28. -->
 # Presets, recovery, and diagnostics
 
 [Manual](user-manual.md) · [Calculation explanation](exploration-and-calculation.md)
@@ -46,7 +47,7 @@ The Shader preset menu groups **Palette**, **Stripe**, **Slope**, **Color**, **F
 
 Palette choices include classic/rainbow, random smooth, cinematic, natural, and glossy families. The visual and numerical behavior of palette interval, smoothing, phase, random recipes, import, and layer blending is covered in the [shader overview](shader-overview.md). Recipe-based palettes retain their preset ID and seed; use the same recipe/seed for reproducibility rather than manually recreating its displayed colors.
 
-**Load KFR Color** imports compatible KFR color information. **Import Color** provides color import through the palette module. These are color workflows, not general import of another renderer's entire calculation project. **Save Appearance Settings** and **Load Appearance Settings** provide `.rfsp` reuse within RFF_Super. Keep external texture images available when transferring an appearance.
+**Load KFR Color** opens the palette's KFR Color section, and **Import Color** its Colors from Settings section for RFC and RFSP files; in both, the file is read when chosen and then applied. These are color workflows, not general import of another renderer's entire calculation project. **Save Appearance Settings** writes `.rfsp` files and **Load File** opens them, for reuse within RFF_Super. Keep external texture images available when transferring an appearance.
 
 Example menu entries are collected from available files. Their count and names can differ between installations; an absent example file is not a missing rendering feature. See the [source menu mapping](feature-coverage.md) and [full shader fields](settings-reference.md).
 
@@ -62,6 +63,14 @@ After an abnormal close or an interrupted rendering session, the recovery prompt
 | **Ignore** | Starts with the default view; kept recovery settings remain available for manual opening. | You want to start normally and inspect recovery later. |
 
 The prompt may also show descriptive labels such as Resume rendering, Review settings, Keep only location, and Start fresh. **Generate** after review computes using the settings as they now stand. **Explore → Recompute** also releases the hold. This prevents an expensive restored configuration from immediately restarting before you can adjust it.
+
+## GPU shader preparation
+
+On a first start, **Preparing GPU shaders** compiles the surface shader, which can take about 25 seconds. **Skip** starts RFF_Super straight away: the picture shows its palette colors without relief, lighting or materials until the surface shader is ready, then switches to full shading by itself. Saving an image, the comparison render and turning Studio, Layer Order or an MFR HDR output on or off wait for the compilation with the preparation window up, so a saved picture always has full shading.
+
+## When the GPU stops responding
+
+Windows resets a GPU that stays busy with one piece of work for about 2 seconds. RFF_Super then explains that the GPU stopped responding and closes. A slower GPU reaches that limit at lower settings: lower **Supersampling**, **Clarity** or the resolution, and for video export raise **GPU Work Split** (Export > Keyframe Output), which splits each frame into smaller pieces of GPU work without changing the video. See [video export load](settings-reference.md#video-export-load).
 
 ## Diagnose an unexpected result
 

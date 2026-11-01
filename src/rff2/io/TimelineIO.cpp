@@ -3,7 +3,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31, 2026-09-01
 // Modified by Opus 5 on 2026-08-25, 2026-08-26
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-28
 //
 
 #include "TimelineIO.h"
@@ -97,6 +97,8 @@ namespace merutilm::rff2 {
         VidTimelineAttribute loadedTimeline = {};
         loadedTimeline.zoomOverlay.visible = out.zoomOverlay.visible;
         IOUtilities::readAndDecode(in, &loadedTimeline.enabled);
+        // Timeline Enabled has no control any more, so an Off saved by an older build is read as On.
+        loadedTimeline.enabled = true;
         uint32_t trackCount = 0;
         IOUtilities::readAndDecode(in, &trackCount);
         if (!checkCount(in, trackCount, MAX_TRACKS)) {

@@ -4,13 +4,15 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01
 //
 
 #include "NativeDialogs.hpp"
 #include "RenderScene.hpp"
 #include "../attr/NumericSettingLimits.hpp"
+#include "VideoPipelineWarmup.hpp"
 #include "VideoRenderScene.hpp"
+#include "SsaaResolve.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -30,6 +32,7 @@
 #include "../formula/DeepMandelbrotPerturbator.h"
 #include "../formula/LightMandelbrotPerturbator.h"
 #include "../formula/CustomFormulaPerturbator.h"
+#include "../formula/BuddhabrotPerturbator.h"
 #include "../locator/MandelbrotLocator.h"
 #include "../parallel/ParallelArrayDispatcher.h"
 #include "../parallel/ParallelDispatcher.h"
@@ -53,6 +56,9 @@
 #include "opencv2/opencv.hpp"
 #include "../io/KFRColorLoader.hpp"
 #include "../io/RecoveryIO.h"
+#include "../io/ConfigIO.h"
+#include "../io/MapLimits.hpp"
+#include <sstream>
 
 
 namespace merutilm::rff2 {
@@ -63,30 +69,24 @@ namespace merutilm::rff2 {
             if (!window) {
                 throw std::runtime_error("Failed to create video preparation window");
             }
-            struct WindowScope {
-                vkh::EngineRef engine;
-                HWND window;
-                uint32_t index = 1;
-                bool attached = false;
-                ~WindowScope() {
-                    if (attached) {
-                        engine.detachWindowContext(index);
-                    }
-                    DestroyWindow(window);
-                }
-            } scope{engine, window, hdr ? Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX
-                                        : Constants::VulkanWindow::VIDEO_WINDOW_ATTACHMENT_INDEX};
+            auto scope = std::make_unique<VideoPipelineWarmup::Window>(
+                engine, window, hdr ? Constants::VulkanWindow::VIDEO_PREPARATION_WINDOW_ATTACHMENT_INDEX
+                                    : Constants::VulkanWindow::VIDEO_WARMUP_WINDOW_ATTACHMENT_INDEX);
             auto attribute = source;
             attribute.render.ssaa = 1;
             attribute.video.data.sourceScale = 1;
             attribute.shader.slope.studio.use = false;
             attribute.shader.layerOrder.enabled = false;
-            auto *context = engine.attachWindowContext(window, scope.index);
-            scope.attached = true;
+            auto *context = engine.attachWindowContext(window, scope->index);
+            scope->attached = true;
             attribute.shader.hdr.use = hdr;
             const std::function<void()> prepareNext = hdr ? std::function<void()>{}
                                                           : [&] { prepareVideoPipelines(engine, source, true); };
-            VideoRenderScene scene(engine, *context, {32, 32}, attribute, prepareNext);
+            auto scene = std::make_unique<VideoRenderScene>(engine, *context, VkExtent2D{32, 32}, attribute,
+                                                            prepareNext);
+            if (scene->isSlopeDeferred()) {
+                VideoPipelineWarmup::hold(std::move(scope), std::move(scene));
+            }
         }
     }
 
@@ -105,6 +105,7 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::init() {
+        vkh::PipelinePreparation::trace("scene init begins");
         refreshCanvasExtent();
         refreshSharedImgContext();
         attachRenderContext();
@@ -114,6 +115,7 @@ namespace merutilm::rff2 {
         applyShaderAttr(attr);
         wndRequestFPS();
         requests.requestRecompute();
+        vkh::PipelinePreparation::trace("scene init ends");
     }
 
 
@@ -146,16 +148,6 @@ namespace merutilm::rff2 {
         wc.attachRenderContext<RCCPresent>(wc.core,
                                            [this] { return getSwapchainRenderContextExtent(); },
                                            swapchainImageContextGetter);
-    }
-
-    void RenderScene::resolveWindowResizeEnd() const {
-        if (wc.getWindow().isUnrenderable()) {
-            return;
-        }
-        wc.core.getLogicalDevice().waitDeviceIdle();
-
-        vkh::SwapchainRef swapchain = wc.getSwapchain();
-        swapchain.recreate();
     }
 
     void RenderScene::recoverStaleSwapchain() const {
@@ -204,7 +196,15 @@ namespace merutilm::rff2 {
     }
 
     void RenderScene::restoreSmoothZoomSource() {
-        if (!smoothZoomActive || smoothZoomCaptureWider || !smoothZoomOriginal) return;
+        if (!smoothZoomActive || !smoothZoomOriginal) return;
+        // A draft is too coarse to settle on, so the view on screen is calculated in full instead.
+        if (smoothZoomCaptureWider ? !smoothZoomCandidateFullQuality : smoothZoomSourceDraft) {
+            if (effectiveProjection(attr.fractal.projectionMethod) == FrtProjectionMethod::PLANAR)
+                attr.fractal = smoothNavigationCamera(smoothZoomView);
+            requests.requestRecompute();
+            return;
+        }
+        if (smoothZoomCaptureWider) return;
         state.cancel();
         pendingIterationLimit = 0;
         waitFramesInFlight();
@@ -214,6 +214,10 @@ namespace merutilm::rff2 {
         lastLogZoom = smoothZoomOriginalLog;
         const auto* source = reinterpret_cast<const double*>(renderer->iterationStagingBufferContext->getContext().mappedMemory);
         for (uint32_t i = 0; i < iterationMatrix->getLength(); ++i) iterationMatrix->storeRelaxed(i, source[i]);
+        // The angles staged with that picture are its own as well, so they come back with it.
+        const auto* angles = reinterpret_cast<const float*>(renderer->escapeAngleStagingBufferContext->getContext().mappedMemory);
+        for (uint32_t i = 0; i < escapeAngleMatrix->getLength(); ++i) escapeAngleMatrix->storeRelaxed(i, angles[i]);
+        orbitTrapMatrix->copyFrom(reinterpret_cast<const float*>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
         renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
         previewUploadPending = false;
         idleCompute = true;
@@ -223,8 +227,7 @@ namespace merutilm::rff2 {
     bool RenderScene::beginSmoothNavigation() {
         if (smoothZoomActive) return true;
         if (!smoothZoomEnabled || renderer->lastShadedFrame < 0 || computeHold || longJobBusy.load() ||
-            isVideoGenerationActive || isVideoExportActive ||
-            effectiveProjection(attr.fractal.projectionMethod) != FrtProjectionMethod::PLANAR) return false;
+            isVideoGenerationActive || isVideoExportActive) return false;
         state.cancel();
         idleCompute = true;
         previewUploadPending = false;
@@ -236,6 +239,7 @@ namespace merutilm::rff2 {
         smoothZoomActive = true;
         smoothZoomFailed = false;
         smoothZoomSourceExact = false;
+        smoothZoomSourceDraft = false;
         smoothZoomNeedsPreview = true;
         smoothZoomGeneration = 0;
         smoothZoomWasPaused = isPreviewAnimationPaused();
@@ -277,7 +281,9 @@ namespace merutilm::rff2 {
 
     void RenderScene::settleSmoothNavigation() {
         if (!smoothZoomActive) return;
-        if (smoothZoomView.scale != smoothZoomTarget.scale || smoothZoomView.x != smoothZoomTarget.x || smoothZoomView.y != smoothZoomTarget.y)
+        // A 360 view has no flat camera to stop part-way on, so it settles on the zoom it was heading for.
+        if (effectiveProjection(attr.fractal.projectionMethod) != FrtProjectionMethod::PLANAR) smoothZoomView = smoothZoomTarget;
+        else if (smoothZoomView.scale != smoothZoomTarget.scale || smoothZoomView.x != smoothZoomTarget.x || smoothZoomView.y != smoothZoomTarget.y)
             attr.fractal = smoothNavigationCamera(smoothZoomView);
         smoothZoomTarget = smoothZoomView;
         smoothZoomPending = 0;
@@ -306,6 +312,7 @@ namespace merutilm::rff2 {
             smoothZoomStarted = now;
             smoothZoomGeneration = 0;
             smoothZoomSourceExact = smoothZoomExactCandidate && smoothZoomCandidateFullQuality && !smoothZoomDirty && smoothZoomPending == 0;
+            smoothZoomSourceDraft = !smoothZoomCandidateFullQuality;
             if (!smoothZoomDirty && smoothZoomPending == 0) smoothZoomNeedsPreview = false;
         }
 
@@ -345,22 +352,34 @@ namespace merutilm::rff2 {
             return;
         }
 
-        if (smoothZoomGeneration != 0 && idleCompute.load() && !smoothZoomDirty) {
+        // A drag takes each finished preview that still holds the view, instead of waiting at the edge until the pointer rests.
+        if (smoothZoomGeneration != 0 && idleCompute.load() && (!smoothZoomDirty || smoothZoomDragging)) {
             if (completedComputeGeneration.load() != smoothZoomGeneration) {
-                smoothZoomGeneration = 0;
-                smoothZoomFailed = true;
-                previewUploadPending = false;
-                setStatusMessage(Constants::Status::RENDER_STATUS, L"Navigation stopped; move again to retry or press Escape");
+                if (!smoothZoomDirty) {
+                    smoothZoomGeneration = 0;
+                    smoothZoomFailed = true;
+                    previewUploadPending = false;
+                    setStatusMessage(Constants::Status::RENDER_STATUS, L"Navigation stopped; move again to retry or press Escape");
+                }
             } else if (SmoothZoomMotion::covered(SmoothZoomMotion::relative(smoothZoomView, smoothZoomCandidate))) {
                 waitFramesInFlight();
                 if (!smoothZoomCandidateFullQuality && smoothZoomPreviewMatrix) {
                     const auto pw = smoothZoomPreviewMatrix->getWidth(), ph = smoothZoomPreviewMatrix->getHeight();
                     const auto fw = iterationMatrix->getWidth(), fh = iterationMatrix->getHeight();
+                    const bool angles = escapeAngleMatrix != nullptr && smoothZoomPreviewAngles != nullptr;
+                    // A shape setting changed since the draft started leaves its traps a plane count apart, so none are shown.
+                    const bool traps = orbitTrapMatrix != nullptr && smoothZoomPreviewTraps != nullptr &&
+                        orbitTrapMatrix->getPlaneCount() == smoothZoomPreviewTraps->getPlaneCount();
+                    if (!angles) clearEscapeAngles();
+                    else if (!traps && orbitTrapMatrix != nullptr) orbitTrapMatrix->clear();
                     for (uint16_t y = 0; y < fh; ++y) {
                         const auto sy = SmoothZoomMotion::previewPixel(y, ph, fh);
                         for (uint16_t x = 0; x < fw; ++x) {
                             const auto sx = SmoothZoomMotion::previewPixel(x, pw, fw);
-                            iterationMatrix->storeRelaxed(x, y, (*smoothZoomPreviewMatrix)(sx, sy));
+                            const auto i = smoothZoomPreviewMatrix->getIndex(sx, sy);
+                            iterationMatrix->storeRelaxed(x, y, smoothZoomPreviewMatrix->loadRelaxed(i));
+                            if (angles) escapeAngleMatrix->storeRelaxed(x, y, smoothZoomPreviewAngles->loadRelaxed(i));
+                            if (traps) orbitTrapMatrix->storeRelaxed(x, y, smoothZoomPreviewTraps->loadRelaxed(i));
                         }
                     }
                 }
@@ -379,13 +398,16 @@ namespace merutilm::rff2 {
         if (!smoothZoomDragging && !smoothZoomSourceExact && !smoothZoomFailed && smoothZoomGeneration == 0 &&
             now - smoothZoomInputAt >= std::chrono::milliseconds(80) && seconds >= SmoothZoomMotion::duration)
             smoothZoomDirty = true;
+        // A drag lets its preview finish, since one restarted every 100 ms may never arrive while the pointer moves.
         if (smoothZoomDirty &&
-            (idleCompute.load() || now - smoothZoomComputeAt >= std::chrono::milliseconds(100))) {
-            smoothZoomExactCandidate = SmoothZoomMotion::covered(smoothZoomTarget) && !smoothZoomDragging;
+            (idleCompute.load() || (!smoothZoomDragging && now - smoothZoomComputeAt >= std::chrono::milliseconds(100)))) {
+            // A 360 view always calculates the target itself, since a wider flat frame is not a wider view of the sphere.
+            smoothZoomExactCandidate = (SmoothZoomMotion::covered(smoothZoomTarget) && !smoothZoomDragging) ||
+                effectiveProjection(attr.fractal.projectionMethod) != FrtProjectionMethod::PLANAR;
             smoothZoomCandidateFullQuality = smoothZoomExactCandidate && !smoothZoomNeedsPreview &&
                 now - smoothZoomInputAt >= std::chrono::milliseconds(200);
             smoothZoomCandidate = smoothZoomExactCandidate ? smoothZoomTarget :
-                SmoothZoomMotion::enclosing(smoothZoomView, smoothZoomTarget);
+                SmoothZoomMotion::enclosing(smoothZoomView, smoothZoomTarget, smoothZoomDragging ? 2.0 : 1.2);
             Attribute settings = attr;
             settings.fractal = smoothNavigationCamera(smoothZoomCandidate);
             if (!smoothZoomExactCandidate) {
@@ -413,7 +435,28 @@ namespace merutilm::rff2 {
             static_cast<float>(smoothZoomView.x), static_cast<float>(smoothZoomView.y));
     }
 
+    void RenderScene::collectDeferredPipelines() {
+        bool collected = renderer != nullptr && renderer->rendererSlope->collectDeferred();
+        collected = VideoPipelineWarmup::poll() || collected;
+        vkh::PipelinePreparation::pollDeferred();
+        // Kept as soon as it exists, so a session that ends any other way does not compile it again.
+        if (collected) {
+            vkh::PipelinePreparation::trace("surface shader swapped in");
+            wc.core.getLogicalDevice().savePipelineCache();
+        }
+    }
+
+    void RenderScene::awaitDeferredSlope() const {
+        if (renderer != nullptr) {
+            renderer->rendererSlope->awaitDeferred();
+        }
+    }
+
     void RenderScene::render(const bool present) {
+        if (static bool traced = false; !traced) {
+            traced = true;
+            vkh::PipelinePreparation::trace("first scene render");
+        }
         if (requests.defaultAttrRequested || requests.shaderRequested || requests.resizeRequested || requests.recomputeRequested) {
             if (requests.shaderRequested && !requests.defaultAttrRequested && !requests.resizeRequested && !requests.recomputeRequested)
                 restoreSmoothZoomSource();
@@ -431,6 +474,11 @@ namespace merutilm::rff2 {
                 attr.shader.slope.reliefZoomReference = attr.fractal.logZoom;
             ensureShaderFormat(attr.shader.sceneLinear());
             applyShaderAttr(attr);
+            // A shape the live planes were not measured with needs the orbits again, whichever control changed it.
+            if (const TrapShapeParams shape = TrapShapeParams::of(attr.shader.palette);
+                shape.enabled && shape != liveTrapShape) {
+                requests.requestRecompute();
+            }
             // The shader is where a change lands that never recomputes, so the snapshot has to
             // follow it here as well as at a compute - throttled, because a dragged slider asks
             // for this every frame.
@@ -447,7 +495,20 @@ namespace merutilm::rff2 {
             backgroundThreads.notifyAll();
         }
 
-        if (requests.recomputeRequested && !computeHold) {
+        // A padded 360 view whose source still holds reprojects the camera move; one whose source is still computing waits for it.
+        bool awaitingPanoramaSource = false;
+        if (requests.recomputeRequested && !computeHold && panoramaPreviewApplies(attr)) {
+            const auto key = panoramaSourceKeyOf(attr);
+            if (idleCompute.load() && !panoramaSourceKey.empty() && key == panoramaSourceKey) {
+                requests.recomputeRequested.exchange(false);
+                reprojectPanoramaView();
+            } else if (!idleCompute.load() && key == panoramaPendingKey &&
+                       panoramaPendingGeneration == computeGeneration.load()) {
+                awaitingPanoramaSource = true;
+            }
+        }
+
+        if (requests.recomputeRequested && !computeHold && !awaitingPanoramaSource) {
             ++previewRevision;
             if (attr.shader.slope.lustreRelief && attr.shader.slope.reliefZoomReference < 0.0f)
                 attr.shader.slope.reliefZoomReference = attr.fractal.logZoom;
@@ -494,6 +555,7 @@ namespace merutilm::rff2 {
         }
 
         renderer->passTimingEnabled = passTimingEnabled;
+        renderer->rendererPresent->setSsaaFilter(attr.render.ssaaFilter);
         if (renderer->execute()) {
             // A stale swapchain, not a resize: routing this through applyResize would cancel the
             // compute and hand back a freshly allocated iteration buffer, so a driver that keeps
@@ -528,7 +590,7 @@ namespace merutilm::rff2 {
             .render = [] {
                 auto r = RenderPresets::High().genRender();
                 r.linearInterpolation = false;
-                r.clarityMultiplier = 1.5f;
+                r.clarityMultiplier = 1.0f;
                 return r;
             }(),
             .shader = {
@@ -627,6 +689,29 @@ namespace merutilm::rff2 {
                     }
                     break;
                 }
+                if (isFocusPickActive()) {
+                    const auto onPicked = std::move(focusPickCallback);
+                    cancelFocusPick();
+                    SetCursor(LoadCursor(nullptr, IDC_ARROW));
+                    if (idleCompute.load() && renderer->iterationStagingBufferContext != nullptr) {
+                        const double it = (*renderer->iterationStagingBufferContext)(getMouseXOnIterationBuffer(),
+                                                                                     getMouseYOnIterationBuffer());
+                        using namespace SharedDescriptorTemplate;
+                        // The same maximum the fog pass divides by, so the band centres on exactly this count.
+                        const double maximum = renderer->rendererIteration->getDescriptor(GPCIterationPalette::SET_ITERATION)
+                            .get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO)->getHostObject()
+                            .get<double>(DescIteration::TARGET_UBO_ITERATION_MAX);
+                        // The interior and unfinished pixels carry no count the band could sit on.
+                        if (it > 0.0 && maximum > 0.0 && it < maximum) {
+                            attr.shader.fog.focusRatio = static_cast<float>(std::clamp(it / maximum, 0.0, 1.0));
+                            requests.requestShader();
+                        }
+                    }
+                    if (onPicked) {
+                        onPicked();
+                    }
+                    break;
+                }
                 if (wparam & MK_SHIFT) {
                     // Begin Shift+drag box-zoom: anchor the rubber-band rectangle.
                     boxZooming = true;
@@ -642,7 +727,8 @@ namespace merutilm::rff2 {
                 interactedMX = getMouseXOnIterationBuffer();
                 interactedMY = getMouseYOnIterationBuffer();
                 canvasDragging = true;
-                smoothZoomDragging = smoothZoomActive;
+                smoothZoomDragging = smoothZoomActive &&
+                    effectiveProjection(attr.fractal.projectionMethod) == FrtProjectionMethod::PLANAR;
                 SetCapture(wc.getWindow().getWindowHandle());
                 break;
             }
@@ -693,7 +779,8 @@ namespace merutilm::rff2 {
                     if (dx == 0 && dy == 0) {
                         break;
                     }
-                    if ((dx != 0 || dy != 0) && beginSmoothNavigation()) {
+                    if (effectiveProjection(attr.fractal.projectionMethod) == FrtProjectionMethod::PLANAR &&
+                        beginSmoothNavigation()) {
                         const auto w = getIterationBufferWidth(attr), h = getIterationBufferHeight(attr);
                         smoothZoomTarget.x += smoothZoomTarget.scale * static_cast<double>(dx) / w;
                         smoothZoomTarget.y -= smoothZoomTarget.scale * static_cast<double>(dy) / h;
@@ -704,6 +791,9 @@ namespace merutilm::rff2 {
                             dex::value((dx * std::sin(radians) + dy * std::cos(radians)) / resolution) / getDivisor(attr),
                             Perturbator::logZoomToExp10(attr.fractal.logZoom));
                         smoothZoomDragging = true;
+                        // A drag follows the pointer one to one instead of easing after it, held at the picture's edge until a wider one is calculated.
+                        if (const auto followed = SmoothZoomMotion::clampedInside(smoothZoomTarget); SmoothZoomMotion::covered(followed))
+                            smoothZoomView = followed;
                         retargetSmoothNavigation();
                         interactedMX = x;
                         interactedMY = y;
@@ -768,8 +858,7 @@ namespace merutilm::rff2 {
                 break;
             }
             case WM_MOUSEWHEEL: {
-                if (smoothZoomEnabled && !computeHold && !longJobBusy.load() && !isVideoExportActive &&
-                    effectiveProjection(attr.fractal.projectionMethod) == FrtProjectionMethod::PLANAR) {
+                if (smoothZoomEnabled && !computeHold && !longJobBusy.load() && !isVideoExportActive) {
                     smoothZoomPending += static_cast<double>(GET_WHEEL_DELTA_WPARAM(wparam)) / WHEEL_DELTA;
                     smoothZoomMouseX = getMouseXOnIterationBuffer();
                     smoothZoomMouseY = getMouseYOnIterationBuffer();
@@ -907,10 +996,75 @@ namespace merutilm::rff2 {
             return projectDirection(dx / len, dy / len, dz / len, h, limit, layout);
         }
 
+        // Catmull-Rom weights for the four source pixels around fraction t (Catmull & Rom 1974; see NOTICE).
+        std::array<double, 4> catmullRomWeights(const double t) {
+            const double t2 = t * t, t3 = t2 * t;
+            return {-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2};
+        }
+
+        // The source's value at (x0 + fx, y0 + fy) with a continuous slope, so Slope shows no source pixel grid where a 360
+        // view enlarges it; -1 where any of the 16 pixels is off the source or not an escaping count. Held inside the middle
+        // four pixels so the cubic never overshoots past a steep edge, as the keyframe relief does.
+        double cubicSourceValue(const Matrix<double> &source, const uint32_t x0, const uint32_t y0, const double fx,
+                                const double fy, const double maxIt) {
+            const uint32_t sw = source.getWidth(), sh = source.getHeight();
+            if (x0 < 1 || y0 < 1 || x0 + 2 >= sw || y0 + 2 >= sh) return -1.0;
+            const auto wx = catmullRomWeights(fx), wy = catmullRomWeights(fy);
+            double sum = 0.0, lo = maxIt, hi = 0.0;
+            for (uint32_t j = 0; j < 4; ++j) {
+                double row = 0.0;
+                for (uint32_t i = 0; i < 4; ++i) {
+                    const double v = source.loadRelaxed((y0 - 1 + j) * sw + x0 - 1 + i);
+                    if (v <= 0.0 || v >= maxIt) return -1.0;
+                    row += wx[i] * v;
+                    if ((i == 1 || i == 2) && (j == 1 || j == 2)) {
+                        lo = std::min(lo, v);
+                        hi = std::max(hi, v);
+                    }
+                }
+                sum += wy[j] * row;
+            }
+            return std::clamp(sum, lo, hi);
+        }
+
+        // The trap's distances at (x0 + fx, y0 + fy) with a continuous slope, as cubicSourceValue gives the count, so Orbit
+        // Trap Relief and glow show no source pixel grid; iterations, angle and status keep the nearest pixel's, having no mean.
+        void cubicTrapDistances(const OrbitTrapMatrix &traps, const uint32_t sw, const uint32_t sh, const uint32_t x0,
+                                const uint32_t y0, const double fx, const double fy, OrbitTrap &trap) {
+            if (x0 < 1 || y0 < 1 || x0 + 2 >= sw || y0 + 2 >= sh) return;
+            std::array<OrbitTrap, 16> taps;
+            for (uint32_t j = 0; j < 4; ++j)
+                for (uint32_t i = 0; i < 4; ++i) taps[j * 4 + i] = traps.loadRelaxed((y0 - 1 + j) * sw + x0 - 1 + i);
+            const auto wx = catmullRomWeights(fx), wy = catmullRomWeights(fy);
+            const auto blend = [&](float OrbitTrap::*field, const bool shape) {
+                double sum = 0.0, lo = OrbitTrap::FAR_LOG2, hi = OrbitTrap::HIT_LOG2;
+                for (uint32_t j = 0; j < 4; ++j) {
+                    for (uint32_t i = 0; i < 4; ++i) {
+                        const auto &tap = taps[j * 4 + i];
+                        const double v = tap.*field;
+                        // A distance never sampled, or floored at an exact hit, is a stand-in with no slope to follow.
+                        if (v >= OrbitTrap::FAR_LOG2 || v <= OrbitTrap::HIT_LOG2 * 0.5 ||
+                            (shape && tap.shapeStatus != OrbitTrap::STATUS_VALID)) return;
+                        sum += wx[i] * wy[j] * v;
+                        if ((i == 1 || i == 2) && (j == 1 || j == 2)) {
+                            lo = std::min(lo, v);
+                            hi = std::max(hi, v);
+                        }
+                    }
+                }
+                trap.*field = static_cast<float>(std::clamp(sum, lo, hi));
+            };
+            blend(&OrbitTrap::crossLog2, false);
+            blend(&OrbitTrap::pointLog2, false);
+            blend(&OrbitTrap::secondLog2, false);
+            if (traps.hasShapePlanes()) blend(&OrbitTrap::shapeLog2, true);
+        }
+
         // The plane offset a canvas pixel lands on, in canvas pixels, for whichever 360 mode is on.
         ProjectedPoint projectedOffsetPixels(const FractalAttribute &calc, const double px, const double py,
-                                             const double w, const double h, const double yaw) {
-            const double limit = panoramaLimit(calc, w, h);
+                                             const double w, const double h, const double yaw,
+                                             const double coverage = std::numeric_limits<double>::infinity()) {
+            const double limit = std::min(panoramaLimit(calc, w, h), coverage);
             if (effectiveProjection(calc.projectionMethod) == FrtProjectionMethod::PERSPECTIVE_360) {
                 constexpr double toRadians = std::numbers::pi / 180.0;
                 return cameraOffsetPixels(px, py, w, h, yaw,
@@ -1282,7 +1436,7 @@ namespace merutilm::rff2 {
             attr.fractal.center = fp_complex("0", "0",
                                              Perturbator::logZoomToExp10(attr.fractal.logZoom));
         }
-        if (preservedFormulaType == FractalFormulaType::CUSTOM) {
+        if (preservedFormulaType != FractalFormulaType::MANDELBROT) {
             if (!autoIterationCustomActive) {
                 autoIterationBackup = preservedAutoMaxIteration;
                 autoIterationCustomActive = true;
@@ -1298,7 +1452,7 @@ namespace merutilm::rff2 {
     void RenderScene::applyLoadedConfig() {
         pickedFreezeColors.clear();
         // The config restores the location, max-iteration and auto-iteration directly.
-        if (attr.fractal.formulaType == FractalFormulaType::CUSTOM) {
+        if (attr.fractal.formulaType != FractalFormulaType::MANDELBROT) {
             attr.fractal.autoMaxIteration = false;
             autoIterationCustomActive = true;
         } else {
@@ -1319,6 +1473,8 @@ namespace merutilm::rff2 {
         fr.autoIterationMultiplier = lf.autoIterationMultiplier;
         fr.formulaType = lf.formulaType;
         fr.customFormula = lf.customFormula;
+        fr.buddhabrotSamples = lf.buddhabrotSamples;
+        fr.buddhabrotMinIteration = lf.buddhabrotMinIteration;
         applyLoadedConfig();
     }
 
@@ -1463,6 +1619,7 @@ namespace merutilm::rff2 {
                 renderer->rendererIteration->pinnedTime = seconds;
                 applyShaderAttr(settings);
                 renderer->rendererIteration->phases.seekTo(seconds);
+                awaitDeferredSlope();
                 renderer->executeOffscreen();
                 const auto frame = renderer->getFrameIndex();
                 wc.getSyncObject().getFence(frame).wait();
@@ -1470,7 +1627,7 @@ namespace merutilm::rff2 {
                     SharedImageContextIndices::MF_MAIN_RENDER_IMAGE_SECONDARY)[frame];
                 auto pixels = readbackImageContextToMat(wc, image);
                 cv::cvtColor(pixels, pixels, cv::COLOR_RGBA2BGRA);
-                cv::resize(pixels, pixels, cv::Size(getClientWidth(), getClientHeight()), 0, 0, cv::INTER_AREA);
+                pixels = SsaaResolve::resize(pixels, cv::Size(getClientWidth(), getClientHeight()), attr.render.ssaaFilter);
                 pixels.convertTo(pixels, CV_8UC4, 1.0 / 257.0);
                 return pixels;
             };
@@ -1507,6 +1664,8 @@ namespace merutilm::rff2 {
         // predate the end of the render. Reading it back saved whatever rows the progressive renderer had
         // not reached yet, which showed up as horizontal bands on the render-priority row grid. One
         // offscreen frame off the finalized map removes the race, the same way the tiled export does.
+        // A saved image always carries the full surface shader, never the stand-in a skip draws.
+        awaitDeferredSlope();
         renderer->executeOffscreen();
 
         const uint32_t frameIndex = renderer->getFrameIndex();
@@ -1519,12 +1678,12 @@ namespace merutilm::rff2 {
         cv::cvtColor(img, img, cv::COLOR_RGBA2BGRA);
         bool saved = false;
         if (const uint32_t ssaa = attr.render.ssaa; ssaa > 1 && request.downsample) {
-            cv::Mat resized;
-            cv::resize(img, resized,
-                       // Clamped like the same divide in CPCImageRGBA2BGR and VideoWindow: a zero size made cv::resize throw.
-                       cv::Size(std::max(1, static_cast<int>(imgCtx.extent.width) / static_cast<int>(ssaa)),
-                                std::max(1, static_cast<int>(imgCtx.extent.height) / static_cast<int>(ssaa))),
-                       0, 0, cv::INTER_AREA);
+            const cv::Mat resized = SsaaResolve::resize(
+                img,
+                // Clamped like the same divide in CPCImageRGBA2BGR and VideoWindow: a zero size made cv::resize throw.
+                cv::Size(std::max(1, static_cast<int>(imgCtx.extent.width) / static_cast<int>(ssaa)),
+                         std::max(1, static_cast<int>(imgCtx.extent.height) / static_cast<int>(ssaa))),
+                attr.render.ssaaFilter);
             saved = IOUtilities::writeImage(request.filename, resized);
         } else {
             saved = IOUtilities::writeImage(request.filename, img);
@@ -1562,6 +1721,21 @@ namespace merutilm::rff2 {
         // flight out first is what makes the rewrite safe; it costs nothing on the frames that do
         // not snapshot, which is all but twenty a second.
         waitFramesInFlight();
+
+        // The angles go across whole: a pixel the compute has not reached still holds 0, which draws no angle coloring.
+        if (escapeAngleMatrix != nullptr && renderer->escapeAngleStagingBufferContext != nullptr &&
+            escapeAngleMatrix->getLength() == renderer->escapeAngleStagingBufferContext->getLength()) {
+            auto *angles = reinterpret_cast<float *>(renderer->escapeAngleStagingBufferContext->getContext().mappedMemory);
+            for (uint32_t i = 0, length = escapeAngleMatrix->getLength(); i < length; ++i) {
+                angles[i] = escapeAngleMatrix->loadRelaxed(i);
+            }
+        }
+        // The traps go across whole as well; an unreached pixel holds iteration 0, which draws no trap coloring.
+        if (orbitTrapMatrix != nullptr && renderer->orbitTrapStagingBufferContext != nullptr &&
+            static_cast<uint64_t>(orbitTrapMatrix->getLength()) * orbitTrapMatrix->getPlaneCount() ==
+            renderer->orbitTrapStagingBufferContext->getLength()) {
+            orbitTrapMatrix->copyTo(reinterpret_cast<float *>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
+        }
 
         // Read one element at a time rather than by block: the compute threads are still writing
         // this matrix, and only the relaxed accessor makes reading it as it fills defined.
@@ -1628,12 +1802,29 @@ namespace merutilm::rff2 {
                     const auto height = getIterationBufferHeight(attr);
                     auto staging = std::make_unique<GraphicsMatrixBuffer<double>>(
                         wc.core, width, height, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    auto angleStaging = std::make_unique<GraphicsMatrixBuffer<float>>(
+                        wc.core, width, height, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    angleStaging->fillZero();
+                    const uint32_t trapPlanes = orbitTrapMatrix != nullptr ? orbitTrapMatrix->getPlaneCount()
+                                                                           : orbitTrapPlaneCountOf(attr);
+                    auto trapStaging = std::make_unique<GraphicsMatrixBuffer<float>>(
+                        wc.core, width, static_cast<uint32_t>(height) * trapPlanes,
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    trapStaging->fillZero();
                     if (iterationMatrix != nullptr && iterationMatrix->getWidth() == width &&
                         iterationMatrix->getHeight() == height) {
                         staging->fill(iterationMatrix->getCanvas());
+                        if (escapeAngleMatrix != nullptr && escapeAngleMatrix->getLength() == angleStaging->getLength()) {
+                            angleStaging->fill(escapeAngleMatrix->getCanvas());
+                        }
+                        if (orbitTrapMatrix != nullptr && orbitTrapMatrix->getLength() == iterationMatrix->getLength()) {
+                            orbitTrapMatrix->copyTo(reinterpret_cast<float *>(trapStaging->getContext().mappedMemory));
+                        }
                     }
                     renderer->iterationStagingBufferContext = std::move(staging);
-                    renderer->rendererIteration->resetIterationBuffer(width, height);
+                    renderer->escapeAngleStagingBufferContext = std::move(angleStaging);
+                    renderer->orbitTrapStagingBufferContext = std::move(trapStaging);
+                    renderer->rendererIteration->resetIterationBuffer(width, height, trapPlanes);
                     renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
                     const auto blurExtent = getBlurredImageExtent();
                     const auto presentExtent = getSwapchainRenderContextExtent();
@@ -1657,6 +1848,10 @@ namespace merutilm::rff2 {
                 const auto pinned = renderer->rendererIteration->animationTimePinned;
                 const auto pinnedTime = renderer->rendererIteration->pinnedTime;
                 auto staging = std::move(renderer->iterationStagingBufferContext);
+                auto angleStaging = std::move(renderer->escapeAngleStagingBufferContext);
+                auto trapStaging = std::move(renderer->orbitTrapStagingBufferContext);
+                // The old renderer cannot go while its surface shader is still compiling.
+                awaitDeferredSlope();
                 renderer.reset();
                 refreshSharedImgContext(desired);
                 for (const auto &context : wc.getRenderContexts()) {
@@ -1669,7 +1864,16 @@ namespace merutilm::rff2 {
                         configurator->renderContextRefreshed();
                     }
                     renderer->iterationStagingBufferContext = std::move(staging);
-                    renderer->rendererIteration->resetIterationBuffer(getIterationBufferWidth(attr), getIterationBufferHeight(attr));
+                    renderer->escapeAngleStagingBufferContext = std::move(angleStaging);
+                    renderer->orbitTrapStagingBufferContext = std::move(trapStaging);
+                    const uint32_t iterationWidth = getIterationBufferWidth(attr);
+                    const uint32_t iterationHeight = getIterationBufferHeight(attr);
+                    // The kept staging buffer decides the plane count, since every frame copies it whole.
+                    const uint64_t trapPixels = static_cast<uint64_t>(iterationWidth) * iterationHeight;
+                    const auto trapPlanes = static_cast<uint32_t>(
+                        trapPixels == 0 ? OrbitTrap::PLANE_COUNT
+                                        : renderer->orbitTrapStagingBufferContext->getLength() / trapPixels);
+                    renderer->rendererIteration->resetIterationBuffer(iterationWidth, iterationHeight, trapPlanes);
                     renderer->rendererIteration->setMaxIteration(maximum);
                     renderer->rendererIteration->phases = phases;
                     renderer->rendererIteration->previewClock = previewClock;
@@ -1689,8 +1893,9 @@ namespace merutilm::rff2 {
 
     void RenderScene::applyShaderAttr(const Attribute &attr) const {
         wc.core.getLogicalDevice().waitDeviceIdle();
-        renderer->rendererIteration->setPalette(attr.shader.palette);
-        renderer->rendererIteration->setTextures(attr.shader.textures, warpSourceLayer(attr.shader.warp));
+        renderer->rendererIteration->setPalette(attr.shader.palette, attr.shader.slope);
+        renderer->rendererIteration->setTextures(attr.shader.textures, warpSourceLayer(attr.shader.warp),
+                                                 environmentSourceLayerMask(attr.shader.slope.studioEnvironmentSource));
         renderer->rendererIteration->setPattern(attr.shader.patterns);
         renderer->rendererIteration->setWarp(attr.shader.warp);
         renderer->rendererStripe->setStripe(attr.shader.stripe);
@@ -1725,17 +1930,56 @@ namespace merutilm::rff2 {
         renderer->rendererDownsampleForBlur->setRescaledResolution(0, {dWidth, dHeight});
         renderer->rendererDownsampleForBlur->setRescaledResolution(1, {dWidth, dHeight});
         renderer->rendererPresent->setRescaledResolution({sWidth, sHeight});
-        renderer->rendererIteration->resetIterationBuffer(iw, ih);
+        const uint32_t trapPlanes = orbitTrapPlaneCountOf(attr);
+        renderer->rendererIteration->resetIterationBuffer(iw, ih, trapPlanes);
         iterationMatrix = std::make_unique<Matrix<double> >(iw, ih);
         renderer->iterationStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<double> >(
             wc.core, iw, ih, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        // The picture a resize seeds carries no angles, so both start at 0.
+        escapeAngleMatrix = std::make_unique<Matrix<float> >(iw, ih);
+        renderer->escapeAngleStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<float> >(
+            wc.core, iw, ih, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        renderer->escapeAngleStagingBufferContext->fillZero();
+        orbitTrapMatrix = std::make_unique<OrbitTrapMatrix>(iw, ih, trapPlanes);
+        renderer->orbitTrapStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<float> >(
+            wc.core, iw, static_cast<uint32_t>(ih) * trapPlanes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        renderer->orbitTrapStagingBufferContext->fillZero();
+    }
+
+    uint32_t RenderScene::orbitTrapPlaneCountOf(const Attribute &settings) {
+        return OrbitTrap::planeCountFor(TrapShapeParams::of(settings.shader.palette).enabled);
+    }
+
+    void RenderScene::matchOrbitTrapPlanes(const Attribute &settings) {
+        const uint32_t planes = orbitTrapPlaneCountOf(settings);
+        if (orbitTrapMatrix == nullptr || renderer == nullptr || renderer->orbitTrapStagingBufferContext == nullptr ||
+            orbitTrapMatrix->getPlaneCount() == planes) {
+            return;
+        }
+        // The new planes start empty: the compute about to run fills them, and an empty pixel draws as with the trap off.
+        const uint16_t w = orbitTrapMatrix->getWidth();
+        const uint16_t h = orbitTrapMatrix->getHeight();
+        orbitTrapMatrix = std::make_unique<OrbitTrapMatrix>(w, h, planes);
+        renderer->orbitTrapStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<float> >(
+            wc.core, w, static_cast<uint32_t>(h) * planes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        renderer->orbitTrapStagingBufferContext->fillZero();
+        renderer->rendererIteration->resizeOrbitTrapBuffer(w, h, planes);
     }
 
     void RenderScene::initRenderer(bool prepareAll) {
         wc.core.getLogicalDevice().waitDeviceIdle();
         const std::function<void()> prepare = prepareAll ? std::function<void()>{[&] { prepareVideoPipelines(engine, attr); }} : std::function<void()>{};
+        // Skip may leave the surface shader compiling; a stand-in draws until render() collects it.
+        vkh::PipelinePreparation::DeferralScope deferral;
+        vkh::PipelinePreparation::trace("renderer build begins");
         renderer = std::make_unique<RenderSceneRenderer>(engine, wc.getAttachmentIndex(), prepare);
-        wc.core.getLogicalDevice().savePipelineCache();
+        vkh::PipelinePreparation::trace("renderer build ends");
+        // After a skip the surface shader is not in the cache yet; collectDeferredPipelines saves it once it is.
+        if (!vkh::PipelinePreparation::deferredPending()) {
+            wc.core.getLogicalDevice().savePipelineCache();
+        }
     }
 
 
@@ -1780,6 +2024,8 @@ namespace merutilm::rff2 {
             }
             ++previewRevision;
             releasedMatrix = std::move(iterationMatrix);
+            releasedEscapeAngleMatrix = std::move(escapeAngleMatrix);
+            releasedOrbitTrapMatrix = std::move(orbitTrapMatrix);
             previewImagesReleased = true;
             applyResize();
             return;
@@ -1789,6 +2035,8 @@ namespace merutilm::rff2 {
         iterationMatrix.reset();
         applyResize();
         std::unique_ptr<Matrix<double> > kept = std::move(releasedMatrix);
+        std::unique_ptr<Matrix<float> > keptAngles = std::move(releasedEscapeAngleMatrix);
+        std::unique_ptr<OrbitTrapMatrix> keptTraps = std::move(releasedOrbitTrapMatrix);
         if (kept == nullptr) {
             requests.requestRecompute();
             return;
@@ -1798,6 +2046,15 @@ namespace merutilm::rff2 {
             staging.getWidth() == kept->getWidth() && staging.getHeight() == kept->getHeight()) {
             staging.fill(kept->getCanvas());
             iterationMatrix = std::move(kept);
+            if (keptAngles != nullptr && keptAngles->getLength() == escapeAngleMatrix->getLength()) {
+                renderer->escapeAngleStagingBufferContext->fill(keptAngles->getCanvas());
+                escapeAngleMatrix = std::move(keptAngles);
+            }
+            if (keptTraps != nullptr && keptTraps->getLength() == orbitTrapMatrix->getLength() &&
+                keptTraps->getPlaneCount() == orbitTrapMatrix->getPlaneCount()) {
+                keptTraps->copyTo(reinterpret_cast<float *>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
+                orbitTrapMatrix = std::move(keptTraps);
+            }
             previewUploadPending = false;
             previewSeedGeneration = 0;
             return;
@@ -1805,6 +2062,23 @@ namespace merutilm::rff2 {
         // The window changed size during the export, so the kept map only seeds the view the recompute fills.
         seedPreviewFromMatrix(*kept);
         requests.requestRecompute();
+    }
+
+    void RenderScene::clearEscapeAngles() {
+        if (escapeAngleMatrix != nullptr) {
+            for (uint32_t i = 0, length = escapeAngleMatrix->getLength(); i < length; ++i) {
+                escapeAngleMatrix->storeRelaxed(i, 0.0f);
+            }
+        }
+        if (renderer != nullptr && renderer->escapeAngleStagingBufferContext != nullptr) {
+            renderer->escapeAngleStagingBufferContext->fillZero();
+        }
+        if (orbitTrapMatrix != nullptr) {
+            orbitTrapMatrix->clear();
+        }
+        if (renderer != nullptr && renderer->orbitTrapStagingBufferContext != nullptr) {
+            renderer->orbitTrapStagingBufferContext->fillZero();
+        }
     }
 
     void RenderScene::waitFramesInFlight() const {
@@ -1828,6 +2102,9 @@ namespace merutilm::rff2 {
         }
         // The frame recorded before this one copies out of the same buffer, so it has to be done with it before the picture below is rewritten in place.
         waitFramesInFlight();
+        // The magnified picture keeps its iterations but not the angles or traps laid out for the old view.
+        renderer->escapeAngleStagingBufferContext->fillZero();
+        renderer->orbitTrapStagingBufferContext->fillZero();
 
         auto *dst = reinterpret_cast<double *>(staging.getContext().mappedMemory);
         // The magnified picture reads pixels the same pass is overwriting, so the source is taken aside first.
@@ -1989,6 +2266,8 @@ namespace merutilm::rff2 {
         renderer->rendererIteration->setMaxIteration(static_cast<double>(map.getMaxIteration()));
         renderer->iterationStagingBufferContext->fill(map.getMatrix().getCanvas());
         iterationMatrix = std::move(loadedMatrix);
+        // A map file stores iterations only, so the opened view has no escape angles.
+        clearEscapeAngles();
         lastLogZoom = map.getLogZoom();
         lastPeriod = map.getPeriod();
         lastMaxIteration = map.getMaxIteration();
@@ -2654,11 +2933,17 @@ namespace merutilm::rff2 {
         // uniform buffer the drawing reads, and a worker writing it alongside a frame in flight is
         // rewriting what the GPU is already fetching. Here the device is idle and nothing is.
         Attribute settings = overrideSettings ? *overrideSettings : attr; //clone the attr
+        // Nothing reads the trap buffers while the device is idle and no compute runs, so the shape planes come and go here.
+        matchOrbitTrapPlanes(settings);
+        liveTrapShape = orbitTrapMatrix != nullptr && orbitTrapMatrix->hasShapePlanes()
+                            ? TrapShapeParams::of(settings.shader.palette) : TrapShapeParams{};
         beforeCompute(settings);
         Attribute geometry = settings;
         ComputeProgress progress;
         const uint64_t fullPixels = static_cast<uint64_t>(getIterationBufferWidth(settings)) * getIterationBufferHeight(settings);
         smoothZoomPreviewMatrix.reset();
+        smoothZoomPreviewAngles.reset();
+        smoothZoomPreviewTraps.reset();
         if (lowResolution) {
             settings.render.ssaa = 1;
             settings.render.clarityMultiplier = SmoothZoomMotion::previewClarity(settings.render.clarityMultiplier,
@@ -2667,6 +2952,10 @@ namespace merutilm::rff2 {
                 settings.render.clarityMultiplier = geometry.render.clarityMultiplier * geometry.render.ssaa;
             settings.render.coarsePreview = false;
             smoothZoomPreviewMatrix = std::make_unique<Matrix<double>>(getIterationBufferWidth(settings), getIterationBufferHeight(settings));
+            // The draft carries its own angles and traps, so Escape Angle and Orbit Trap Coloring keep drawing while it is shown.
+            smoothZoomPreviewAngles = std::make_unique<Matrix<float>>(smoothZoomPreviewMatrix->getWidth(), smoothZoomPreviewMatrix->getHeight());
+            smoothZoomPreviewTraps = std::make_unique<OrbitTrapMatrix>(smoothZoomPreviewMatrix->getWidth(), smoothZoomPreviewMatrix->getHeight(),
+                orbitTrapPlaneCountOf(settings));
             smoothZoomDraftPixels = smoothZoomPreviewMatrix->getLength();
             smoothZoomDraftTicks = 0;
             progress.total = smoothZoomDraftPixels + fullPixels;
@@ -2678,20 +2967,42 @@ namespace merutilm::rff2 {
             smoothZoomDraftPixels = 0;
         } else smoothZoomDraftPixels = 0;
         auto* output = lowResolution ? smoothZoomPreviewMatrix.get() : iterationMatrix.get();
-        state.createThread([this, generation, output, progress, geometry = std::move(geometry), settings = std::move(settings)](const std::stop_token &) {
+        auto* outputAngles = smoothZoomPreviewAngles.get();
+        auto* outputTraps = smoothZoomPreviewTraps.get();
+        Attribute source = settings;
+        const bool panorama = !lowResolution && overrideSettings == nullptr && preparePanoramaSource(source, generation);
+        if (panorama) {
+            progress.total = static_cast<uint64_t>(getIterationBufferWidth(source)) * getIterationBufferHeight(source);
+        } else {
+            releasePanoramaSource();
+        }
+        state.createThread([this, generation, output, outputAngles, outputTraps, progress, panorama, source = std::move(source), geometry = std::move(geometry), settings = std::move(settings)](const std::stop_token &) {
             try {
-                const bool success = compute(settings, output, &geometry, &progress);
+                const bool success = panorama ? computePanoramaSource(source, settings, &progress)
+                                              : compute(settings, output, &geometry, &progress, outputAngles, outputTraps);
                 afterCompute(success, generation);
+            } catch (const std::bad_alloc &) {
+                afterCompute(false, generation);
+                if (generation == computeGeneration.load()) {
+                    reportComputeFailure(L"There is not enough memory. Lower Clarity, Supersampling or the resolution.");
+                }
             } catch (const std::exception &error) {
                 afterCompute(false, generation);
                 try {
                     vkh::logger::log_err_silent("Recompute failed: {}", error.what());
+                    if (generation == computeGeneration.load()) {
+                        const std::string what = error.what();
+                        reportComputeFailure(std::wstring(what.begin(), what.end()));
+                    }
                 } catch (...) {
                 }
             } catch (...) {
                 afterCompute(false, generation);
                 try {
                     vkh::logger::log_err_silent("Recompute failed with an unknown exception");
+                    if (generation == computeGeneration.load()) {
+                        reportComputeFailure(L"");
+                    }
                 } catch (...) {
                 }
             }
@@ -2732,6 +3043,8 @@ namespace merutilm::rff2 {
         if (calc.formulaType == FractalFormulaType::CUSTOM) {
              currentPerturbator = std::make_unique<CustomFormulaPerturbator>(
                  state, calc, static_cast<double>(dcMax));
+        } else if (calc.formulaType == FractalFormulaType::BUDDHABROT) {
+            currentPerturbator = std::make_unique<BuddhabrotPerturbator>(state, calc, static_cast<double>(dcMax));
         } else {
             switch (calc.reuseReferenceMethod) {
                 using enum FrtReuseReferenceMethod;
@@ -2802,7 +3115,7 @@ namespace merutilm::rff2 {
         if (reference == Constants::NullPointer::PROCESS_TERMINATED_REFERENCE || state.interruptRequested())
             return false;
 
-        if (calc.autoMaxIteration && calc.formulaType != FractalFormulaType::CUSTOM) {
+        if (calc.autoMaxIteration && calc.formulaType == FractalFormulaType::MANDELBROT) {
             calc.maxIteration = NumericSettingLimits::automaticIterationLimit(
                 reference->longestPeriod(), calc.autoIterationMultiplier);
             if (auto* p = dynamic_cast<LightMandelbrotPerturbator*>(currentPerturbator.get())) {
@@ -2832,10 +3145,137 @@ namespace merutilm::rff2 {
         return true;
     }
 
+    GpuLightPerturbator *RenderScene::gpuPerturbatorOrNull() {
+        if (gpuPerturbator != nullptr || gpuPerturbatorUnavailable) return gpuPerturbator.get();
+        try {
+            if (!GpuLightPerturbator::isSupported(wc.core)) {
+                gpuPerturbatorUnavailable = true;
+                vkh::logger::log_err_silent("GPU perturbation needs 64-bit shader integers; calculating on the CPU.");
+                postNotice(L"GPU Perturbation is not available on this GPU, so RFF_Super calculates on the CPU.",
+                           L"This GPU has no 64-bit shader integers.");
+                return nullptr;
+            }
+            gpuPerturbator = std::make_unique<GpuLightPerturbator>(wc.core);
+        } catch (const std::exception &error) {
+            gpuPerturbatorUnavailable = true;
+            vkh::logger::log_err_silent("GPU perturbation is unavailable: {}", error.what());
+            const std::string what = error.what();
+            postNotice(L"GPU Perturbation is not available on this GPU, so RFF_Super calculates on the CPU.",
+                       std::wstring(what.begin(), what.end()));
+        }
+        return gpuPerturbator.get();
+    }
+
+    std::vector<double> RenderScene::gpuPixelOffsets(const Attribute &attr, const LightMandelbrotPerturbator &perturbator,
+                                                     const PixelCoordinate &coordinate, const uint16_t w,
+                                                     const uint16_t h) const {
+        // The CPU iterate() adds the reuse offset in double after narrowing dc, so the same is done here.
+        const auto [offR, offI] = perturbator.getOffset();
+        std::vector<double> dc(static_cast<size_t>(w) * h * 2);
+        const uint32_t workerCount = std::max<uint32_t>(1u, attr.render.threads);
+        std::atomic<uint32_t> nextRow = 0;
+        std::vector<std::jthread> pool;
+        pool.reserve(workerCount);
+        for (uint32_t t = 0; t < workerCount; ++t) {
+            pool.emplace_back([&] {
+                for (uint32_t y = nextRow.fetch_add(1); y < h; y = nextRow.fetch_add(1)) {
+                    if (state.interruptRequested()) return;
+                    for (uint16_t x = 0; x < w; ++x) {
+                        bool sky = false;
+                        const auto c = coordinate(x, static_cast<uint16_t>(y), &sky);
+                        const size_t i = (static_cast<size_t>(y) * w + x) * 2;
+                        dc[i] = sky ? std::numeric_limits<double>::quiet_NaN() : static_cast<double>(c[0]) + offR;
+                        dc[i + 1] = sky ? 0.0 : static_cast<double>(c[1]) + offI;
+                    }
+                }
+            });
+        }
+        // Joins the workers before dc is handed back.
+        pool.clear();
+        return dc;
+    }
+
+    bool RenderScene::computeOnGpu(const Attribute &attr, const PixelCoordinate &coordinate, const uint16_t w,
+                                   const uint16_t h, Matrix<double> &matrix, Matrix<float> *escapeAngles,
+                                   OrbitTrapMatrix *traps, std::atomic<int> &renderPixelsCount) {
+        if (!attr.render.computeShader.use) return false;
+        const auto *light = dynamic_cast<const LightMandelbrotPerturbator *>(currentPerturbator.get());
+        if (light == nullptr || !GpuLightPerturbator::accepts(*light)) return false;
+        GpuLightPerturbator *gpu = gpuPerturbatorOrNull();
+        if (gpu == nullptr) return false;
+
+        const std::vector<double> dc = gpuPixelOffsets(attr, *light, coordinate, w, h);
+        // An interrupted compute is still this path's to finish; compute() sees the interruption and stops.
+        if (state.interruptRequested()) return true;
+
+        gpuComputing = true;
+        try {
+            gpu->render(state, *light, attr.fractal, attr.render.computeShader, w, h, dc, matrix, escapeAngles, traps,
+                        renderPixelsCount, {});
+            gpuComputing = false;
+            return true;
+        } catch (const std::exception &error) {
+            gpuComputing = false;
+            vkh::logger::log_err_silent("GPU perturbation failed, calculating on the CPU: {}", error.what());
+            const std::string what = error.what();
+            postNotice(L"GPU Perturbation stopped on an error, so this view is calculated on the CPU.",
+                       std::wstring(what.begin(), what.end()));
+            // The CPU path starts from the same blank matrix the GPU started from.
+            renderPixelsCount = 0;
+            for (uint32_t i = 0, length = matrix.getLength(); i < length; ++i) {
+                matrix.storeRelaxed(i, 0);
+            }
+            if (escapeAngles != nullptr) {
+                for (uint32_t i = 0, length = escapeAngles->getLength(); i < length; ++i) {
+                    escapeAngles->storeRelaxed(i, 0.0f);
+                }
+            }
+            if (traps != nullptr) traps->clear();
+            return false;
+        }
+    }
+
+    bool RenderScene::computeBuddhabrot(const Attribute &geometry, const uint16_t w, const uint16_t h,
+                                        const double fullW, const double fullH, Matrix<double> &matrix,
+                                        std::atomic<int> &renderPixelsCount) {
+        const auto *perturbator = dynamic_cast<const BuddhabrotPerturbator *>(currentPerturbator.get());
+        if (perturbator == nullptr) return false;
+        Attribute planar = geometry;
+        planar.fractal.projectionMethod = FrtProjectionMethod::PLANAR;
+        // A draft pixel x samples the full grid at (x + 0.5) * fullW / w - 0.5, so the map stays affine.
+        const double scaleX = fullW / w, scaleY = fullH / h;
+        const double firstX = 0.5 * scaleX - 0.5, firstY = 0.5 * scaleY - 0.5;
+        const double spanX = std::max(1, w - 1), spanY = std::max(1, h - 1);
+        const auto at = [this, &planar](const double x, const double y) {
+            const auto offset = offsetConversion(planar, x, y);
+            return std::array{static_cast<double>(offset[0]), static_cast<double>(offset[1])};
+        };
+        // Corners are sampled because the nudge off the reference only moves points next to the center.
+        const auto origin = at(firstX, firstY);
+        const auto right = at(firstX + scaleX * spanX, firstY);
+        const auto down = at(firstX, firstY + scaleY * spanY);
+        const BuddhabrotPlane plane{
+            origin[0], origin[1],
+            (right[0] - origin[0]) / spanX, (right[1] - origin[1]) / spanX,
+            (down[0] - origin[0]) / spanY, (down[1] - origin[1]) / spanY
+        };
+        return perturbator->render(plane, matrix, geometry.render.threads, renderPixelsCount);
+    }
+
     bool RenderScene::compute(const Attribute &requestedAttr, Matrix<double>* output, const Attribute* samplingGeometry,
-                              const ComputeProgress* requestedProgress) {
+                              const ComputeProgress* requestedProgress, Matrix<float>* angleOutput,
+                              OrbitTrapMatrix* trapOutput) {
         Attribute attr = requestedAttr;
         auto& matrix = output ? *output : *iterationMatrix;
+        // Angles are kept for the live view only; a low-resolution draft has nowhere to put them.
+        Matrix<float>* escapeAngles = angleOutput != nullptr ? angleOutput
+                                      : &matrix == iterationMatrix.get() ? escapeAngleMatrix.get() : nullptr;
+        // Traps are kept for the live view only, as the angles are; the 360 source and drafts carry none.
+        OrbitTrapMatrix* traps = angleOutput == nullptr && &matrix == iterationMatrix.get() &&
+                                 orbitTrapMatrix != nullptr && orbitTrapMatrix->getLength() == matrix.getLength()
+                                     ? orbitTrapMatrix.get() : nullptr;
+        // A caller handing its own trap matrix (the 360 source) gets the traps there instead.
+        if (trapOutput != nullptr && trapOutput->getLength() == matrix.getLength()) traps = trapOutput;
         const auto& geometry = samplingGeometry ? *samplingGeometry : attr;
         const ComputeProgress progress = requestedProgress ? *requestedProgress : ComputeProgress{};
         auto start = progress.start;
@@ -2862,6 +3302,9 @@ namespace merutilm::rff2 {
         const dex dcMax = dcMaxOf(geometry, static_cast<int>(fullW), static_cast<int>(fullH), 1);
 
         if (!buildPerturbator(attr, dcMax, start)) return false;
+        // The shape is measured only where there are planes to keep it.
+        currentPerturbator->setTrapShape(traps != nullptr && traps->hasShapePlanes()
+                                             ? TrapShapeParams::of(attr.shader.palette) : TrapShapeParams{});
 
 
         std::atomic renderPixelsCount = 0;
@@ -2871,12 +3314,19 @@ namespace merutilm::rff2 {
         for (uint32_t i = 0, matrixLength = matrix.getLength(); i < matrixLength; ++i) {
             matrix.storeRelaxed(i, 0);
         }
+        if (escapeAngles != nullptr) {
+            for (uint32_t i = 0, length = escapeAngles->getLength(); i < length; ++i) {
+                escapeAngles->storeRelaxed(i, 0.0f);
+            }
+        }
+        if (traps != nullptr) traps->clear();
 
         auto statusThread = std::jthread([&renderPixelsCount, &progress, progressTotal, this, &start](const std::stop_token &stop) {
             while (!stop.stop_requested()) {
                 float ratio = static_cast<float>(progress.before + renderPixelsCount.load()) / static_cast<float>(progressTotal) * 100;
                 setStatusMessage(Constants::Status::TIME_STATUS, Utilities::elapsed_time(start));
-                setStatusMessage(Constants::Status::RENDER_STATUS, std::format(L"C : {:.3f}%", ratio));
+                setStatusMessage(Constants::Status::RENDER_STATUS,
+                                 std::format(L"{} : {:.3f}%", gpuComputing.load() ? L"G" : L"C", ratio));
 
                 Sleep(Constants::Status::SET_PROCESS_INTERVAL_MS);
             }
@@ -2889,9 +3339,15 @@ namespace merutilm::rff2 {
         // White-tile fill assumes a binary in/out classification (no gradient
         // detail in the exterior), so it is gated on the 2-color preview mode.
         const bool useWhiteFill = useBoundaryTrace && attr.render.preview2Color;
-        previewFillDown = !useBoundaryTrace;
+        const bool buddhabrot = attr.fractal.formulaType == FractalFormulaType::BUDDHABROT;
+        // Each Buddhabrot pass writes the whole map, so its preview is shown as it stands.
+        previewFillDown = !useBoundaryTrace && !buddhabrot;
 
-        if (useBoundaryTrace) {
+        if (buddhabrot) {
+            computeBuddhabrot(geometry, w, h, fullW, fullH, matrix, renderPixelsCount);
+        } else if (computeOnGpu(attr, coordinate, w, h, matrix, escapeAngles, traps, renderPixelsCount)) {
+            // The GPU filled the matrix, or was interrupted while doing so.
+        } else if (useBoundaryTrace) {
             const uint16_t tileSize = std::clamp<uint16_t>(
                 static_cast<uint16_t>(std::min(w, h) / 8), 8, 32);
             constexpr double whiteFillValue = 1.0;
@@ -2901,13 +3357,17 @@ namespace merutilm::rff2 {
             const uint32_t numTiles = static_cast<uint32_t>(tilesX) * tilesY;
 
             std::atomic<uint32_t> tileIndex = 0;
-            const auto computePixel = [this, &coordinate, &matrix, &renderPixelsCount, useWhiteFill, maxItValue](
-                                          const uint16_t x, const uint16_t y) {
+            const auto computePixel = [this, &coordinate, &matrix, escapeAngles, traps, &renderPixelsCount, useWhiteFill,
+                                       maxItValue](const uint16_t x, const uint16_t y) {
                 bool sky = false;
                 const auto dc = coordinate(x, y, &sky);
-                const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
+                float angle = 0.0f;
+                OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
+                const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr);
                 const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
                 matrix.storeRelaxed(x, y, stored);
+                if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
+                if (traps != nullptr) traps->storeRelaxed(x, y, trap);
                 ++renderPixelsCount;
                 return it;
             };
@@ -3001,7 +3461,9 @@ namespace merutilm::rff2 {
 
                         bool sky = false;
                         const auto dc = coordinate(sx, sy, &sky);
-                        const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1]);
+                        float angle = 0.0f;
+                        OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
+                        const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr);
                         const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
 
                         const uint16_t bx1 = std::min<uint16_t>(sx + coarseStep, w);
@@ -3009,6 +3471,8 @@ namespace merutilm::rff2 {
                         for (uint16_t y = sy; y < by1; ++y) {
                             for (uint16_t x = sx; x < bx1; ++x) {
                                 matrix.storeRelaxed(x, y, stored);
+                                if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
+                                if (traps != nullptr) traps->storeRelaxed(x, y, trap);
                             }
                         }
                     }
@@ -3037,13 +3501,17 @@ namespace merutilm::rff2 {
             // front down as it uploads, which is what leaves this buffer to a single writer.
             auto previewer = ParallelArrayDispatcher<double>(
                 state, matrix, attr.render.threads,
-                [attr, this, &coordinate, &renderPixelsCount](const uint16_t x, const uint16_t y, uint16_t, uint16_t, float,
-                                                 float, uint32_t, double) {
+                [attr, this, &coordinate, escapeAngles, traps, &renderPixelsCount](const uint16_t x, const uint16_t y, uint16_t,
+                                                 uint16_t, float, float, uint32_t, double) {
                     bool sky = false;
                     const auto dc = coordinate(x, y, &sky);
+                    float angle = 0.0f;
+                    OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
                     const double iteration = sky
                                                  ? static_cast<double>(attr.fractal.maxIteration)
-                                                 : currentPerturbator->iterate(dc[0], dc[1]);
+                                                 : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr);
+                    if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
+                    if (traps != nullptr) traps->storeRelaxed(x, y, trap);
                     ++renderPixelsCount;
                     return iteration;
                 });
@@ -3106,6 +3574,216 @@ namespace merutilm::rff2 {
     }
 
 
+    void RenderScene::postNotice(std::wstring headline, std::wstring detail) {
+        std::scoped_lock lock(noticeMutex);
+        if (!postedNotices.insert(headline + L"\n" + detail).second) {
+            return;
+        }
+        pendingNotices.emplace_back(std::move(headline), std::move(detail));
+    }
+
+    void RenderScene::showPendingNotice() {
+        // A notice opened over another dialog, or over a job pumping messages, would stack on it.
+        if (NativeDialogs::isOpen() || isLongJobBusy()) {
+            return;
+        }
+        std::pair<std::wstring, std::wstring> notice;
+        {
+            std::scoped_lock lock(noticeMutex);
+            if (pendingNotices.empty()) {
+                return;
+            }
+            notice = std::move(pendingNotices.front());
+            pendingNotices.erase(pendingNotices.begin());
+        }
+        std::wstring text = UiLanguage::text(notice.first);
+        if (!notice.second.empty()) {
+            text.append(L"\n\n").append(UiLanguage::text(notice.second));
+        }
+        NativeDialogs::message(nullptr, text.c_str(), L"RFF_Super", MB_OK | MB_ICONWARNING);
+    }
+
+    void RenderScene::reportComputeFailure(std::wstring detail) {
+        setStatusMessage(Constants::Status::RENDER_STATUS, UiLanguage::text(L"Calculation failed"));
+        postNotice(L"The view could not be calculated. The picture on screen is the last one that finished.",
+                   std::move(detail));
+    }
+
+    bool RenderScene::panoramaPreviewApplies(const Attribute &settings) const {
+        // Video work reads the exact map of the view it is given, so it never gets the reprojected one.
+        // Past four times the view each way the source costs far more than the calculations it saves, so the view is calculated directly.
+        return settings.video.data.cameraPadding && settings.video.data.sourceScale == 1 && settings.video.data.cameraScale <= 4 &&
+               effectiveProjection(settings.fractal.projectionMethod) != FrtProjectionMethod::PLANAR &&
+               !isVideoGenerationActive.load() && !isVideoExportActive.load();
+    }
+
+    std::string RenderScene::panoramaSourceKeyOf(const Attribute &settings) const {
+        // Everything but the camera, the shader and the video settings other than the padding scale decides the planar source.
+        Attribute key = settings;
+        key.fractal.projectionMethod = FrtProjectionMethod::PLANAR;
+        key.fractal.rotation = 0.0f;
+        key.fractal.panoramaPitch = 0.0f;
+        key.fractal.panoramaFov = 0.0f;
+        key.fractal.panoramaRange = 0.0f;
+        key.fractal.panoramaLayout = FrtPanoramaLayout::GROUND;
+        key.fractal.reuseReferenceMethod = FrtReuseReferenceMethod::DISABLED;
+        key.shader = {};
+        // The shape trap is computed into the source, so its settings decide the source too.
+        if (const auto &palette = settings.shader.palette; TrapShapeParams::of(palette).enabled) {
+            key.shader.palette.orbitTrapColoring = palette.orbitTrapColoring;
+            key.shader.palette.orbitTrapShape = palette.orbitTrapShape;
+            key.shader.palette.orbitTrapCenterReal = palette.orbitTrapCenterReal;
+            key.shader.palette.orbitTrapCenterImag = palette.orbitTrapCenterImag;
+            key.shader.palette.orbitTrapRadius = palette.orbitTrapRadius;
+            key.shader.palette.orbitTrapAngle = palette.orbitTrapAngle;
+        }
+        key.video = {};
+        key.video.data.cameraPadding = true;
+        key.video.data.cameraScale = settings.video.data.cameraScale;
+        std::ostringstream out(std::ios::binary);
+        ConfigIO::write(out, key, getClientWidth(), getClientHeight());
+        return out.str();
+    }
+
+    bool RenderScene::preparePanoramaSource(Attribute &source, const uint64_t generation) {
+        if (!panoramaPreviewApplies(source)) return false;
+        const uint32_t scale = std::clamp<uint32_t>(source.video.data.cameraScale, 2, 64);
+        const uint32_t w = getIterationBufferWidth(source), h = getIterationBufferHeight(source);
+        source.fractal.projectionMethod = FrtProjectionMethod::PLANAR;
+        source.fractal.rotation = 0.0f;
+        source.video.data.sourceScale = scale;
+        const uint32_t sw = getIterationBufferWidth(source), sh = getIterationBufferHeight(source);
+        // An axis clamped to the buffer range would cover less than the scale promises, so the view is computed directly instead.
+        if (sw != w * scale || sh != h * scale || !MapLimits::valid(sw, sh)) {
+            vkh::logger::log("360 preview padding exceeds the map limits; computing the view directly.");
+            return false;
+        }
+        if (!panoramaSource || panoramaSource->getWidth() != sw || panoramaSource->getHeight() != sh) {
+            panoramaSource.reset();
+            panoramaSourceAngles.reset();
+            panoramaSourceTraps.reset();
+            panoramaSource = std::make_unique<Matrix<double>>(static_cast<uint16_t>(sw), static_cast<uint16_t>(sh));
+            panoramaSourceAngles = std::make_unique<Matrix<float>>(static_cast<uint16_t>(sw), static_cast<uint16_t>(sh));
+            panoramaSourceTraps.reset();
+        }
+        if (!panoramaSourceTraps || panoramaSourceTraps->getPlaneCount() != orbitTrapPlaneCountOf(source)) {
+            panoramaSourceTraps = std::make_unique<OrbitTrapMatrix>(static_cast<uint16_t>(sw), static_cast<uint16_t>(sh),
+                                                                    orbitTrapPlaneCountOf(source));
+        }
+        panoramaSourceKey.clear();
+        panoramaPendingKey = panoramaSourceKeyOf(attr);
+        panoramaPendingGeneration = generation;
+        // The view keeps its last picture until the reprojection replaces it whole.
+        previewSeedGeneration = generation;
+        return true;
+    }
+
+    bool RenderScene::computePanoramaSource(const Attribute &source, const Attribute &settings,
+                                            const ComputeProgress *progress) {
+        if (!compute(source, panoramaSource.get(), &source, progress, panoramaSourceAngles.get(),
+                     panoramaSourceTraps.get())) return false;
+        // Auto Max Iteration settles the limit inside the compute, so the source's own setting can be a stale guess.
+        panoramaSourceMax = static_cast<double>(lastMaxIteration);
+        reprojectPanoramaSource(settings);
+        panoramaSourceKey = panoramaPendingKey;
+        return true;
+    }
+
+    void RenderScene::reprojectPanoramaSource(const Attribute &settings) {
+        const auto &source = *panoramaSource;
+        const auto &sourceAngles = *panoramaSourceAngles;
+        auto &matrix = *iterationMatrix;
+        const uint16_t w = matrix.getWidth(), h = matrix.getHeight();
+        if (w != getIterationBufferWidth(settings) || h != getIterationBufferHeight(settings)) return;
+        const uint32_t sw = source.getWidth(), sh = source.getHeight();
+        const double radians = static_cast<double>(settings.fractal.rotation) * std::numbers::pi / 180.0;
+        // Held two pixels inside the source edge, in horizon radii, so every bilinear tap is a computed pixel.
+        const double coverage = std::max(0.0, (std::min(sw, sh) * 0.5 - 2.0) / (h * 0.5));
+        const double maxIt = panoramaSourceMax;
+        Matrix<float> *angles = escapeAngleMatrix && escapeAngleMatrix->getLength() == matrix.getLength()
+                                    ? escapeAngleMatrix.get() : nullptr;
+        const OrbitTrapMatrix *sourceTraps = panoramaSourceTraps && panoramaSourceTraps->getLength() == source.getLength()
+                                                 ? panoramaSourceTraps.get() : nullptr;
+        OrbitTrapMatrix *traps = orbitTrapMatrix && orbitTrapMatrix->getLength() == matrix.getLength()
+                                     ? orbitTrapMatrix.get() : nullptr;
+        std::atomic<uint32_t> nextRow = 0;
+        const auto worker = [&] {
+            for (uint32_t y; (y = nextRow.fetch_add(1)) < h;) {
+                for (uint16_t x = 0; x < w; ++x) {
+                    const auto p = projectedOffsetPixels(settings.fractal, x, y, w, h, radians, coverage);
+                    double value = maxIt;
+                    float angle = 0.0f;
+                    OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
+                    if (!p.sky) {
+                        // The planar source puts offset 0 at its middle, as offsetConversion does.
+                        const double sx = std::clamp(p.x + sw / 2.0, 0.0, sw - 1.0);
+                        const double sy = std::clamp(p.y + sh / 2.0, 0.0, sh - 1.0);
+                        const uint32_t x0 = std::min(static_cast<uint32_t>(sx), sw - 2);
+                        const uint32_t y0 = std::min(static_cast<uint32_t>(sy), sh - 2);
+                        const double fx = sx - x0, fy = sy - y0;
+                        const uint32_t taps[4] = {y0 * sw + x0, y0 * sw + x0 + 1, (y0 + 1) * sw + x0, (y0 + 1) * sw + x0 + 1};
+                        const double weights[4] = {(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy};
+                        // Interior taps carry no escape count to blend, so the pixel follows whichever side covers most of it, as the video camera does.
+                        double exterior = 0.0, sum = 0.0;
+                        // The heaviest tap on each side; angles and traps have no mean worth taking, so the pixel copies that tap's.
+                        int nearestExterior = -1, nearestInterior = -1;
+                        for (int i = 0; i < 4; ++i) {
+                            const double v = source.loadRelaxed(taps[i]);
+                            if (v <= 0.0) continue;
+                            int &nearest = v >= maxIt ? nearestInterior : nearestExterior;
+                            if (nearest < 0 || weights[i] > weights[nearest]) nearest = i;
+                            if (v >= maxIt) continue;
+                            exterior += weights[i];
+                            sum += weights[i] * v;
+                        }
+                        const int followed = exterior >= 0.5 ? nearestExterior : nearestInterior;
+                        if (exterior >= 0.5) {
+                            const double cubic = cubicSourceValue(source, x0, y0, fx, fy, maxIt);
+                            value = cubic > 0.0 ? cubic : sum / exterior;
+                            angle = sourceAngles.loadRelaxed(taps[followed]);
+                        }
+                        if (sourceTraps != nullptr && followed >= 0) {
+                            trap = sourceTraps->loadRelaxed(taps[followed]);
+                            cubicTrapDistances(*sourceTraps, sw, sh, x0, y0, fx, fy, trap);
+                        }
+                    }
+                    matrix.storeRelaxed(x, static_cast<uint16_t>(y), value);
+                    if (angles != nullptr) angles->storeRelaxed(x, static_cast<uint16_t>(y), angle);
+                    if (traps != nullptr) traps->storeRelaxed(x, static_cast<uint16_t>(y), trap);
+                }
+            }
+        };
+        std::vector<std::jthread> pool;
+        const uint32_t workerCount = std::max<uint32_t>(1u, settings.render.threads);
+        pool.reserve(workerCount);
+        for (uint32_t t = 0; t < workerCount; ++t) pool.emplace_back(worker);
+    }
+
+    void RenderScene::reprojectPanoramaView() {
+        state.cancel();
+        endMapBrowse();
+        endImageBrowse();
+        const uint64_t generation = ++computeGeneration;
+        ++previewRevision;
+        reprojectPanoramaSource(attr);
+        previewSeedGeneration = 0;
+        previewUploadPending = true;
+        completedComputeGeneration.store(generation);
+        idleCompute = true;
+        writeRecoverySnapshot(false);
+        backgroundThreads.notifyAll();
+    }
+
+    void RenderScene::releasePanoramaSource() {
+        panoramaSource.reset();
+        panoramaSourceAngles.reset();
+        panoramaSourceTraps.reset();
+        panoramaSourceKey.clear();
+        panoramaPendingKey.clear();
+        panoramaPendingGeneration = 0;
+    }
+
+
     void RenderScene::destroy() {
         state.cancel();
         if (boxZoomOverlay != nullptr) {
@@ -3113,7 +3791,15 @@ namespace merutilm::rff2 {
             boxZoomOverlay = nullptr;
         }
         destroyBoxZoomOverlayBitmap();
+        // Compiles a skip left running still read the warm-up scenes and this renderer's render passes.
+        // The main window is already gone, so they finish unseen; the cache saved at device teardown
+        // then holds the surface shader, and the next start needs no preparation for it.
+        vkh::PipelinePreparation::quietWaits = true;
+        VideoPipelineWarmup::drain();
+        awaitDeferredSlope();
+        vkh::PipelinePreparation::awaitAll();
         engine.getCore().getLogicalDevice().waitDeviceIdle();
+        gpuPerturbator = nullptr;
         renderer = nullptr;
     }
 }

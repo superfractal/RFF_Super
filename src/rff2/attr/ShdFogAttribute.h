@@ -2,12 +2,13 @@
 // Created by Merutilm on 2025-05-04.
 // Modified by Opus 5 on 2026-08-07, 2026-08-17, 2026-08-19
 // Modified by GPT-6 on 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-09
 //
 
 #pragma once
 
 #include "ShdChaosBlurAverage.h"
+#include "ShdChaosBokehShape.h"
 #include "ShdFogBlurQuality.h"
 
 namespace merutilm::rff2 {
@@ -34,6 +35,10 @@ namespace merutilm::rff2 {
         float focusRange = 0.25f;    // half-width of the sharp band
         float focusFalloff = 1.0f;   // curve out of the band; >1 holds the sharp part wider
         float focusBlur = 10.0f;     // blur radius at full defocus, in 1280-wide-relative pixels
+        // In a video, measures the band against a maximum iteration that glides between the two keyframes
+        // being shown instead of stepping at each switch, so an Auto Max Iteration jump no longer moves the
+        // band in one frame. Off keeps the stepped reference; files written before the setting read Off.
+        bool focusSmoothKeyframes = true;
 
         // Speed holds the two full-resolution blurs above to a 16-texel ceiling, which shrinks against
         // the frame as the render resolution grows; Appearance spends the radius they ask for instead.
@@ -51,5 +56,13 @@ namespace merutilm::rff2 {
         float chaosBlur = 4.0f;
         float chaosShade = 0.0f;
         ShdChaosBlurAverage chaosBlurAverage = ShdChaosBlurAverage::GAMMA;
+        // Selection strength given to pixels whose whole neighbourhood reaches Max Iterations; 0 leaves the interior sharp.
+        float chaosInterior = 0.0f;
+        // Each aperture tap counts only as far as its own blur reaches, so sharp surfaces stay out of the blurred regions.
+        bool chaosEdgeProtection = true;
+        // The aperture outline, its rotation in degrees and its height over width; Circle at 1 draws the round blur.
+        ShdChaosBokehShape chaosBokehShape = ShdChaosBokehShape::CIRCLE;
+        float chaosBokehRotation = 0.0f;
+        float chaosBokehAspect = 1.0f;
     };
 }

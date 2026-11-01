@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-09-10.
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
 // Modified by GPT-6 on 2026-09-23
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-07, 2026-10-08
 //
 
 #include "CPCImageRGBA2BGR.hpp"
@@ -39,12 +39,22 @@ namespace merutilm::rff2 {
         applyOutputSize();
     }
 
-    void CPCImageRGBA2BGR::setHdr(const bool use) {
-        if (use == hdr) {
+    void CPCImageRGBA2BGR::setTransfer(const VidHdrTransfer outputTransfer) {
+        if (outputTransfer == transfer) {
             return;
         }
-        hdr = use;
+        transfer = outputTransfer;
         applyOutputSize();
+    }
+
+    void CPCImageRGBA2BGR::setSsaaFilter(const RndSsaaFilter filter) {
+        if (filter == ssaaFilter) {
+            return;
+        }
+        ssaaFilter = filter;
+        const auto &ubo = *getDescriptor(SET_INFO).get<vkh::Uniform>(0, BINDING_OUTPUT_EXTENT_UBO);
+        ubo.getHostObject().set<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_SSAA_FILTER, static_cast<uint32_t>(filter));
+        ubo.update();
     }
 
     void CPCImageRGBA2BGR::applyOutputSize() {
@@ -59,11 +69,11 @@ namespace merutilm::rff2 {
         const uint64_t maxShaderInt = std::numeric_limits<int32_t>::max();
         const uint64_t maxHostBytes = std::numeric_limits<uint32_t>::max();
         if (pixels > maxShaderInt ||
-            (!hdr && pixels * 3 + 3 > maxShaderInt)) {
+            (!isHdr() && pixels * 3 + 3 > maxShaderInt)) {
             throw std::overflow_error("Video output exceeds compute shader index limits");
         }
         // Keep the SDR extra word used by the existing buffer layout.
-        const uint64_t words = hdr ? pixels * 2 : pixels * 3 / 4 + 1;
+        const uint64_t words = isHdr() ? pixels * 2 : pixels * 3 / 4 + 1;
         if (words > maxHostBytes / sizeof(uint32_t)) {
             throw std::overflow_error("Video output exceeds the host buffer size limit");
         }
@@ -81,7 +91,7 @@ namespace merutilm::rff2 {
         const auto &ubo = *desc.get<vkh::Uniform>(0, BINDING_OUTPUT_EXTENT_UBO);
         ubo.getHostObject().set<glm::uvec2>(TARGET_OUTPUT_EXTENT_UBO_EXTENT,
                                             glm::uvec2(outputExtent.width, outputExtent.height));
-        ubo.getHostObject().set<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_HDR, hdr ? 1u : 0u);
+        ubo.getHostObject().set<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_TRANSFER, static_cast<uint32_t>(transfer));
         ubo.update();
 
         // One invocation per destination pixel; the shader averages the source region it covers.
@@ -137,7 +147,8 @@ namespace merutilm::rff2 {
 
         auto uboManager = vkh::factory::create<vkh::HostDataObjectManager>();
         uboManager->reserve<glm::uvec2>(TARGET_OUTPUT_EXTENT_UBO_EXTENT);
-        uboManager->reserve<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_HDR);
+        uboManager->reserve<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_TRANSFER);
+        uboManager->reserve<uint32_t>(TARGET_OUTPUT_EXTENT_UBO_SSAA_FILTER);
         descManager->appendUBO(BINDING_OUTPUT_EXTENT_UBO, VK_SHADER_STAGE_COMPUTE_BIT,
                                vkh::factory::create<vkh::Uniform>(wc.core, std::move(uboManager),
                                                                   vkh::BufferLock::LOCK_UNLOCK, false));

@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-26
 //
 
 #pragma once
@@ -21,8 +22,12 @@
 namespace merutilm::rff2 {
     enum class FractalFormulaType {
         MANDELBROT = 0,
-        CUSTOM = 1
+        CUSTOM = 1,
+        BUDDHABROT = 2
     };
+
+    // Buddhabrot stays out of the menus, panels and settings files until its coloring is finished.
+    inline constexpr bool BUDDHABROT_AVAILABLE = false;
 
     struct FractalAttribute final {
         fp_complex center;
@@ -44,5 +49,7 @@ namespace merutilm::rff2 {
         float panoramaPitch = -90.0f; // degrees the 360 camera looks up (+) or down (-); -90 faces the view center
         float panoramaFov = 100.0f; // horizontal field of view of the 360 camera, in degrees
         FrtPanoramaLayout panoramaLayout = FrtPanoramaLayout::GROUND;
+        uint32_t buddhabrotSamples = 16; // random orbits started per iteration-buffer pixel
+        uint64_t buddhabrotMinIteration = 0; // orbits escaping in this many iterations or fewer are left out
     };
 }

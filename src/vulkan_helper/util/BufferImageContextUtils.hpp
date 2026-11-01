@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -119,42 +120,6 @@ namespace merutilm::vkh {
         }
 
         /**
-        * Creates image from file path. result layout is <b>VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL.</b>
-        */
-        static ImageContext imageFromPath(CoreRef core, CommandPoolRef commandPool, const VkFormat format,
-                                          const bool useMipmap,
-                                          const std::string_view path) {
-            const std::string terminatedPath(path);
-            int width = 0;
-            int height = 0;
-            int fileChannels = 0;
-            std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> data(
-                stbi_load(terminatedPath.c_str(), &width, &height, &fileChannels, STBI_rgb_alpha), &stbi_image_free);
-            if (data == nullptr || width <= 0 || height <= 0) {
-                throw exception_init("Failed to load texture");
-            }
-            // Whatever the file claims its size to be, the image has to be one the device will
-            // actually make: past this limit the create fails with the whole decoded picture, and
-            // the staging copy of it, already resident.
-            if (const VkPhysicalDeviceLimits &limits = core.getPhysicalDevice().getPhysicalDeviceProperties().limits;
-                static_cast<uint32_t>(width) > limits.maxImageDimension2D ||
-                static_cast<uint32_t>(height) > limits.maxImageDimension2D) {
-                throw exception_init("Texture is larger than this device allows");
-            }
-            // The count stb hands back is how many channels the file had, not how many it decoded
-            // to: the load above asks for four whatever the file holds. Sizing the staging buffer
-            // by the file's count leaves it short of the image being filled from it, so the copy
-            // reads past the end of the buffer. Four is what is in memory, and four is what is
-            // copied.
-            const ImageContext result = imageFromByteColorArray(core, commandPool, format,
-                                                                static_cast<uint32_t>(width),
-                                                                static_cast<uint32_t>(height), STBI_rgb_alpha,
-                                                                8, useMipmap,
-                                                                reinterpret_cast<std::byte *>(data.get()));
-            return result;
-        }
-
-        /**
          * Copies whole buffer.
          * @param commandBuffer The command buffer to record
          * @param srcBuffer The source buffer to copy.
@@ -232,36 +197,6 @@ namespace merutilm::vkh {
                                                 dstLayout, mipLevels - 1, 1,
                                                 VK_PIPELINE_STAGE_TRANSFER_BIT,
                                                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-        }
-
-        /**
-        * Copy source image to destination image. srcContext layout must be <b>VK_IMAGE_LAYOUT_TRANSFER_SRC_BIT,</b> and dstContext layout must be <b>VK_IMAGE_LAYOUT_TRANSFER_DST_BIT.</b>
-        */
-        static void cmdCopyEqualSizeImage(const VkCommandBuffer commandBuffer, const uint32_t mipLevel,
-                                          const ImageContext &srcContext, const ImageContext &dstContext) {
-            const VkImageCopy copyRegion = {
-                .srcSubresource = {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .mipLevel = mipLevel,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-                },
-                .srcOffset = {0, 0, 0},
-                .dstSubresource = {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .mipLevel = mipLevel,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-                },
-                .dstOffset = {0, 0, 0},
-                .extent = {
-                    .width = srcContext.extent.width,
-                    .height = srcContext.extent.height,
-                    .depth = 1
-                },
-            };
-            vkCmdCopyImage(commandBuffer, srcContext.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstContext.image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
         }
 
         /**

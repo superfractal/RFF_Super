@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-23, 2026-09-01
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-23
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-12, 2026-10-27
 //
 
 #include <chrono>
@@ -17,6 +17,8 @@
 #include <string>
 
 #include "Application.hpp"
+#include "UiLanguage.hpp"
+#include "CpuFeatures.hpp"
 #include "../io/PreferencesIO.h"
 #include "Utilities.h"
 #include "SettingsWindow.hpp"
@@ -121,22 +123,31 @@ void countLines() {
 }
 #endif
 
-// Catches a CPU-incompatible-build crash. The Release binary is compiled with
-// -march=native, so an older CPU that lacks the required instruction set (AVX,
-// FMA, ...) raises an illegal-instruction fault. Show a clear message instead
-// of terminating silently.
-static LONG WINAPI unsupportedCpuFilter(EXCEPTION_POINTERS *info) {
-    if (info && info->ExceptionRecord &&
-        info->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
-        MessageBoxW(nullptr,
-            L"Your CPU does not support the instruction set (AVX / FMA, etc.) this program requires.\n\n"
-            L"This build is optimized for the build machine's CPU (-march=native).\n"
-            L"Run on a newer CPU, or rebuild without -march=native for better compatibility.",
-            L"Unsupported CPU",
-            MB_OK | MB_ICONERROR);
-        return EXCEPTION_EXECUTE_HANDLER;
+// Constant data, so it is in place before CpuSupportCheck.cpp reads it ahead of every initializer.
+constinit const std::uint64_t merutilm::rff2::CpuFeatures::programFeatures =
+    merutilm::rff2::CpuFeatures::compiledHere();
+
+// A lost device reaches here under its Vulkan code name, which tells the reader nothing about what to change.
+static constexpr const char *DEVICE_LOST_EXPLANATION =
+    "The GPU stopped responding and Windows reset it, so RFF_Super has to close.\n\n"
+    "Windows does this when one piece of GPU work takes longer than about 2 seconds, which a slower GPU "
+    "reaches at lower settings. Lower Supersampling, Clarity or the resolution, or raise GPU Work Split "
+    "for video export.";
+
+static std::string explainFailure(const std::string &message) {
+    if (message.find("VK_ERROR_DEVICE_LOST") == std::string::npos) {
+        return message;
     }
-    return EXCEPTION_CONTINUE_SEARCH;
+    return std::string(DEVICE_LOST_EXPLANATION) + "\n\n" + message;
+}
+
+// explainFailure for the message box, in the interface language; the crash log keeps the English.
+static std::wstring localizedFailure(const std::string &message) {
+    using merutilm::rff2::UiLanguage;
+    if (message.find("VK_ERROR_DEVICE_LOST") == std::string::npos) {
+        return UiLanguage::utf8(message);
+    }
+    return UiLanguage::utf8(DEVICE_LOST_EXPLANATION) + L"\n\n" + UiLanguage::utf8(message);
 }
 
 // The text of whatever exception is being handled right now, or an empty string outside one.
@@ -159,7 +170,7 @@ static std::string activeExceptionText() {
 // where what happened is written down and said out loud instead of the program simply vanishing.
 [[noreturn]] static void reportFatalError() {
     const std::string text = activeExceptionText();
-    const std::string message = text.empty() ? "The program stopped on an unexpected error." : text;
+    const std::string message = text.empty() ? "The program stopped on an unexpected error." : explainFailure(text);
     try {
         const std::filesystem::path path = merutilm::rff2::Utilities::getDefaultPath() / L"recovery" / L"crash-report.log";
         std::filesystem::create_directories(path.parent_path());
@@ -171,7 +182,14 @@ static std::string activeExceptionText() {
     } catch (...) {
         // Reporting the failure must not fail in turn.
     }
-    MessageBoxA(nullptr, message.c_str(), "RFF_Super stopped", MB_OK | MB_ICONERROR);
+    try {
+        using merutilm::rff2::UiLanguage;
+        const std::wstring shown = text.empty() ? UiLanguage::text(L"The program stopped on an unexpected error.")
+                                                : localizedFailure(text);
+        MessageBoxW(nullptr, shown.c_str(), UiLanguage::text(L"RFF_Super stopped").c_str(), MB_OK | MB_ICONERROR);
+    } catch (...) {
+        MessageBoxA(nullptr, message.c_str(), "RFF_Super stopped", MB_OK | MB_ICONERROR);
+    }
     std::_Exit(3);
 }
 
@@ -184,7 +202,6 @@ static bool isVulkanGpuFailure(const std::string &message) {
 int main() {
     using namespace merutilm::rff2;
 
-    SetUnhandledExceptionFilter(unsupportedCpuFilter);
     std::set_terminate(reportFatalError);
 
     try {
@@ -203,20 +220,22 @@ int main() {
     } catch (const merutilm::vkh::exception &e) {
         if (isVulkanGpuFailure(e.what())) {
             MessageBoxW(nullptr,
-                L"No Vulkan-capable GPU was found.\n\n"
-                L"Possible causes:\n"
-                L"- The GPU (or its driver) does not support Vulkan\n"
-                L"- The graphics driver is outdated or not installed\n"
-                L"- No supported GPU (a Vulkan-capable discrete GPU) is present\n\n"
-                L"Install the latest GPU driver and try again.",
-                L"Unsupported GPU",
+                UiLanguage::text(L"No Vulkan-capable GPU was found.\n\n"
+                                 L"Possible causes:\n"
+                                 L"- The GPU (or its driver) does not support Vulkan\n"
+                                 L"- The graphics driver is outdated or not installed\n"
+                                 L"- No supported GPU (a Vulkan-capable discrete GPU) is present\n\n"
+                                 L"Install the latest GPU driver and try again.").c_str(),
+                UiLanguage::text(L"Unsupported GPU").c_str(),
                 MB_OK | MB_ICONERROR);
         } else {
-            MessageBoxA(nullptr, e.what(), "Error", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, localizedFailure(e.what()).c_str(), UiLanguage::text(L"Error").c_str(),
+                        MB_OK | MB_ICONERROR);
         }
         return 1;
     } catch (const std::exception &e) {
-        MessageBoxA(nullptr, e.what(), "Error", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, localizedFailure(e.what()).c_str(), UiLanguage::text(L"Error").c_str(),
+                    MB_OK | MB_ICONERROR);
         return 1;
     }
     return 0;

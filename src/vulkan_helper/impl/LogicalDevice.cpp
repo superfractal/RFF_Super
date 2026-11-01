@@ -3,9 +3,11 @@
 // Modified by Opus 5 on 2026-08-23
 // Modified by GPT-5 on 2026-08-23
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-13, 2026-10-21
 //
 
 #include "LogicalDevice.hpp"
+#include "PipelinePreparation.hpp"
 
 #include <array>
 #include <atomic>
@@ -141,6 +143,10 @@ namespace merutilm::vkh {
         if (pipelineCache == nullptr) {
             return;
         }
+        struct Trace {
+            Trace() { PipelinePreparation::trace("pipeline cache save begins"); }
+            ~Trace() { PipelinePreparation::trace("pipeline cache save ends"); }
+        } trace;
         size_t size = 0;
         if (allocator::invoke(vkGetPipelineCacheData, logicalDevice, pipelineCache, &size, nullptr) != VK_SUCCESS ||
             size == 0 || size > static_cast<size_t>(MAX_PIPELINE_CACHE_SIZE)) {

@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-15, 2026-09-19, 2026-09-22
+// Modified by Opus 5.5 on 2026-10-26, 2026-10-27
 //
 
 #include "UiLanguage.hpp"
@@ -81,8 +82,10 @@ namespace merutilm::rff2 {
                                       L"Generated recipe. ",
                                       L"Before edit: ",
                                       L"Search settings. ",
+                                      L"Search ",
                                       L"Rendering video: ",
                                       L"Video saved: ",
+                                      L"Image saved: ",
                                       L"Processing... ",
                                       L"Replace this file?\n\n"}) {
                 if (english.starts_with(prefix)) {

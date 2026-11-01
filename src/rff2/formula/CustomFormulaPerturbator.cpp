@@ -5,6 +5,7 @@
 // Modified by Opus 5 on 2026-08-06, 2026-08-16
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-10-01
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
 //
 
 #include "CustomFormulaPerturbator.h"
@@ -34,7 +35,9 @@ namespace merutilm::rff2 {
         return dex::value(dcMax);
     }
 
-    double CustomFormulaPerturbator::iterate(const dex& dcr, const dex& dci) const {
+    double CustomFormulaPerturbator::iterate(const dex& dcr, const dex& dci, float* escapeAngle, OrbitTrap* trap) const {
+         if (escapeAngle != nullptr) *escapeAngle = 0.0f;
+         if (trap != nullptr) *trap = OrbitTrap{};
          // If parse failed, return max iteration (treat all points as inside set)
          if (hasParseError) {
              return static_cast<double>(calc.maxIteration);
@@ -56,6 +59,12 @@ namespace merutilm::rff2 {
          
          double pd = 0.0; // previous distance
          double cd = 0.0; // current distance
+         OrbitTrapAccumulator<double> traps(trap != nullptr ? &trapShape : nullptr);
+         // Every exit below reports the traps gathered up to it.
+         const auto finish = [&](const double value) {
+             if (trap != nullptr) *trap = traps.result();
+             return value;
+         };
          
          for (uint64_t i = 0; i < maxIteration; ++i) {
              if (state.interruptRequested()) return 0.0;
@@ -70,20 +79,27 @@ namespace merutilm::rff2 {
 
              // Check for NaN or infinity (invalid formula result)
              if (!std::isfinite(z.real()) || !std::isfinite(z.imag())) {
-                 return static_cast<double>(escapeIteration);
+                 return finish(static_cast<double>(escapeIteration));
              }
              
              pd = cd;
              cd = std::norm(z);
              
              if (cd > bailout2) {
+                 if (escapeAngle != nullptr) *escapeAngle = escapeAngleOf(z.real(), z.imag());
                  // Apply smooth coloring like LightMandelbrotPerturbator
                  pd = std::sqrt(pd);
                  cd = std::sqrt(cd);
-                 return getPotentialDoubleValueIteration(escapeIteration, pd, cd, calc.decimalizeIterationMethod, bailout);
+                 return finish(getPotentialDoubleValueIteration(escapeIteration, pd, cd, calc.decimalizeIterationMethod, bailout));
+             }
+             if (trap != nullptr) {
+                 traps.sample(std::min(std::abs(z.real()), std::abs(z.imag())), cd, escapeIteration);
+                 if (traps.measuresShape()) {
+                     traps.sampleShape(z.real() - trapShape.centerReal, z.imag() - trapShape.centerImag, escapeIteration);
+                 }
              }
          }
          
-         return static_cast<double>(maxIteration);
+         return finish(static_cast<double>(maxIteration));
     }
 }

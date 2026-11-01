@@ -1,5 +1,5 @@
 # Modified by GPT-6 on 2026-09-20, 2026-09-21, 2026-09-24
-# Modified by Opus 5.5 on 2026-10-04
+# Modified by Opus 5.5 on 2026-10-04, 2026-11-01
 param(
     [string]$ServerConfig = (Join-Path (Split-Path $PSScriptRoot -Parent) 'config/local-ai-server.json'),
     [string]$ApplicationPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bin/RFF_Super.exe')
@@ -56,11 +56,11 @@ try {
     ) + @($config.arguments)
     if ($connection.vision) {
         if (-not $config.mmproj) {
-            throw 'Vision requires mmproj in local-ai-server.json. See documentation/notes/local-ai.md.'
+            throw 'Vision requires mmproj in local-ai-server.json. See guide/local-ai.md.'
         }
         $projectorPath = [IO.Path]::GetFullPath((Join-Path $projectRoot $config.mmproj))
         if (-not (Test-Path -LiteralPath $projectorPath -PathType Leaf)) {
-            throw "Vision projector not found: $projectorPath. See documentation/notes/local-ai.md."
+            throw "Vision projector not found: $projectorPath. See guide/local-ai.md."
         }
         $serverArguments += @('--mmproj', ('"' + $projectorPath + '"'))
     }

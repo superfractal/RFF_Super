@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
 // Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-25
 //
 
 #pragma once
@@ -61,11 +61,19 @@ namespace merutilm::rff2 {
 
         VideoRenderScene &operator=(VideoRenderScene &&) = delete;
 
-        void applyCurrentDynamicMap(const RFFDynamicMapBinary &normal, const RFFDynamicMapBinary &zoomed, float currentFrame) const;
+        // The trap planes are the keyframes' orbit traps at the maps' size; null draws that keyframe without them.
+        void applyCurrentDynamicMap(const RFFDynamicMapBinary &normal, const RFFDynamicMapBinary &zoomed, float currentFrame,
+                                    const std::vector<float> *normalTraps = nullptr,
+                                    const std::vector<float> *zoomedTraps = nullptr) const;
 
         void setMaxIterationDynamic(double maxIteration, double normalMaxIteration, double zoomedMaxIteration) const;
 
         void setSampleJitter(float jitterX, float jitterY) const;
+
+        // A start-up warm-up whose surface shader a skip left compiling; see VideoPipelineWarmup.
+        [[nodiscard]] bool isSlopeDeferred() const { return renderer->rendererSlope->isDeferred(); }
+        bool collectDeferredSlope() const { return renderer->rendererSlope->collectDeferred(); }
+        void awaitDeferredSlope() const { renderer->rendererSlope->awaitDeferred(); }
 
         void applyShaderStatic() const;
 
@@ -111,10 +119,6 @@ namespace merutilm::rff2 {
         void renderOnce() const;
 
         void renderOffscreenOnce() const;
-
-        [[nodiscard]] const VideoRenderSceneRenderer &getRenderer() const {
-            return *renderer;
-        }
 
         [[nodiscard]] float calculateZoom(float defaultZoomIncrement, float currentFrame) const;
 

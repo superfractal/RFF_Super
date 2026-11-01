@@ -1,32 +1,33 @@
-# タイムラインと生成AIの受け渡し
+<!-- Modified by Opus 5.5 on 2026-11-01. -->
+# Exchanging the Timeline with a Generative AI
 
-更新：2026-09-24（GPT-6）
+Updated: 2026-09-24 (GPT-6)
 
-タイムライン上部、**Exportの右隣のAI Editボタン**から開きます。メニューは2×2、3×3、フォルダー保存の3項目です。
+Open it from the **AI Edit button to the right of Export** at the top of the timeline. The menu has three items: 2 x 2, 3 x 3, and save to folder.
 
-## フォルダーにまとめて保存
+## Saving everything to a folder
 
-**画像の配置：2×2（4枚）** または **3×3（9枚）** を選び、**プロンプト＋JSONと全画像をフォルダーに保存...** を選択します。保存先を指定すると、その中に日時付きの `timeline-ai-...` フォルダーを作ります。同じ日時のフォルダーがある場合は連番を付け、上書きしません。
+Choose **Image grid: 2 x 2** (4 images) or **Image grid: 3 x 3** (9 images), then choose **Save prompt + JSON and all images to folder...**. After you pick a destination, a dated `timeline-ai-...` folder is created inside it. If a folder with the same date and time exists, a sequence number is appended; nothing is overwritten.
 
-- `prompt.txt`：システムプロンプト、現在の状態の説明、編集JSONを結合したプロンプト。
-- `page_000001.png` 以降：先頭から最終ページまでの全画像。現在選択中のページには依存しません。
-- `backup/timeline.json`：読み戻し用のバックアップ。`prompt.txt` 内のJSONと一致します。
-- `backup/images.json`：画像ファイルとキーフレーム番号の対応、保存済みページ数、完了状態。画像ファイル名は保存フォルダー直下を基準とします。
+- `prompt.txt`: the combined prompt of the system prompt, a description of the current state, and the editable JSON.
+- `page_000001.png` onward: every image from the first page to the last. It does not depend on the page currently selected.
+- `backup/timeline.json`: a backup for reading back in. It matches the JSON inside `prompt.txt`.
+- `backup/images.json`: which image file belongs to which keyframe numbers, the number of pages saved, and the completion state. Image file names are relative to the top of the saved folder.
 
-保存フォルダー直下の `prompt.txt` と必要な画像を生成AIに添付してください。`backup` フォルダーは添付不要です。全ページの保存に「次へ」の操作は不要です。音声素材のパスは、AIの回答をクリップボードから読み込んでも使えるよう絶対パスで保存します。音声素材自体はコピーしません。
+Attach `prompt.txt` from the top of the saved folder and the images you need to the generative AI. The `backup` folder does not need to be attached. Saving every page needs no "Next" step. Audio source paths are saved as absolute paths so they still work when the AI's answer is loaded from the clipboard. The audio sources themselves are not copied.
 
-保存開始時の編集値と外観を使って画像を順に生成します。保存中はページ数を表示し、同じメニューの **画像の生成・保存をキャンセル** で中止できます。フォルダー切り替えや終了でも保存は中断します。途中のファイルは残り、`backup/images.json` の状態は `cancelled` または `failed` になります。全ページを書き終えた場合だけ `complete` になります。
+The images are generated in order with the edit values and appearance at the moment saving starts. While saving, the page count is shown, and **Cancel image generation** in the same menu stops it. Switching folders or closing also interrupts saving. Files written so far remain, and the state in `backup/images.json` becomes `cancelled` or `failed`. It becomes `complete` only when every page has been written.
 
-## AIの回答を読み込む
+## Loading the AI's answer
 
-AIが返した完全なJSONだけを.jsonファイルに保存し、タイムラインの **Load** から読み込みます。Markdownの囲みや説明文は含めません。**Save** ではJSONまたは従来の.rfvt形式を選べます。
+Save only the complete JSON the AI returned to a .json file, and load it with the timeline's **Load**. Do not include Markdown fences or explanatory text. **Save** can write either JSON or the older .rfvt format.
 
-## 対象と動作
+## Scope and behavior
 
-- JSONは速度、色・シェーダーのアニメーションキー、停止区間、回転、倍率表示、音声クリップを含むタイムライン全体を置き換えます。読み込みは取り消し／やり直しに対応します。基本のシェーダー設定、キー画像フォルダー、出力設定、素材ファイルそのものは読み込みません。
-- 画像は現在のフォルダーのRFM/RFMZまたはRFSM/PNGを、現在のタイムラインと外観でプレビュー描画したものです。倍率文字や編集用ガイドは含みません。2×2は1024×704、3×3は1536×1056ピクセルで、縦横比を保持します。フォルダー保存は全ページが対象です。
-- 保存にはプレビュー可能なキー画像フォルダーが必要です。未選択の場合はフォルダー保存が無効になります。
-- システムプロンプトの外観説明は同梱の `local-ai-system-prompt.md`、対象ID・値域・列挙値は実際のタイムライン定義を参照します。ファイルが見つからない場合は理由を表示します。
-- PNGは色が焼き込まれているため、カタログの `affectsPNG` が `false` のトラックは描画に反映されません。
-- 読み込み前に形式、バージョン、値域、重複キー、音声の時刻などを検証します。エラー時は現在の編集を保持します。JSONは16 MiBまでです。フォルダーを開いている場合は `estimateKeyframes` が現在の枚数に一致する必要があります。
-- 自動送信やAIサービスへの接続はありません。保存したプロンプトと画像を、利用する生成AIへ手動で添付します。
+- The JSON replaces the whole timeline, including speed, color and shader animation keys, hold sections, rotation, zoom display and audio clips. Loading supports undo and redo. It does not load the base shader settings, the keyframe image folder, output settings or the source files themselves.
+- The images are preview renders of the current folder's RFM/RFMZ or RFSM/PNG with the current timeline and appearance. They contain no zoom text or editing guides. 2 x 2 is 1024 x 704 pixels and 3 x 3 is 1536 x 1056 pixels, keeping the aspect ratio. Saving to a folder covers every page.
+- Saving needs a keyframe image folder that can be previewed. Without one selected, saving to a folder is disabled.
+- The system prompt's appearance description comes from the bundled `local-ai-system-prompt.md`, and target IDs, value ranges and enumerated values come from the actual timeline definitions. If the file cannot be found, the reason is shown.
+- Because PNG images have their colors baked in, tracks whose catalog entry has `affectsPNG` set to `false` do not affect the render.
+- Before loading, the format, version, value ranges, duplicate keys, audio times and so on are validated. On an error, the current edit is kept. The JSON may be up to 16 MiB. When a folder is open, `estimateKeyframes` must match the current number of keyframes.
+- There is no automatic sending or connection to an AI service. Attach the saved prompt and images to the generative AI you use by hand.

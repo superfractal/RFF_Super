@@ -2,6 +2,7 @@
 // Created by AI; exact creation date unavailable.
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-10-25
 //
 
 #pragma once
@@ -50,18 +51,12 @@ namespace merutilm::rff2 {
         // Parse expression, returns true on success
         bool parse(const std::string& expression);
         
-        // Check if last parse had errors
-        [[nodiscard]] bool hasError() const { return parseError; }
-        
         // Get error message from last parse
         [[nodiscard]] const std::string& getErrorMessage() const { return errorMessage; }
         
         // Evaluate (returns 0 if there was a parse error or empty instructions)
         [[nodiscard]] std::complex<double> evaluate(std::complex<double> z, std::complex<double> c) const;
         
-        // Get supported syntax as string for UI display
-        static std::string getSupportedSyntax();
-
     private:
         int getPrecedence(const std::string& op);
         bool isOperator(const std::string& token);

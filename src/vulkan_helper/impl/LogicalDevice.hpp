@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-09, 2026-08-23
 // Modified by GPT-5 on 2026-08-23
 // Modified by GPT-6 on 2026-09-23, 2026-09-30
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-21, 2026-10-25
 //
 
 #pragma once
@@ -44,15 +45,11 @@ namespace merutilm::vkh {
 
         [[nodiscard]] VkDevice getLogicalDeviceHandle() const { return logicalDevice; }
 
-        [[nodiscard]] VkQueue getGraphicsQueue() const { return graphicsQueue; }
-
         [[nodiscard]] VkPipelineCache getPipelineCacheHandle() const { return pipelineCache; }
 
         // Writes what has been compiled so far. Called on shutdown, and wherever a long compile has
         // just been paid for, so an end that never reaches shutdown does not throw the work away.
         void savePipelineCache() const;
-
-        [[nodiscard]] VkQueue getPresentQueue() const { return presentQueue; }
 
         // The result code is the only clue these two carry: every other Vulkan call in the
         // codebase discards its VkResult, so a failure that started elsewhere (a rejected
@@ -60,13 +57,6 @@ namespace merutilm::vkh {
         VkResult queueSubmitResult(const uint32_t submitCount, const VkSubmitInfo *pSubmits, const VkFence fence) {
             std::scoped_lock lock(queueMutex);
             return allocator::invoke(vkQueueSubmit, graphicsQueue, submitCount, pSubmits, fence);
-        }
-
-        void queueSubmit(const uint32_t submitCount, const VkSubmitInfo *pSubmits, const VkFence fence) {
-            if (const VkResult result = queueSubmitResult(submitCount, pSubmits, fence);
-                result != VK_SUCCESS) {
-                throw exception_invalid_state(std::string("Failed to submit queue! ") + string_VkResult(result));
-            }
         }
 
         VkResult queuePresent(const VkPresentInfoKHR *presentInfo) {

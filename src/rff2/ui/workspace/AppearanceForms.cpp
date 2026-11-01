@@ -1,15 +1,38 @@
 //
-// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04
+// Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01, 2026-10-07
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01
 //
 
 #include "AppearanceForms.hpp"
 #include "AttributeFormSection.hpp"
 #include "AppearanceFormBehavior.hpp"
 #include "../../attr/NumericSettingLimits.hpp"
+#include "../../vulkan/OrderedShaderLayers.hpp"
 #include <thread>
 
 namespace merutilm::rff2::workspace {
+    namespace {
+        using InUseCheck = std::function<bool(const Attribute &)>;
+        // The groups listed can be switched off, each on while its check holds; the others are never in use.
+        std::vector<std::function<bool()>> groupsInUse(const AttributeGetter &attribute, size_t groupCount,
+                                                       std::initializer_list<std::pair<int, InUseCheck>> checks) {
+            std::vector<std::function<bool()>> result(groupCount);
+            for (const auto &[group, check] : checks) {
+                result.at(group) = [attribute, check] { return check(attribute()); };
+            }
+            return result;
+        }
+        // One check per layer group, true while the renderer draws that layer.
+        std::vector<std::function<bool()>> layersInUse(const AttributeGetter &attribute, ShdLayer first) {
+            std::vector<std::function<bool()>> result;
+            for (uint32_t i = 0; i < 4; ++i) {
+                result.push_back([attribute, layer = ShdLayer(uint32_t(first) + i)] {
+                    return shaderLayerActive(attribute().shader, layer);
+                });
+            }
+            return result;
+        }
+    }
     WorkspaceForm previewPerformanceForm(AttributeGetter attribute, std::function<void()> changed) {
         auto model = std::make_shared<AttributeFormModel>(attribute, std::move(changed));
         using Settings = RenderAttribute;
@@ -29,7 +52,32 @@ namespace merutilm::rff2::workspace {
                        L"Recomputes the view with a two-color preview.");
         section.choice("coarsePreview", &Settings::coarsePreview, L"Coarse Preview",
                        L"Recomputes the view with an initial coarse preview.");
-        return model->form(L"Render & Preview", {L"Performance", L"Calculation Preview"});
+        using Gpu = RndComputeShaderAttribute;
+        AttributeFormSection gpu(
+            model, [](auto &attributes) -> auto & { return attributes.render.computeShader; },
+            "render.computeShader.", 2);
+        gpu.choice("use", &Gpu::use, L"Use GPU Perturbation",
+                   L"Iterates on the GPU down to zoom 1e290; deeper zooms, custom formulas and compressed references "
+                   L"stay on the CPU.");
+        gpu.choice("singlePrecision", &Gpu::singlePrecision, L"Single Precision",
+                   L"Iterates in float down to zoom 1e30, much faster on most GPUs, but iteration values drift from "
+                   L"the double-precision result; deeper zooms use double.");
+        gpu.number("batchSeconds", &Gpu::batchSeconds, L"Batch Duration (s)", 0.01f, 1.0f);
+        gpu.number("allowedUnfinishedPixels", &Gpu::allowedUnfinishedPixels, L"Allowed Unfinished Pixels",
+                   uint32_t(0), uint32_t(100000000),
+                   L"Stops once no more than this many pixels are still iterating. 0 finishes every pixel.");
+        gpu.number("stopMpaAfterBatches", &Gpu::stopMpaAfterBatches, L"Stop MPA After Batches", uint32_t(0),
+                   uint32_t(1000000), L"Iterates without MPA after this many batches. 0 keeps MPA.");
+        gpu.choice("ignoreMpa", &Gpu::ignoreMpa, L"Ignore MPA on GPU",
+                   L"Iterates every step without approximation skips.");
+        gpu.choice("interpolateIsolatedPixels", &Gpu::interpolateIsolatedPixels, L"Interpolate Isolated Pixels",
+                   L"Fills an unfinished pixel with four finished neighbors from their mean; faster, but approximated.");
+        auto form = model->form(L"Render & Preview",
+                                {L"Performance", L"Calculation Preview", L"GPU Perturbation"});
+        form.groupInUse = groupsInUse(attribute, form.groups.size(),
+                                      {{2, [](const Attribute &a) { return a.render.computeShader.use; }}});
+        appearanceFormBehavior(form);
+        return form;
     }
     WorkspaceForm lightingForm(AttributeGetter attribute, std::function<void()> changed) {
         auto model = std::make_shared<AttributeFormModel>(attribute, std::move(changed));
@@ -90,7 +138,7 @@ namespace merutilm::rff2::workspace {
         section.choice("lightBlend", &Settings::lightBlend, L"Light Blend");
         section.group = 6;
         section.number("rimIntensity", &Settings::rimIntensity, L"Rim Intensity", 0.0f, 1.0f);
-        section.number("rimPower", &Settings::rimPower, L"Rim Power", 1.0f, 64.0f);
+        section.number("rimPower", &Settings::rimPower, L"Rim Power", 0.1f, 64.0f);
         section.colorRgb("rimColor", &Settings::rimColor, L"Rim Color");
         section.group = 7;
         section.number("glossIntensity", &Settings::glossIntensity, L"Gloss Intensity", 0.0f, 1.0f);
@@ -110,6 +158,7 @@ namespace merutilm::rff2::workspace {
         section.number("boundaryGuard", &Settings::boundaryGuard, L"Boundary Reflection Guard", 0.0f, 1.0f);
         section.number("reliefWaves", &Settings::reliefWaves, L"Relief Waves", 0.0f, 1.0f);
         section.number("waveFrequency", &Settings::waveFrequency, L"Wave Frequency", 0.03f, 1.5f);
+        section.choice("reliefWavesCoatOnly", &Settings::reliefWavesCoatOnly, L"Waves on Clear Coat Only");
         model->text("slope.reliefZoomReference", 8, L"Zoom Reference",
                     L"Saved reference zoom: 0 to 16777216, or -1 for an unbound reference.",
                     [](const Attribute &a) { return AttributeFormModel::number(a.shader.slope.reliefZoomReference); },
@@ -136,12 +185,29 @@ namespace merutilm::rff2::workspace {
         studio.number("clearcoat", &ShdStudioAttribute::clearcoat, L"Clearcoat", 0.f, 1.f);
         studio.number("clearcoatRoughness", &ShdStudioAttribute::clearcoatRoughness, L"Coat Roughness", .04f, 1.f);
         section.group = 9;
+        section.choice("coatSoftbox", &Settings::coatSoftbox, L"Coat Softbox");
+        section.choice("studioEnvironmentSource", &Settings::studioEnvironmentSource, L"Environment Source");
+        section.number("environmentBrightness", &Settings::environmentBrightness, L"Environment Brightness", 0.f, 32.f);
+        section.number("environmentStop1Position", &Settings::environmentStop1Position, L"Gradient Stop 1 Position", 0.f, 1.f);
+        section.colorRgb("environmentStop1Color", &Settings::environmentStop1Color, L"Gradient Stop 1 Color");
+        section.number("environmentStop2Position", &Settings::environmentStop2Position, L"Gradient Stop 2 Position", 0.f, 1.f);
+        section.colorRgb("environmentStop2Color", &Settings::environmentStop2Color, L"Gradient Stop 2 Color");
+        section.number("environmentStop3Position", &Settings::environmentStop3Position, L"Gradient Stop 3 Position", 0.f, 1.f);
+        section.colorRgb("environmentStop3Color", &Settings::environmentStop3Color, L"Gradient Stop 3 Color");
+        section.number("environmentStop4Position", &Settings::environmentStop4Position, L"Gradient Stop 4 Position", 0.f, 1.f);
+        section.colorRgb("environmentStop4Color", &Settings::environmentStop4Color, L"Gradient Stop 4 Color");
         section.number("iridescence", &Settings::iridescence, L"Iridescence", 0.f, 1.f);
         section.number("filmThickness", &Settings::filmThickness, L"Film Thickness (nm)", 0.f, 2000.f);
         auto form =
             model->form(L"Lighting & Relief",
                         {L"Slope Shading", L"Light Direction", L"Specular", L"Relief Detail",
                          L"Lit / Shadow Tint", L"Tone Mapping", L"Rim Light", L"Gloss", L"Lustre Relief", L"Material Presets"});
+        form.groupInUse = groupsInUse(
+            attribute, form.groups.size(),
+            {{0, [](const Attribute &a) { return a.shader.slope.depth != 0 && a.shader.slope.opacity > 0; }},
+             {6, [](const Attribute &a) { return a.shader.slope.rimIntensity > 0; }},
+             {7, [](const Attribute &a) { return a.shader.slope.glossIntensity > 0; }},
+             {8, [](const Attribute &a) { return a.shader.slope.lustreRelief; }}});
         constexpr const wchar_t *presets[] = {L"Bronze", L"Pearl", L"Obsidian", L"Ceramic"};
         for (int i = 0; i < 4; ++i) form.actions.push_back({9, presets[i], [model, i] {
             model->edit([i](Attribute &a) { applyStudioPreset(a.shader.slope, i); });
@@ -179,6 +245,7 @@ namespace merutilm::rff2::workspace {
             section.number("scrollV", &Settings::scrollV, L"Scroll V", -2.0f, 2.0f);
         }
         auto form = model->form(L"Textures", {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        form.groupInUse = layersInUse(attribute, ShdLayer::TEXTURE_1);
         model->setNormalizer([](const Attribute &, Attribute &after, const FormDraft &draft) {
             for (int i = 0; i < 4; ++i) if (draft.contains("texture." + std::to_string(i) + ".path") &&
                 !draft.contains("texture." + std::to_string(i) + ".enabled"))
@@ -228,6 +295,7 @@ namespace merutilm::rff2::workspace {
             section.choice("edgeRelative", &Settings::edgeRelative, L"Relative Edge Width");
         }
         auto form = model->form(L"Patterns", {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        form.groupInUse = layersInUse(attribute, ShdLayer::PATTERN_1);
         appearanceFormBehavior(form);
         form.addDividers({"paletteFollow", "edgeEnabled"});
         addLayerGuidance(form, "pattern.");
@@ -268,10 +336,99 @@ namespace merutilm::rff2::workspace {
                            formMaximum, L"Signed speed; 0 stops stripe motion.");
         }
         auto form = model->form(L"Warp & Stripe", {L"Domain Warp", L"Stripe"});
+        form.groupInUse = groupsInUse(
+            attribute, form.groups.size(),
+            {{0, [](const Attribute &a) { return a.shader.warp.enabled; }},
+             {1, [](const Attribute &a) { return shaderLayerActive(a.shader, ShdLayer::STRIPE); }}});
         appearanceFormBehavior(form);
         return form;
     }
-    WorkspaceForm finishingForm(AttributeGetter attribute, std::function<void()> changed) {
+    WorkspaceForm otherForm(AttributeGetter attribute, std::function<void()> changed) {
+        auto model = std::make_shared<AttributeFormModel>(attribute, std::move(changed));
+        using Settings = ShdPaletteAttribute;
+        AttributeFormSection section(
+            model, [](auto &attributes) -> auto & { return attributes.shader.palette; }, "palette.");
+        section.choice("escapeAngleColoring", &Settings::escapeAngleColoring, L"Escape Angle Coloring");
+        section.number("escapeAngleAmount", &Settings::escapeAngleAmount, L"Escape Angle Amount",
+                       -Settings::ESCAPE_ANGLE_AMOUNT_LIMIT, Settings::ESCAPE_ANGLE_AMOUNT_LIMIT,
+                       L"Palette cycles; 0.50 sets the two halves of Binary Decomposition half a cycle apart.");
+        auto form = model->form(L"Other", {L"Escape Angle"});
+        form.groupInUse = groupsInUse(attribute, form.groups.size(), {{0, [](const Attribute &a) {
+            return a.shader.palette.escapeAngleColoring != ShdPalEscapeAngleColoring::NONE;
+        }}});
+        appearanceFormBehavior(form);
+        return form;
+    }
+    WorkspaceForm orbitTrapForm(AttributeGetter attribute, std::function<void()> changed) {
+        auto model = std::make_shared<AttributeFormModel>(attribute, std::move(changed));
+        using Settings = ShdPaletteAttribute;
+        AttributeFormSection section(
+            model, [](auto &attributes) -> auto & { return attributes.shader.palette; }, "palette.");
+        section.choice("orbitTrapColoring", &Settings::orbitTrapColoring, L"Coloring");
+        section.choice("orbitTrapShape", &Settings::orbitTrapShape, L"Shape",
+                       L"Shape coloring only: the trap each orbit is measured against. Changing it recalculates.");
+        section.number("orbitTrapCenterReal", &Settings::orbitTrapCenterReal, L"Center Real",
+                       -Settings::ORBIT_TRAP_CENTER_LIMIT, Settings::ORBIT_TRAP_CENTER_LIMIT,
+                       L"Real part of the trap's center on the complex plane.");
+        section.number("orbitTrapCenterImag", &Settings::orbitTrapCenterImag, L"Center Imaginary",
+                       -Settings::ORBIT_TRAP_CENTER_LIMIT, Settings::ORBIT_TRAP_CENTER_LIMIT,
+                       L"Imaginary part of the trap's center on the complex plane.");
+        section.number("orbitTrapRadius", &Settings::orbitTrapRadius, L"Radius", 0.0,
+                       Settings::ORBIT_TRAP_RADIUS_MAX,
+                       L"Circle's and Polygon's and Star's size, Grid and Rings spacing, Spiral's step per turn; 0 measures as Point. Recalculates.");
+        section.number("orbitTrapAngle", &Settings::orbitTrapAngle, L"Angle",
+                       -Settings::ORBIT_TRAP_ANGLE_LIMIT, Settings::ORBIT_TRAP_ANGLE_LIMIT,
+                       L"Degrees the trap turns about its center; Point, Circle and Rings do not use it. Recalculates.");
+        section.number("orbitTrapSides", &Settings::orbitTrapSides, L"Sides", ORBIT_TRAP_SIDES_MIN,
+                       ORBIT_TRAP_SIDES_MAX, L"Polygon's sides and Star's points. Recalculates.");
+        section.group = 1;
+        section.choice("orbitTrapMapping", &Settings::orbitTrapMapping, L"Color Mapping",
+                       L"Shape coloring only: what the trap's colors follow.");
+        section.number("orbitTrapArms", &Settings::orbitTrapArms, L"Arms", uint32_t(1),
+                       Settings::ORBIT_TRAP_ARMS_MAX, L"Angle color mapping only: palette turns per revolution.");
+        section.number("orbitTrapDensity", &Settings::orbitTrapDensity, L"Density",
+                       -Settings::ORBIT_TRAP_DENSITY_LIMIT, Settings::ORBIT_TRAP_DENSITY_LIMIT,
+                       L"Palette cycles across the trap; Angle color mapping uses Arms instead.");
+        section.number("orbitTrapOffset", &Settings::orbitTrapOffset, L"Offset", -1.0f, 1.0f,
+                       L"Shifts the trap's colors, in palette cycles.");
+        section.number("orbitTrapAnimationSpeed", &Settings::orbitTrapAnimationSpeed, L"Animation Speed",
+                       -Settings::ORBIT_TRAP_SPEED_LIMIT, Settings::ORBIT_TRAP_SPEED_LIMIT,
+                       L"Palette cycles per second; 0 holds still.");
+        section.choice("orbitTrapHoldColorAnimation", &Settings::orbitTrapHoldColorAnimation,
+                       L"Hold in Color Animation");
+        section.group = 2;
+        section.number("orbitTrapWidth", &Settings::orbitTrapWidth, L"Width",
+                       Settings::ORBIT_TRAP_WIDTH_MIN, Settings::ORBIT_TRAP_WIDTH_MAX,
+                       L"log2 of the distance where the glow halves; lower it at deep zooms.");
+        section.number("orbitTrapGlowSharpness", &Settings::orbitTrapGlowSharpness, L"Glow Sharpness",
+                       Settings::ORBIT_TRAP_SHAPE_MIN, Settings::ORBIT_TRAP_SHAPE_MAX,
+                       L"Higher draws thinner lines; Relief does not use it.");
+        section.colorRgb("orbitTrapGlowColor", &Settings::orbitTrapGlowColor, L"Glow Color");
+        section.number("orbitTrapGlowStrength", &Settings::orbitTrapGlowStrength, L"Glow Strength", 0.0f,
+                       Settings::ORBIT_TRAP_GLOW_STRENGTH_MAX);
+        section.choice("orbitTrapRelief", &Settings::orbitTrapRelief, L"Relief",
+                       L"Cross Glow and Shape only: draws the trap as a lit tube of radius Width.");
+        section.group = 3;
+        section.number("orbitTrapAmount", &Settings::orbitTrapAmount, L"Amount", 0.0f, 1.0f,
+                       L"Share of the trap coloring over the iteration palette.");
+        section.choice("orbitTrapBlend", &Settings::orbitTrapBlend, L"Blend Mode");
+        section.choice("orbitTrapInterior", &Settings::orbitTrapRegion, L"Apply To",
+                       L"Inside means the pixels that reach Max Iterations, the black inside of the set.");
+        section.group = 4;
+        section.number("orbitTrapCellBorderWidth", &Settings::orbitTrapCellBorderWidth,
+                       L"Border Width", Settings::ORBIT_TRAP_SHAPE_MIN, Settings::ORBIT_TRAP_SHAPE_MAX,
+                       L"Cellular only.");
+        section.number("orbitTrapCellBorderDarkness", &Settings::orbitTrapCellBorderDarkness,
+                       L"Border Darkness", 0.0f, 1.0f, L"Cellular only.");
+        auto form = model->form(L"Orbit Trap", {L"Trap", L"Palette", L"Glow", L"Blending", L"Cell Border"});
+        form.groupInUse = groupsInUse(attribute, form.groups.size(), {{0, [](const Attribute &a) {
+            return a.shader.palette.orbitTrapColoring != ShdPalOrbitTrapColoring::NONE;
+        }}});
+        appearanceFormBehavior(form);
+        return form;
+    }
+    WorkspaceForm finishingForm(AttributeGetter attribute, std::function<void()> changed,
+                                std::function<void(std::function<void()>)> pickFocus) {
         auto model = std::make_shared<AttributeFormModel>(attribute, std::move(changed));
         using Settings = ShdColorAttribute;
         AttributeFormSection section(
@@ -317,6 +474,10 @@ namespace merutilm::rff2::workspace {
             section.number("focusFalloff", &Settings::focusFalloff, L"Focus Falloff", 0.1f, 4.0f);
             section.number("focusBlur", &Settings::focusBlur, L"Focus Blur", NumericSettingLimits::blur.minimum, NumericSettingLimits::blur.maximum,
                            L"Blur radius in pixels relative to 1280 width.");
+            section.choice("focusSmoothKeyframes", &Settings::focusSmoothKeyframes, L"Smooth Focus Across Keyframes",
+                           L"Video only. With Auto Max Iteration the maximum iteration can change several times over "
+                           L"at a keyframe, and the band, being a fraction of it, jumped there in one frame. On glides "
+                           L"it between the two keyframes instead. Off keeps the band where earlier versions put it.");
             section.group = 4;
             section.number(
                 "chaosAmount", &Settings::chaosAmount, L"Chaos Amount", 0.0f, 1.0f,
@@ -340,14 +501,44 @@ namespace merutilm::rff2::workspace {
                 "chaosShade", &Settings::chaosShade, L"Chaos Shade", 0.0f, 1.0f,
                 L"Darkens intricate defocused regions to separate them from smooth foreground surfaces. At 1, "
                 L"fully selected regions turn black whatever Chaos Amount is.");
+            section.number(
+                "chaosInterior", &Settings::chaosInterior, L"Chaos Interior", 0.0f, 1.0f,
+                L"Blurs areas that reach Max Iterations, such as the black interior of the Mandelbrot set. "
+                L"Zero leaves them sharp; higher values select them more strongly.");
             section.choice("chaosBlurAverage", &Settings::chaosBlurAverage, L"Chaos Blur Averaging",
                            L"Gamma Space keeps the dark gaps between bright details dark. Linear Space averages "
                            L"light physically, so bright detail spreads and blurred regions come out brighter.");
+            section.choice("chaosEdgeProtection", &Settings::chaosEdgeProtection, L"Chaos Edge Protection",
+                           L"On keeps smooth surfaces next to blurred regions from bleeding into the blur, so "
+                           L"their outlines stay crisp. Off blurs every neighbouring pixel into the region, as "
+                           L"earlier versions did.");
+            section.choice("chaosBokehShape", &Settings::chaosBokehShape, L"Chaos Bokeh Shape",
+                           L"The outline of the blur: Circle, or a polygon with three to eight straight "
+                           L"edges. Bright specks in blurred regions take this shape.");
+            section.number("chaosBokehRotation", &Settings::chaosBokehRotation, L"Chaos Bokeh Rotation", 0.0f, 360.0f,
+                           L"Turns the polygon outline, in degrees. With Circle it turns the stretch set by "
+                           L"Chaos Bokeh Aspect.");
+            section.number("chaosBokehAspect", &Settings::chaosBokehAspect, L"Chaos Bokeh Aspect", 0.25f, 4.0f,
+                           L"Height over width of the outline. 1 keeps it even; above 1 stretches it "
+                           L"vertically, below 1 horizontally, at the same area.");
         }
         auto form =
             model->form(L"Finishing", {L"Color Correction", L"Bloom", L"Fog", L"Focus Band", L"Chaos Blur"});
+        form.groupInUse = groupsInUse(attribute, form.groups.size(),
+                                      {{1, [](const Attribute &a) { return a.shader.bloom.intensity != 0; }},
+                                       {2, [](const Attribute &a) { return a.shader.fog.opacity > 0; }},
+                                       {3, [](const Attribute &a) { return a.shader.fog.focusAmount > 0; }},
+                                       {4, [](const Attribute &a) { return a.shader.fog.chaosAmount > 0; }}});
         appearanceFormBehavior(form);
         form.addDividers({"rimMask"});
+        if (pickFocus) {
+            const auto depth = std::find_if(form.fields.begin(), form.fields.end(),
+                                            [](const auto &field) { return field.id == "fog.focusRatio"; })->read;
+            form.actions.push_back({3, L"Pick Focus Depth", [model, depth, pickFocus] {
+                const auto before = depth();
+                pickFocus([model, before] { model->recordExternal({{"fog.focusRatio", before}}); });
+            }});
+        }
         return form;
     }
     WorkspaceForm materialEffectsForm(AttributeGetter attribute, std::function<void()> changed, LayerMove onMove) {
@@ -359,10 +550,12 @@ namespace merutilm::rff2::workspace {
                 [layerIndex](auto &attributes) -> auto & { return attributes.shader.effects[layerIndex]; },
                 "effect." + std::to_string(layerIndex) + ".", layerIndex);
             section.choice("enabled", &Settings::enabled, L"Enabled");
-            section.choice("type", &Settings::type, L"Effect Type");
+            section.template derivedChoice<ShdEffectVariant>(
+                "type", L"Effect Type", [](const Settings &effect) { return effectVariantOf(effect); },
+                [](Settings &effect, ShdEffectVariant variant) { applyEffectVariant(effect, variant); },
+                L"The material and, in parentheses, its shape or style. Classic is each type's original look.");
             section.choice("blend", &Settings::blend, L"Blend");
             section.choice("mask", &Settings::mask, L"Mask");
-            section.choice("rainShape", &Settings::rainShape, L"Rain Shape");
             section.number("dropSize", &Settings::dropSize, L"Drop Size", 0.1f, 8.0f);
             section.number("opacity", &Settings::opacity, L"Opacity", 0.0f, 1.0f);
             section.number("scale", &Settings::scale, L"Surface Scale", 0.1f, 100.0f);
@@ -382,6 +575,7 @@ namespace merutilm::rff2::workspace {
         }
         auto form = model->form(L"Animated Materials",
                                 {L"Layer 1 (Bottom)", L"Layer 2", L"Layer 3", L"Layer 4 (Top)"});
+        form.groupInUse = layersInUse(attribute, ShdLayer::EFFECT_1);
         appearanceFormBehavior(form);
         form.addDividers({"syncColorAnimation", "color"});
         addLayerGuidance(form, "effect.");

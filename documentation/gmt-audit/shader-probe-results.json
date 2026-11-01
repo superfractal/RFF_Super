@@ -1,0 +1,42 @@
+{
+  "scope": "CPU arithmetic counterexamples with source-expression guards; DE generator executed, but no GLSL execution or visual tests",
+  "linearAttenuation": {
+    "direct": 0.09090909090909091,
+    "scatter": 1,
+    "ratio": 11
+  },
+  "negativePaletteCoordinate": {
+    "raw": -0.2,
+    "glow": 0.19999999999999996,
+    "surface": 0.8
+  },
+  "ggxAtNormalIncidence": {
+    "roughness": 0.05,
+    "unregularizedNDF": 50929.5817894065,
+    "regularizedNDF": 62.42339496912223,
+    "suppression": 815.8733086305037
+  },
+  "boundedVNDFNormalRough1": {
+    "samplerDensity": 0.15915494309189535,
+    "reportedPDF": 0.07957746901291816,
+    "ratio": 2.000000063661977
+  },
+  "volumeGateUniformSeed": {
+    "samples": 1000000,
+    "gateProbability": 0.0078125,
+    "expectedCompensatedUnitContribution": 1,
+    "actualAtDepth0": 1.076224,
+    "actualAtDepthHalf": 0.94208
+  },
+  "fourDimensionalPreBailout": {
+    "fixture": "xyz=0,w=20,bailout=100,iterations=8,formula z*=0.5,getDist returns radius",
+    "fullMap": {
+      "iterations": 8,
+      "radius": 0.078125
+    },
+    "geometryMap": {
+      "iterations": 0,
+      "radius": 20
+    }
+  }
+}

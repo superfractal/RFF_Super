@@ -5,7 +5,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29
 //
 
 #define NONE 0
@@ -64,6 +64,8 @@ layout (set = 0, binding = 0) uniform IterUBO {
     // screen-space animation fields and decor UVs stay one continuous image instead of repeating.
     uvec2 canvas_extent;
     ivec2 canvas_offset;
+    // Orbit trap planes per pixel the host uploaded (x); read in place of length(), which fails past 2 GiB.
+    uvec2 orbit_trap_planes;
 } iteration_info_attr;
 
 layout (set = 0, binding = 1) buffer IterSSBO {
@@ -91,6 +93,32 @@ layout (set = PALETTE_DATA_SET, binding = 0) buffer PaletteSSBO {
     // Appended ahead of the runtime color array, which must stay last. The layout pads after this
     // float so the array holds its 16-byte alignment; the host reserve carries the same pad.
     float cycle_bias;
+    // Escape Angle coloring: 0 off, 1 binary decomposition, 2 angle twist, and its amount in palette cycles.
+    uint escape_angle_mode;
+    float escape_angle_amount;
+    // Orbit Trap coloring: 0 off, 1 cross glow, 2 cellular, 3 shape; the amount it is mixed in, the glow width as log2 distance, and palette cycles per step.
+    uint orbit_trap_mode;
+    float orbit_trap_amount;
+    float orbit_trap_width;
+    float orbit_trap_density;
+    // 0 leaves pixels at Max Iterations without the trap, 1 traps every pixel, 2 traps only the pixels at Max Iterations.
+    uint orbit_trap_interior;
+    // Offset in cycles, glow strength and falloff, Cellular border width; the glow color; blend mode, border darkness.
+    float orbit_trap_offset;
+    float orbit_trap_glow_strength;
+    float orbit_trap_glow_sharpness;
+    float orbit_trap_cell_border_width;
+    vec4 orbit_trap_glow_color;
+    uint orbit_trap_blend;
+    float orbit_trap_cell_border_darkness;
+    // 1 keeps the trap's colors out of the palette animation.
+    uint orbit_trap_hold;
+    // Shape's mapping (0 distance, 1 angle, 2 bands) and its palette turns per revolution; 1 draws the trap as a lit tube, lit from Slope's azimuth and zenith.
+    uint orbit_trap_mapping;
+    float orbit_trap_arms;
+    uint orbit_trap_relief;
+    float orbit_trap_light_azimuth;
+    float orbit_trap_light_zenith;
     vec4 palette[];
 } palette_attr;
 
@@ -121,6 +149,17 @@ layout (set = PALETTE_TIME_SET, binding = 0) uniform TimeUBO {
     float pattern_scroll_v_3;
     float warp_scroll_u;
     float warp_scroll_v;
+    // The effects' phases, declared only to reach the orbit trap phase behind them.
+    float effect_phase_0u;
+    float effect_phase_0v;
+    float effect_phase_1u;
+    float effect_phase_1v;
+    float effect_phase_2u;
+    float effect_phase_2v;
+    float effect_phase_3u;
+    float effect_phase_3v;
+    // Orbit Trap Animation Speed run up on the host, in palette cycles wrapped to [0,1).
+    float orbit_trap_phase;
 } time_attr;
 
 // One binding per layer rather than one array binding, matching TextureDescriptor's one-descriptor
@@ -534,53 +573,7 @@ double smooth_iteration(double iteration) {
 }
 
 // ln(1+x) in double: the float builtin's own ulp is thousands of iterations wide at depth and would step the bands this feeds.
-double log1p_d(double x) {
-    if (x <= 0.0LF) {
-        return 0.0LF;
-    }
-    double s;
-    double hi = 0.0LF;
-    if (x < 0.25LF) {
-        // The same reduction without forming 1 + x, whose rounding is the whole error for a small x.
-        s = x / (2.0LF + x);
-    } else {
-        double u = 1.0LF + x;
-        int e = 0;
-        double m;
-        if (u >= ldexp(1.0LF, 120)) {
-            m = frexp(u, e);
-        } else {
-            e = int(floor(log2(float(u))));
-            // exp2 of a whole number is exact in float and in double, so this scaling costs no bits.
-            m = u * double(exp2(float(-e)));
-        }
-        // The float exponent can miss by one either way; these put the mantissa back in [1/sqrt2, sqrt2).
-        if (m >= 1.4142135623730951LF) {
-            m *= 0.5LF;
-            e += 1;
-        }
-        if (m < 0.70710678118654746LF) {
-            m *= 2.0LF;
-            e -= 1;
-        }
-        s = (m - 1.0LF) / (m + 1.0LF);
-        hi = double(e) * LN2;
-    }
-    double t = s * s;
-    // ln((1+s)/(1-s)) = 2s * (1 + s^2/3 + s^4/5 + ...), taken past double's last bit for every s that reduction leaves.
-    double p = 1.0LF / 21.0LF;
-    p = fma(p, t, 1.0LF / 19.0LF);
-    p = fma(p, t, 1.0LF / 17.0LF);
-    p = fma(p, t, 1.0LF / 15.0LF);
-    p = fma(p, t, 1.0LF / 13.0LF);
-    p = fma(p, t, 1.0LF / 11.0LF);
-    p = fma(p, t, 1.0LF / 9.0LF);
-    p = fma(p, t, 1.0LF / 7.0LF);
-    p = fma(p, t, 1.0LF / 5.0LF);
-    p = fma(p, t, 1.0LF / 3.0LF);
-    p = fma(p, t, 1.0LF);
-    return fma(2.0LF * s, p, hi);
-}
+#include "log1p_d.glsl"
 
 // Cube root in double: the float builtin seeds it, and two Newton steps on y^3 = x each double the digits that seed holds.
 double cbrt_d(double x) {

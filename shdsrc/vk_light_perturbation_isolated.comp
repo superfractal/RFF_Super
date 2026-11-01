@@ -1,0 +1,41 @@
+//
+// Created by Merutilm on 8/24/26.
+// Modified by Opus 5.5 on 2026-10-06
+//
+
+// Derived from Merutilm RFF 2.3.0 shaders/src/vk_interpolate_isolated.comp, GPL-3.0; see NOTICE.
+// Marks an unfinished pixel whose four neighbors are finished; GpuLightPerturbator fills it with their mean.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "light_perturbation.glsl"
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// An interpolated neighbor does not count, so the result does not depend on invocation order.
+bool settled(const uint index) {
+    const uint status = states.state[index].status;
+    return status == STATUS_FINISHED || status == STATUS_INTERIOR || status == STATUS_SKY;
+}
+
+void main() {
+    uint index;
+    PixelState s;
+    if (!load_running_pixel(index, s)) {
+        return;
+    }
+    const uvec2 pixel = gl_GlobalInvocationID.xy;
+    const uvec2 extent = params.extent;
+    const bool hasLeft = pixel.x != 0;
+    const bool hasRight = pixel.x < extent.x - 1;
+    const bool hasBelow = pixel.y < extent.y - 1;
+    const bool hasAbove = pixel.y != 0;
+
+    if ((hasLeft && !settled(index - 1)) || (hasRight && !settled(index + 1)) ||
+        (hasBelow && !settled(index + extent.x)) || (hasAbove && !settled(index - extent.x))) {
+        return;
+    }
+
+    states.state[index].status = STATUS_INTERPOLATED;
+    results.result[index].status = STATUS_INTERPOLATED;
+}

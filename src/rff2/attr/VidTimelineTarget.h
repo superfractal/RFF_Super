@@ -4,7 +4,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-27, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06
 //
 
 #pragma once
@@ -112,6 +112,7 @@ namespace merutilm::rff2 {
         FOG_CHAOS_BLUR = 517,
         // ID 518 belonged to the retired Chaos Highlight Detail track and must never be reused.
         FOG_CHAOS_SHADE = 519,
+        FOG_CHAOS_INTERIOR = 520,
 
         BLOOM_THRESHOLD = 600,
         BLOOM_RADIUS = 601,

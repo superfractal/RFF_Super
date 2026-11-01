@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #pragma once
@@ -10,7 +11,7 @@
 namespace merutilm::rff2::workspace {
     struct NavigationItems {
         static constexpr long studio = 1, style = 2, filter = 10, category = 100, favorite = 101,
-                              palette = 200, section = 1000;
+                              palette = 200, section = 1000, sectionFavorite = 3000;
         static long categoryId(Category value) {
             return category + 2 * long(value);
         }
@@ -65,18 +66,55 @@ namespace merutilm::rff2::workspace {
                 EffectsLayout::palette(int(categories.size()), width), ROLE_SYSTEM_PUSHBUTTON);
             return result;
         }
-        static std::vector<AccessibleItem> sections(const std::vector<std::wstring> &names, int selected,
-                                                    int width, float scale) {
+        // rows lists the sections the filter shows, by their index in names; ids keep that index.
+        // tabs lists the filters shown, left to right; none means the plain list without stars.
+        static std::vector<AccessibleItem> sections(const std::vector<std::wstring> &names,
+                                                    const std::vector<int> &rows, int selected,
+                                                    EffectFilter shown, const std::vector<EffectFilter> &tabs,
+                                                    const std::function<bool(int)> &favorite, int width,
+                                                    float scale) {
             std::vector<AccessibleItem> result;
-            for (int sectionIndex = 0; sectionIndex < int(names.size()); ++sectionIndex) {
+            const bool tabbed = !tabs.empty();
+            for (int slot = 0; slot < int(tabs.size()); ++slot) {
+                const int kind = int(tabs[slot]);
+                result.push_back({filter + kind, std::wstring(EffectNavigation::filterLabels[kind]),
+                                  std::wstring(sectionFilterHelp[kind]), L"Select",
+                                  EffectsLayout::sectionFilter(slot, width).pixels(scale), ROLE_SYSTEM_RADIOBUTTON,
+                                  STATE_SYSTEM_FOCUSABLE | (shown == tabs[slot] ? STATE_SYSTEM_CHECKED : 0)});
+            }
+            for (int rowIndex = 0; rowIndex < int(rows.size()); ++rowIndex) {
+                const int sectionIndex = rows[rowIndex];
                 result.push_back(
                     {section + sectionIndex, names[sectionIndex], L"Open this settings section.", L"Open",
-                     EffectsLayout::Box{10, 64 + sectionIndex * 40, width - 20, 36}.pixels(scale),
-                     ROLE_SYSTEM_LISTITEM,
+                     EffectsLayout::section(rowIndex, width, tabbed).pixels(scale), ROLE_SYSTEM_LISTITEM,
                      STATE_SYSTEM_FOCUSABLE | STATE_SYSTEM_SELECTABLE |
                          (sectionIndex == selected ? STATE_SYSTEM_SELECTED : 0)});
+                if (!tabbed) {
+                    continue;
+                }
+                result.push_back({sectionFavorite + sectionIndex, L"Favorite " + names[sectionIndex],
+                                  L"Include this section in Favorites. This does not change the artwork.",
+                                  favorite(sectionIndex) ? L"Remove favorite" : L"Add favorite",
+                                  EffectsLayout::sectionFavorite(rowIndex, width).pixels(scale),
+                                  ROLE_SYSTEM_CHECKBUTTON,
+                                  STATE_SYSTEM_FOCUSABLE | (favorite(sectionIndex) ? STATE_SYSTEM_CHECKED : 0)});
+            }
+            if (tabbed && rows.empty()) {
+                const auto text = sectionEmptyText(shown);
+                result.push_back({150, std::wstring(text[0]) + L". " + std::wstring(text[1]), L"", L"",
+                                  EffectsLayout::Box{20, EffectsLayout::sectionTop, width - 34, 40}.pixels(scale),
+                                  ROLE_SYSTEM_STATICTEXT, 0});
             }
             return result;
+        }
+        static constexpr std::array<std::wstring_view, EffectNavigation::filterCount> sectionFilterHelp = {
+            L"Show all sections of this page.", L"Show the sections that are turned on.",
+            L"Show favorite sections. Favorites are workspace preferences, not artwork settings."};
+        static std::array<std::wstring_view, 2> sectionEmptyText(EffectFilter shown) {
+            if (shown == EffectFilter::USED) {
+                return {L"No sections in use", L"Sections that are turned on appear here."};
+            }
+            return {L"No favorite sections", L"Use a star in All."};
         }
     };
 }

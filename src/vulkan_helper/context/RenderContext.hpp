@@ -1,6 +1,7 @@
 //
 // Created by Merutilm on 2025-07-18.
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-10-13
 //
 
 #pragma once
@@ -11,6 +12,7 @@
 
 #include "../configurator/RenderContextConfigurator.hpp"
 #include "../impl/Framebuffer.hpp"
+#include "../impl/PipelinePreparation.hpp"
 #include "../impl/RenderPass.hpp"
 
 namespace merutilm::vkh {
@@ -45,6 +47,8 @@ namespace merutilm::vkh {
 
         void recreate() {
             framebuffer = nullptr;
+            // A compile a skip left running may still be reading the render pass being replaced.
+            PipelinePreparation::keepAliveWhileDeferred(std::shared_ptr<RenderPassImpl>(std::move(renderPass)));
             renderPass = nullptr;
             VkExtent2D extent = extentGetter();
             auto renderPassManager = factory::create<RenderPassManager>();

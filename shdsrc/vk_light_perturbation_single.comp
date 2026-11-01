@@ -1,0 +1,186 @@
+//
+// Created by Merutilm on 8/24/26.
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-12
+//
+
+// Derived from Merutilm RFF 2.3.0 shaders/src/vk_iterate.comp (single precision), GPL-3.0; see NOTICE.
+// Single-precision variant of vk_light_perturbation.comp; the escape past float range finishes in double.
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "light_perturbation.glsl"
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// Largest |z|^2 kept in float; the remaining iterations up to a larger bailout run in double.
+const double FLOAT_ESCAPE2 = 1.0e30LF;
+// Each double step squares |z|, so a few always reach any double bailout.
+const uint DOUBLE_TAIL_STEPS = 64;
+
+// The float copy of a pixel's perturbation, loaded from and stored back to its double PixelState.
+struct FloatDelta {
+    float dzr;
+    float dzi;
+    float pd;
+    float cd;
+};
+
+float hypot_approx_f(float x, float y) {
+    x = abs(x);
+    y = abs(y);
+    const float lo = min(x, y);
+    const float hi = max(x, y);
+    if (lo == 0) {
+        return hi;
+    }
+    if (hi == 0) {
+        return 0;
+    }
+    return hi + 0.428 * lo / hi * lo;
+}
+
+// lookup() of vk_light_perturbation.comp on the float table.
+int lookup_f(const uint64_t ref_iteration, const float dzr, const float dzi) {
+    const TableMapper m = table_slot(ref_iteration);
+    if (m.levels == 0) {
+        return -1;
+    }
+    const float r = hypot_approx_f(dzr, dzi);
+    switch (params.selection_method) {
+        case MSM_LOWEST: {
+            int found = -1;
+            for (uint i = 0; i < m.levels; ++i) {
+                if (r < table_f.pa[m.offset + i].radius) {
+                    found = int(m.offset + i);
+                } else {
+                    return found;
+                }
+            }
+            return found;
+        }
+        case MSM_HIGHEST: {
+            if (!(r < table_f.pa[m.offset].radius)) {
+                return -1;
+            }
+            for (uint j = m.levels; j > 0; --j) {
+                if (r < table_f.pa[m.offset + j - 1].radius) {
+                    return int(m.offset + j - 1);
+                }
+            }
+            return int(m.offset);
+        }
+        default: return -1;
+    }
+}
+
+bool skip_with_table_f(inout PixelState s, inout FloatDelta d, const vec2 dc) {
+    const int found = lookup_f(s.ref_iteration, d.dzr, d.dzi);
+    if (found < 0) {
+        return false;
+    }
+    const LightPAF pa = table_f.pa[found];
+    const float dzr = pa.anr * d.dzr - pa.ani * d.dzi + pa.bnr * dc.x - pa.bni * dc.y;
+    const float dzi = pa.anr * d.dzi + pa.ani * d.dzr + pa.bnr * dc.y + pa.bni * dc.x;
+    d.dzr = dzr;
+    d.dzi = dzi;
+    s.iteration += pa.skip;
+    s.ref_iteration += pa.skip;
+    ++s.abs_iteration;
+    if (s.iteration >= params.max_iteration) {
+        s.status = STATUS_FINISHED;
+    } else {
+        // The skip's endpoint is the only point of its interval the trap sees.
+        const vec2 z = reference_f.orbit[uint(s.ref_iteration)] + vec2(d.dzr, d.dzi);
+        sample_trap(s, double(z.x), double(z.y), double(z.x) * double(z.x) + double(z.y) * double(z.y));
+    }
+    return true;
+}
+
+// step_double() in float; true once |z|^2 passes escape2.
+bool step_float(inout PixelState s, inout FloatDelta d, const vec2 dc, const float escape2) {
+    if (s.ref_iteration != params.max_ref_iteration) {
+        const vec2 ref = reference_f.orbit[uint(s.ref_iteration)];
+        const float zr1 = ref.x * 2 + d.dzr;
+        const float zi1 = ref.y * 2 + d.dzi;
+        const float zr2 = zr1 * d.dzr - zi1 * d.dzi + dc.x;
+        const float zi2 = zr1 * d.dzi + zi1 * d.dzr + dc.y;
+        d.dzr = zr2;
+        d.dzi = zi2;
+        ++s.ref_iteration;
+        ++s.iteration;
+        ++s.abs_iteration;
+    }
+
+    const vec2 ref = reference_f.orbit[uint(s.ref_iteration)];
+    const float zr = ref.x + d.dzr;
+    const float zi = ref.y + d.dzi;
+
+    if (zi == 0 && zr < 0.25 && zr >= -2.0) {
+        s.status = STATUS_INTERIOR;
+        return false;
+    }
+
+    d.pd = d.cd;
+    d.cd = zr * zr + zi * zi;
+    sample_trap(s, double(zr), double(zi), double(zr) * double(zr) + double(zi) * double(zi));
+
+    if (s.ref_iteration == params.max_ref_iteration || d.cd < d.dzr * d.dzr + d.dzi * d.dzi) {
+        s.ref_iteration = 0;
+        d.dzr = zr;
+        d.dzi = zi;
+    }
+    return d.cd > escape2;
+}
+
+void main() {
+    uint index;
+    PixelState s;
+    if (!load_running_pixel(index, s)) {
+        return;
+    }
+    const dvec2 dc = offsets.dc[index];
+    const vec2 dcf = offsets_f.dc[index];
+    if (isnan(dc.x)) {
+        s.status = STATUS_SKY;
+    }
+    const bool use_table = batch.ignore_mpa == 0 && params.mapper_length != 0;
+    // A bailout beyond float range escapes float at FLOAT_ESCAPE2 and reaches the real bailout in double.
+    const bool bailout_beyond_float = params.bailout2 > FLOAT_ESCAPE2;
+    const float escape2 = float(bailout_beyond_float ? FLOAT_ESCAPE2 : params.bailout2);
+
+    FloatDelta d = FloatDelta(float(s.dzr), float(s.dzi), float(s.pd), float(s.cd));
+    bool left_float_range = false;
+
+    for (uint step = 0; s.status == STATUS_RUNNING && step < batch.batch_size; ++step) {
+        if (s.iteration >= params.max_iteration) {
+            s.status = STATUS_FINISHED;
+            break;
+        }
+        if (use_table && skip_with_table_f(s, d, dcf)) {
+            continue;
+        }
+        if (step_float(s, d, dcf, escape2)) {
+            if (bailout_beyond_float) {
+                left_float_range = true;
+            } else {
+                s.status = STATUS_FINISHED;
+            }
+            break;
+        }
+    }
+
+    s.dzr = d.dzr;
+    s.dzi = d.dzi;
+    s.pd = d.pd;
+    s.cd = d.cd;
+
+    for (uint step = 0; left_float_range && s.status == STATUS_RUNNING && step < DOUBLE_TAIL_STEPS; ++step) {
+        if (s.iteration >= params.max_iteration) {
+            s.status = STATUS_FINISHED;
+            break;
+        }
+        step_double(s, dc);
+    }
+
+    store_pixel(index, s);
+}

@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-07-10.
 // Modified by GPT-6 on 2026-09-23, 2026-09-29
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-25
 //
 
 #include "BufferObject.hpp"
@@ -63,13 +63,6 @@ namespace merutilm::vkh {
         checkFinalizedBeforeUpdate();
         memcpy(getBufferContextMF(frameIndex).mappedMemory, hostDataObject->data.data(),
                hostDataObject->getTotalSizeByte());
-    }
-
-    void BufferObjectAbstract::updateMF(const uint32_t frameIndex, const uint32_t target) const {
-        checkFinalizedBeforeUpdate();
-        const uint32_t offset = hostDataObject->getOffset(target);
-        const size_t size = hostDataObject->getReservedSizeByte(target);
-        memcpy(getBufferContextMF(frameIndex).mappedMemory + offset, hostDataObject->data.data() + offset, size);
     }
 
     void BufferObjectAbstract::upload() const {

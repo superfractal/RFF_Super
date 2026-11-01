@@ -3,8 +3,9 @@
 // Modified by AI; earlier exact modification date unavailable.
 // Modified by Opus 5 on 2026-08-06, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-27
-// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06, 2026-09-24, 2026-09-25, 2026-10-04
-// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-23, 2026-09-26, 2026-10-01
+// Modified by SuperFractal on 2026-08-24, 2026-08-25, 2026-09-06, 2026-09-24, 2026-09-25, 2026-10-04, 2026-10-05
+// Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-23, 2026-09-26, 2026-10-01, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-11-01
 //
 
 #pragma once
@@ -18,6 +19,9 @@ namespace merutilm::rff2::Constants::Win32 {
 
         constexpr int INIT_RENDER_SCENE_WIDTH = 1280;
         constexpr int INIT_RENDER_SCENE_HEIGHT = 720;
+        // The canvas resolution a session starts with; the window around it still follows the display.
+        constexpr int INIT_CANVAS_WIDTH = 1920;
+        constexpr int INIT_CANVAS_HEIGHT = 1080;
         constexpr int BASELINE_DISPLAY_WIDTH = 1920;
         constexpr int BASELINE_DISPLAY_HEIGHT = 1080;
         constexpr int MIN_WINDOW_WIDTH = 300;
@@ -32,7 +36,7 @@ namespace merutilm::rff2::Constants::Win32 {
         constexpr int MAX_AMOUNT_COMBOBOX = 7;
         // The running version, shown by the dialog the main window's ? menu opens. Bump it
         // together with the CHANGELOG heading of the release being prepared.
-        constexpr auto APPLICATION_VERSION = "v3.0.0.1";
+        constexpr auto APPLICATION_VERSION = "v3.2.0";
         constexpr auto CLASS_MASTER_WINDOW = L"RFF2MW";
         constexpr auto CLASS_SETTINGS_WINDOW = L"RFF2SW";
         constexpr auto CLASS_VIDEO_WINDOW = L"RFF2VW";
@@ -239,17 +243,6 @@ namespace merutilm::rff2::Constants::Win32 {
                 return std::wcscmp(resolved, FONT_PREFERRED) == 0 ? FONT_PREFERRED : FONT_FALLBACK;
             }();
             return face;
-        }
-
-        // Process-lifetime font for the video progress bar, which paints its own text and so carried
-        // no font at all - GDI drew that readout in the stock "System" bitmap face. Never destroyed:
-        // it stays in use for as long as that window exists. The status bar deliberately does not
-        // use this; it keeps the face Windows gives it, which is how it has always looked.
-        inline HFONT sharedUiFont() {
-            static const HFONT font = CreateFontW(settingsScaled(FONT_SIZE), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                                                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, uiFontFace());
-            return font;
         }
 
         // Shift+drag box-zoom rubber-band overlay

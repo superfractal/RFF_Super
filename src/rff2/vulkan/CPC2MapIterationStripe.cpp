@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-09-23
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-05, 2026-10-08, 2026-10-09, 2026-10-13, 2026-10-16, 2026-10-24, 2026-10-25
 //
 
 #include "CPC2MapIterationStripe.hpp"
@@ -24,6 +24,7 @@
 #include "TextureDescriptor.hpp"
 #include "../../vulkan_helper/repo/GlobalSamplerRepo.hpp"
 #include "../attr/ShdPaletteAttribute.h"
+#include "../formula/OrbitTrap.h"
 
 namespace merutilm::rff2 {
     void CPC2MapIterationStripe::updateQueue(vkh::DescriptorUpdateQueue &queue, uint32_t frameIndex) {
@@ -83,7 +84,7 @@ namespace merutilm::rff2 {
     }
 
 
-    void CPC2MapIterationStripe::setPalette(const ShdPaletteAttribute &palette) {
+    void CPC2MapIterationStripe::setPalette(const ShdPaletteAttribute &palette, const ShdSlopeAttribute &slope) {
         using namespace SharedDescriptorTemplate;
         phases.setPaletteSpeeds(palette);
         auto &paletteDesc = getDescriptor(SET_PALETTE);
@@ -149,6 +150,7 @@ namespace merutilm::rff2 {
 
         paletteSSBOHost.set<glm::vec4>(DescPalette::TARGET_PALETTE_MANDELBROT_COLOR, palette.mandelbrotColor);
         paletteSSBOHost.set<float>(DescPalette::TARGET_PALETTE_CYCLE_BIAS, palette.cycleBias);
+        DescPalette::setOrbitTrap(paletteSSBOHost, palette, slope);
         paletteSSBOHost.resizeArray<glm::vec4>(DescPalette::TARGET_PALETTE_COLORS, finalColors.size());
         paletteSSBOHost.set<glm::vec4>(DescPalette::TARGET_PALETTE_COLORS, finalColors);
         paletteSSBO.reloadBuffer();
@@ -355,6 +357,45 @@ namespace merutilm::rff2 {
         map2DescZoomedSSBO.update();
     }
 
+    void CPC2MapIterationStripe::setAllTraps(const std::vector<float> *normal, const std::vector<float> *zoomed) const {
+        auto &map2Desc = getDescriptor(SET_I2MAP);
+        const auto &normalIterations = *map2Desc.get<vkh::ShaderStorage>(0, BINDING_I2MAP_SSBO_NORMAL);
+        const size_t pixels = normalIterations.getHostObject().getElementCount(TARGET_I2MAP_SSBO_NORMAL_ITERATION);
+        const size_t planes = pixels * OrbitTrap::PLANE_COUNT;
+        // A keyframe saved with its shape planes carries all eight; the shader tells the two apart by length.
+        const size_t shapePlanes = pixels * OrbitTrap::SHAPE_PLANE_COUNT;
+        const std::array sources = {normal, zoomed};
+        const std::array bindings = {BINDING_I2MAP_SSBO_NORMAL_TRAP, BINDING_I2MAP_SSBO_ZOOMED_TRAP};
+        std::vector<uint32_t> resized;
+        glm::uvec2 planeCounts = {0, 0};
+        for (size_t i = 0; i < sources.size(); ++i) {
+            const bool present = sources[i] != nullptr && (sources[i]->size() == planes || sources[i]->size() == shapePlanes);
+            const size_t length = present ? sources[i]->size() : 1;
+            planeCounts[static_cast<glm::length_t>(i)] = present && pixels > 0 ? static_cast<uint32_t>(length / pixels) : 0;
+            auto &ssbo = *map2Desc.get<vkh::ShaderStorage>(0, bindings[i]);
+            // Resized only when a keyframe with traps follows one without, or the other way round.
+            if (ssbo.getHostObject().getElementCount(TARGET_I2MAP_SSBO_TRAP) != length) {
+                ssbo.getHostObject().resizeAndClear<float>(TARGET_I2MAP_SSBO_TRAP, length);
+                ssbo.reloadBuffer();
+                resized.push_back(bindings[i]);
+            }
+            if (present) {
+                ssbo.getHostObject().set<float>(TARGET_I2MAP_SSBO_TRAP, *sources[i]);
+                ssbo.update();
+            }
+        }
+        if (!resized.empty()) {
+            writeDescriptorMF([&map2Desc, resized](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                map2Desc.queue(queue, frameIndex, {}, std::vector(resized));
+            });
+        }
+        // The shader reads the plane counts here rather than the buffers' length(), which fails past 2 GiB.
+        using SharedDescriptorTemplate::DescIteration;
+        const auto &info = *getDescriptor(SET_OUTPUT_ITERATION).get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO);
+        info.getHostObject().set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_TRAP_PLANES, planeCounts);
+        info.update(DescIteration::TARGET_UBO_ITERATION_TRAP_PLANES);
+    }
+
     void CPC2MapIterationStripe::set2MapSize(const VkExtent2D &extent) {
         using namespace SharedDescriptorTemplate;
         const auto &[width, height] = extent;
@@ -378,6 +419,7 @@ namespace merutilm::rff2 {
         // lock() copies the staging mapping, so the cleared host values must be in it first.
         outputIterations.upload();
         outputIterations.lock(wc.getCommandPool());
+        DescIteration::resizeCaches(outputIterationsDescriptor, width, height, wc.getCommandPool());
 
         const auto &outputIterationInfo = *outputIterationsDescriptor.get<vkh::Uniform>(
             0, DescIteration::BINDING_UBO_ITERATION_INFO);
@@ -394,10 +436,14 @@ namespace merutilm::rff2 {
         writeDescriptorMF([&inputIterationsDescriptor, &outputIterationsDescriptor](vkh::DescriptorUpdateQueue &queue,
                                                                                      const uint32_t frameIndex) {
             inputIterationsDescriptor.queue(queue, frameIndex, {},
-                                            {BINDING_I2MAP_SSBO_NORMAL, BINDING_I2MAP_SSBO_ZOOMED});
+                                            {BINDING_I2MAP_SSBO_NORMAL, BINDING_I2MAP_SSBO_ZOOMED,
+                                             BINDING_I2MAP_SSBO_NORMAL_TRAP, BINDING_I2MAP_SSBO_ZOOMED_TRAP});
             outputIterationsDescriptor.queue(queue, frameIndex, {},
                                              {DescIteration::BINDING_UBO_ITERATION_INFO,
-                                              DescIteration::BINDING_SSBO_ITERATION_MATRIX});
+                                              DescIteration::BINDING_SSBO_ITERATION_MATRIX,
+                                              DescIteration::BINDING_SSBO_RELIEF_CACHE,
+                                              DescIteration::BINDING_SSBO_CHAOS_CACHE,
+                                              DescIteration::BINDING_SSBO_CHAOS_DEFOCUS});
         });
     }
 
@@ -457,6 +503,13 @@ namespace merutilm::rff2 {
                                            std::move(normalIterations));
         inputIterationsManager->appendSSBO(BINDING_I2MAP_SSBO_ZOOMED, VK_SHADER_STAGE_COMPUTE_BIT,
                                            std::move(zoomedIterations));
+        for (const uint32_t binding : {BINDING_I2MAP_SSBO_NORMAL_TRAP, BINDING_I2MAP_SSBO_ZOOMED_TRAP}) {
+            auto trapLayout = vkh::factory::create<vkh::HostDataObjectManager>();
+            trapLayout->reserveArray<float>(TARGET_I2MAP_SSBO_TRAP, 1);
+            inputIterationsManager->appendSSBO(binding, VK_SHADER_STAGE_COMPUTE_BIT,
+                                               vkh::factory::create<vkh::ShaderStorage>(
+                                                   wc.core, std::move(trapLayout), vkh::BufferLock::ALWAYS_MUTABLE, false));
+        }
         appendUniqueDescriptor(SET_I2MAP, descriptors, std::move(inputIterationsManager));
         appendDescriptor<DescVideo>(SET_VIDEO, descriptors);
         appendDescriptor<DescPalette>(SET_PALETTE, descriptors);
@@ -476,7 +529,7 @@ namespace merutilm::rff2 {
                 .flags = 0,
                 .magFilter = VK_FILTER_LINEAR,
                 .minFilter = VK_FILTER_LINEAR,
-                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
                 .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
@@ -486,7 +539,7 @@ namespace merutilm::rff2 {
                 .compareEnable = VK_FALSE,
                 .compareOp = VK_COMPARE_OP_ALWAYS,
                 .minLod = 0,
-                .maxLod = 0,
+                .maxLod = VK_LOD_CLAMP_NONE,
                 .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
                 .unnormalizedCoordinates = VK_FALSE,
             });
