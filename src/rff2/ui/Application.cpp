@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-18, 2026-10-21, 2026-10-25, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-18, 2026-10-21, 2026-10-25, 2026-11-01, 2026-11-07
 //
 
 #include "NativeDialogs.hpp"
@@ -461,6 +461,17 @@ namespace merutilm::rff2 {
             (statusBarWidth - rightEdges[Constants::Status::PERIOD_STATUS]) / 2;
 
         SendMessageW(statusBar, SB_SETPARTS, Constants::Status::LENGTH, (LPARAM)rightEdges.data());
+        if (statusTooltip != nullptr) {
+            for (const int part : {Constants::Status::ITERATION_STATUS, Constants::Status::PERIOD_STATUS}) {
+                TTTOOLINFOW tool{};
+                tool.cbSize = statusToolSize;
+                tool.hwnd = statusBar;
+                tool.uId = static_cast<UINT_PTR>(part);
+                SendMessageW(statusBar, SB_GETRECT, part, reinterpret_cast<LPARAM>(&tool.rect));
+                SendMessageW(statusTooltip, TTM_NEWTOOLRECTW, 0, reinterpret_cast<LPARAM>(&tool));
+            }
+            SendMessageW(statusTooltip, TTM_SETMAXTIPWIDTH, 0, UiDpi::pixels(420, uiDpi));
+        }
         // Painted now, not on a later WM_PAINT: during a panel drag the strip the canvas left kept its old picture as a trail.
         RedrawWindow(masterWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_NOCHILDREN);
         if (workspaceShell) {
@@ -532,6 +543,7 @@ namespace merutilm::rff2 {
             refreshStatusBar();
             InvalidateRect(statusBar, nullptr, TRUE);
         }
+        applyStatusTooltipTheme();
         RedrawWindow(masterWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE);
     }
 
@@ -627,8 +639,68 @@ namespace merutilm::rff2 {
                                         WS_CLIPCHILDREN,
                                     0, 0, 0, 0, masterWindow, nullptr, nullptr, nullptr);
 
+        statusTooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr,
+                                        WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP, CW_USEDEFAULT, CW_USEDEFAULT,
+                                        CW_USEDEFAULT, CW_USEDEFAULT, masterWindow, nullptr, nullptr, nullptr);
+        if (statusTooltip != nullptr) {
+            // Without a version 6 manifest the loaded comctl32 rejects the full structure size, so no tool would be added.
+            statusToolSize = SendMessageW(statusTooltip, CCM_GETVERSION, 0, 0) < 6 ? TTTOOLINFOW_V2_SIZE
+                                                                                   : sizeof(TTTOOLINFOW);
+            // The part index is the tool id; the rectangles follow the parts in adjustClient.
+            for (const int part : {Constants::Status::ITERATION_STATUS, Constants::Status::PERIOD_STATUS}) {
+                TTTOOLINFOW tool{};
+                tool.cbSize = statusToolSize;
+                tool.uFlags = TTF_SUBCLASS;
+                tool.hwnd = statusBar;
+                tool.uId = static_cast<UINT_PTR>(part);
+                tool.lpszText = LPSTR_TEXTCALLBACKW;
+                SendMessageW(statusTooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+            }
+            SendMessageW(statusTooltip, TTM_SETDELAYTIME, TTDT_AUTOPOP, 30000);
+            applyStatusTooltipTheme();
+        }
+
         statusHeight = 0;
         updateStatusMetrics();
+    }
+
+    std::wstring Application::statusTooltipFor(const int part) const {
+        std::wstring shown;
+        {
+            std::scoped_lock lock(statusMessagesMutex);
+            shown = statusMessages[part];
+        }
+        // Only the "value (a, b)" form is explained; I also shows a folder place such as 3/120 while browsing.
+        if (shown.find(L'(') == std::wstring::npos) {
+            return {};
+        }
+        const auto lines = part == Constants::Status::ITERATION_STATUS
+                               ? std::vector<const wchar_t *>{
+                                     L"I : iterations of the pixel under the pointer.",
+                                     L"(x, y) : that pixel's place in the calculation, counted from 0, 0 at the top left. With Clarity or Supersampling above 1 it counts calculated pixels, so it runs larger than the canvas."}
+                               : std::vector<const wchar_t *>{
+                                     L"P : the period of the reference orbit found for this view.",
+                                     L"First number in parentheses : the points of the reference orbit kept in memory.",
+                                     L"Second number : the size of the MPA table, the places along the reference orbit where MPA skips iterations. 0 means no skipping in this view."};
+        std::wstring text;
+        for (const auto *line : lines) {
+            if (!text.empty()) {
+                text += L"\r\n";
+            }
+            text += UiLanguage::text(line);
+        }
+        return text;
+    }
+
+    void Application::applyStatusTooltipTheme() const {
+        if (statusTooltip == nullptr) {
+            return;
+        }
+        // The colors only take while the tooltip is off the visual styles, as the settings tooltips are.
+        disableThemeClass(statusTooltip);
+        SendMessageW(statusTooltip, TTM_SETTIPBKCOLOR, settingsTheme().tooltipBackground, 0);
+        SendMessageW(statusTooltip, TTM_SETTIPTEXTCOLOR, settingsTheme().tooltipText, 0);
+        SendMessageW(statusTooltip, TTM_SETMAXTIPWIDTH, 0, UiDpi::pixels(420, uiDpi));
     }
 
     void Application::updateStatusMetrics() {
@@ -663,6 +735,14 @@ namespace merutilm::rff2 {
         const auto *application = reinterpret_cast<Application *>(data);
         if (message == WM_ERASEBKGND) {
             return 1;
+        }
+        if (message == WM_NOTIFY && application != nullptr) {
+            if (auto *info = reinterpret_cast<NMTTDISPINFOW *>(lParam);
+                info->hdr.hwndFrom == application->statusTooltip && info->hdr.code == TTN_GETDISPINFOW) {
+                application->statusTooltipText = application->statusTooltipFor(static_cast<int>(info->hdr.idFrom));
+                info->lpszText = application->statusTooltipText.data();
+                return 0;
+            }
         }
         if (application && (message == WM_PRINTCLIENT || message == WM_PRINT)) {
             application->paintStatusBar(reinterpret_cast<HDC>(wParam));

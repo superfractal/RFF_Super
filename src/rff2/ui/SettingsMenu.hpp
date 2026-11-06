@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-27, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-26, 2026-08-27
 // Modified by GPT-6 on 2026-09-14, 2026-09-17, 2026-09-23
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07
 //
 
 #pragma once
@@ -94,7 +94,7 @@ namespace merutilm::rff2 {
         inline static const std::vector<std::string> LOCAL_AI_FEATURE = {"Shader", "Local AI appearance"};
         inline static const std::vector<std::string> AI_EDIT_FEATURE = {"Timeline Editor", "AI Edit"};
         // Menu items renamed after the panel or section they open, each with the caption it had before.
-        static constexpr std::array<std::pair<std::string_view, std::string_view>, 16> RENAMED_CAPTIONS{{
+        static constexpr std::array<std::pair<std::string_view, std::string_view>, 17> RENAMED_CAPTIONS{{
             {"Lighting & Relief", "Slope"},
             {"Animated Materials", "Effects"},
             {"Color Correction", "Color"},
@@ -111,6 +111,7 @@ namespace merutilm::rff2 {
             {"Use GPU Perturbation", "GPU Perturbation"},
             {"Generate Keyframes", "Generate Video Keyframe"},
             {"Smooth Navigation", "Smooth Zooming"},
+            {"Help", "?"},
         }};
         std::vector<std::optional<std::function<bool*(RenderScene &, bool)>>> checkboxActions = {};
         // What part of the attribute a panel is bound to - all the closers below need to tell them

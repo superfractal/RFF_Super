@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07
 //
 
 {L"Load keyframes to start", L"キーフレームを読み込んで開始"},
@@ -2149,3 +2149,8 @@
 {L"The view could not be calculated. The picture on screen is the last one that finished.", L"表示を計算できませんでした。画面の画像は最後に完了したものです。"},
 {L"There is not enough memory. Lower Clarity, Supersampling or the resolution.", L"メモリが不足しています。解像度倍率、スーパーサンプリング、または解像度を下げてください。"},
 {L"Calculation failed", L"計算に失敗しました"},
+{L"I : iterations of the pixel under the pointer.", L"I : ポインターの下にあるピクセルの反復回数です。"},
+{L"(x, y) : that pixel's place in the calculation, counted from 0, 0 at the top left. With Clarity or Supersampling above 1 it counts calculated pixels, so it runs larger than the canvas.", L"(x, y) : そのピクセルの計算上の位置です。左上が 0, 0 です。解像度倍率やスーパーサンプリングが 1 より大きいと計算したピクセル単位で数えるため、キャンバスの大きさより大きな値になります。"},
+{L"P : the period of the reference orbit found for this view.", L"P : この表示のために見つけた参照軌道の周期です。"},
+{L"First number in parentheses : the points of the reference orbit kept in memory.", L"かっこ内の 1 つ目 : メモリに保持している参照軌道の点の数です。"},
+{L"Second number : the size of the MPA table, the places along the reference orbit where MPA skips iterations. 0 means no skipping in this view.", L"2 つ目 : MPA テーブルの大きさ、つまり参照軌道上で MPA が反復を飛ばせる箇所の数です。0 はこの表示で飛ばしがないことを表します。"},

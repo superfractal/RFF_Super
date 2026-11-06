@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 8/24/26.
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29, 2026-11-01, 2026-11-06
 //
 
 // Derived from Merutilm RFF 2.3.0 shaders/include/desc_render_meta_double.glsl and desc_batch_result.glsl, GPL-3.0; see NOTICE.
@@ -451,6 +451,12 @@ void store_pixel(const uint index, const PixelState s) {
 
 // ---- One step of LightMandelbrotPerturbator::iterate in double, after the MPA skip ----
 
+// Whether c = orbit[1] + dc lies on the real axis; a real z off that axis, as at Re(c) = -0.5, is not interior.
+bool c_is_real(const dvec2 dc) {
+    precise const double ci = reference.orbit[1].y + dc.y;
+    return ci == 0.0LF;
+}
+
 // Advances the reference by one, then rebases or ends the pixel exactly as the CPU loop does.
 void step_double(inout PixelState s, const dvec2 dc) {
     if (s.ref_iteration != params.max_ref_iteration) {
@@ -471,7 +477,7 @@ void step_double(inout PixelState s, const dvec2 dc) {
     precise const double zi = ref.y + s.dzi;
 
     // The CPU's shortcut for a point on the real axis inside the set.
-    if (zi == 0 && zr < 0.25LF && zr >= -2.0LF) {
+    if (zi == 0 && zr < 0.25LF && zr >= -2.0LF && c_is_real(dc)) {
         s.status = STATUS_INTERIOR;
         return;
     }

@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07
 //
 
 #include "NativeDialogs.hpp"
@@ -666,9 +666,8 @@ namespace merutilm::rff2 {
         addChildItem(currentMenu, "Show GPU Pass Times", CallbackDebug::SHOW_PASS_TIMES);
 #endif
 
-        // Added last and pushed to the right edge of the bar, where a help mark has sat since the
-        // menu bar was invented, so it is found without crowding the groups that are worked in.
-        currentMenu = addChildMenu(menubar, "?");
+        // Added last and kept in line after the other menus, named Help like them instead of a lone mark at the far right.
+        currentMenu = addChildMenu(menubar, "Help");
         addChildItem(currentMenu, "Open Guide", [](SettingsMenu &, RenderScene &) {
             constexpr auto url = L"https://github.com/superfractal/RFF_Super/blob/master/guide/user-manual.md";
             const bool japanese = UiLanguage::current() == Language::Japanese;
@@ -693,22 +692,6 @@ namespace merutilm::rff2 {
                 nullptr, std::string("RFF_Super ").append(Constants::Win32::APPLICATION_VERSION).c_str(),
                 "Version", MB_OK | MB_ICONINFORMATION);
         });
-        // MFT_RIGHTJUSTIFY right-aligns this menu and every one after it, so it must stay the last
-        // one added. MIIM_FTYPE leaves the caption and the popup it carries alone.
-        MENUITEMINFOW rightJustified = {};
-        rightJustified.cbSize = sizeof(rightJustified);
-        rightJustified.fMask = MIIM_FTYPE;
-        rightJustified.fType = MFT_STRING | MFT_RIGHTJUSTIFY;
-        const auto lastPosition = static_cast<UINT>(GetMenuItemCount(menubar) - 1);
-        // Remembered, because applyMenuTheme rewrites this item's type whole every time the theme
-        // changes and would otherwise drop it back among the menus on the left.
-        for (MenuEntry &entry : menuEntries) {
-            // Only the ? menu itself, which menu-visibility.json may have left off the bar.
-            if (entry.parent == menubar && entry.position == lastPosition && entry.text == "?") {
-                SetMenuItemInfoW(menubar, lastPosition, TRUE, &rightJustified);
-                entry.rightJustified = true;
-            }
-        }
         // The Timeline Editor's AI Edit button is not a menu item, so its switch is listed by hand.
         menuVisibilityTemplate[AI_EDIT_FEATURE[0]][AI_EDIT_FEATURE[1]] = false;
         if (visibilityStatus == MenuVisibilityIO::Status::MISSING) {
@@ -767,11 +750,18 @@ namespace merutilm::rff2 {
             hasChild ? MenuVisibilityIO::Json::object() : MenuVisibilityIO::Json(shownByDefault);
         bool visible = MenuVisibilityIO::visible(menuVisibility, captions, shownByDefault);
         // An item renamed to match the panel it opens stays hidden by a file written under its old caption.
-        if (const auto renamed = std::ranges::find(RENAMED_CAPTIONS, std::string_view(captions.back()),
-                                                   &std::pair<std::string_view, std::string_view>::first);
-            renamed != RENAMED_CAPTIONS.end()) {
-            auto old = captions;
-            old.back() = renamed->second;
+        // Every level is mapped, so an item inside a renamed menu, such as Help (formerly ?), keeps its old setting too.
+        auto old = captions;
+        bool anyRenamed = false;
+        for (auto &caption : old) {
+            if (const auto renamed = std::ranges::find(RENAMED_CAPTIONS, std::string_view(caption),
+                                                       &std::pair<std::string_view, std::string_view>::first);
+                renamed != RENAMED_CAPTIONS.end()) {
+                caption = renamed->second;
+                anyRenamed = true;
+            }
+        }
+        if (anyRenamed) {
             visible = visible && MenuVisibilityIO::visible(menuVisibility, old, shownByDefault);
         }
         if (hmenu != nullptr) {

@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 8/24/26.
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-12
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-12, 2026-11-06
 //
 
 // Derived from Merutilm RFF 2.3.0 shaders/src/vk_iterate.comp (single precision), GPL-3.0; see NOTICE.
@@ -97,7 +97,7 @@ bool skip_with_table_f(inout PixelState s, inout FloatDelta d, const vec2 dc) {
 }
 
 // step_double() in float; true once |z|^2 passes escape2.
-bool step_float(inout PixelState s, inout FloatDelta d, const vec2 dc, const float escape2) {
+bool step_float(inout PixelState s, inout FloatDelta d, const vec2 dc, const dvec2 dc_double, const float escape2) {
     if (s.ref_iteration != params.max_ref_iteration) {
         const vec2 ref = reference_f.orbit[uint(s.ref_iteration)];
         const float zr1 = ref.x * 2 + d.dzr;
@@ -115,7 +115,7 @@ bool step_float(inout PixelState s, inout FloatDelta d, const vec2 dc, const flo
     const float zr = ref.x + d.dzr;
     const float zi = ref.y + d.dzi;
 
-    if (zi == 0 && zr < 0.25 && zr >= -2.0) {
+    if (zi == 0 && zr < 0.25 && zr >= -2.0 && c_is_real(dc_double)) {
         s.status = STATUS_INTERIOR;
         return false;
     }
@@ -159,7 +159,7 @@ void main() {
         if (use_table && skip_with_table_f(s, d, dcf)) {
             continue;
         }
-        if (step_float(s, d, dcf, escape2)) {
+        if (step_float(s, d, dcf, dc, escape2)) {
             if (bailout_beyond_float) {
                 left_float_range = true;
             } else {

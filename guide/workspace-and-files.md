@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-28, 2026-11-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-28, 2026-11-01, 2026-11-07. -->
 # Workspace and files
 
 [Manual](user-manual.md) · [Actual UI gallery](ui-gallery.md)
@@ -111,7 +111,7 @@ For a reproducible comparison, retain the RFC files and use a fixed time, canvas
 
 `menu-visibility.json` controls which menu entries appear. It lives in the `config/` folder beside the executable's folder: with `bin/RFF_Super.exe`, this is `config/menu-visibility.json`. A copy left at the application root by an older build is moved there on startup. On first startup, the application writes a template if the file is absent and the directory is writable. Edit it while RFF_Super is closed, then restart.
 
-The file controls the main menu bar and the Timeline Editor's **AI Edit** button. The timeline's right-click **Parameters** menu, including **Zoom Overlay** and **Max Iterations Display**, is not controlled by this file; adding those keys has no effect. Existing files are not automatically expanded when new menu entries are introduced. To control the guide entry, add `"Open Guide": true` or `false` inside the `"?"` object.
+The file controls the main menu bar and the Timeline Editor's **AI Edit** button. The timeline's right-click **Parameters** menu, including **Zoom Overlay** and **Max Iterations Display**, is not controlled by this file; adding those keys has no effect. Existing files are not automatically expanded when new menu entries are introduced. To control the guide entry, add `"Open Guide": true` or `false` inside the `"Help"` object. A file written before 3.2.1.1 that hides the menu or its items under `"?"` still hides them.
 
 Keys use the original English captions even in the Japanese interface. Set an item to `false` to hide it, or `true` to show it; setting a whole menu to `false` hides its submenu. Missing ordinary entries default to visible. **Local AI appearance** and the timeline's **AI Edit** button default to hidden and need explicit enabling:
 

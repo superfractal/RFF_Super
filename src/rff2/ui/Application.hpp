@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-15, 2026-08-27, 2026-09-01
 // Modified by GPT-5 on 2026-08-23, 2026-09-02
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-25
+// Modified by Opus 5.5 on 2026-10-25, 2026-11-07
 //
 
 #pragma once
@@ -36,6 +36,12 @@ namespace merutilm::rff2 {
         HWND masterWindow = nullptr;
         HWND renderWindow = nullptr;
         HWND statusBar = nullptr;
+        // Explains the bracketed numbers of the I and P parts while the pointer rests on them.
+        HWND statusTooltip = nullptr;
+        // The text handed to that tooltip, kept alive until it asks again.
+        mutable std::wstring statusTooltipText;
+        // The TTTOOLINFOW size the loaded comctl32 accepts.
+        UINT statusToolSize = 0;
         vkh::WindowContextPtr wc = nullptr;
         std::unique_ptr<RenderScene> scene = nullptr;
         std::unique_ptr<SettingsMenu> settingsMenu = nullptr;
@@ -79,6 +85,9 @@ namespace merutilm::rff2 {
         // Watches the status bar for a press on its map part, which opens the jump entry.
         static LRESULT CALLBACK statusBarProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam,
                                               UINT_PTR id, DWORD_PTR data);
+        // The tooltip text for a status part, empty when the part shows nothing to explain.
+        std::wstring statusTooltipFor(int part) const;
+        void applyStatusTooltipTheme() const;
 
         void init() override;
 

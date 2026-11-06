@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-18
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-11-06
 //
 
 #include "LightMandelbrotPerturbator.h"
@@ -144,7 +144,9 @@ namespace merutilm::rff2 {
             zi = reference->refImag[index] + dzi;
 
 
-            if (zi == 0 && zr < 0.25 && zr >= -2) {
+            // Only a real c keeps a real orbit; at Re(c) = -0.5 the second z is real for every Im(c).
+            if (zi == 0 && zr < 0.25 && zr >= -2 &&
+                reference->refImag[ArrayCompressor::compress(reference->compressor, 1)] + dci1 == 0) {
                 //IT IS NOT SATISFIED MPA SKIP RADIUS CONDITION.
                 //WHEN THE MAX ITERATION IS HIGH, REPEATS SEMI-INFINITELY.
                 return finish(static_cast<double>(maxIteration));

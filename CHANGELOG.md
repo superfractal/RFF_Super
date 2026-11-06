@@ -2,6 +2,14 @@
 <!-- Modified by Opus 5.5 on 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-16, 2026-10-17, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05, 2026-11-06. -->
 # Update History
 
+## 2026/11/07
+
+* **3.2.1.1**
+  * The ? menu is now named Help (ヘルプ) and sits on the menu bar right after Explore, instead of alone at the far right end of the window. A `menu-visibility.json` that hides the menu or its items under the old name ? still hides them.
+  * Resting the pointer on the I or P part of the status bar now explains its numbers: after I, the iterations and the position of the pixel under the pointer; after P, the period, the points of the reference orbit kept in memory and the size of the MPA table.
+* **Fixes**
+  * GPU Perturbation no longer draws a thin black vertical line through the view at real coordinate -0.5, as it did across the starting view with Single Precision on; that column is now colored like its neighbors, inside and outside the set.
+
 ## 2026/11/06
 
 * **3.2.1 - Faster Preview Preload**
@@ -27,6 +35,8 @@
   * The settings search now also finds a setting by the name of one of its choices, in English or Japanese, such as Along Bands (帯に沿う) or OpenPBR Surface.
   * Timeline Editor preview and video export: keyframes generated in 360 Camera or 360 Equirectangular, such as a 1080 x 1920 360 Camera view tilted to Pitch -67, now zoom smoothly from one keyframe to the next, instead of the camera lurching at every keyframe while the next keyframe shows through as a misaligned rectangle with doubled shapes. Existing keyframe folders need no regenerating, and planar keyframes render exactly as before.
   * A tall 360 Camera view, such as 1080 x 1920, with Rotation / 360 Padding on no longer smears the top and bottom of the picture into streaks while looking straight down; the padded area now always reaches the corners of that view, which at 1080 x 1920 and Field of View 90 takes Camera Padding Scale 4 whatever lower scale is set, with about 4 times the memory and first calculation time of 2. Where more than 4 would be needed, as at 1080 x 1920 and Field of View 120, the view is calculated directly, as with padding off. Tilting the camera toward the horizon still stops the view at the edge of the padded area. A 1920 x 1080 view at Field of View 120 or less is unaffected.
+
+## 2026/11/01
 
 * **3.2.0 - Optimizations, Orbit Traps, and More**
   * RFF_Super groups Zoom Display and Max Iterations Display settings into collapsible sections, with display content and timing open initially and position, font, outline, shadow and tools available on demand. Custom Appearance explains its behavior beside the setting, and section changes retain pending edits.
