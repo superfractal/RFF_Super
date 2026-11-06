@@ -1,6 +1,7 @@
 //
 // Modified by Opus 5 on 2026-08-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-16, 2026-09-23
+// Modified by Opus 5.5 on 2026-11-04, 2026-11-06
 //
 
 #version 450
@@ -17,7 +18,23 @@ layout (set = 1, binding = 0) uniform ColorUBO {
     float brightness;
     float contrast;
     float scene_linear;
+    // Appended at the tail to keep existing offsets fixed (must match DescColor reserve order).
+    float vignette;
+    float vignette_radius;
+    float vignette_richness;
+    // 0 = Ellipse, 1 = Frame.
+    float vignette_shape;
 } color_attr;
+
+// The finished canvas this buffer is a piece of, so a tiled export lays one vignette over the whole image.
+layout (set = 2, binding = 0) uniform IterUBO {
+    uvec2 extent;
+    double max_value;
+    double max_value_normal;
+    double max_value_zoomed;
+    uvec2 canvas_extent;
+    ivec2 canvas_offset;
+} iteration_info_attr;
 
 layout (location = 0) out vec4 color;
 
@@ -139,6 +156,35 @@ vec3 studio_encode(vec3 c) {
     return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
 }
 
+// Original RFF_Super vignette, GPL-3.0-only; see NOTICE.
+// The rim goes dark toward the frame edge, a deeper color sits just inside it, and the graded color returns past Vignette Radius.
+vec3 apply_vignette(vec3 c) {
+    vec2 size = vec2(iteration_info_attr.canvas_extent);
+    if (size.x < 1.0 || size.y < 1.0) {
+        return c;
+    }
+    vec2 pixel = gl_FragCoord.xy + vec2(iteration_info_attr.canvas_offset);
+    float radius = clamp(color_attr.vignette_radius, 0.0, 0.95);
+    float rich;
+    float dark;
+    if (color_attr.vignette_shape > 0.5) {
+        // Frame: the nearest edge in half heights, so all four sides carry a band of the same width.
+        vec2 toEdge = min(pixel, size - pixel);
+        float t = clamp((1.0 - min(toEdge.x, toEdge.y) / (0.5 * size.y) - radius) / (1.0 - radius), 0.0, 1.0);
+        rich = smoothstep(0.0, 0.55, t);
+        dark = smoothstep(0.45, 1.0, t);
+    } else {
+        // An ellipse fitted to the frame: 0 at the center, 1 at the middle of each edge, past 1 toward the corners.
+        vec2 p = pixel / size * 2.0 - 1.0;
+        float t = clamp((length(p) - radius) / (1.0 - radius), 0.0, 1.0);
+        rich = smoothstep(0.0, 0.5, t);
+        dark = smoothstep(0.2, 1.0, t);
+    }
+    float gray = grayscale(c);
+    c = fix_color(c + (c - vec3(gray)) * (rich * max(color_attr.vignette_richness, 0.0)));
+    return c * (1.0 - clamp(color_attr.vignette, 0.0, 1.0) * dark);
+}
+
 void main() {
 
     vec3 c = subpassLoad(canvas).rgb;
@@ -146,7 +192,8 @@ void main() {
     float sceneScale = 1.0;
     if (color_attr.scene_linear > 0.5) {
         if (color_attr.gamma == 1.0 && color_attr.exposure == 0.0 && color_attr.hue == 0.0 &&
-            color_attr.saturation == 0.0 && color_attr.brightness == 0.0 && color_attr.contrast == 0.0) {
+            color_attr.saturation == 0.0 && color_attr.brightness == 0.0 && color_attr.contrast == 0.0 &&
+            color_attr.vignette == 0.0) {
             color = vec4(c, 1);
             return;
         }
@@ -167,5 +214,9 @@ void main() {
     c = fix_color(c + (c - vec3(gray, gray, gray)) * color_attr.saturation);
     c = fix_color(c + color_attr.brightness);
     c = fix_color((c - 0.5) / (1 - contrast) * (1 + contrast) + 0.5);
+    // Off skips the vignette outright, so the grade above is all that reaches the output.
+    if (color_attr.vignette > 0.0) {
+        c = apply_vignette(c);
+    }
     color = vec4(color_attr.scene_linear > 0.5 ? studio_decode(c) * sceneScale : c, 1);
 }

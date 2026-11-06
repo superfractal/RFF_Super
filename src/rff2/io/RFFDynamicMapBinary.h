@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-23
 // Modified by GPT-5 on 2026-08-18
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-11-05
 //
 
 #pragma once
@@ -19,6 +20,7 @@ namespace merutilm::rff2 {
         uint64_t period;
         uint64_t maxIteration;
         Matrix<double> iterations;
+        double lowestEscaped;
 
     public:
         static const RFFDynamicMapBinary DEFAULT;
@@ -73,5 +75,10 @@ namespace merutilm::rff2 {
         [[nodiscard]] uint64_t getMaxIteration() const;
 
         [[nodiscard]] const Matrix<double> &getMatrix() const;
+
+        // The lowest iteration of a pixel that escaped below the limit, 0 when none did; Relief Cap counts its periods from here.
+        [[nodiscard]] double getLowestEscapedIteration() const;
+
+        [[nodiscard]] static double lowestEscapedIteration(const Matrix<double> &iterations, double maxIteration);
     };
 }

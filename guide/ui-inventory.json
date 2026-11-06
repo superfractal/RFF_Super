@@ -1102,6 +1102,14 @@
       {
         "choices": [],
         "group": 8,
+        "hint": "0 to 8",
+        "id": "slope.reliefCap",
+        "label": "Relief Cap",
+        "value": "0"
+      },
+      {
+        "choices": [],
+        "group": 8,
         "hint": "0 to 1",
         "id": "slope.reliefWaves",
         "label": "Relief Waves",

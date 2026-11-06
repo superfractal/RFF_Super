@@ -1,7 +1,7 @@
 //
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 // Modified by GPT-5 on 2026-09-17
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-25, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-25, 2026-11-01, 2026-11-04
 //
 
 #pragma once
@@ -590,8 +590,15 @@ namespace merutilm::rff2::workspace {
                 const auto *f = &field;
                 const auto path = workspaceName(workspaceNavigation.tab(module)) + L" / " + form->title() +
                                   L" / " + form->groups().at(f->group);
+                std::wstring aliases = f->hint + L" " + settingsSearchAliases(f->id);
+                // A choice's option names find it too, as written and in the UI language; On and Off would match every checkbox.
+                for (const auto &choice : f->choices) {
+                    if (choice.label != L"On" && choice.label != L"Off") {
+                        aliases += L" " + choice.label + L" " + UiLanguage::text(choice.label);
+                    }
+                }
                 searchIndex.add(
-                    {module, f->group, f->id}, f->label, path, f->hint + L" " + settingsSearchAliases(f->id),
+                    {module, f->group, f->id}, f->label, path, aliases,
                     [form, f] { return form->searchValue(*f); }, [form, f] { return form->searchState(*f); });
             }
         }

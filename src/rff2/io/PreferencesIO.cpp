@@ -1,7 +1,7 @@
 //
 // Created by Opus 5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-11-01
 //
 
 #include "PreferencesIO.h"
@@ -73,6 +73,22 @@ namespace merutilm::rff2 {
                 showSettingDescriptions() = showDescriptions;
             }
         }
+
+        if (hasMoreBytes(in)) {
+            uint8_t threads = 0;
+            IOUtilities::readAndDecode(in, &threads);
+            if (!in.fail() && threads <= MAX_PREVIEW_LOAD_THREADS) {
+                previewLoadThreads() = threads;
+            }
+        }
+
+        if (hasMoreBytes(in)) {
+            uint8_t snap = 0;
+            IOUtilities::readAndDecode(in, &snap);
+            if (!in.fail() && snap <= MAX_KEYFRAME_SNAP) {
+                keyframeSnap() = snap;
+            }
+        }
     }
 
     void PreferencesIO::save() {
@@ -90,5 +106,7 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, static_cast<uint8_t>(UiLanguage::preferred()));
         IOUtilities::encodeAndWrite(out, legacySettingsUI());
         IOUtilities::encodeAndWrite(out, showSettingDescriptions());
+        IOUtilities::encodeAndWrite(out, previewLoadThreads());
+        IOUtilities::encodeAndWrite(out, keyframeSnap());
     }
 } // namespace merutilm::rff2

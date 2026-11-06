@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-09, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-11-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-09, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-04. -->
 # Actual UI gallery and form inventory
 
 [Manual](user-manual.md) · [Explanations and dependencies](settings-reference.md)
@@ -237,7 +237,9 @@ Captured section; the Animation workspace no longer has it. These controls and M
 | Rotation Mode | Keyframes, Constant Period |
 | Seconds per Turn | Duration of one complete turn, 0.01 to 86400 seconds. Used by Constant Period. |
 | Rotation Direction | Clockwise, Counterclockwise |
-| Rotation Start Angle | Angle at video time zero, in degrees. Used by Constant Period. |
+| Rotation Start Angle | Angle when the rotation starts, in degrees. Used by Constant Period. |
+| Rotation Start Time | Video seconds at which the rotation starts turning; before it the camera stays at the start angle. Used by Constant Period. |
+| Rotation End Time | Video seconds at which the rotation stops and holds its angle. 0 keeps turning to the end of the video. Used by Constant Period. |
 | Camera Rotation | Degrees, -360000 to 360000. Values beyond 360 allow multiple turns. |
 | Camera Projection | Planar, 360° Equirectangular, 360° Camera |
 | Camera Pitch | -90 to 90 degrees. |
@@ -339,6 +341,7 @@ Captured section; the Animation workspace no longer has it. These controls and M
 | Specular Direction | 0 to 359.99997 |
 | Specular Anisotropy | 0 to 1 |
 | Anisotropy Angle | 0 to 359.99997 |
+| Anisotropy Direction | Fixed Angle, Along Bands, Across Bands |
 
 ### Relief Detail
 

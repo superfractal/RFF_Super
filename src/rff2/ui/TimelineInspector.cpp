@@ -12,6 +12,7 @@
 #include "workspace/TimelineOverlayForm.hpp"
 #include "workspace/TimelineHoldForm.hpp"
 #include "../io/TimelineIO.h"
+#include "../io/PreferencesIO.h"
 #include "../io/AudioTimelineIO.hpp"
 #include "../video/TimelineParams.hpp"
 #include "../video/TimelineEvaluator.hpp"
@@ -455,8 +456,9 @@ namespace merutilm::rff2 {
                         return L"Choose a listed value and Step interpolation for this parameter.";
                     }
                     for (size_t i = 0; i < keys.size(); ++i) {
-                        if (i != size_t(index) && std::abs(keys[i].depth - keys[index].depth) < 1.f) {
-                            return L"Keep animation keys at least one keyframe apart.";
+                        if (i != size_t(index) &&
+                            std::abs(keys[i].depth - keys[index].depth) < VidTimelineAttribute::MIN_KEY_GAP) {
+                            return L"Keep animation keys at least 0.01 keyframe apart.";
                         }
                     }
                 }
@@ -655,6 +657,21 @@ namespace merutilm::rff2 {
             return value == L"0" || value == L"1" ? std::wstring{} : L"Choose On or Off.";
         };
         form.fields.push_back(std::move(guideDescriptions));
+        workspace::FormField snapField{"view.keyframeSnap",
+                                       0,
+                                       L"Keyframe Snap",
+                                       L"Step that adding and dragging keys and moving the playhead round keyframe "
+                                       L"positions to. 1 keeps whole keyframes. A typed Keyframe Depth is never rounded.",
+                                       [] {
+                                           return std::to_wstring(PreferencesIO::keyframeSnap());
+                                       },
+                                       {{L"0", L"1"}, {L"1", L"0.1"}, {L"2", L"0.01"}}};
+        snapField.persisted = false;
+        snapField.divider = true;
+        snapField.validate = [](const std::wstring &value) {
+            return value == L"0" || value == L"1" || value == L"2" ? std::wstring{} : L"Choose 1, 0.1 or 0.01.";
+        };
+        form.fields.push_back(std::move(snapField));
         const auto guideMargin = [&](const char *id, const wchar_t *label,
                                      int workspace::ShortsGuide::*member) {
             workspace::FormField field{
@@ -688,9 +705,12 @@ namespace merutilm::rff2 {
         if (cameraPage != form.groups.end()) {
             form.actions.push_back({int(cameraPage - form.groups.begin()), L"Match Planar Framing",
                                     [this] { matchCameraToPlanar(window); }});
+            form.actions.push_back({int(cameraPage - form.groups.begin()), L"Rotation Mode...",
+                                    [this] { openCameraSettings(); }});
         }
         if (target >= uint16_t(VidTimelineTarget::CAMERA_ROTATION) && target <= uint16_t(VidTimelineTarget::CAMERA_LAYOUT)) {
             form.actions.push_back({0, L"Match Planar Framing", [this] { matchCameraToPlanar(window); }});
+            form.actions.push_back({0, L"Rotation Mode...", [this] { openCameraSettings(); }});
         }
         for (const auto &parameter : TimelineParams::all()) {
             if (!offered(parameter, attribute.video.data.isStatic)) {
@@ -746,6 +766,14 @@ namespace merutilm::rff2 {
                 if (!workspace::AttributeFormModel::parse(selected->second, nextAudio) ||
                     std::ranges::find(attribute.video.timeline.audio.clips, nextAudio, &VidAudioClip::id) == attribute.video.timeline.audio.clips.end()) {
                     return L"Select an existing audio clip.";
+                }
+                documentDraft.erase(selected);
+            }
+            uint8_t snap = PreferencesIO::keyframeSnap();
+            if (const auto selected = documentDraft.find("view.keyframeSnap"); selected != documentDraft.end()) {
+                if (!workspace::AttributeFormModel::parse(selected->second, snap) ||
+                    snap > PreferencesIO::MAX_KEYFRAME_SNAP) {
+                    return L"Choose 1, 0.1 or 0.01.";
                 }
                 documentDraft.erase(selected);
             }
@@ -813,6 +841,10 @@ namespace merutilm::rff2 {
             overlayPositionMode = positionMode;
             if (hasPosition) editingIterationOverlay = iterationPosition;
             shortsGuide = guide;
+            if (snap != PreferencesIO::keyframeSnap()) {
+                PreferencesIO::keyframeSnap() = snap;
+                PreferencesIO::save();
+            }
             InvalidateRect(window, nullptr, FALSE);
             return {};
         };
@@ -1063,10 +1095,11 @@ namespace merutilm::rff2 {
             return;
         }
         const auto *p = TimelineParams::find(selectedTrackTarget);
+        const float step = PreferencesIO::keyframeSnapStep();
         const float depth =
-            std::clamp(std::round(previewDepth), schedule.getEndDepth(), schedule.getStartDepth());
+            std::clamp(std::round(previewDepth / step) * step, schedule.getEndDepth(), schedule.getStartDepth());
         for (size_t i = 0; i < current->keys.size(); ++i) {
-            if (std::abs(current->keys[i].depth - depth) < 1.f) {
+            if (std::abs(current->keys[i].depth - depth) < step) {
                 selectedTrackKey = int(i);
                 inspectorSectionRequest = 0;
                 return;

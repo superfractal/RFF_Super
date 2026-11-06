@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-13, 2026-10-20, 2026-10-23
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-13, 2026-10-20, 2026-10-23, 2026-11-04, 2026-11-05
 //
 
 #include "GPCSlope.hpp"
@@ -153,6 +153,18 @@ namespace merutilm::rff2 {
         slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_ENVIRONMENT_INTENSITY, slope.studio.environmentIntensity);
         slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_CLEARCOAT, slope.studio.clearcoat);
         slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_CLEARCOAT_ROUGHNESS, slope.studio.clearcoatRoughness);
+        slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_MODEL, float(slope.studio.model));
+        slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_COAT_IOR, slope.studio.coatIor);
+        slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_COAT_DARKENING, slope.studio.coatDarkening);
+        slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_FUZZ, slope.studio.fuzz);
+        slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_FUZZ_ROUGHNESS, slope.studio.fuzzRoughness);
+        slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_FILM_IOR, slope.studio.filmIor);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SLOPE_SPECULAR_ANISOTROPY_DIRECTION, float(slope.specularAnisotropyDirection));
+        for (uint32_t channel = 0; channel < 3; ++channel) {
+            slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_COAT_COLOR_R + channel, slope.studio.coatColor[channel]);
+            slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_EDGE_TINT_R + channel, slope.studio.edgeTint[channel]);
+            slopeUBOHost.set<float>(DescSlope::TARGET_OPENPBR_FUZZ_COLOR_R + channel, slope.studio.fuzzColor[channel]);
+        }
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_IRIDESCENCE, slope.iridescence);
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_FILM_THICKNESS, slope.filmThickness);
         slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_SPECULAR_AA, slope.specularAA);
@@ -290,6 +302,17 @@ namespace merutilm::rff2 {
         if (host.get<float>(DescSlope::TARGET_SURFACE_ZOOM_LOG2) == value) return;
         wc.core.getLogicalDevice().waitDeviceIdle();
         host.set<float>(DescSlope::TARGET_SURFACE_ZOOM_LOG2, value);
+        ubo->update();
+    }
+
+    void GPCSlope::setReliefCap(const double capIteration) const {
+        using namespace SharedDescriptorTemplate;
+        const auto &ubo = getDescriptor(SET_SLOPE).get<vkh::Uniform>(0, DescSlope::BINDING_UBO_SLOPE);
+        auto &host = ubo->getHostObject();
+        const auto value = static_cast<float>(capIteration);
+        if (host.get<float>(DescSlope::TARGET_SURFACE_RELIEF_CAP) == value) return;
+        wc.core.getLogicalDevice().waitDeviceIdle();
+        host.set<float>(DescSlope::TARGET_SURFACE_RELIEF_CAP, value);
         ubo->update();
     }
 

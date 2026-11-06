@@ -1,5 +1,5 @@
 // Modified by GPT-6 on 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-22, 2026-10-23
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-22, 2026-10-23, 2026-11-04
 #define AI_FIELD(member, label, minimum, maximum)                                                            \
     appendShaderField(                                                                                       \
         registeredFields, registeredAddresses, referenceShader, #member, label,                              \
@@ -48,6 +48,8 @@ AI_FIELD(palette.grooveCreaseBlur, "Band Line / Rounded band crease blur", 0, 24
 AI_ENUM(slope.shadingBlend, "Slope / Shading blend", 0, 2, R"({"0":"Overlay","2":"OKLab lightness"})");
 AI_ENUM(slope.lightBlend, "Slope / Light blend", 0, 1, R"({"0":"Direct","1":"Linear"})");
 AI_ENUM(slope.tintBlend, "Slope / Tint blend", 0, 1, R"({"0":"Multiply","1":"OKLab"})");
+AI_ENUM(slope.specularAnisotropyDirection, "Slope / Studio anisotropy direction", 0, 2,
+        R"({"0":"Fixed Angle","1":"Along Bands","2":"Across Bands"})");
 AI_ENUM(slope.glossSource, "Slope / Gloss source", 0, 3,
         R"({"0":"Shading","1":"Relief","2":"Aspect","3":"Fine shading"})");
 AI_FIELD(slope.glossIntensity, "Slope / Gloss intensity", 0, 4);
@@ -60,6 +62,15 @@ AI_FIELD(slope.lustreRelief, "Surface / Lustre relief enabled", 0, 1);
 AI_FIELD(slope.invertRelief, "Surface / Invert relief", 0, 1);
 AI_FIELD(slope.reliefWavesCoatOnly, "Surface / Relief waves on clear coat only", 0, 1);
 AI_FIELD(slope.coatSoftbox, "Studio / Clear coat softbox reflections", 0, 1);
+AI_ENUM(slope.studio.model, "Studio / Material model", 0, 1, R"({"0":"Studio GGX","1":"OpenPBR Surface"})");
+AI_FIELD(slope.studio.coatIor, "Studio / OpenPBR clear coat IOR", 1, 3);
+AI_FIELD(slope.studio.coatDarkening, "Studio / OpenPBR clear coat darkening", 0, 1);
+AI_FIELD(slope.studio.coatColor, "Studio / OpenPBR clear coat color", 0, 1);
+AI_FIELD(slope.studio.edgeTint, "Studio / OpenPBR metal edge tint", 0, 1);
+AI_FIELD(slope.studio.fuzz, "Studio / OpenPBR fuzz", 0, 1);
+AI_FIELD(slope.studio.fuzzRoughness, "Studio / OpenPBR fuzz roughness", 0, 1);
+AI_FIELD(slope.studio.fuzzColor, "Studio / OpenPBR fuzz color", 0, 1);
+AI_FIELD(slope.studio.filmIor, "Studio / OpenPBR thin film IOR", 1, 3);
 AI_ENUM(slope.studioEnvironmentSource, "Studio / Environment source", 0, 5,
         R"({"0":"Two colors","1":"Gradient","2":"Texture layer 1","3":"Texture layer 2","4":"Texture layer 3","5":"Texture layer 4"})");
 AI_FIELD(slope.environmentBrightness, "Studio / Environment brightness", 0, 32);

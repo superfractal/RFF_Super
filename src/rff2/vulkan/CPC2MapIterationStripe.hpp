@@ -5,13 +5,14 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-24, 2026-08-25, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-24, 2026-10-25
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-24, 2026-10-25, 2026-11-05
 //
 
 #pragma once
 #include "ShaderLayerControl.hpp"
 #include <array>
 #include "../attr/ShaderAttribute.h"
+#include "../attr/VidDataAttribute.h"
 #include <string>
 
 #include "ShaderAnimationPhases.hpp"
@@ -115,7 +116,8 @@ namespace merutilm::rff2 {
 
         void setDither(bool use);
 
-        void setCamera(const VidCameraAttribute &camera, uint32_t sourceScale) const;
+        // Also hands the shader the 360 projection the keyframes were calculated in, which data carries.
+        void setCamera(const VidCameraAttribute &camera, const VidDataAttribute &data) const;
 
         void setAllIterations(const std::vector<double> &normal, const std::vector<double> &zoomed) const;
 

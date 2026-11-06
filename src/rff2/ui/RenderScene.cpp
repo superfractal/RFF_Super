@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-05
 //
 
 #include "NativeDialogs.hpp"
@@ -542,6 +542,7 @@ namespace merutilm::rff2 {
 
         renderer->rendererSlope->setReliefZoom(attr.shader.slope,
             smoothZoomCaptureWider ? smoothZoomCandidateFractal->logZoom : attr.fractal.logZoom);
+        renderer->rendererSlope->setReliefCap(attr.shader.slope.reliefCapIteration(lastLowestEscaped, lastPeriod));
         if (idleCompute.load() && !smoothZoomActive) {
             if (auto imageRequest = requests.takeCreateImageRequest()) {
                 applyCreateImage(std::move(*imageRequest));
@@ -1745,9 +1746,14 @@ namespace merutilm::rff2 {
         if (complete) {
             // The map is final, so what is left of the picture the resize was seeded from goes with it.
             previewSeedGeneration = 0;
+            const auto maximum = static_cast<double>(lastMaxIteration);
+            double lowest = maximum;
             for (uint32_t i = 0, length = static_cast<uint32_t>(w) * h; i < length; ++i) {
-                dst[i] = src.loadRelaxed(i);
+                const double v = src.loadRelaxed(i);
+                dst[i] = v;
+                if (v > 0.0 && v < lowest) lowest = v;
             }
+            lastLowestEscaped = lowest < maximum ? lowest : 0.0;
             return;
         }
 
@@ -1907,6 +1913,7 @@ namespace merutilm::rff2 {
         renderer->rendererLinearInterpolation->setSurface(attr.shader.slope);
         renderer->rendererSlope->setGroove(attr.shader.palette);
         renderer->rendererSlope->setReliefZoom(attr.shader.slope, attr.fractal.logZoom);
+        renderer->rendererSlope->setReliefCap(attr.shader.slope.reliefCapIteration(lastLowestEscaped, lastPeriod));
         renderer->rendererColor->setColor(attr.shader.color, attr.shader.sceneLinear());
         renderer->rendererFog->setFog(attr.shader.fog);
         renderer->rendererSlope->setEffects(attr.shader.effects, attr.shader.sceneLinear());
@@ -2271,6 +2278,7 @@ namespace merutilm::rff2 {
         lastLogZoom = map.getLogZoom();
         lastPeriod = map.getPeriod();
         lastMaxIteration = map.getMaxIteration();
+        lastLowestEscaped = map.getLowestEscapedIteration();
         previewSeedGeneration = 0;
         // The canvas is now the map's view, not the one last computed, so the zoom shown follows it.
         setStatusMessage(Constants::Status::ZOOM_STATUS, zoomStatus(map.getLogZoom()));
@@ -3609,10 +3617,24 @@ namespace merutilm::rff2 {
                    std::move(detail));
     }
 
+    uint32_t RenderScene::panoramaSourceScale(const Attribute &settings) const {
+        const uint32_t padding = std::clamp<uint32_t>(settings.video.data.cameraScale, 2, 64);
+        if (effectiveProjection(settings.fractal.projectionMethod) != FrtProjectionMethod::PERSPECTIVE_360) return padding;
+        const double w = getIterationBufferWidth(settings), h = getIterationBufferHeight(settings);
+        if (w <= 0.0 || h <= 0.0) return padding;
+        // The source reaches at least the corners of the view looking straight down, which a tall canvas pushes past the padding.
+        FractalAttribute nadir = settings.fractal;
+        nadir.panoramaPitch = -90.0f;
+        const auto corner = projectedOffsetPixels(nadir, -0.5, -0.5, w, h, 0.0);
+        const double needed = std::ceil((2.0 * std::hypot(corner.x, corner.y) + 4.0) / std::min(w, h) - 1e-9);
+        return std::max<uint32_t>(padding, static_cast<uint32_t>(std::min(needed, 65.0)));
+    }
+
     bool RenderScene::panoramaPreviewApplies(const Attribute &settings) const {
         // Video work reads the exact map of the view it is given, so it never gets the reprojected one.
         // Past four times the view each way the source costs far more than the calculations it saves, so the view is calculated directly.
         return settings.video.data.cameraPadding && settings.video.data.sourceScale == 1 && settings.video.data.cameraScale <= 4 &&
+               panoramaSourceScale(settings) <= 4 &&
                effectiveProjection(settings.fractal.projectionMethod) != FrtProjectionMethod::PLANAR &&
                !isVideoGenerationActive.load() && !isVideoExportActive.load();
     }
@@ -3639,7 +3661,7 @@ namespace merutilm::rff2 {
         }
         key.video = {};
         key.video.data.cameraPadding = true;
-        key.video.data.cameraScale = settings.video.data.cameraScale;
+        key.video.data.cameraScale = panoramaSourceScale(settings);
         std::ostringstream out(std::ios::binary);
         ConfigIO::write(out, key, getClientWidth(), getClientHeight());
         return out.str();
@@ -3647,7 +3669,7 @@ namespace merutilm::rff2 {
 
     bool RenderScene::preparePanoramaSource(Attribute &source, const uint64_t generation) {
         if (!panoramaPreviewApplies(source)) return false;
-        const uint32_t scale = std::clamp<uint32_t>(source.video.data.cameraScale, 2, 64);
+        const uint32_t scale = panoramaSourceScale(source);
         const uint32_t w = getIterationBufferWidth(source), h = getIterationBufferHeight(source);
         source.fractal.projectionMethod = FrtProjectionMethod::PLANAR;
         source.fractal.rotation = 0.0f;

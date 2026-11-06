@@ -3,9 +3,11 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-31
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #pragma once
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -54,6 +56,8 @@ namespace merutilm::rff2 {
         static constexpr uint32_t MAX_KEYS_PER_TRACK = 1024;
         // Speed may come arbitrarily close to a standstill but never reach one.
         static constexpr float MIN_SPEED = 1e-4f;
+        // Closest two keys of one track may sit, in keyframes, however their positions were set.
+        static constexpr float MIN_KEY_GAP = 0.01f;
 
         // False leaves the export exactly as it is without a timeline: one constant Zoom Speed.
         VidZoomOverlayAttribute zoomOverlay;
@@ -85,5 +89,14 @@ namespace merutilm::rff2 {
         float rotationPeriod = 10.0f;
         VidRotationDirection rotationDirection = VidRotationDirection::CLOCKWISE;
         float rotationStartAngle = 0.0f;
+        // Video seconds Constant Period turns between, holding its angle outside them; an end of 0 means the video end.
+        float rotationStartTime = 0.0f;
+        float rotationEndTime = 0.0f;
+
+        [[nodiscard]] bool validRotationTime() const {
+            return std::isfinite(rotationStartTime) && std::isfinite(rotationEndTime) && rotationStartTime >= 0.0f &&
+                   rotationStartTime <= 604800.0f && rotationEndTime >= 0.0f && rotationEndTime <= 604800.0f &&
+                   (rotationEndTime == 0.0f || rotationEndTime > rotationStartTime);
+        }
     };
 }

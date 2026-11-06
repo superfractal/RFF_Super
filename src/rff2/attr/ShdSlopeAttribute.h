@@ -6,12 +6,13 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-08
+// Modified by Opus 5.5 on 2026-10-08, 2026-11-04, 2026-11-05
 //
 
 #pragma once
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <iterator>
 #include <glm/glm.hpp>
 #include "ShdSurfaceStyle.h"
@@ -20,6 +21,8 @@
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
 #include "ShdStudioEnvironmentSource.h"
+#include "ShdStudioMaterialModel.h"
+#include "ShdAnisotropyDirection.h"
 #include "ShdSlopeTintBlend.h"
 
 namespace merutilm::rff2 {
@@ -32,6 +35,16 @@ namespace merutilm::rff2 {
         float environmentIntensity = 0.7f;
         float clearcoat = 0.3f;
         float clearcoatRoughness = 0.15f;
+        // OpenPBR Surface only; the defaults are the specification's, and Studio GGX ignores every one of them.
+        ShdStudioMaterialModel model = ShdStudioMaterialModel::STUDIO_GGX;
+        float coatIor = 1.6f;
+        float coatDarkening = 1.0f;
+        glm::vec4 coatColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        glm::vec4 edgeTint = {1.0f, 1.0f, 1.0f, 1.0f};
+        float fuzz = 0.0f;
+        float fuzzRoughness = 0.5f;
+        glm::vec4 fuzzColor = {1.0f, 1.0f, 1.0f, 1.0f};
+        float filmIor = 1.4f;
     };
 
     struct ShdSlopeAttribute {
@@ -57,6 +70,8 @@ namespace merutilm::rff2 {
         float specularAzimuth = 135.0f;        // 0 ~ 360: specular light azimuth (used when independent)
         float specularAnisotropy = 0.0f;       // 0 = round, >0 stretches the highlight
         float specularAnisotropyAngle = 0.0f;  // 0 ~ 360: stretch direction (degrees)
+        // Studio only: Along / Across Bands turn the stretch with the iteration bands, and the angle above twists it from there.
+        ShdAnisotropyDirection specularAnisotropyDirection = ShdAnisotropyDirection::FIXED_ANGLE;
         float macroRelief = 0.0f;              // N3: 0 = single-scale relief (existing), >0 blends a wide Sobel for broad form
         float macroRadius = 8.0f;              // N3: macro Sobel sampling radius (1280px-reference pixels)
         // P6: how the shading meets the palette color. Overlay is the original composite.
@@ -115,6 +130,7 @@ namespace merutilm::rff2 {
         float boundaryGuard = 0.0f;
         bool reliefAutoZoom = true;
         float reliefZoomReference = -1.0f;
+        float reliefCap = 0.0f;                // periods above the view's lowest escaped iteration where Lustre relief stops rising; 0 = off
         ShdSurfaceStyle surfaceStyle = ShdSurfaceStyle::ORIGINAL;
         float chromeStrength = 1.0f;
         float filmStrength = 0.65f;
@@ -230,6 +246,14 @@ namespace merutilm::rff2 {
                 (double(logZoom) - double(reliefZoomReference)) * 3.321928094887362,
                 -512.0,
                 512.0));
+        }
+
+        // The iteration the Lustre relief is flattened above, from the view's lowest escaped iteration and period; 0 is off.
+        [[nodiscard]] double reliefCapIteration(double lowestEscaped, uint64_t period) const {
+            if (!lustreRelief || !(reliefCap > 0.0f) || !(lowestEscaped > 0.0)) {
+                return 0.0;
+            }
+            return lowestEscaped + double(reliefCap) * double(std::max<uint64_t>(period, 1));
         }
 
     };

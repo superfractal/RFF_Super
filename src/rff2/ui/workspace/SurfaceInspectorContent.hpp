@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-18, 2026-09-19, 2026-09-22, 2026-09-24, 2026-10-01
+// Modified by Opus 5.5 on 2026-11-05
 //
 
 #pragma once
@@ -117,7 +118,7 @@ namespace merutilm::rff2::workspace {
                 {Category::RELIEF,
                  L"Relief",
                  {"slope.depth", "slope.opacity", "surface.reliefDepth", "surface.normalSmooth",
-                  "surface.aoRadius", "surface.boundaryGuard"}},
+                  "surface.aoRadius", "surface.boundaryGuard", "surface.reliefCap"}},
                 {Category::RELIEF, L"Lighting", {"slope.reflectionRatio", "slope.zenith", "slope.azimuth"}},
                 {Category::RELIEF, L"Waves", {"surface.reliefWaves", "surface.waveFrequency"}},
                 {Category::MIX,

@@ -3,7 +3,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-25, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-17
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-17, 2026-11-04
 //
 
 #include "TimelineParams.hpp"
@@ -291,6 +291,10 @@ namespace merutilm::rff2 {
             NESTED_VALUE(COLOR_SATURATION, L"Color", L"Saturation", FLOAT, COLOR, NumericSettingLimits::saturation.minimum, NumericSettingLimits::saturation.maximum, color, saturation),
             NESTED_VALUE(COLOR_BRIGHTNESS, L"Color", L"Brightness", FLOAT, COLOR, NumericSettingLimits::colorBrightness.minimum, NumericSettingLimits::colorBrightness.maximum, color, brightness),
             NESTED_VALUE(COLOR_CONTRAST, L"Color", L"Contrast", FLOAT, COLOR, NumericSettingLimits::contrast.minimum, NumericSettingLimits::contrast.maximum, color, contrast),
+            NESTED_VALUE(COLOR_VIGNETTE, L"Color", L"Vignette", FLOAT, COLOR, NumericSettingLimits::vignette.minimum, NumericSettingLimits::vignette.maximum, color, vignette),
+            NESTED_VALUE(COLOR_VIGNETTE_RADIUS, L"Color", L"Vignette Radius", FLOAT, COLOR, NumericSettingLimits::vignetteRadius.minimum, NumericSettingLimits::vignetteRadius.maximum, color, vignetteRadius),
+            NESTED_VALUE(COLOR_VIGNETTE_RICHNESS, L"Color", L"Vignette Richness", FLOAT, COLOR, NumericSettingLimits::vignetteRichness.minimum, NumericSettingLimits::vignetteRichness.maximum, color, vignetteRichness),
+            NESTED_VALUE(COLOR_VIGNETTE_SHAPE, L"Color", L"Vignette Shape (0 Ellipse, 1 Frame)", ENUM, COLOR, 0.0f, 1.0f, color, vignetteShape),
 
             NESTED_VALUE(FOG_RADIUS, L"Fog", L"Radius", FLOAT, FOG, 0.0f, 1.0f, fog, radius),
             NESTED_VALUE(FOG_OPACITY, L"Fog", L"Opacity", FLOAT, FOG, 0.0f, 1.0f, fog, opacity),

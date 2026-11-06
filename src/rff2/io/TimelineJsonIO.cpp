@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-25
+// Modified by Opus 5.5 on 2026-10-25, 2026-11-01
 //
 
 #include "TimelineJsonIO.hpp"
@@ -120,6 +120,7 @@ namespace merutilm::rff2 {
             {"enabled", t.enabled}, {"estimateKeyframes", t.estimateKeyframes}, {"tracks", tracks}, {"holds", holds},
             {"rotationMode", int(t.rotationMode)}, {"rotationPeriod", t.rotationPeriod},
             {"rotationDirection", int(t.rotationDirection)}, {"rotationStartAngle", t.rotationStartAngle},
+            {"rotationStartTime", t.rotationStartTime}, {"rotationEndTime", t.rotationEndTime},
             {"zoomOverlay", overlay}, {"maxIterationOverlay", iteration},
             {"interpolateMaxIteration", t.interpolateMaxIteration}, {"audio", {{"exportEnabled", t.audio.exportEnabled}, {"gain", t.audio.gain}, {"clips", clips}}}}}};
     }
@@ -160,6 +161,8 @@ namespace merutilm::rff2 {
             }
         }
         if (j.is_object() && j.contains("timeline") && j.at("timeline").is_object()) {
+            if (!j["timeline"].contains("rotationStartTime")) j["timeline"]["rotationStartTime"] = 0.0;
+            if (!j["timeline"].contains("rotationEndTime")) j["timeline"]["rotationEndTime"] = 0.0;
             for (const auto *name : {"zoomOverlay", "maxIterationOverlay"}) {
                 auto &timeline = j["timeline"];
                 if (!timeline.contains(name) || !timeline[name].is_object()) continue;
@@ -184,6 +187,9 @@ namespace merutilm::rff2 {
         t.rotationStartAngle = v.at("rotationStartAngle");
         range(t.rotationPeriod, .01f, 86400, "rotationPeriod");
         range(t.rotationStartAngle, -360000, 360000, "rotationStartAngle");
+        t.rotationStartTime = v.at("rotationStartTime");
+        t.rotationEndTime = v.at("rotationEndTime");
+        require(t.validRotationTime(), "rotationStartTime/rotationEndTime must be 0..604800 seconds, and a nonzero end must exceed the start");
         require(v.at("tracks").size() <= 4096 && v.at("holds").size() <= 65536, "Too many tracks/holds");
         std::unordered_set<uint16_t> targets;
         for (const auto &track : v.at("tracks")) {
@@ -282,7 +288,7 @@ Timeline behavior:
 - Depth is a keyframe number, NOT seconds, magnification or displayed travel distance. Playback moves from the context startDepth down to endDepth. Travel distance=startDepth-depth. Keys and holds stay at a fractal location when speed changes. estimateKeyframes must remain unchanged for the current folder. Image labels K identify this depth; pages are in descending playback order, left-to-right then top-to-bottom. Only the selected page is attached; do not assume unseen frames. Each tile is a rendered preview at timeAt(depth), not the raw iteration map. RFMZ/RFM can be recolored; PNG already has baked colors, and only affectsPNG=true parameters can move it. Blank cells are not frames.
 - tracks contain unique targetId, enabled and keys. Each key is {depth,value,color:[r,g,b,a],out}. Keep unused value/color fields. Keys have distinct depths in descending order; a track's first/last value extends beyond its end keys. Disabled or empty tracks use base settings. Target 0 is speed in keyframe depths/second and must stay >=0.0001; use holds {depth,seconds} to pause zoom. Total duration integrates 1/speed plus holds; context seconds are derived and not editable. Higher speed means less time. Timeline enabled stays true; import turns it on.
 - out controls the segment to the NEXT, lower-depth key: 0 STEP holds until the next key; 1 LINEAR; 2 SMOOTH uses u*u*(3-2*u); 3 CUBIC uses neighboring values and may overshoot before clamping. Bool/enum values are integers and require out=0. Colors are RGBA in [0,1], interpolated perceptually in OKLab. Numeric parameters clamp to catalog ranges. Bounds are limits, not recommended artistic values.
-- rotationMode=0 uses camera rotation keys; 1 uses constant-period rotation. rotationPeriod is seconds per revolution [0.01,86400], rotationDirection=0 clockwise/1 counterclockwise, rotationStartAngle is degrees [-360000,360000]. Constant rotation continues during holds. Speed-like animation parameters are integrated over elapsed time; changing speed does not reset phase.
+- rotationMode=0 uses camera rotation keys; 1 uses constant-period rotation. rotationPeriod is seconds per revolution [0.01,86400], rotationDirection=0 clockwise/1 counterclockwise, rotationStartAngle is degrees [-360000,360000]. rotationStartTime/rotationEndTime are video seconds [0,604800] the constant rotation turns between; before the start it holds rotationStartAngle, after the end it holds its last angle, and rotationEndTime=0 means the video end. Constant rotation continues during holds. Speed-like animation parameters are integrated over elapsed time; changing speed does not reset phase.
 - Camera tracks: Rotation is degrees; Projection 0=planar, 1=equirectangular 360, 2=perspective 360. Pitch tilts the 360 camera in degrees; Field of View controls the perspective cone. Range bounds the far field as a power of ten of the horizon radius; Layout 0=ground plane with sky, 1=whole sphere. Camera projection works from available keyframes and does not calculate new fractal locations. Texture layers require an existing image, Enabled and nonzero Opacity; Scale U/V control repetition, Size scales the layer, Keep Aspect preserves its source ratio. Shared UV/Blend/Scroll modes follow the guide below. Legacy Studio Softbox tracks are retained for compatibility but no longer affect rendering.
 - zoomOverlay and maxIterationOverlay independently control zoom and maximum-iteration text. visible toggles each label. limitDisplayTime restricts it to video seconds [displayStart, displayEnd), including zoom holds; displayEnd=0 means the video end. Times are 0..604800 seconds and a nonzero end must exceed start. zoomOverlay.showMaxIteration is a legacy mirror of maxIterationOverlay.visible. interpolateMaxIteration gradually interpolates the displayed count between maps without changing rendering; custom=false uses the default appearance. x/y are normalized frame coordinates [0,1]; anchor=0..8 selects a 3x3 anchor grid, row-major. size is relative to frame height [.005,.2]; family names a local font; style bit 1=bold, bit 2=italic; decimalPlaces=0..9. RGBA colors are [0,1]. outlineWidth=[0,.25], shadowX/Y=[-1,1] are relative to text size. Overlay is composited separately and is not included in contact-sheet tiles.
 - audio: all times are INTEGER MICROSECONDS, 1000000 per second, not depth. clip start is video time, in/out trim the source, sourceDuration is source length, fadeIn/fadeOut are durations within the trimmed clip. IDs must remain unique; preserve existing paths and sourceDuration. gain is linear amplitude, muted silences a clip, exportEnabled controls audio export. Clips must not overlap. Master and clip gain are [0,4]. Fade durations must be nonnegative and their sum must not exceed the trimmed duration. Times must fit within seven days. Changing zoom speed does not automatically move audio. Do not fabricate media files.

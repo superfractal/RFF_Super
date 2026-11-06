@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-04, 2026-11-05
 //
 
 #pragma once
@@ -543,6 +543,19 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_GROOVE_SMOOTH = 185;
         static constexpr uint32_t TARGET_GROOVE_ROUNDED = 186;
         static constexpr uint32_t TARGET_GROOVE_CREASE_BLUR = 187;
+        static constexpr uint32_t TARGET_STUDIO_MODEL = 188;
+        static constexpr uint32_t TARGET_OPENPBR_COAT_IOR = 189;
+        static constexpr uint32_t TARGET_OPENPBR_COAT_DARKENING = 190;
+        // Coat color, edge tint and fuzz color, each an r, g, b triple of floats.
+        static constexpr uint32_t TARGET_OPENPBR_COAT_COLOR_R = 191;
+        static constexpr uint32_t TARGET_OPENPBR_EDGE_TINT_R = 194;
+        static constexpr uint32_t TARGET_OPENPBR_FUZZ = 197;
+        static constexpr uint32_t TARGET_OPENPBR_FUZZ_ROUGHNESS = 198;
+        static constexpr uint32_t TARGET_OPENPBR_FUZZ_COLOR_R = 199;
+        static constexpr uint32_t TARGET_OPENPBR_FILM_IOR = 202;
+        static constexpr uint32_t TARGET_SLOPE_SPECULAR_ANISOTROPY_DIRECTION = 203;
+        // Set per view from the iteration map, not from the settings; see GPCSlope::setReliefCap.
+        static constexpr uint32_t TARGET_SURFACE_RELIEF_CAP = 204;
 
 
 
@@ -724,6 +737,11 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_GROOVE_SMOOTH);
             bufferManager->reserve<float>(TARGET_GROOVE_ROUNDED);
             bufferManager->reserve<float>(TARGET_GROOVE_CREASE_BLUR);
+            for (uint32_t target = TARGET_STUDIO_MODEL; target <= TARGET_OPENPBR_FILM_IOR; ++target) {
+                bufferManager->reserve<float>(target);
+            }
+            bufferManager->reserve<float>(TARGET_SLOPE_SPECULAR_ANISOTROPY_DIRECTION);
+            bufferManager->reserve<float>(TARGET_SURFACE_RELIEF_CAP);
 
 
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
@@ -746,6 +764,10 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_COLOR_BRIGHTNESS = 4;
         static constexpr uint32_t TARGET_COLOR_CONTRAST = 5;
         static constexpr uint32_t TARGET_COLOR_SCENE_LINEAR = 6;
+        static constexpr uint32_t TARGET_COLOR_VIGNETTE = 7;
+        static constexpr uint32_t TARGET_COLOR_VIGNETTE_RADIUS = 8;
+        static constexpr uint32_t TARGET_COLOR_VIGNETTE_RICHNESS = 9;
+        static constexpr uint32_t TARGET_COLOR_VIGNETTE_SHAPE = 10;
 
 
         void configure(const vkh::CoreRef core,
@@ -758,6 +780,10 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_COLOR_BRIGHTNESS);
             bufferManager->reserve<float>(TARGET_COLOR_CONTRAST);
             bufferManager->reserve<float>(TARGET_COLOR_SCENE_LINEAR);
+            bufferManager->reserve<float>(TARGET_COLOR_VIGNETTE);
+            bufferManager->reserve<float>(TARGET_COLOR_VIGNETTE_RADIUS);
+            bufferManager->reserve<float>(TARGET_COLOR_VIGNETTE_RICHNESS);
+            bufferManager->reserve<float>(TARGET_COLOR_VIGNETTE_SHAPE);
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
             auto descManager = vkh::factory::create<vkh::DescriptorManager>();
             descManager->appendUBO(BINDING_UBO_COLOR, STAGE, std::move(ubo));
@@ -992,6 +1018,9 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_VIDEO_DITHER = 3;
         static constexpr uint32_t TARGET_VIDEO_CAMERA = 4;
         static constexpr uint32_t TARGET_VIDEO_COVERAGE = 5;
+        // The 360 projection the keyframes were calculated in, read by keyframe_projection.glsl.
+        static constexpr uint32_t TARGET_VIDEO_KEYFRAME_CAMERA = 6;
+        static constexpr uint32_t TARGET_VIDEO_KEYFRAME_VIEW = 7;
 
 
         void configure(const vkh::CoreRef core,
@@ -1004,6 +1033,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<bool>(TARGET_VIDEO_DITHER, 15);
             bufferManager->reserve<glm::vec4>(TARGET_VIDEO_CAMERA);
             bufferManager->reserve<glm::vec4>(TARGET_VIDEO_COVERAGE);
+            bufferManager->reserve<glm::vec4>(TARGET_VIDEO_KEYFRAME_CAMERA);
+            bufferManager->reserve<glm::vec4>(TARGET_VIDEO_KEYFRAME_VIEW);
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, true);
             auto descManager = vkh::factory::create<vkh::DescriptorManager>();
             descManager->appendUBO(BINDING_UBO_VIDEO, STAGE, std::move(ubo));

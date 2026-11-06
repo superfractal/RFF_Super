@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01, 2026-11-05
 //
 
 #include "NativeDialogs.hpp"
@@ -85,7 +85,8 @@ namespace merutilm::rff2 {
                                                                                                    settingsMenu,
                                                                                                RenderScene
                                                                                                    &scene) {
-        auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast] =
+        auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast,
+               keyframeProjection] =
             scene.getAttribute().video.data;
         auto window = std::make_unique<SettingsWindow>(L"Set Data");
 
@@ -125,7 +126,7 @@ namespace merutilm::rff2 {
             if (IsWindow(timeline)) TimelineWindow::matchCameraToPlanar(timeline);
             else NativeDialogs::message(nullptr, L"Open the Timeline Editor and load keyframes before matching the camera framing.", L"Match Planar Framing", MB_OK | MB_ICONINFORMATION);
         }, L"Match Planar Framing", L"At the playhead, match the planar scale using 360 Camera, Ground layout and Pitch -90. Rotation is preserved.");
-        window->registerStaticText(L"Changes are recorded at the Timeline Editor playhead.");
+        window->registerStaticText(L"Camera values are keyed in the Timeline Editor. Rotation Mode applies to the whole video.");
         window->registerStaticText(
             L"Rotation and 360 modes require Rotation / 360 padding when generating keyframes.");
         window->registerSelectionInput<VidRotationMode>(
@@ -145,7 +146,24 @@ namespace merutilm::rff2 {
             L"Rotation Start Angle", &timeline.rotationStartAngle, Unparser::floatTrim(2), Parser::FLOAT,
             [](const float &v) { return std::isfinite(v) && v >= -360000.0f && v <= 360000.0f; },
             [&scene] { scene.getRequests().requestShader(); }, L"Rotation Start Angle",
-            L"Angle at video time zero, in degrees. Used by Constant Period.");
+            L"Angle when the rotation starts, in degrees. Used by Constant Period.");
+        window->registerTextInput<float>(
+            L"Rotation Start Time", &timeline.rotationStartTime, Unparser::floatTrim(2), Parser::FLOAT,
+            [&timeline](const float &v) {
+                return std::isfinite(v) && v >= 0.0f && v <= 604800.0f &&
+                       (timeline.rotationEndTime == 0.0f || timeline.rotationEndTime > v);
+            },
+            [&scene] { scene.getRequests().requestShader(); }, L"Rotation Start Time",
+            L"Video seconds at which the rotation starts turning; before it the camera stays at the start angle. "
+            L"Must be before Rotation End Time. Used by Constant Period.");
+        window->registerTextInput<float>(
+            L"Rotation End Time", &timeline.rotationEndTime, Unparser::floatTrim(2), Parser::FLOAT,
+            [&timeline](const float &v) {
+                return std::isfinite(v) && v >= 0.0f && v <= 604800.0f && (v == 0.0f || v > timeline.rotationStartTime);
+            },
+            [&scene] { scene.getRequests().requestShader(); }, L"Rotation End Time",
+            L"Video seconds at which the rotation stops and holds its angle. 0 keeps turning to the end of the video. "
+            L"Used by Constant Period.");
         window->registerTextInput<float>(
             L"Rotation", &camera.rotation, Unparser::floatFixed(1), Parser::FLOAT,
             [](const float &v) { return std::isfinite(v) && v >= -360000 && v <= 360000; },

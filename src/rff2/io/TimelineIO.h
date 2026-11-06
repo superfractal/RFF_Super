@@ -2,6 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #pragma once
@@ -28,6 +29,7 @@ namespace merutilm::rff2 {
         // this one is bare, so a config from a build that wrote one more of them would hand its
         // bytes to the block below; the marker is what tells the two apart.
         static constexpr uint32_t CONFIG_BLOCK_MAGIC = 0x424C5456; // "VTLB"
+        static constexpr uint32_t ROTATION_TIME_MAGIC = 0x314D5452; // "RTM1"
 
         static bool save(const std::filesystem::path &path, const VidTimelineAttribute &timeline);
 

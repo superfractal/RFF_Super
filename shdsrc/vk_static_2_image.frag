@@ -1,9 +1,11 @@
 //
 // Modified by Opus 5 on 2026-08-24
 // Modified by GPT-6 on 2026-09-08, 2026-09-17, 2026-09-23, 2026-10-02
+// Modified by Opus 5.5 on 2026-11-05
 //
 
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 layout (set = 0, binding = 0) uniform sampler2D normal;
 layout (set = 0, binding = 1) uniform sampler2D zoomed;
@@ -15,7 +17,18 @@ layout (set = 1, binding = 0) uniform VideoUBO {
     bool dither;
     vec4 camera;
     vec4 coverage;
+    // The 360 projection the keyframes were calculated in; x = 0 for planar keyframes. See keyframe_projection.glsl.
+    vec4 keyframe_camera;
+    vec4 keyframe_view;
 } video_attr;
+#include "keyframe_projection.glsl"
+
+// The image position an output position reads once the keyframe is scaled by sr; an image's first row is the buffer's top one.
+vec2 keyframe_uv(vec2 uv, vec2 size, float sr) {
+    if (!keyframes_projected()) return (uv - 0.5) / sr + 0.5;
+    vec2 m = keyframe_plane_zoom(vec2(uv.x, 1.0 - uv.y), size, sr);
+    return m.x < 0.0 ? vec2(-1.0) : vec2(m.x, 1.0 - m.y);
+}
 
 // The same block the bloom pass reads, which is where a dynamic frame's headroom store is written.
 layout (set = 2, binding = 0) uniform BloomUBO {
@@ -89,8 +102,8 @@ void main(){
     float zoomedScale = pow(video_attr.default_zoom_increment, r);// r = -1 ~ 0
 
 
-    vec2 normalUv = (coord - 0.5) / normalScale + 0.5;
-    vec2 zoomedUv = (coord - 0.5) / zoomedScale + 0.5;
+    vec2 normalUv = keyframe_uv(coord, resolution, normalScale);
+    vec2 zoomedUv = keyframe_uv(coord, resolution, zoomedScale);
     vec4 normalColor = texture(normal, normalUv).bgra;
     color = normalColor;
     if (video_attr.current_frame >= 1) {

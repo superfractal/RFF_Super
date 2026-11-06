@@ -5,7 +5,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27, 2026-09-01, 2026-09-02
 // Modified by Opus 5 on 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-21, 2026-08-25
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-08, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-27, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-08, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-27, 2026-11-01, 2026-11-05
 //
 
 #include "NativeDialogs.hpp"
@@ -1029,7 +1029,8 @@ namespace merutilm::rff2 {
         };
 
 
-        const auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast] =
+        const auto &[defaultZoomIncrement, isStatic, cameraPadding, cameraScale, sourceScale, keyframeFirst, keyframeLast,
+                     keyframeProjection] =
             attr.video.data;
         const auto &[overZoom, showText, mps] = attr.video.animation;
         const auto overlaySettings = attr.video.timeline.zoomOverlay;

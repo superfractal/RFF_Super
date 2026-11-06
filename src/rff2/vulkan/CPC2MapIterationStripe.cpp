@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-05, 2026-10-08, 2026-10-09, 2026-10-13, 2026-10-16, 2026-10-24, 2026-10-25
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-05, 2026-10-08, 2026-10-09, 2026-10-13, 2026-10-16, 2026-10-24, 2026-10-25, 2026-11-05
 //
 
 #include "CPC2MapIterationStripe.hpp"
@@ -313,8 +313,9 @@ namespace merutilm::rff2 {
         });
     }
 
-    void CPC2MapIterationStripe::setCamera(const VidCameraAttribute &camera, const uint32_t sourceScale) const {
+    void CPC2MapIterationStripe::setCamera(const VidCameraAttribute &camera, const VidDataAttribute &data) const {
         using namespace SharedDescriptorTemplate;
+        const uint32_t sourceScale = data.sourceScale;
         const auto &ubo = *getDescriptor(SET_VIDEO).get<vkh::Uniform>(0, DescVideo::BINDING_UBO_VIDEO);
         auto &host = ubo.getHostObject();
         if (sourceScale == 1 && (camera.rotation != 0.0f || camera.projection != FrtProjectionMethod::PLANAR)) {
@@ -322,6 +323,15 @@ namespace merutilm::rff2 {
         }
         host.set<glm::vec4>(DescVideo::TARGET_VIDEO_CAMERA, {camera.rotation, static_cast<float>(camera.projection), camera.pitch, camera.fov});
         host.set<glm::vec4>(DescVideo::TARGET_VIDEO_COVERAGE, {static_cast<float>(sourceScale), camera.range, static_cast<float>(camera.layout), 0.0f});
+        // Padded keyframes are planar by construction, so only unpadded ones carry a projection of their own.
+        const auto &keyframes = data.keyframeProjection;
+        const bool projected = sourceScale == 1 && keyframes.projection != FrtProjectionMethod::PLANAR;
+        host.set<glm::vec4>(DescVideo::TARGET_VIDEO_KEYFRAME_CAMERA,
+                            projected ? glm::vec4{static_cast<float>(keyframes.projection), keyframes.yaw,
+                                                  keyframes.pitch, keyframes.halfFovTangent}
+                                      : glm::vec4{0.0f});
+        host.set<glm::vec4>(DescVideo::TARGET_VIDEO_KEYFRAME_VIEW,
+                            {static_cast<float>(keyframes.layout), keyframes.limit, 0.0f, 0.0f});
         updateBufferMF([&ubo](const uint32_t frameIndex) { ubo.updateMF(frameIndex); });
     }
 

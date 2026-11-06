@@ -8,10 +8,11 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05
 //
 
 #include "ShaderPresetIO.h"
+#include "../attr/NumericSettingLimits.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -55,6 +56,21 @@ namespace merutilm::rff2 {
         template <typename E> bool enumInRange(const E value, const int32_t min, const int32_t max) {
             const int32_t raw = static_cast<int32_t>(value);
             return raw >= min && raw <= max;
+        }
+
+        bool validReliefCap(const float periods) {
+            return finiteInRange(periods, 0.0f, 8.0f);
+        }
+
+        bool validOpenPbr(const ShdStudioAttribute &studio) {
+            const auto unitRgb = [](const glm::vec4 &c) {
+                return finiteInRange(c.r, 0.0f, 1.0f) && finiteInRange(c.g, 0.0f, 1.0f) && finiteInRange(c.b, 0.0f, 1.0f);
+            };
+            return enumInRange(studio.model, 0, 1) && finiteInRange(studio.coatIor, 1.0f, 3.0f) &&
+                   finiteInRange(studio.coatDarkening, 0.0f, 1.0f) && unitRgb(studio.coatColor) &&
+                   unitRgb(studio.edgeTint) && finiteInRange(studio.fuzz, 0.0f, 1.0f) &&
+                   finiteInRange(studio.fuzzRoughness, 0.0f, 1.0f) && unitRgb(studio.fuzzColor) &&
+                   finiteInRange(studio.filmIor, 1.0f, 3.0f);
         }
     } // namespace
 
@@ -522,7 +538,7 @@ namespace merutilm::rff2 {
             slope.reliefDepth < 0 || slope.reliefDepth > 16 || slope.normalSmooth < 0 ||
             slope.normalSmooth > 1 || slope.aoRadius < 1 || slope.aoRadius > 64 || slope.reliefWaves < 0 ||
             slope.reliefWaves > 1 || slope.waveFrequency < 0.03f || slope.waveFrequency > 1.5f ||
-            slope.boundaryGuard < 0 || slope.boundaryGuard > 1) {
+            slope.boundaryGuard < 0 || slope.boundaryGuard > 1 || !validReliefCap(slope.reliefCap)) {
             return false;
         }
         if (!allFinite({studio.roughness, studio.metalness, studio.ior, studio.directIntensity,
@@ -534,11 +550,15 @@ namespace merutilm::rff2 {
             studio.environmentIntensity < 0.0f || studio.environmentIntensity > 8.0f ||
             studio.clearcoat < 0.0f ||
             studio.clearcoat > 1.0f || studio.clearcoatRoughness < 0.04f ||
-            studio.clearcoatRoughness > 1.0f) {
+            studio.clearcoatRoughness > 1.0f || !validOpenPbr(studio) || !enumInRange(slope.specularAnisotropyDirection, 0, 2)) {
             return false;
         }
 
         const auto &color = shader.color;
+        if (!NumericSettingLimits::vignette(color.vignette) || !NumericSettingLimits::vignetteRadius(color.vignetteRadius) ||
+            !NumericSettingLimits::vignetteRichness(color.vignetteRichness) || !enumInRange(color.vignetteShape, 0, 1)) {
+            return false;
+        }
         const auto &fog = shader.fog;
         if (!allFinite({fog.chaosAmount, fog.chaosScale, fog.chaosThreshold, fog.chaosTransition,
                         fog.chaosFeather, fog.chaosBlur, fog.chaosShade, fog.chaosInterior}) ||
@@ -1682,6 +1702,194 @@ namespace merutilm::rff2 {
         }
         p.orbitTrapShape = static_cast<ShdPalOrbitTrapShape>(shape);
         p.orbitTrapSides = sides;
+    }
+
+    void ShaderPresetIO::writeVignette(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &c = shader.color;
+        const ShdColorAttribute defaults{};
+        // At its defaults the vignette is off and the file stays as it was.
+        if (c.vignette == defaults.vignette && c.vignetteRadius == defaults.vignetteRadius &&
+            c.vignetteRichness == defaults.vignetteRichness && c.vignetteShape == defaults.vignetteShape) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, VIGNETTE_MAGIC);
+        IOUtilities::encodeAndWrite(out, c.vignette);
+        IOUtilities::encodeAndWrite(out, c.vignetteRadius);
+        IOUtilities::encodeAndWrite(out, c.vignetteRichness);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(c.vignetteShape));
+    }
+
+    void ShaderPresetIO::readVignette(std::ifstream &in, ShaderAttribute &shader) {
+        auto &c = shader.color;
+        const ShdColorAttribute defaults{};
+        c.vignette = defaults.vignette;
+        c.vignetteRadius = defaults.vignetteRadius;
+        c.vignetteRichness = defaults.vignetteRichness;
+        c.vignetteShape = defaults.vignetteShape;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != VIGNETTE_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        float strength = 0.0f;
+        float radius = 0.0f;
+        float richness = 0.0f;
+        uint32_t shape = 0;
+        IOUtilities::readAndDecode(in, &strength);
+        IOUtilities::readAndDecode(in, &radius);
+        IOUtilities::readAndDecode(in, &richness);
+        IOUtilities::readAndDecode(in, &shape);
+        if (in.fail() || !NumericSettingLimits::vignette(strength) || !NumericSettingLimits::vignetteRadius(radius) ||
+            !NumericSettingLimits::vignetteRichness(richness) || shape > static_cast<uint32_t>(ShdVignetteShape::FRAME)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        c.vignette = strength;
+        c.vignetteRadius = radius;
+        c.vignetteRichness = richness;
+        c.vignetteShape = static_cast<ShdVignetteShape>(shape);
+    }
+
+    void ShaderPresetIO::writeOpenPbr(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &s = shader.slope.studio;
+        const ShdStudioAttribute defaults{};
+        // With Studio GGX and every OpenPBR value at its default the file stays as it was.
+        if (s.model == defaults.model && s.coatIor == defaults.coatIor && s.coatDarkening == defaults.coatDarkening &&
+            glm::vec3(s.coatColor) == glm::vec3(defaults.coatColor) && glm::vec3(s.edgeTint) == glm::vec3(defaults.edgeTint) &&
+            s.fuzz == defaults.fuzz && s.fuzzRoughness == defaults.fuzzRoughness &&
+            glm::vec3(s.fuzzColor) == glm::vec3(defaults.fuzzColor) && s.filmIor == defaults.filmIor) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, OPENPBR_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(s.model));
+        IOUtilities::encodeAndWrite(out, s.coatIor);
+        IOUtilities::encodeAndWrite(out, s.coatDarkening);
+        for (const auto *color : {&s.coatColor, &s.edgeTint}) {
+            IOUtilities::encodeAndWrite(out, color->r);
+            IOUtilities::encodeAndWrite(out, color->g);
+            IOUtilities::encodeAndWrite(out, color->b);
+        }
+        IOUtilities::encodeAndWrite(out, s.fuzz);
+        IOUtilities::encodeAndWrite(out, s.fuzzRoughness);
+        IOUtilities::encodeAndWrite(out, s.fuzzColor.r);
+        IOUtilities::encodeAndWrite(out, s.fuzzColor.g);
+        IOUtilities::encodeAndWrite(out, s.fuzzColor.b);
+        IOUtilities::encodeAndWrite(out, s.filmIor);
+    }
+
+    void ShaderPresetIO::readOpenPbr(std::ifstream &in, ShaderAttribute &shader) {
+        auto &s = shader.slope.studio;
+        const ShdStudioAttribute defaults{};
+        s.model = defaults.model;
+        s.coatIor = defaults.coatIor;
+        s.coatDarkening = defaults.coatDarkening;
+        s.coatColor = defaults.coatColor;
+        s.edgeTint = defaults.edgeTint;
+        s.fuzz = defaults.fuzz;
+        s.fuzzRoughness = defaults.fuzzRoughness;
+        s.fuzzColor = defaults.fuzzColor;
+        s.filmIor = defaults.filmIor;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != OPENPBR_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t model = 0;
+        ShdStudioAttribute read = s;
+        IOUtilities::readAndDecode(in, &model);
+        IOUtilities::readAndDecode(in, &read.coatIor);
+        IOUtilities::readAndDecode(in, &read.coatDarkening);
+        for (auto *color : {&read.coatColor, &read.edgeTint}) {
+            IOUtilities::readAndDecode(in, &color->r);
+            IOUtilities::readAndDecode(in, &color->g);
+            IOUtilities::readAndDecode(in, &color->b);
+        }
+        IOUtilities::readAndDecode(in, &read.fuzz);
+        IOUtilities::readAndDecode(in, &read.fuzzRoughness);
+        IOUtilities::readAndDecode(in, &read.fuzzColor.r);
+        IOUtilities::readAndDecode(in, &read.fuzzColor.g);
+        IOUtilities::readAndDecode(in, &read.fuzzColor.b);
+        IOUtilities::readAndDecode(in, &read.filmIor);
+        read.model = static_cast<ShdStudioMaterialModel>(model);
+        if (in.fail() || model > static_cast<uint32_t>(ShdStudioMaterialModel::OPENPBR_SURFACE) || !validOpenPbr(read)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        s = read;
+    }
+
+    void ShaderPresetIO::writeAnisotropyDirection(std::ostream &out, const ShaderAttribute &shader) {
+        // At Fixed Angle the file stays as it was.
+        if (shader.slope.specularAnisotropyDirection == ShdAnisotropyDirection::FIXED_ANGLE) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ANISOTROPY_DIRECTION_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.slope.specularAnisotropyDirection));
+    }
+
+    void ShaderPresetIO::readAnisotropyDirection(std::ifstream &in, ShaderAttribute &shader) {
+        shader.slope.specularAnisotropyDirection = ShdAnisotropyDirection::FIXED_ANGLE;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ANISOTROPY_DIRECTION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t direction = 0;
+        IOUtilities::readAndDecode(in, &direction);
+        if (in.fail() || direction > static_cast<uint32_t>(ShdAnisotropyDirection::ACROSS_BANDS)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.specularAnisotropyDirection = static_cast<ShdAnisotropyDirection>(direction);
+    }
+
+    void ShaderPresetIO::writeReliefCap(std::ostream &out, const ShaderAttribute &shader) {
+        // Off, the file stays as it was.
+        if (shader.slope.reliefCap == 0.0f) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, RELIEF_CAP_MAGIC);
+        IOUtilities::encodeAndWrite(out, shader.slope.reliefCap);
+    }
+
+    void ShaderPresetIO::readReliefCap(std::ifstream &in, ShaderAttribute &shader) {
+        shader.slope.reliefCap = 0.0f;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != RELIEF_CAP_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        float periods = 0.0f;
+        IOUtilities::readAndDecode(in, &periods);
+        if (in.fail() || !validReliefCap(periods)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.reliefCap = periods;
     }
 
     void ShaderPresetIO::writeEffectStyles(std::ostream &out, const ShaderAttribute &shader) {
@@ -3282,6 +3490,10 @@ namespace merutilm::rff2 {
         writeOrbitTrapMapping(out, shader);
         writeOrbitTrapRegion(out, shader);
         writeOrbitTrapShapeExtension(out, shader);
+        writeVignette(out, shader);
+        writeOpenPbr(out, shader);
+        writeAnisotropyDirection(out, shader);
+        writeReliefCap(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -3463,6 +3675,10 @@ namespace merutilm::rff2 {
         readOrbitTrapMapping(in, s);
         readOrbitTrapRegion(in, s);
         readOrbitTrapShapeExtension(in, s);
+        readVignette(in, s);
+        readOpenPbr(in, s);
+        readAnisotropyDirection(in, s);
+        readReliefCap(in, s);
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");
             return false;

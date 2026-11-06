@@ -469,6 +469,8 @@ namespace merutilm::rff2 {
 
         void openExportSettings();
 
+        void openCameraSettings();
+
         void exportVideo();
 
         void loadKeyframeDirectory();
@@ -503,7 +505,7 @@ namespace merutilm::rff2 {
         // Scrolls the stack while a row is carried to an end of it.
         bool rowEdgeScroll(POINT point);
 
-        void syncPlaybackClock();
+        void syncPlaybackClock(double seconds = -1.0);
 
         [[nodiscard]] float keyframeLogZoom(uint32_t id);
 
@@ -512,6 +514,22 @@ namespace merutilm::rff2 {
         [[nodiscard]] float viewSpan() const;
 
         [[nodiscard]] float viewDepthAt(int x) const;
+
+        // Zoom holds take width on the axis: each spans the distance its zoom would have covered meanwhile.
+        [[nodiscard]] float holdWidth(const VidTimelineHold &hold) const;
+
+        [[nodiscard]] float axisDistance(float depth, bool pastHold) const;
+
+        [[nodiscard]] int axisX(float depth, const RECT &axis, bool pastHold = false) const;
+
+        [[nodiscard]] int timeX(double seconds, const RECT &axis) const;
+
+        [[nodiscard]] int previewX(const RECT &axis) const;
+
+        // The depth under x; holdFraction is how far into a hold's band x falls, or negative outside every band.
+        [[nodiscard]] float axisDepthAt(int x, float *holdFraction) const;
+
+        [[nodiscard]] double viewSecondsAt(int x) const;
 
         void resetView();
 

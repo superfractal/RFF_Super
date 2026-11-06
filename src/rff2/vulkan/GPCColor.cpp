@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-08-15.
 // Modified by GPT-6 on 2026-09-10, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-13
+// Modified by Opus 5.5 on 2026-10-13, 2026-11-04
 //
 
 #include "GPCColor.hpp"
@@ -27,6 +27,11 @@ namespace merutilm::rff2 {
         colorParameters.set<float>(DescColor::TARGET_COLOR_BRIGHTNESS, color.brightness);
         colorParameters.set<float>(DescColor::TARGET_COLOR_CONTRAST, color.contrast);
         colorParameters.set<float>(DescColor::TARGET_COLOR_SCENE_LINEAR, sceneLinear ? 1.0f : 0.0f);
+        colorParameters.set<float>(DescColor::TARGET_COLOR_VIGNETTE, color.vignette);
+        colorParameters.set<float>(DescColor::TARGET_COLOR_VIGNETTE_RADIUS, color.vignetteRadius);
+        colorParameters.set<float>(DescColor::TARGET_COLOR_VIGNETTE_RICHNESS, color.vignetteRichness);
+        colorParameters.set<float>(DescColor::TARGET_COLOR_VIGNETTE_SHAPE,
+                                   color.vignetteShape == ShdVignetteShape::FRAME ? 1.0f : 0.0f);
         colorUniform.update();
     }
 
@@ -75,5 +80,6 @@ namespace merutilm::rff2 {
 
         appendUniqueDescriptor(SET_PREV_RESULT, descriptors, std::move(descManager));
         appendDescriptor<DescColor>(SET_COLOR, descriptors);
+        appendDescriptor<DescIteration>(SET_ITERATION, descriptors);
     }
 }

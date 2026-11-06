@@ -591,6 +591,22 @@ namespace merutilm::rff2 {
         addWorkspaceItem(currentMenu, "Keyframes", 2, 3, CallbackVideo::DATA_SETTINGS);
         addWorkspaceItem(currentMenu, "Color Animation", 2, 0, CallbackVideo::ANIMATION_SETTINGS);
         addChildItem(currentMenu, "Timeline Editor", CallbackVideo::TIMELINE_EDITOR);
+        // Taken up the next time the Timeline Editor preloads its previews.
+        static constexpr uint8_t PRELOAD_THREAD_CHOICES[] = {0, 1, 2, 4, 6, 8, 12, 16};
+        constexpr UINT lastPreloadChoice = UINT(std::size(PRELOAD_THREAD_CHOICES) - 1);
+        const auto preloadThreadsMenu = addChildMenu(currentMenu, "Preview Preload Threads");
+        for (UINT i = 0; i <= lastPreloadChoice; ++i) {
+            const uint8_t threads = PRELOAD_THREAD_CHOICES[i];
+            addChildItem(preloadThreadsMenu, threads == 0 ? std::string("Auto") : std::to_string(threads),
+                         [preloadThreadsMenu, i, threads](SettingsMenu &, RenderScene &) {
+                             PreferencesIO::previewLoadThreads() = threads;
+                             PreferencesIO::save();
+                             CheckMenuRadioItem(preloadThreadsMenu, 0, lastPreloadChoice, i, MF_BYPOSITION);
+                         });
+            if (threads == PreferencesIO::previewLoadThreads()) {
+                CheckMenuRadioItem(preloadThreadsMenu, 0, lastPreloadChoice, i, MF_BYPOSITION);
+            }
+        }
         addWorkspaceItem(currentMenu, "Video Encoding", 3, 3, CallbackVideo::EXPORT_SETTINGS);
         addChildItem(currentMenu, "Generate Keyframes", CallbackVideo::GENERATE_VID_KEYFRAME);
         addChildItem(currentMenu, "Export Video", CallbackVideo::EXPORT_ZOOM_VID);

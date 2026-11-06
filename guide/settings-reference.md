@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06. -->
 # RFF_Super complete field reference
 
 Read the [shader feature overview](shader-overview.md) for an explanation of each group, and use the [coverage checklist](shader-coverage.md) to locate features by their source panel. Surface editor names can differ from the registry labels below; see [Surface editor display names](#surface-editor-display-names).
@@ -72,6 +72,7 @@ Field names, choices, and defaults were read from current production form models
 | Specular Direction | 135 | Aims the independent highlight; enable Independent Specular Light. | 0 to 359.99997 |
 | Specular Anisotropy | 0 | Stretches highlights away from a round shape. | 0 to 1 |
 | Anisotropy Angle | 0 | Rotates the anisotropic stretching direction. | 0 to 359.99997 |
+| Anisotropy Direction | Fixed Angle | Studio only. Fixed Angle stretches every highlight the same way on screen; Along Bands stretches it along the color bands so it flows around spirals and tendrils, and Across Bands across them. With either, Anisotropy Angle twists the stretch away from the bands. Needs Studio and Specular Anisotropy above 0. | Fixed Angle / Along Bands / Across Bands |
 
 ### Relief Detail
 
@@ -132,6 +133,7 @@ Field names, choices, and defaults were read from current production form models
 | Normal Smoothing | 0 | Smooths relief normals to reduce harsh fine variation. | 0 to 1 |
 | AO Radius | 8 | Neighborhood size of the cavity/ambient-occlusion response. | 1 to 64 |
 | Boundary Reflection Guard | 0 | Suppresses unwanted reflections near iteration boundaries. | 0 to 1 |
+| Relief Cap | 0 | Stops the Lustre relief rising this many periods above the view's lowest escaped iteration, so detail too dense for the pixels lies flat and matte instead of glittering while the broad bands keep their gloss; colors are unaffected. The cap follows the view, including through a video zoom. 0 is off. | 0 to 8 |
 | Relief Waves | 0 | Adds wave modulation to relief; 0 disables it. | 0 to 1 |
 | Wave Frequency | 0.5 | Frequency of relief waves; requires Relief Waves above zero. | 0.03 to 1.5 |
 | Waves on Clear Coat Only | Off | Relief Waves shape only the Studio clear-coat highlights, leaving the shading free of their lines and dark bands. | Off / On |
@@ -235,6 +237,10 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Saturation | 0 | 0 preserves saturation; -1 makes grayscale; positive values increase saturation. | 0 keeps saturation; -1 is grayscale. |
 | Brightness | 0 | Adds a channel offset; 0 preserves brightness. | Offset added to every color channel. |
 | Contrast | 0 | Positive expands contrast about the midpoint; negative flattens it; 0 preserves it. | -1 to 0.999 |
+| Vignette | 0 | Darkens the picture toward the frame edges, deepens the colors just inside the dark rim, and leaves the center at its graded color. The value is how dark the edge becomes; 0 is off and draws exactly as before. Applied after the grade and before Fog and Bloom. | 0 to 1 |
+| Vignette Shape | Ellipse | Ellipse darkens toward the corners in a rounded shape fitted to the frame. Frame runs a band of the same width along all four edges, slightly deeper in the corners. Requires Vignette above zero. | Ellipse, Frame |
+| Vignette Radius | 0.5 | How far the untouched center reaches. With Ellipse, a fraction of the way from the center to the middle of each edge; with Frame, each edge band is (1 − Radius) of half the frame height wide. Requires Vignette above zero. | 0 to 0.95 |
+| Vignette Richness | 0.5 | Saturation added where the vignette begins, so colors deepen before they darken; 0 only darkens. Requires Vignette above zero. | 0 to 2 |
 
 ### Bloom
 
@@ -658,6 +664,7 @@ Studio enables Studio materials. Base Style selects a recipe; related parameter 
 | Light Zenith | 60 | Changes the main light's elevation in degrees. | 0 up to, but excluding, 360 degrees |
 | Light Direction | 135 | Rotates the main light around the relief in degrees. | 0 up to, but excluding, 360 degrees |
 | Boundary Reflection Guard | 0 | Suppresses reflection near iteration boundaries. | 0 to 1 |
+| Relief Cap | 0 | Flattens Lustre relief above the view's lowest escaped iteration plus this many periods; also available in Lighting & Relief. | 0 to 8 |
 | Lustre Depth | 1 | Lustre relief depth; also available in Lighting & Relief. | 0 to 16 |
 | Normal Smoothing | 0 | Relief normal smoothing; also available in Lighting & Relief. | 0 to 1 |
 | AO Radius | 8 | Neighborhood radius for cavity shading. | 1 to 64 |
@@ -668,6 +675,7 @@ Studio enables Studio materials. Base Style selects a recipe; related parameter 
 
 | Setting | Fresh default | Effect | Range |
 | --- | --- | --- | --- |
+| Material Model | Studio GGX | How Studio shades its material. OpenPBR Surface layers it as an approximation of the OpenPBR Surface specification (not a conforming implementation): reflections keep their energy at every roughness, metals take an Edge Tint, the coat has its own IOR, color and darkening, and Fuzz adds a sheen; Specular Intensity becomes its specular weight. Choosing OpenPBR Surface turns Studio on. | Studio GGX / OpenPBR Surface |
 | Roughness | 0.32 | Spreads Studio reflections; needs Studio and visible specular/reflection contribution. | 0.04 to 1 |
 | Metalness | 0.6 | Blends toward a metallic Studio response. | 0 to 1 |
 | Index of Refraction | 1.5 | Dielectric index of refraction, controlling reflection strength. | 1 to 3 |
@@ -680,6 +688,14 @@ Studio enables Studio materials. Base Style selects a recipe; related parameter 
 | Gradient Stop 1-4 Position | 0 / 0.55 / 0.68 / 0.82 | Where each stop sits along the reflected direction: 0 straight down, 0.5 level, 1 straight up. Requires Gradient. | 0 to 1 |
 | Gradient Stop 1-4 Color | dark / slate / white / blue | Color reflected at each stop. Requires Gradient. | Color |
 | Coat Softbox | On | The coating reflects the key and fill lights as small rectangular softboxes, crisp window shapes that bend with the relief; Off keeps round highlights. Older files open with it off. Requires Clearcoat above zero. | Off / On |
+| Coat IOR | 1.6 | OpenPBR Surface: index of refraction of the coat; the base's own IOR is measured against it. Requires Clearcoat above zero. | 1 to 3 |
+| Coat Darkening | 1 | OpenPBR Surface: how much the base darkens and deepens under the coat; 0 keeps it as bright as without the coat. Requires Clearcoat above zero. | 0 to 1 |
+| Coat Color | White | OpenPBR Surface: tint absorbed by everything seen through the coat, stronger on slopes seen at an angle. Requires Clearcoat above zero. | Color |
+| Edge Tint | White | OpenPBR Surface: color a metal turns toward near its grazing edges (F82 tint). Requires Metalness above zero. | Color |
+| Fuzz | 0 | OpenPBR Surface: a soft velvet- or dust-like sheen over everything, brightest on steep slopes. | 0 to 1 |
+| Fuzz Roughness | 0.5 | OpenPBR Surface: low values gather the fuzz into a thin rim; high values spread it. Requires Fuzz above zero. | 0 to 1 |
+| Fuzz Color | White | OpenPBR Surface: color of the fuzz. Requires Fuzz above zero. | Color |
+| Film IOR | 1.4 | OpenPBR Surface: index of refraction of the thin film that Iridescence draws as real interference. Requires Iridescence above zero. | 1 to 3 |
 | Environment Rotation | 0 | Rotates the Studio environment independently. | 0 up to, but excluding, 360 degrees |
 | Follow Light Direction | 1 | How much the environment follows Light Direction: 0 independent, 1 full follow. | 0 to 1 |
 | Specular Antialiasing | 0 | Reduces harsh specular aliasing by adjusting highlight response. | 0 to 1 |

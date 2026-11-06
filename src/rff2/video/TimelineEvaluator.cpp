@@ -2,6 +2,7 @@
 // Modified by GPT-5 on 2026-08-18
 // Modified by Opus 5 on 2026-08-21, 2026-08-24, 2026-08-25
 // Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-23, 2026-09-26, 2026-09-30, 2026-10-01
+// Modified by Opus 5.5 on 2026-11-01
 //
 
 #include "TimelineEvaluator.hpp"
@@ -222,7 +223,13 @@ namespace merutilm::rff2 {
         if (timeline.rotationMode == VidRotationMode::CONSTANT_PERIOD &&
             std::isfinite(sec) && std::isfinite(timeline.rotationPeriod) && timeline.rotationPeriod > 0.0f &&
             std::isfinite(timeline.rotationStartAngle)) {
-            const double turns = std::fmod(static_cast<double>(sec), static_cast<double>(timeline.rotationPeriod)) / timeline.rotationPeriod;
+            // The turn runs from the start time, held at its start angle before it and at its last angle after the end time.
+            double turning = static_cast<double>(sec) - timeline.rotationStartTime;
+            if (timeline.rotationEndTime > timeline.rotationStartTime) {
+                turning = std::min(turning, static_cast<double>(timeline.rotationEndTime) - timeline.rotationStartTime);
+            }
+            turning = std::max(turning, 0.0);
+            const double turns = std::fmod(turning, static_cast<double>(timeline.rotationPeriod)) / timeline.rotationPeriod;
             const double direction = timeline.rotationDirection == VidRotationDirection::CLOCKWISE ? 1.0 : -1.0;
             out.camera.rotation = static_cast<float>(std::remainder(timeline.rotationStartAngle + direction * 360.0 * turns, 360.0));
         }

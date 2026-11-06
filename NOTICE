@@ -1,7 +1,7 @@
 RFF Super - Third-Party Notices
 
 Notice mappings updated by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-03, 2026-10-04.
-Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-26, 2026-10-29, 2026-10-31, 2026-11-01.
+Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-26, 2026-10-29, 2026-10-31, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06.
 
 RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
 GNU General Public License v3; see LICENSE. This file records the third-party
@@ -822,6 +822,47 @@ code or constants were copied. The equirectangular mapping (polar angle from aco
 azimuth from atan) and the 1-4-6-4-1 binomial blur are textbook; the spread-to-mip
 conversion and gradient evaluation are original GPL-3.0-only code.
 
+2026-11-04: Material Model > OpenPBR Surface (shdsrc/openpbr_surface.glsl) layers the Studio
+material after the OpenPBR Surface specification 1.1 (page v1.1.2) by the Academy Software Foundation
+(Apache-2.0): https://academysoftwarefoundation.github.io/OpenPBR/
+https://github.com/AcademySoftwareFoundation/OpenPBR/blob/main/LICENSE
+It is written independently from the specification's published equations: the
+specular-weight IOR modulation, coat-relative base IOR, coat roughening of the base,
+coat absorption along the refracted view, coat darkening (Delta from the internal
+reflectance K) and the fuzz albedo layering. No MaterialX graph or OpenPBR reference
+code is used. It is an approximation in a screen-space relief shader, not a
+conforming OpenPBR renderer, and implies no endorsement by the ASWF.
+- Metal Fresnel uses the F82-tint model of Kutz et al. (2021) as the specification
+  adopts it, extending Naty Hoffman, "Fresnel Equations Considered Harmful" (EGSR 2019).
+- The dielectric Fresnel is the exact unpolarised formula given by Walter et al. (2007,
+  cited above).
+- Multiple-scattering energy compensation follows Emmanuel Turquin, "Practical
+  multiple scattering compensation for microfacet models" (2019):
+  https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf
+- Fuzz uses the "Charlie" sheen distribution of Alejandro Conty Estevez and
+  Christopher Kulla, "Production Friendly Microfacet Sheen BRDF" (SIGGRAPH 2017):
+  https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_sheen.pdf
+  with the visibility term of David Neubelt and Matt Pettineo (SIGGRAPH 2013 Physically
+  Based Shading course). The specification itself
+  recommends a different, LTC-based fuzz model; Charlie is used here instead. The
+  same published sheen equation appears in Filament (Apache-2.0, cited above) and in
+  the Khronos KHR_materials_sheen extension; neither's code is copied.
+- The thin film is the textbook single-layer Airy reflectance (Max Born and Emil Wolf,
+  "Principles of Optics") at three wavelengths; the specification recommends Belcour and
+  Barla (2017), which is not implemented.
+The GGX split-sum albedo table, the Charlie fuzz albedo table and the quartic fit of
+the average dielectric Fresnel were integrated numerically for this project
+(scripts kept in the ignored debug/openpbr_fit folder); no published table or fit
+constants are copied. 0.46266437 and 0.05665278 are (6/7)^5 and (1/7)(6/7)^6.
+
+2026-11-04: Anisotropy Direction (shdsrc/studio_anisotropy.glsl) turns the Studio
+anisotropic GGX axis along or across the iteration bands, taking the axis from the
+direction the relief normal tilts. Driving an anisotropic highlight from a procedural
+tangent field instead of a fixed or UV tangent is common practice (for example the
+radial tangent of Blender's Tangent node: https://docs.blender.org/manual/en/latest/render/shader_nodes/input/tangent.html);
+no code from it or elsewhere is used, and the anisotropic GGX itself is the one cited
+above. The function is original GPL-3.0-only code.
+
 ================================================================================
 Lustre surface - mathematical references
 ================================================================================
@@ -958,6 +999,21 @@ shdsrc/vk_static_2_image.frag and shdsrc/vk_2_map_iter_stripe.comp keeps
 planar video rotation consistent with the existing 360 camera heading. This is independent
 project GPLv3 code using elementary rotation identities, with no adapted
 third-party implementation or constants.
+
+Original keyframe projection zoom by Opus 5.5 on 2026-11-05 in
+shdsrc/keyframe_projection.glsl, used by shdsrc/vk_2_map_iter_stripe.comp and
+shdsrc/vk_static_2_image.frag, inverts the project's own 360 Camera and
+Equirectangular projections so video zooms keyframes calculated in them on the
+plane. This is independent project GPL-3.0-only code using elementary pinhole-camera
+and stereographic (half-angle tangent) geometry, with no adapted third-party
+implementation or constants.
+
+Original vignette by Opus 5.5 on 2026-11-04 in shdsrc/vk_color.frag
+(apply_vignette) darkens toward an ellipse fitted to the canvas or a frame of
+equal width on all four edges, and pushes colors away from their gray just inside
+the dark rim. Smoothstep falloff from the center is common practice; the shapes,
+the richness band and their smoothstep ranges are independent project
+GPL-3.0-only code, with no adapted third-party implementation or constants.
 
 ================================================================================
 Licensing remediation and owner clarification - 2026-10-03

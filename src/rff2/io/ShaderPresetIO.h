@@ -6,7 +6,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05
 //
 
 #pragma once
@@ -204,6 +204,40 @@ namespace merutilm::rff2 {
         // Without the block OTS1's shape stands and the sides load 5; another marker is left unread, a cut-short
         // block or a value out of range fails the stream.
         static void readOrbitTrapShapeExtension(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Vignette block: float32 strength, radius and richness, then uint32 shape (0 Ellipse, 1 Frame),
+        // written only when one differs from its default.
+        static constexpr uint32_t VIGNETTE_MAGIC = 0x31474956; // "VIG1"
+
+        static void writeVignette(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block the vignette loads off at its default radius, richness and shape; another marker is left unread,
+        // a cut-short block or a value out of range fails the stream.
+        static void readVignette(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the OpenPBR block, written only off its defaults: uint32 model, then float32 coat IOR, darkening, coat color, edge tint, fuzz, fuzz roughness, fuzz color and film IOR.
+        static constexpr uint32_t OPENPBR_MAGIC = 0x3142504F; // "OPB1"
+
+        static void writeOpenPbr(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Studio loads as Studio GGX with the OpenPBR defaults; another marker is left unread, a bad block fails the stream.
+        static void readOpenPbr(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Anisotropy Direction block, written only off Fixed Angle: uint32 direction (1 Along Bands, 2 Across Bands).
+        static constexpr uint32_t ANISOTROPY_DIRECTION_MAGIC = 0x31494E41; // "ANI1"
+
+        static void writeAnisotropyDirection(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block the direction loads as Fixed Angle; another marker is left unread, a bad block fails the stream.
+        static void readAnisotropyDirection(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Relief Cap block, written only when the cap is on: float32 periods above the lowest escaped iteration.
+        static constexpr uint32_t RELIEF_CAP_MAGIC = 0x31504352; // "RCP1"
+
+        static void writeReliefCap(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Relief Cap loads off; another marker is left unread, a bad block fails the stream.
+        static void readReliefCap(std::ifstream &in, ShaderAttribute &shader);
 
         // Marks the Orbit Trap look block: float32 offset and speed, four float32 glow color, float32 strength
         // and sharpness, uint32 blend, then float32 border width and border darkness.

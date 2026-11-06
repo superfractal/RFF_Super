@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-18, 2026-09-19, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-08
+// Modified by Opus 5.5 on 2026-10-08, 2026-11-04
 //
 
 // Artist-directed GGX and dielectric coating over native relief; equation provenance is recorded in NOTICE.
@@ -40,6 +40,9 @@ vec3 studio_surface(
     if (variance > 0.0) {
         rough = clamp(pow(pow(rough, 4.0) + variance, 0.25), 0.04, 1.0);
     }
+    if (slope_attr.studio_model > 0.5) {
+        return openpbr_surface(base, diffuseBase, n, ns, v, keyDir, fillDir, specAngle, rough, aoFactor, variance, footprint, boundaryMask);
+    }
     float metal = clamp(slope_attr.studio_metalness, 0.0, 1.0);
     float ior = clamp(slope_attr.studio_ior, 1.0, 3.0);
     float dielectric = (ior - 1.0) / (ior + 1.0);
@@ -62,9 +65,9 @@ vec3 studio_surface(
     vec3 ground = srgb_to_linear(vec3(
         slope_attr.ground_color_r, slope_attr.ground_color_g, slope_attr.ground_color_b
     ));
-    float axis = radians(slope_attr.specular_anisotropy_angle);
-    vec3 direct = studio_brdf(ns, v, keyDir, rough, slope_attr.specular_anisotropy, axis, f0) * key;
-    direct += studio_brdf(ns, v, fillDir, rough, slope_attr.specular_anisotropy, axis, f0)
+    vec2 anisotropy = studio_anisotropy(n);
+    vec3 direct = studio_brdf(ns, v, keyDir, rough, anisotropy.x, anisotropy.y, f0) * key;
+    direct += studio_brdf(ns, v, fillDir, rough, anisotropy.x, anisotropy.y, f0)
             * sky * clamp(slope_attr.fill_intensity, 0.0, 1.0);
     direct *= slope_attr.studio_direct_intensity * 3.0;
     float environmentAngle = radians(slope_attr.studio_environment_rotation)

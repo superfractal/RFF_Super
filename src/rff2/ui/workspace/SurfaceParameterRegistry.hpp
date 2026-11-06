@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-18, 2026-09-19, 2026-09-22, 2026-09-23, 2026-09-24
+// Modified by Opus 5.5 on 2026-11-05
 //
 
 #pragma once
@@ -100,6 +101,7 @@ namespace merutilm::rff2::workspace {
             {"surface.filmThickness", L"Film Thickness (nm)", &ShdSlopeAttribute::filmThickness, 0, 2000},
             {"surface.specularAA", L"Specular Antialiasing", &ShdSlopeAttribute::specularAA, 0, 1},
             {"surface.boundaryGuard", L"Boundary Reflection Guard", &ShdSlopeAttribute::boundaryGuard, 0, 1},
+            {"surface.reliefCap", L"Relief Cap", &ShdSlopeAttribute::reliefCap, 0, 8},
             {"surface.reflectionDetail", L"Reflection Detail", &ShdSlopeAttribute::reflectionDetail, 0.25f, 4.0f},
             {"surface.reflectionContrast", L"Reflection Contrast", &ShdSlopeAttribute::reflectionContrast, 0.25f, 3.0f},
             {"surface.reflectionBrightness", L"Reflection Brightness", &ShdSlopeAttribute::reflectionBrightness, 0.0f, 3.0f},

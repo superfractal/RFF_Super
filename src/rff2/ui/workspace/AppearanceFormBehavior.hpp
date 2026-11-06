@@ -1,12 +1,18 @@
 //
 // Modified by GPT-6 on 2026-10-01
-// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-04, 2026-11-05
 //
 
 #pragma once
 #include "FormValues.hpp"
 
 namespace merutilm::rff2::workspace {
+    // Studio fields only OpenPBR Surface reads.
+    inline bool openPbrField(const std::string &id) {
+        return id == "studio.coatIor" || id == "studio.coatDarkening" || id == "studio.coatColor" || id == "studio.edgeTint" ||
+               id == "studio.fuzz" || id == "studio.fuzzRoughness" || id == "studio.fuzzColor" || id == "studio.filmIor";
+    }
+
     inline void appearanceFormBehavior(WorkspaceForm &form) {
         const auto fields = std::make_shared<std::vector<FormField>>(form.fields);
         for (auto &field : form.fields) {
@@ -25,6 +31,7 @@ namespace merutilm::rff2::workspace {
             if (id == "render.computeShader.stopMpaAfterBatches") field.dependencies.push_back("render.computeShader.ignoreMpa");
             if (id == "bloom.threshold" || id == "bloom.radius" || id == "bloom.softness" || id == "bloom.linearAdd")
                 field.dependencies.push_back("bloom.intensity");
+            if (id == "color.vignetteShape" || id == "color.vignetteRadius" || id == "color.vignetteRichness") field.dependencies.push_back("color.vignette");
             if (id == "fog.radius" || id == "fog.centerStart" || id == "fog.centerInvert" || id == "fog.rimMask" ||
                 id == "fog.rimMaskBoost" || id == "fog.rimBlur")
                 field.dependencies.push_back("fog.opacity");
@@ -38,8 +45,13 @@ namespace merutilm::rff2::workspace {
             if (id.starts_with("warp.") && id != "warp.enabled") field.dependencies.push_back("warp.enabled");
             if (id == "warp.octaves") field.dependencies.push_back("warp.source");
             if (id == "animation.flowAmount" || id == "animation.flowScale" || id == "animation.flowSpeed" || id == "animation.swirl") field.dependencies.push_back("animation.mode");
-            if (id == "slope.reliefAutoZoom" || id == "slope.invertRelief" || id == "slope.reliefDepth" || id == "slope.normalSmooth" || id == "slope.aoRadius" || id == "slope.reliefWaves" || id == "slope.waveFrequency" || id == "slope.reliefWavesCoatOnly") field.dependencies.push_back("slope.lustreRelief");
+            if (id == "slope.reliefAutoZoom" || id == "slope.invertRelief" || id == "slope.reliefDepth" || id == "slope.normalSmooth" || id == "slope.aoRadius" || id == "slope.reliefWaves" || id == "slope.waveFrequency" || id == "slope.reliefWavesCoatOnly" || id == "slope.reliefCap") field.dependencies.push_back("slope.lustreRelief");
             if (id.starts_with("studio.") && id != "studio.use") field.dependencies.push_back("studio.use");
+            if (openPbrField(id)) field.dependencies.push_back("studio.model");
+            if (id == "studio.coatIor" || id == "studio.coatDarkening" || id == "studio.coatColor") field.dependencies.push_back("studio.clearcoat");
+            if (id == "studio.edgeTint") field.dependencies.push_back("studio.metalness");
+            if (id == "studio.fuzzRoughness" || id == "studio.fuzzColor") field.dependencies.push_back("studio.fuzz");
+            if (id == "studio.filmIor") field.dependencies.push_back("slope.iridescence");
             if (id == "slope.coatSoftbox") field.dependencies.insert(field.dependencies.end(), {"studio.use", "studio.clearcoat"});
             if (id == "slope.studioEnvironmentSource") field.dependencies.push_back("studio.use");
             if (id == "slope.environmentBrightness") field.dependencies.insert(field.dependencies.end(), {"studio.use", "slope.studioEnvironmentSource"});
@@ -61,9 +73,10 @@ namespace merutilm::rff2::workspace {
             if (id == "slope.specularPower" || id == "slope.specularColor" ||
                 id == "slope.specularIndependent" || id == "slope.specularZenith" ||
                 id == "slope.specularAzimuth" || id == "slope.specularAnisotropy" ||
-                id == "slope.specularAnisotropyAngle" || id == "slope.reliefResponse") {
+                id == "slope.specularAnisotropyAngle" || id == "slope.specularAnisotropyDirection" || id == "slope.reliefResponse") {
                 field.dependencies.insert(field.dependencies.end(), {"slope.depth", "slope.opacity", "slope.specularIntensity"});
             }
+            if (id == "slope.specularAnisotropyDirection") field.dependencies.insert(field.dependencies.end(), {"studio.use", "slope.specularAnisotropy"});
             if (id == "slope.specularPower" || id == "slope.specularColor" ||
                 id == "slope.specularIndependent" || id == "slope.specularZenith" || id == "slope.specularAzimuth")
                 field.dependencies.push_back("studio.use");
@@ -112,6 +125,7 @@ namespace merutilm::rff2::workspace {
                 }
                 if (id == "bloom.threshold" || id == "bloom.radius" || id == "bloom.softness" || id == "bloom.linearAdd")
                     return number("bloom.intensity") > 0;
+                if (id == "color.vignetteShape" || id == "color.vignetteRadius" || id == "color.vignetteRichness") return number("color.vignette") > 0;
                 if (id == "fog.radius" || id == "fog.centerStart" || id == "fog.centerInvert" || id == "fog.rimMask" ||
                     id == "fog.rimMaskBoost" || id == "fog.rimBlur") {
                     if (number("fog.opacity") <= 0) return false;
@@ -177,6 +191,14 @@ namespace merutilm::rff2::workspace {
                 const bool studio = slope && on("studio.use");
                 const bool specular = slope && number("slope.specularIntensity") > 0;
                 const bool reflection = specular || (studio && number("studio.clearcoat") > 0);
+                if (openPbrField(id)) {
+                    if (!studio || values.number<int>("studio.model").value_or(0) != int(ShdStudioMaterialModel::OPENPBR_SURFACE)) return false;
+                    if (id == "studio.coatIor" || id == "studio.coatDarkening" || id == "studio.coatColor") return number("studio.clearcoat") > 0;
+                    if (id == "studio.edgeTint") return number("studio.metalness") > 0;
+                    if (id == "studio.fuzzRoughness" || id == "studio.fuzzColor") return number("studio.fuzz") > 0;
+                    if (id == "studio.filmIor") return number("slope.iridescence") > 0;
+                    return true;
+                }
                 if (id.starts_with("studio.") && id != "studio.use") return studio;
                 if (id == "slope.coatSoftbox") return studio && number("studio.clearcoat") > 0;
                 if (id == "slope.studioEnvironmentSource" || id == "slope.iridescence") return studio;
@@ -189,6 +211,7 @@ namespace merutilm::rff2::workspace {
                 if (id == "slope.specularZenith" || id == "slope.specularAzimuth") return reflection && on("slope.specularIndependent");
                 if (id == "slope.specularAnisotropy" || id == "slope.reliefResponse") return specular;
                 if (id == "slope.specularAnisotropyAngle") return specular && number("slope.specularAnisotropy") > 0;
+                if (id == "slope.specularAnisotropyDirection") return specular && studio && number("slope.specularAnisotropy") > 0;
                 if (id == "slope.fillZenith" || id == "slope.fillAzimuth") return slope && number("slope.fillIntensity") > 0;
                 if (id == "slope.zenith" || id == "slope.azimuth" || id == "slope.fillIntensity" || id == "slope.shadingBlend") return slope;
                 if (id == "slope.gamma" || id == "slope.reflectionRatio" || id == "slope.terminatorSoftness") return slope && number("slope.lumaAmount") > 0;
@@ -200,7 +223,7 @@ namespace merutilm::rff2::workspace {
                     return slope && number("slope.glossIntensity") > 0 && (id != "slope.glossRelief" || values.number<int>("slope.glossSource").value_or(0) == int(ShdSlopeGlossSource::SHADING_FINE));
                 if (id == "slope.lightBlend" || id == "slope.highlightKnee") return slope && !on("studio.use");
                 if (id == "slope.reliefAutoZoom" || id == "slope.invertRelief" || id == "slope.reliefDepth" || id == "slope.normalSmooth" || id == "slope.aoRadius" ||
-                    id == "slope.reliefWaves" || id == "slope.waveFrequency" || id == "slope.reliefWavesCoatOnly") return slope && on("slope.lustreRelief");
+                    id == "slope.reliefWaves" || id == "slope.waveFrequency" || id == "slope.reliefWavesCoatOnly" || id == "slope.reliefCap") return slope && on("slope.lustreRelief");
                 return true;
             };
         }

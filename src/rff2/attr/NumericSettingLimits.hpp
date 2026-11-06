@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-24
-// Modified by Opus 5.5 on 2026-10-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-11-04
 //
 
 #pragma once
@@ -32,6 +32,9 @@ namespace merutilm::rff2::NumericSettingLimits {
     inline constexpr Range saturation{-1.f, 10.f};
     inline constexpr Range colorBrightness{-1.f, 1.f};
     inline constexpr Range contrast{-1.f, 0.999f};
+    inline constexpr Range vignette{0.f, 1.f};
+    inline constexpr Range vignetteRadius{0.f, 0.95f};
+    inline constexpr Range vignetteRichness{0.f, 2.f};
     inline constexpr Range slopeBrightness{0.f, 100.f};
     inline constexpr Range bloomIntensity{0.f, 100.f};
     inline constexpr Range rimMaskBoost{1.f, 100.f};

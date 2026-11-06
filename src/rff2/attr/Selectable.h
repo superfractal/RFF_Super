@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04
 //
 
 #pragma once
@@ -17,11 +17,14 @@
 #include "ShdPalColorSmoothingMethod.h"
 #include "ShdPalColorInterpolationMethod.h"
 #include "ShdChaosBlurAverage.h"
+#include "ShdVignetteShape.h"
 #include "ShdChaosBokehShape.h"
 #include "ShdFogBlurQuality.h"
 #include "ShdToneMapMethod.h"
 #include "ShdSlopeGlossSource.h"
 #include "ShdStudioEnvironmentSource.h"
+#include "ShdStudioMaterialModel.h"
+#include "ShdAnisotropyDirection.h"
 #include "ShdSurfaceStyle.h"
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
@@ -132,6 +135,13 @@ namespace merutilm::rff2 {
                     APPEARANCE
                 };
             }
+            if constexpr (std::is_same_v<E, ShdVignetteShape>) {
+                using enum ShdVignetteShape;
+                return {
+                    ELLIPSE,
+                    FRAME
+                };
+            }
             if constexpr (std::is_same_v<E, ShdChaosBlurAverage>) {
                 using enum ShdChaosBlurAverage;
                 return {
@@ -227,6 +237,21 @@ namespace merutilm::rff2 {
                     SHADING,
                     RELIEF,
                     ASPECT
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdStudioMaterialModel>) {
+                using enum ShdStudioMaterialModel;
+                return {
+                    STUDIO_GGX,
+                    OPENPBR_SURFACE
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdAnisotropyDirection>) {
+                using enum ShdAnisotropyDirection;
+                return {
+                    FIXED_ANGLE,
+                    ALONG_BANDS,
+                    ACROSS_BANDS
                 };
             }
             if constexpr (std::is_same_v<E, ShdStudioEnvironmentSource>) {
@@ -595,6 +620,14 @@ namespace merutilm::rff2 {
                     default: break;
                 }
             }
+            if constexpr (std::is_same_v<E, ShdVignetteShape>) {
+                switch (value) {
+                    using enum ShdVignetteShape;
+                    case ELLIPSE: return L"Ellipse";
+                    case FRAME: return L"Frame";
+                    default: break;
+                }
+            }
             if constexpr (std::is_same_v<E, ShdChaosBlurAverage>) {
                 switch (value) {
                     using enum ShdChaosBlurAverage;
@@ -698,6 +731,23 @@ namespace merutilm::rff2 {
                     case SHADING: return L"Shading";
                     case RELIEF: return L"Relief Detail";
                     case ASPECT: return L"Slope Facing";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdStudioMaterialModel>) {
+                switch (value) {
+                    using enum ShdStudioMaterialModel;
+                    case STUDIO_GGX: return L"Studio GGX";
+                    case OPENPBR_SURFACE: return L"OpenPBR Surface";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdAnisotropyDirection>) {
+                switch (value) {
+                    using enum ShdAnisotropyDirection;
+                    case FIXED_ANGLE: return L"Fixed Angle";
+                    case ALONG_BANDS: return L"Along Bands";
+                    case ACROSS_BANDS: return L"Across Bands";
                     default: break;
                 }
             }

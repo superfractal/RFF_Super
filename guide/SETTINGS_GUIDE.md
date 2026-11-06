@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-28, 2026-11-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-28, 2026-11-01, 2026-11-05. -->
 # RFF_Super settings guide
 
 Learn what each group of settings changes, see before-and-after renders, and understand calculation settings. The instructions are reviewed against the **October 4, 2026** source tree. Images and their recorded measurements retain their original capture dates; see [validation](validation.md).
@@ -164,7 +164,7 @@ Light Direction rotates illumination around the relief; Light Zenith changes its
 
 **Macro Relief** emphasizes broader structure; **Cavity Intensity** darkens recessed regions. **Tint Intensity** mixes Light-Facing and Shadow-Facing colors. Shadow Chroma is used by OKLab Tint. **Rim Intensity** emphasizes rims, while **Gloss** creates repeated highlights from a relief-based source. Gloss Source is independent of Palette Gloss.
 
-**Lustre Relief** enables the alternate relief treatment. Lustre Depth, Normal Smoothing, AO Radius, Relief Waves, and Wave Frequency adjust it. Invert Relief flips its orientation. Auto Zoom Compensation uses Zoom Reference to keep relief behavior consistent while zooming; **Use Current Zoom** binds that reference to the current view.
+**Lustre Relief** enables the alternate relief treatment. Lustre Depth, Normal Smoothing, AO Radius, Relief Waves, and Wave Frequency adjust it. Relief Cap flattens the relief where the detail becomes too dense for the pixels, so those areas stay matte instead of turning grainy. Invert Relief flips its orientation. Auto Zoom Compensation uses Zoom Reference to keep relief behavior consistent while zooming; **Use Current Zoom** binds that reference to the current view.
 
 ### Studio materials and surface styles
 
@@ -261,7 +261,7 @@ There are three separate rates: **Rendering FPS** for the live display, **Video 
 | Rotation / 360 Padding | Calculates a larger source area for rotation/projection. Camera Padding Scale 2 → 4 multiplies padded pixel count by 4. Existing unpadded maps do not gain missing detail when this switch changes. |
 | Render from PNG Images | Uses already-colored pictures. Iteration-based recoloring and relief need RFM/RFMZ sources; PNGs support the available image finishing path. |
 | Camera Rotation / Projection / Pitch / Field of View / Range / Layout | Transforms the saved view during playback. Rotations and panorama views need suitable source coverage. |
-| Rotation Mode: Constant Period | Replaces rotation keys with a continuous turn. Seconds per Turn controls the duration, Direction sets its sign, and Start Angle sets the phase. Rotation continues during zoom holds. |
+| Rotation Mode: Constant Period | Replaces rotation keys with a continuous turn. Seconds per Turn controls the duration, Direction sets its sign, and Start Angle sets the phase. Rotation Start Time and Rotation End Time limit the turn to part of the video; outside them the camera holds its angle, and an end of 0 means the video end. Rotation continues during zoom holds. |
 
 | Linear color motion at 0 s | Same settings at 1 s, speed 16 |
 | --- | --- |

@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-11, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-11-05
 //
 
 #include "div_reciprocal.glsl"
@@ -16,12 +16,17 @@ double lustre_reduce_phase(double phase) {
     return fma(-correction, tau, remainder) - correction * tauTail;
 }
 
+// Relief Cap's ceiling on an iteration, so detail too dense for the pixel grid lies flat; with the cap off the value is untouched.
+double lustre_capped(double value) {
+    return slope_attr.surface_relief_cap > 0.0 ? min(value, double(slope_attr.surface_relief_cap)) : value;
+}
+
 // One tap's height twice over: x with the relief waves, y without them, both from a single read of the tap.
 vec2 lustre_height(double value, double center, double c4, double invC4, double phaseC, bool withWaves) {
     if (value <= 0.0 || value >= iteration_info_attr.max_value) {
         return vec2(0.0);
     }
-    double m = max(value, 1.0), c = max(center, 1.0);
+    double m = lustre_capped(max(value, 1.0)), c = lustre_capped(max(center, 1.0));
     double difference = m - c;
     // On zoom-out, evaluate the original height differences at the saved reference interval; see NOTICE.
     if (slope_attr.surface_zoom_log2 < 0.0) {
@@ -64,9 +69,9 @@ int lustre_ring_radius(uvec2 coord, int radius) {
 
 // Sobel gradient (xy) and tap mean (z) on a ring of radius r, for the waved relief and the calm one alike.
 void lustre_sobel(uvec2 coord, int r, double center, bool withWaves, out vec3 waved, out vec3 calm) {
-    double c4 = max(center, 1.0) + 4.0;
+    double c4 = lustre_capped(max(center, 1.0)) + 4.0;
     double invC4 = 1.0 / c4;
-    double phaseC = withWaves ? lustre_reduce_phase(max(center, 1.0) * double(slope_attr.surface_wave_frequency)) : 0.0;
+    double phaseC = withWaves ? lustre_reduce_phase(lustre_capped(max(center, 1.0)) * double(slope_attr.surface_wave_frequency)) : 0.0;
     vec2 nw = lustre_height(get_iteration(coord, ivec2(-r, -r)), center, c4, invC4, phaseC, withWaves);
     vec2 n = lustre_height(get_iteration(coord, ivec2(0, -r)), center, c4, invC4, phaseC, withWaves);
     vec2 ne = lustre_height(get_iteration(coord, ivec2(r, -r)), center, c4, invC4, phaseC, withWaves);

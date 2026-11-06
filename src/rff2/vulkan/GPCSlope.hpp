@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-08-15.
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-13
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-13, 2026-11-05
 //
 
 #pragma once
@@ -55,6 +55,8 @@ namespace merutilm::rff2 {
         void setSlope(const ShdSlopeAttribute &slope) const;
         void setGroove(const ShdPaletteAttribute &palette) const;
         void setReliefZoom(const ShdSlopeAttribute &slope, float logZoom) const;
+        // The iteration Relief Cap flattens the Lustre relief above, from ShdSlopeAttribute::reliefCapIteration; 0 is off.
+        void setReliefCap(double capIteration) const;
 
         // Orders the INITIALIZE stage's relief cache writes after the previous frame's reads, and before this frame's.
         void cmdReliefCacheBeforeWrite(VkCommandBuffer cbh) const;

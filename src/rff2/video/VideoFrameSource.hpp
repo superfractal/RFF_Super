@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18
 // Modified by GPT-6 on 2026-09-15, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-10, 2026-10-13, 2026-10-16
+// Modified by Opus 5.5 on 2026-10-10, 2026-10-13, 2026-10-16, 2026-11-01
 //
 
 #pragma once
@@ -12,6 +12,7 @@
 #include <functional>
 #include <stop_token>
 #include <optional>
+#include <unordered_map>
 
 #include "../io/RFFDynamicMapBinary.h"
 #include "../io/RFFStaticMapBinary.h"
@@ -43,7 +44,12 @@ namespace merutilm::rff2 {
         std::shared_ptr<Frame> normalFrame = std::make_shared<Frame>();
         std::shared_ptr<Frame> zoomedFrame = std::make_shared<Frame>();
         std::vector<std::shared_ptr<Frame>> cachedFrames;
+        // Frames already read at the current preview size and trap shape, by file number, that the cache does not hold.
+        std::unordered_map<uint32_t, std::shared_ptr<Frame>> reusable;
         [[nodiscard]] std::shared_ptr<Frame> readFrame(uint32_t id, std::wstring &error) const;
+        // Reads at the size and trap shape given rather than the live ones, so a preload thread never reads them as they change.
+        [[nodiscard]] std::shared_ptr<Frame> readFrame(uint32_t id, uint32_t outputWidth, uint32_t outputHeight,
+                                                       const TrapShapeParams &shape, std::wstring &error) const;
         [[nodiscard]] std::shared_ptr<Frame> getFrame(uint32_t id, std::wstring &error) const;
 
         VideoFrameSource(std::filesystem::path directory, bool staticImages, KeyframeRange range,
@@ -56,6 +62,9 @@ namespace merutilm::rff2 {
 
         void setPreviewSize(uint32_t width, uint32_t height);
 
+        // Takes over the frames another source of the same folder has read, so a new file range reads only the files it lacks.
+        void adoptFrames(VideoFrameSource &previous);
+
         // A different shape empties the cache, since the frames in it were read for the old one.
         void setTrapShape(const TrapShapeParams &shape);
 
@@ -66,7 +75,8 @@ namespace merutilm::rff2 {
             const auto& frame = cachedFrames[id - 1];
             return staticImages ? frame->header.getLogZoom() : frame->dynamic.getLogZoom();
         }
-        [[nodiscard]] bool preload(uint64_t byteLimit, std::stop_token stop,
+        // Reads on the given number of threads; progress is reported from the calling thread.
+        [[nodiscard]] bool preload(uint64_t byteLimit, uint32_t threads, std::stop_token stop,
             const std::function<void(uint32_t, uint32_t, uint64_t)> &progress, std::wstring &error);
 
         [[nodiscard]] bool load(float depth, std::wstring &error);

@@ -8,7 +8,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
 //
 
 #include "ConfigIO.h"
@@ -213,7 +213,8 @@ namespace merutilm::rff2 {
                 vi.timeline.estimateKeyframes < 0.0f || !enumInRange(vi.timeline.rotationMode, 0, 1) ||
                 !enumInRange(vi.timeline.rotationDirection, 0, 1) || !std::isfinite(vi.timeline.rotationPeriod) ||
                 vi.timeline.rotationPeriod < 0.01f || vi.timeline.rotationPeriod > 86400.0f ||
-                !std::isfinite(vi.timeline.rotationStartAngle) || std::abs(vi.timeline.rotationStartAngle) > 360000.0f) {
+                !std::isfinite(vi.timeline.rotationStartAngle) || std::abs(vi.timeline.rotationStartAngle) > 360000.0f ||
+                !vi.timeline.validRotationTime()) {
                 return false;
             }
             return ShaderPresetIO::validate(attr.shader);
@@ -457,6 +458,10 @@ namespace merutilm::rff2 {
         ShaderPresetIO::writeOrbitTrapMapping(out, attr.shader);
         ShaderPresetIO::writeOrbitTrapRegion(out, attr.shader);
         ShaderPresetIO::writeOrbitTrapShapeExtension(out, attr.shader);
+        ShaderPresetIO::writeVignette(out, attr.shader);
+        ShaderPresetIO::writeOpenPbr(out, attr.shader);
+        ShaderPresetIO::writeAnisotropyDirection(out, attr.shader);
+        ShaderPresetIO::writeReliefCap(out, attr.shader);
         if constexpr (BUDDHABROT_AVAILABLE) writeBuddhabrot(out, fr);
 
 
@@ -921,6 +926,10 @@ namespace merutilm::rff2 {
         ShaderPresetIO::readOrbitTrapMapping(in, t.shader);
         ShaderPresetIO::readOrbitTrapRegion(in, t.shader);
         ShaderPresetIO::readOrbitTrapShapeExtension(in, t.shader);
+        ShaderPresetIO::readVignette(in, t.shader);
+        ShaderPresetIO::readOpenPbr(in, t.shader);
+        ShaderPresetIO::readAnisotropyDirection(in, t.shader);
+        ShaderPresetIO::readReliefCap(in, t.shader);
         if (!readBuddhabrot(in, fr)) return false;
         try { AudioTimelineIO::resolvePaths(vi.timeline.audio, path); }
         catch (const std::filesystem::filesystem_error&) { return false; }

@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01, 2026-10-07
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
 //
 
 #include "AppearanceForms.hpp"
@@ -118,6 +118,7 @@ namespace merutilm::rff2::workspace {
                        1.0f);
         section.number("specularAnisotropyAngle", &Settings::specularAnisotropyAngle, L"Anisotropy Angle",
                        0.0f, std::nextafter(360.f, 0.f));
+        section.choice("specularAnisotropyDirection", &Settings::specularAnisotropyDirection, L"Anisotropy Direction");
         section.group = 3;
         section.number("macroRelief", &Settings::macroRelief, L"Macro Relief", 0.0f, 1.0f);
         section.number("macroRadius", &Settings::macroRadius, L"Macro Radius", 1.0f, 12.0f);
@@ -156,6 +157,7 @@ namespace merutilm::rff2::workspace {
         section.number("normalSmooth", &Settings::normalSmooth, L"Normal Smoothing", 0.0f, 1.0f);
         section.number("aoRadius", &Settings::aoRadius, L"AO Radius", 1.0f, 64.0f);
         section.number("boundaryGuard", &Settings::boundaryGuard, L"Boundary Reflection Guard", 0.0f, 1.0f);
+        section.number("reliefCap", &Settings::reliefCap, L"Relief Cap", 0.0f, 8.0f);
         section.number("reliefWaves", &Settings::reliefWaves, L"Relief Waves", 0.0f, 1.0f);
         section.number("waveFrequency", &Settings::waveFrequency, L"Wave Frequency", 0.03f, 1.5f);
         section.choice("reliefWavesCoatOnly", &Settings::reliefWavesCoatOnly, L"Waves on Clear Coat Only");
@@ -180,10 +182,19 @@ namespace merutilm::rff2::workspace {
         });
         AttributeFormSection studio(model, [](auto &a) -> auto & { return a.shader.slope.studio; }, "studio.", 9);
         studio.choice("use", &ShdStudioAttribute::use, L"Studio");
+        studio.choice("model", &ShdStudioAttribute::model, L"Material Model");
         studio.number("roughness", &ShdStudioAttribute::roughness, L"Roughness", .04f, 1.f);
         studio.number("metalness", &ShdStudioAttribute::metalness, L"Metalness", 0.f, 1.f);
         studio.number("clearcoat", &ShdStudioAttribute::clearcoat, L"Clearcoat", 0.f, 1.f);
         studio.number("clearcoatRoughness", &ShdStudioAttribute::clearcoatRoughness, L"Coat Roughness", .04f, 1.f);
+        studio.number("coatIor", &ShdStudioAttribute::coatIor, L"Coat IOR", 1.f, 3.f);
+        studio.number("coatDarkening", &ShdStudioAttribute::coatDarkening, L"Coat Darkening", 0.f, 1.f);
+        studio.colorRgb("coatColor", &ShdStudioAttribute::coatColor, L"Coat Color");
+        studio.colorRgb("edgeTint", &ShdStudioAttribute::edgeTint, L"Edge Tint");
+        studio.number("fuzz", &ShdStudioAttribute::fuzz, L"Fuzz", 0.f, 1.f);
+        studio.number("fuzzRoughness", &ShdStudioAttribute::fuzzRoughness, L"Fuzz Roughness", 0.f, 1.f);
+        studio.colorRgb("fuzzColor", &ShdStudioAttribute::fuzzColor, L"Fuzz Color");
+        studio.number("filmIor", &ShdStudioAttribute::filmIor, L"Film IOR", 1.f, 3.f);
         section.group = 9;
         section.choice("coatSoftbox", &Settings::coatSoftbox, L"Coat Softbox");
         section.choice("studioEnvironmentSource", &Settings::studioEnvironmentSource, L"Environment Source");
@@ -443,6 +454,13 @@ namespace merutilm::rff2::workspace {
         section.number("brightness", &Settings::brightness, L"Brightness", NumericSettingLimits::colorBrightness.minimum, NumericSettingLimits::colorBrightness.maximum,
                        L"Offset added to every color channel.");
         section.number("contrast", &Settings::contrast, L"Contrast", NumericSettingLimits::contrast.minimum, NumericSettingLimits::contrast.maximum);
+        section.number("vignette", &Settings::vignette, L"Vignette", NumericSettingLimits::vignette.minimum, NumericSettingLimits::vignette.maximum,
+                       L"Darkness at the frame edges; 0 is off.");
+        section.choice("vignetteShape", &Settings::vignetteShape, L"Vignette Shape");
+        section.number("vignetteRadius", &Settings::vignetteRadius, L"Vignette Radius", NumericSettingLimits::vignetteRadius.minimum,
+                       NumericSettingLimits::vignetteRadius.maximum, L"Size of the untouched center.");
+        section.number("vignetteRichness", &Settings::vignetteRichness, L"Vignette Richness", NumericSettingLimits::vignetteRichness.minimum,
+                       NumericSettingLimits::vignetteRichness.maximum, L"Saturation added inside the dark rim.");
         {
             using Settings = ShdBloomAttribute;
             AttributeFormSection section(

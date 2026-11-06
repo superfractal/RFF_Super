@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-16, 2026-09-23, 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-05
 //
 
 #version 450
@@ -90,7 +90,11 @@ layout (set = 1, binding = 0) uniform VideoUBO {
     bool dither;
     vec4 camera;
     vec4 coverage;
+    // The 360 projection the keyframes were calculated in; x = 0 for planar keyframes. See keyframe_projection.glsl.
+    vec4 keyframe_camera;
+    vec4 keyframe_view;
 } video_attr;
+#include "keyframe_projection.glsl"
 
 
 #define MAX_STATIC_COLORS 16
@@ -1368,6 +1372,15 @@ vec2 map_center() {
     return vec2(iteration_output_info_attr.extent) / 2.0 - vec2(0.0, 1.0);
 }
 
+// The keyframe texel an output offset reads once the keyframe is scaled by sr; keyframes calculated in a 360 projection are zoomed on the plane through it.
+vec2 keyframe_texel(vec2 coord, float sr) {
+    if (!keyframes_projected()) return coord / sr + map_center();
+    vec2 size = vec2(iteration_output_info_attr.extent);
+    vec2 tx = coord + map_center();
+    vec2 m = keyframe_plane_zoom(vec2(tx.x + 0.5, size.y - 0.5 - tx.y) / size, size, sr);
+    return m.x < 0.0 ? vec2(-16.0) : vec2(m.x * size.x - 0.5, size.y - 0.5 - m.y * size.y);
+}
+
 double normalize_map_iteration(double iteration, double map_max_value) {
     return map_max_value > 0.0 && iteration >= map_max_value ? iteration_output_info_attr.max_value : iteration;
 }
@@ -1582,8 +1595,8 @@ HeightSample sample_map_height(vec2 coord, float nsr, float zsr, float r, const 
     bool sky;
     coord = camera_offset(coord, vec2(iteration_output_info_attr.extent), sky);
     if (sky) return height_sample(0.0);
-    vec2 ntx = coord / nsr + center;
-    vec2 ztx = coord / zsr + center;
+    vec2 ntx = keyframe_texel(coord, nsr);
+    vec2 ztx = keyframe_texel(coord, zsr);
     vec2 nrt = mod(ntx, 1);
     vec2 zrt = mod(ztx, 1);
 
@@ -1667,11 +1680,12 @@ double smooth_relief_height(vec2 coord, float nsr, float zsr, float r) {
     coord = camera_offset(coord, size, sky);
     if (sky) return -1.0;
     // The texel position is formed in double: the relief reads height steps far finer than float's step at a few thousand texels.
-    double n = cubic_map_height(false, dvec2(coord) / double(nsr) + dvec2(center));
+    bool projected = keyframes_projected();
+    double n = cubic_map_height(false, projected ? dvec2(keyframe_texel(coord, nsr)) : dvec2(coord) / double(nsr) + dvec2(center));
     if (n < 0.0) return -1.0;
-    vec2 ztx = coord / zsr + center;
+    vec2 ztx = keyframe_texel(coord, zsr);
     if (ztx.x < 0.0 || ztx.y < 0.0 || ztx.x >= size.x - 1.0 || ztx.y >= size.y - 1.0) return n;
-    double z = cubic_map_height(true, dvec2(coord) / double(zsr) + dvec2(center));
+    double z = cubic_map_height(true, projected ? dvec2(ztx) : dvec2(coord) / double(zsr) + dvec2(center));
     if (z < 0.0) return n;
     float w = smoothstep(0.0, 1.0, r + 1.0) * zoomed_edge_fade(ztx, zsr);
     return n - (n - z) * double(w);
@@ -1729,10 +1743,10 @@ vec4 sample_orbit_trap(vec2 coord, float nsr, float zsr, float r, bool want_angl
     if (sky) return vec4(0.0);
     float n_angle = 0.0;
     float z_angle = 0.0;
-    vec2 ntx = coord / nsr + center;
+    vec2 ntx = keyframe_texel(coord, nsr);
     bool normal_inside = all(greaterThanEqual(ntx, vec2(-0.5))) && all(lessThan(ntx, size - vec2(0.5)));
     vec4 n = normal_inside && keyframe_has_traps(false) ? sample_keyframe_trap(false, ntx, want_angle, n_angle) : vec4(0.0);
-    vec2 ztx = coord / zsr + center;
+    vec2 ztx = keyframe_texel(coord, zsr);
     bool zoomed_inside = all(greaterThanEqual(ztx, vec2(0.0))) && all(lessThan(ztx, size - 1.0));
     vec4 z = zoomed_inside && keyframe_has_traps(true) ? sample_keyframe_trap(true, ztx, want_angle, z_angle) : vec4(0.0);
     if (z.w == 0.0) {
@@ -1867,8 +1881,8 @@ void main() {
     // returns before reading past its first corner.
     vec2 tap0 = coord + vec2(-0.25, -0.25);
     bool legacy_camera = video_attr.camera.x == 0.0 && video_attr.camera.y == 0.0 && video_attr.coverage.x <= 1.0;
-    HeightWindow nw = legacy_camera ? load_normal_window(tap0 / nsr + center) : window_none();
-    vec2 ztx0 = tap0 / zsr + center;
+    HeightWindow nw = legacy_camera ? load_normal_window(keyframe_texel(tap0, nsr)) : window_none();
+    vec2 ztx0 = keyframe_texel(tap0, zsr);
     HeightWindow zw = (ztx0.x >= 0 && ztx0.y >= 0 && ztx0.x < iteration_output_info_attr.extent.x - 1 && ztx0.y < iteration_output_info_attr.extent.y - 1)
         ? (legacy_camera ? load_zoomed_window(ztx0) : window_none()) : window_none();
     HeightSample h0 = sample_map_height(tap0, nsr, zsr, r, nw, zw);

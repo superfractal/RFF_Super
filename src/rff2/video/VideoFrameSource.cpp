@@ -1,7 +1,7 @@
 //
 // Modified by GPT-5 on 2026-08-18, 2026-09-01
 // Modified by GPT-6 on 2026-09-15, 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-10, 2026-10-13, 2026-10-16
+// Modified by Opus 5.5 on 2026-10-10, 2026-10-13, 2026-10-16, 2026-11-01
 //
 
 #include "VideoFrameSource.hpp"
@@ -9,8 +9,14 @@
 #include "../formula/OrbitTrap.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <limits>
+#include <mutex>
+#include <system_error>
+#include <thread>
 #include <opencv2/imgproc.hpp>
 
 #include "../constants/Constants.hpp"
@@ -194,6 +200,7 @@ namespace merutilm::rff2 {
         }
         trapShape = shape;
         cachedFrames.clear();
+        reusable.clear();
         normalFrame = std::make_shared<Frame>();
         zoomedFrame = std::make_shared<Frame>();
         loadedPair.reset();
@@ -208,9 +215,26 @@ namespace merutilm::rff2 {
         previewWidth = outputWidth;
         previewHeight = outputHeight;
         cachedFrames.clear();
+        reusable.clear();
         normalFrame = std::make_shared<Frame>();
         zoomedFrame = std::make_shared<Frame>();
         loadedPair.reset();
+    }
+
+    void VideoFrameSource::adoptFrames(VideoFrameSource &previous) {
+        if (previous.directory != directory || previous.staticImages != staticImages || previous.width != width ||
+            previous.height != height || previous.previewWidth == 0) {
+            return;
+        }
+        previewWidth = previous.previewWidth;
+        previewHeight = previous.previewHeight;
+        trapShape = previous.trapShape;
+        reusable = std::move(previous.reusable);
+        for (const auto &frame : previous.cachedFrames) {
+            reusable[previous.range.fileNumber(frame->id)] = frame;
+        }
+        previous.reusable.clear();
+        previous.cachedFrames.clear();
     }
 
     uint64_t VideoFrameSource::previewCacheBytes() const {
@@ -235,10 +259,16 @@ namespace merutilm::rff2 {
 
     std::shared_ptr<VideoFrameSource::Frame> VideoFrameSource::readFrame(const uint32_t id,
                                                                          std::wstring &error) const {
+        return readFrame(id, previewWidth ? previewWidth : width, previewHeight ? previewHeight : height, trapShape,
+                         error);
+    }
+
+    std::shared_ptr<VideoFrameSource::Frame> VideoFrameSource::readFrame(const uint32_t id, const uint32_t outputWidth,
+                                                                         const uint32_t outputHeight,
+                                                                         const TrapShapeParams &shape,
+                                                                         std::wstring &error) const {
         auto frame = std::make_shared<Frame>();
         frame->id = id;
-        const uint32_t outputWidth = previewWidth ? previewWidth : width;
-        const uint32_t outputHeight = previewHeight ? previewHeight : height;
         if (staticImages) {
             frame->header = RFFStaticMapBinary::readByID(directory, range.fileNumber(id));
             frame->image = RFFStaticMapBinary::loadImageByID(directory, range.fileNumber(id));
@@ -269,7 +299,7 @@ namespace merutilm::rff2 {
                 return nullptr;
             }
             frame->traps = RFFOrbitTrapBinary::readByID(directory, range.fileNumber(id), static_cast<uint16_t>(width),
-                                                        static_cast<uint16_t>(height), trapShape);
+                                                        static_cast<uint16_t>(height), shape);
             // Averaged around each output pixel's exact center rather than picked: a picked pixel drifts across its
             // source pixel in a repeating cycle at a fractional ratio, and the relief draws that drift as a grid of dots.
             if (outputWidth != width || outputHeight != height) {
@@ -295,10 +325,14 @@ namespace merutilm::rff2 {
         if (zoomedFrame->id == id) {
             return zoomedFrame;
         }
+        if (const auto kept = reusable.find(range.fileNumber(id)); kept != reusable.end()) {
+            kept->second->id = id;
+            return kept->second;
+        }
         return readFrame(id, error);
     }
 
-    bool VideoFrameSource::preload(const uint64_t byteLimit, const std::stop_token stop,
+    bool VideoFrameSource::preload(const uint64_t byteLimit, const uint32_t threads, const std::stop_token stop,
                                    const std::function<void(uint32_t, uint32_t, uint64_t)> &progress,
                                    std::wstring &error) {
         error.clear();
@@ -309,44 +343,131 @@ namespace merutilm::rff2 {
             }
             return true;
         }
-        if (requiredBytes > byteLimit) {
+        // Frames kept from an earlier read of the same files are already in RAM and are not read again.
+        std::vector<uint32_t> missing;
+        for (uint32_t index = 0; index < frameCount; ++index) {
+            if (!reusable.contains(range.fileNumber(index + 1))) {
+                missing.push_back(index);
+            }
+        }
+        const uint64_t keptBytes = requiredBytes / frameCount * (frameCount - missing.size());
+        if (requiredBytes - keptBytes > byteLimit) {
             error = L"Not enough free RAM for all previews. Using on-demand loading.";
             return false;
         }
-        try {
-            std::vector<std::shared_ptr<Frame>> pendingFrames;
-            pendingFrames.reserve(frameCount);
-            if (progress) {
-                progress(0, frameCount, requiredBytes);
-            }
-            for (uint32_t index = 0; index < frameCount; ++index) {
-                const uint32_t id = index + 1;
-                if (stop.stop_requested()) {
-                    error = L"RAM preload canceled. Using on-demand loading.";
-                    return false;
+        const uint32_t outputWidth = previewWidth ? previewWidth : width;
+        const uint32_t outputHeight = previewHeight ? previewHeight : height;
+        const TrapShapeParams shape = trapShape;
+        std::vector<std::shared_ptr<Frame>> pendingFrames;
+        std::mutex mutex;
+        std::condition_variable wake;
+        std::atomic<uint32_t> next = 0;
+        std::atomic<bool> abandoned = false;
+        uint32_t done = frameCount - static_cast<uint32_t>(missing.size());
+        uint32_t running = 0;
+        std::wstring failure;
+        // Each thread takes the next unread keyframe, so a slow one never holds up the rest.
+        const auto work = [&] {
+            for (uint32_t slot = next++; slot < missing.size() && !abandoned && !stop.stop_requested();
+                 slot = next++) {
+                const uint32_t index = missing[slot];
+                std::wstring frameError;
+                std::shared_ptr<Frame> frame;
+                try {
+                    frame = readFrame(index + 1, outputWidth, outputHeight, shape, frameError);
+                } catch (const std::bad_alloc &) {
+                    frameError = L"Not enough free RAM for all previews. Using on-demand loading.";
+                } catch (const std::exception &) {
+                    frameError = L"RAM preload failed. Using on-demand loading.";
                 }
-                auto frame = getFrame(id, error);
+                std::scoped_lock lock(mutex);
                 if (!frame) {
-                    return false;
+                    if (failure.empty()) {
+                        failure = frameError.empty() ? L"RAM preload failed. Using on-demand loading." : frameError;
+                    }
+                    abandoned = true;
+                    break;
                 }
-                pendingFrames.push_back(std::move(frame));
-                if (progress) {
-                    progress(id, frameCount, requiredBytes);
+                pendingFrames[index] = std::move(frame);
+                ++done;
+                wake.notify_one();
+            }
+            std::scoped_lock lock(mutex);
+            --running;
+            wake.notify_one();
+        };
+        // Declared last so the threads are joined before anything they read goes away.
+        std::vector<std::jthread> workers;
+        try {
+            pendingFrames.resize(frameCount);
+            for (uint32_t index = 0; index < frameCount; ++index) {
+                if (const auto kept = reusable.find(range.fileNumber(index + 1)); kept != reusable.end()) {
+                    kept->second->id = index + 1;
+                    pendingFrames[index] = kept->second;
                 }
             }
-            if (stop.stop_requested()) {
-                error = L"RAM preload canceled. Using on-demand loading.";
+            if (progress) {
+                progress(done, frameCount, requiredBytes);
+            }
+            const auto count = static_cast<uint32_t>(std::clamp<size_t>(threads, 1, std::max<size_t>(missing.size(), 1)));
+            workers.reserve(count);
+            for (uint32_t i = 0; i < count; ++i) {
+                {
+                    std::scoped_lock lock(mutex);
+                    ++running;
+                }
+                try {
+                    workers.emplace_back(work);
+                } catch (const std::system_error &) {
+                    std::scoped_lock lock(mutex);
+                    --running;
+                    break;
+                }
+            }
+            if (workers.empty() && !missing.empty()) {
+                error = L"RAM preload failed. Using on-demand loading.";
                 return false;
             }
-            cachedFrames = std::move(pendingFrames);
-            return true;
+            std::unique_lock lock(mutex);
+            while (running > 0) {
+                wake.wait_for(lock, std::chrono::milliseconds(100));
+                const uint32_t reported = done;
+                if (progress && failure.empty()) {
+                    lock.unlock();
+                    progress(reported, frameCount, requiredBytes);
+                    lock.lock();
+                }
+            }
         } catch (const std::bad_alloc &) {
+            abandoned = true;
             error = L"Not enough free RAM for all previews. Using on-demand loading.";
             return false;
         } catch (const std::exception &) {
+            abandoned = true;
             error = L"RAM preload failed. Using on-demand loading.";
             return false;
         }
+        workers.clear();
+        // Frames read for a size or trap shape that has since changed are not the ones the preview now needs.
+        const bool current = outputWidth == (previewWidth ? previewWidth : width) &&
+                             outputHeight == (previewHeight ? previewHeight : height) && shape == trapShape;
+        if (!failure.empty() || stop.stop_requested() || done != frameCount || !current) {
+            error = failure.empty() ? L"RAM preload canceled. Using on-demand loading." : failure;
+            // What was read before a stop is kept, so the next load of these files picks up from there.
+            if (current && error != L"Not enough free RAM for all previews. Using on-demand loading.") {
+                for (uint32_t index = 0; index < frameCount; ++index) {
+                    if (pendingFrames[index]) {
+                        reusable[range.fileNumber(index + 1)] = std::move(pendingFrames[index]);
+                    }
+                }
+            }
+            return false;
+        }
+        for (uint32_t index = 0; index < frameCount; ++index) {
+            reusable.erase(range.fileNumber(index + 1));
+        }
+        cachedFrames = std::move(pendingFrames);
+        return true;
     }
 
     bool VideoFrameSource::load(const float depth, std::wstring &error) {

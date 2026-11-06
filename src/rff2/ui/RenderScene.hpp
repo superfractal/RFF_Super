@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-25, 2026-10-26, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05
 //
 
 #pragma once
@@ -92,6 +92,8 @@ namespace merutilm::rff2 {
         uint64_t lastMaxIteration = 0;
         float lastLogZoom = 0;
         uint64_t lastPeriod = 1;
+        // The finished map's lowest escaped iteration, 0 when none escaped; Relief Cap counts its periods from here.
+        double lastLowestEscaped = 0;
 
         bool autoIterationBackup = true;
         bool autoIterationCustomActive = false;
@@ -191,6 +193,8 @@ namespace merutilm::rff2 {
         std::string panoramaPendingKey;
         uint64_t panoramaPendingGeneration = 0;
         double panoramaSourceMax = 0.0;
+        // The padded source's scale each way: the padding, raised so the source covers the straight-down view.
+        [[nodiscard]] uint32_t panoramaSourceScale(const Attribute &settings) const;
         [[nodiscard]] bool panoramaPreviewApplies(const Attribute &settings) const;
         [[nodiscard]] std::string panoramaSourceKeyOf(const Attribute &settings) const;
         bool preparePanoramaSource(Attribute &source, uint64_t generation);
@@ -889,7 +893,13 @@ namespace merutilm::rff2 {
                 attr.shader.slope = preset.genSlope();
             }
             if constexpr (std::is_base_of_v<Presets::ShaderPresets::ColorPreset, P>) {
-                attr.shader.color = preset.genColor();
+                // A Color preset sets the grade only; the vignette is a separate choice and stays as it is.
+                auto color = preset.genColor();
+                color.vignette = attr.shader.color.vignette;
+                color.vignetteRadius = attr.shader.color.vignetteRadius;
+                color.vignetteRichness = attr.shader.color.vignetteRichness;
+                color.vignetteShape = attr.shader.color.vignetteShape;
+                attr.shader.color = color;
             }
             if constexpr (std::is_base_of_v<Presets::ShaderPresets::FogPreset, P>) {
                 attr.shader.fog = preset.genFog();

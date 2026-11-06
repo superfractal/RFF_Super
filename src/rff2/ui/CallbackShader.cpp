@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
 //
 
 #include "NativeDialogs.hpp"
@@ -1708,6 +1708,14 @@ namespace merutilm::rff2 {
 
         struct SlopeControls {
             std::vector<HWND> studio;
+            HWND coatIor = nullptr;
+            HWND coatDarkening = nullptr;
+            HWND coatColor = nullptr;
+            HWND edgeTint = nullptr;
+            HWND fuzz = nullptr;
+            HWND fuzzRoughness = nullptr;
+            HWND fuzzColor = nullptr;
+            HWND filmIor = nullptr;
             std::vector<HWND> lustre;
             std::vector<HWND> shadingBlend;
             HWND lightZenith = nullptr;
@@ -1723,6 +1731,7 @@ namespace merutilm::rff2 {
             HWND specularAzimuth = nullptr;
             HWND specularAnisotropy = nullptr;
             HWND specularAnisotropyAngle = nullptr;
+            HWND specularAnisotropyDirection = nullptr;
             HWND reliefResponse = nullptr;
             HWND ambientSkyColor = nullptr;
             HWND ambientGroundColor = nullptr;
@@ -1782,6 +1791,36 @@ namespace merutilm::rff2 {
                 controls->studio.push_back(control);
             }
             studioFields->emplace_back(control, value);
+        };
+        window->registerSelectionInput<ShdStudioMaterialModel>(
+            L"Material Model", &slope_attr.studio.model,
+            [&slope_attr, studioCheckbox, winPtr = window.get(), requestSlopeShader] {
+                if (slope_attr.studio.model == ShdStudioMaterialModel::OPENPBR_SURFACE) {
+                    slope_attr.studio.use = true;
+                    winPtr->setCheckboxValue(studioCheckbox, true);
+                }
+                requestSlopeShader();
+            },
+            L"Material Model",
+            L"Studio GGX is the original Studio material. OpenPBR Surface layers it the way the OpenPBR Surface "
+            L"specification does: reflections keep their energy at every roughness, metals take an Edge Tint, the "
+            L"clearcoat has its own IOR, color and darkening, and Fuzz adds a soft sheen on top. The relief shading "
+            L"stays the base color. Choosing OpenPBR Surface turns Studio on.");
+        // Sliders only OpenPBR Surface reads; their rows are greyed under Studio GGX.
+        auto openPbrSlider = [&](const std::wstring &name, float *value, float minimum, float maximum,
+                                 const std::wstring &help) {
+            const HWND control = window->registerSliderInput(
+                name, value, minimum, maximum, Unparser::floatFixed(2), Parser::FLOAT,
+                ValidCondition::floatInRange(minimum, maximum), [requestSlopeShader] { requestSlopeShader(); },
+                name, help);
+            window->setSliderFractionalSteps(control);
+            studioFields->emplace_back(control, value);
+            return control;
+        };
+        auto openPbrColor = [&](const std::wstring &name, glm::vec4 *color, const std::wstring &help) {
+            return window->registerColorButton(
+                name, L"Pick Color", [colorToColorRef, color] { return colorToColorRef(color); },
+                [openColorPicker, color] { openColorPicker(color); }, L"Set " + name, help, color);
         };
         window->registerSelectionInput<ShdSurfaceStyle>(
             L"Surface Style", &slope_attr.surfaceStyle,
@@ -1879,11 +1918,41 @@ namespace merutilm::rff2 {
             L"Coat Softbox", &slope_attr.coatSoftbox, requestSlopeShader, L"Coat Softbox",
             L"On reflects the key and fill lights in the clearcoat as small rectangular softboxes, so the "
             L"highlights become crisp window shapes that bend with the relief. Off keeps round highlights.");
+        controls->coatIor = openPbrSlider(
+            L"Coat IOR", &slope_attr.studio.coatIor, 1.0f, 3.0f,
+            L"OpenPBR Surface: index of refraction of the clearcoat. Higher values reflect more, and the base "
+            L"beneath reflects less because its own IOR is measured against the coat.");
+        controls->coatDarkening = openPbrSlider(
+            L"Coat Darkening", &slope_attr.studio.coatDarkening, 0.0f, 1.0f,
+            L"OpenPBR Surface: how much the base darkens and deepens under the coat, from light the coat "
+            L"reflects back into it. 0 keeps the base as bright as without the coat.");
+        controls->coatColor = openPbrColor(
+            L"Coat Color", &slope_attr.studio.coatColor,
+            L"OpenPBR Surface: tint of the clearcoat, absorbed by everything seen through it, more strongly on "
+            L"slopes seen at an angle. White is clear.");
+        controls->edgeTint = openPbrColor(
+            L"Edge Tint", &slope_attr.studio.edgeTint,
+            L"OpenPBR Surface: color a metal turns toward near its grazing edges (F82 tint). White keeps the "
+            L"palette color's own edges.");
+        controls->fuzz = openPbrSlider(
+            L"Fuzz", &slope_attr.studio.fuzz, 0.0f, 1.0f,
+            L"OpenPBR Surface: a soft sheen over everything, like velvet or dust, brightest on steep slopes. "
+            L"0 is off.");
+        controls->fuzzRoughness = openPbrSlider(
+            L"Fuzz Roughness", &slope_attr.studio.fuzzRoughness, 0.0f, 1.0f,
+            L"OpenPBR Surface: low values gather the fuzz into a thin rim at the steepest slopes; high values "
+            L"spread it across the surface.");
+        controls->fuzzColor = openPbrColor(
+            L"Fuzz Color", &slope_attr.studio.fuzzColor, L"OpenPBR Surface: color of the fuzz sheen.");
 
         studioSlider(L"Iridescence", &slope_attr.iridescence, 0, 1,
                      L"Artistic three-band thin-film tint on the base reflection; not spectral rendering.");
         studioSlider(L"Film Thickness (nm)", &slope_attr.filmThickness, 0, 2000,
                      L"Optical film thickness for the artistic tint.");
+        controls->filmIor = openPbrSlider(
+            L"Film IOR", &slope_attr.studio.filmIor, 1.0f, 3.0f,
+            L"OpenPBR Surface: index of refraction of the thin film. OpenPBR Surface draws Iridescence as real "
+            L"interference of light in a film this thick, over metal and nonmetal alike.");
         studioSlider(L"Specular Antialiasing", &slope_attr.specularAA, 0, 1,
                      L"Widens base and coat highlights where neighboring surface normals differ. Reduces "
                      L"sparkle; not temporal antialiasing.");
@@ -2284,6 +2353,7 @@ namespace merutilm::rff2 {
         reliefSlider(L"AO Radius", &slope_attr.aoRadius, 1, 64);
         reliefSlider(L"Relief Waves", &slope_attr.reliefWaves, 0, 1);
         reliefSlider(L"Wave Frequency", &slope_attr.waveFrequency, 0.03f, 1.5f);
+        reliefSlider(L"Relief Cap", &slope_attr.reliefCap, 0, 8);
         controls->lustre.push_back(window->registerCheckboxInput(
             L"Invert Relief", &slope_attr.invertRelief, requestSlopeShader, L"Invert Relief",
             L"Inverts the Lustre height field before normal and AO evaluation."));
@@ -2472,6 +2542,13 @@ namespace merutilm::rff2 {
             angleParser, ValidCondition::FLOAT_DEGREE, [requestSlopeShader] { requestSlopeShader(); },
             L"Set Anisotropy Angle",
             L"Direction the highlight is stretched along. Only matters when Anisotropy > 0.");
+
+        controls->specularAnisotropyDirection = window->registerSelectionInput<ShdAnisotropyDirection>(
+            L"Anisotropy Direction", &slope_attr.specularAnisotropyDirection, [requestSlopeShader] { requestSlopeShader(); },
+            L"Anisotropy Direction",
+            L"Studio only. Fixed Angle stretches every highlight the same way across the screen, by Anisotropy Angle. "
+            L"Along Bands stretches it along the color bands, so it flows around spirals and tendrils like brushed metal; "
+            L"Across Bands stretches it across them. With either, Anisotropy Angle twists the stretch away from the bands.");
 
         window->setExtraRowGap(0);
         window->registerSectionHeader(L"Cavity Shading");
@@ -2702,6 +2779,16 @@ namespace merutilm::rff2 {
             for (const HWND item : controls->studio) {
                 enable(item, studioActive);
             }
+            const bool openPbrActive = studioActive && slope_attr.studio.model == ShdStudioMaterialModel::OPENPBR_SURFACE;
+            const bool openPbrCoat = openPbrActive && slope_attr.studio.clearcoat > 0.0f;
+            enable(controls->coatIor, openPbrCoat);
+            enable(controls->coatDarkening, openPbrCoat);
+            enable(controls->coatColor, openPbrCoat);
+            enable(controls->edgeTint, openPbrActive && slope_attr.studio.metalness > 0.0f);
+            enable(controls->fuzz, openPbrActive);
+            enable(controls->fuzzRoughness, openPbrActive && slope_attr.studio.fuzz > 0.0f);
+            enable(controls->fuzzColor, openPbrActive && slope_attr.studio.fuzz > 0.0f);
+            enable(controls->filmIor, openPbrActive && slope_attr.iridescence > 0.0f);
             for (const HWND item : controls->lustre) {
                 enable(item, slopeActive && slope_attr.lustreRelief);
             }
@@ -2712,6 +2799,7 @@ namespace merutilm::rff2 {
             enable(controls->specularAzimuth, independentSpecular);
             enable(controls->specularAnisotropy, specularActive);
             enable(controls->specularAnisotropyAngle, specularActive && slope_attr.specularAnisotropy > 0.0f);
+            enable(controls->specularAnisotropyDirection, specularActive && studioActive && slope_attr.specularAnisotropy > 0.0f);
             enable(controls->reliefResponse, specularActive);
             // Every one of these shapes the lightness Relief Lightness scales, so at 0 they do nothing.
             const bool lumaActive = slopeActive && slope_attr.lumaAmount > 0.0f;
@@ -2756,7 +2844,8 @@ namespace merutilm::rff2 {
     const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::COLOR = [](SettingsMenu
                                                                                             &settingsMenu,
                                                                                         RenderScene &scene) {
-        auto &[gamma, exposure, hue, saturation, brightness, contrast] = scene.getAttribute().shader.color;
+        auto &[gamma, exposure, hue, saturation, brightness, contrast, vignette, vignetteRadius, vignetteRichness,
+               vignetteShape] = scene.getAttribute().shader.color;
         auto window = std::make_unique<SettingsWindow>(L"Color");
         window->registerTextInput<float>(
             L"Gamma", &gamma, Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::gamma,
@@ -2795,6 +2884,58 @@ namespace merutilm::rff2 {
             L"the picture to one mid tone; past that it would swap black and white, so the range stops "
             L"there. Range: -1 to 0.999.\nUp/Down arrows nudge by 0.01 (Shift = 0.1).",
             0.01);
+
+        struct VignetteControls {
+            std::vector<HWND> shape;
+            HWND radius = nullptr;
+            HWND richness = nullptr;
+        };
+        auto controls = std::make_shared<VignetteControls>();
+        auto updateEnabled = std::make_shared<std::function<void()>>();
+        auto requestVignette = [&scene, updateEnabled] {
+            scene.getRequests().requestShader();
+            if (*updateEnabled) {
+                (*updateEnabled)();
+            }
+        };
+        window->registerSectionHeader(L"Vignette");
+        window->registerSliderInput(
+            L"Vignette", &vignette, NumericSettingLimits::vignette.minimum, NumericSettingLimits::vignette.maximum,
+            Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::vignette,
+            [requestVignette] { requestVignette(); }, L"Set Vignette",
+            L"Darkens the picture toward the edges of the frame. Just inside the dark rim the colors deepen, "
+            L"and toward the center the picture returns to its graded color, which draws the eye inward.\n"
+            L"The value is how dark the very edge becomes: 0 = off, 1 = black. Applied after the grade above "
+            L"and before Fog and Bloom.");
+        controls->shape = window->registerRadioButtonInput<ShdVignetteShape>(
+            L"Vignette Shape", &vignetteShape, [requestVignette] { requestVignette(); }, L"Set Vignette Shape",
+            L"The outline the darkening follows. Ellipse darkens toward the corners in a rounded shape fitted to "
+            L"the frame. Frame runs a band of the same width along all four edges, like a picture frame, and "
+            L"deepens a little more in the corners where two edges meet.");
+        controls->radius = window->registerSliderInput(
+            L"Vignette Radius", &vignetteRadius, NumericSettingLimits::vignetteRadius.minimum,
+            NumericSettingLimits::vignetteRadius.maximum, Unparser::floatFixed(2), Parser::FLOAT,
+            NumericSettingLimits::vignetteRadius, [requestVignette] { requestVignette(); }, L"Set Vignette Radius",
+            L"How far the untouched center reaches. With Ellipse it is a fraction of the way from the center "
+            L"to the middle of each edge; with Frame the band along each edge is (1 - Radius) of half the "
+            L"frame height wide. Lower values spread the vignette further in; higher values keep it to a thin "
+            L"band along the edges.");
+        controls->richness = window->registerSliderInput(
+            L"Vignette Richness", &vignetteRichness, NumericSettingLimits::vignetteRichness.minimum,
+            NumericSettingLimits::vignetteRichness.maximum, Unparser::floatFixed(2), Parser::FLOAT,
+            NumericSettingLimits::vignetteRichness, [requestVignette] { requestVignette(); },
+            L"Set Vignette Richness",
+            L"Saturation the vignette adds where it begins, so the colors grow deeper on the way to the dark "
+            L"rim instead of only dimming. 0 only darkens.");
+        *updateEnabled = [winPtr = window.get(), controls, &color_attr = scene.getAttribute().shader.color] {
+            for (const HWND item : controls->shape) {
+                winPtr->setRowEnabled(item, color_attr.vignette > 0.0f);
+            }
+            winPtr->setRowEnabled(controls->radius, color_attr.vignette > 0.0f);
+            winPtr->setRowEnabled(controls->richness, color_attr.vignette > 0.0f);
+        };
+        (*updateEnabled)();
+
         window->setWindowCloseFunction(
             [&settingsMenu] { settingsMenu.setCurrentActiveSettingsWindow(nullptr); });
         settingsMenu.setCurrentActiveSettingsWindow(std::move(window),

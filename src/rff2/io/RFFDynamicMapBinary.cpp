@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-23, 2026-08-26
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-22, 2026-09-23, 2026-09-25
+// Modified by Opus 5.5 on 2026-11-05
 //
 
 #include "RFFDynamicMapBinary.h"
@@ -28,7 +29,8 @@ namespace merutilm::rff2 {
 
     RFFDynamicMapBinary::RFFDynamicMapBinary(const float logZoom, const uint64_t period, const uint64_t maxIteration,
                                   Matrix<double> iterations) : RFFBinary(logZoom), period(period), maxIteration(maxIteration),
-                                                               iterations(std::move(iterations)) {
+                                                               iterations(std::move(iterations)),
+                                                               lowestEscaped(lowestEscapedIteration(this->iterations, double(maxIteration))) {
     }
 
 
@@ -362,5 +364,18 @@ namespace merutilm::rff2 {
 
     const Matrix<double> &RFFDynamicMapBinary::getMatrix() const {
         return iterations;
+    }
+
+    double RFFDynamicMapBinary::getLowestEscapedIteration() const {
+        return lowestEscaped;
+    }
+
+    double RFFDynamicMapBinary::lowestEscapedIteration(const Matrix<double> &iterations, const double maxIteration) {
+        // 0 is a pixel with no value and maxIteration the interior, so neither is an escape.
+        double lowest = maxIteration;
+        for (const double value : iterations.getCanvas()) {
+            if (value > 0.0 && value < lowest) lowest = value;
+        }
+        return lowest < maxIteration ? lowest : 0.0;
     }
 }

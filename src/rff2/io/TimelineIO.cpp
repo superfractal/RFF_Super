@@ -3,7 +3,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31, 2026-09-01
 // Modified by Opus 5 on 2026-08-25, 2026-08-26
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-28
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-28, 2026-11-01
 //
 
 #include "TimelineIO.h"
@@ -449,6 +449,10 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, timeline.rotationPeriod);
         IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(timeline.rotationDirection));
         IOUtilities::encodeAndWrite(out, timeline.rotationStartAngle);
+        // Its own block, so files written before it read as turning across the whole video.
+        IOUtilities::encodeAndWrite(out, ROTATION_TIME_MAGIC);
+        IOUtilities::encodeAndWrite(out, timeline.rotationStartTime);
+        IOUtilities::encodeAndWrite(out, timeline.rotationEndTime);
     }
 
     void TimelineIO::readRotation(std::ifstream &in, VidTimelineAttribute &out) {
@@ -487,6 +491,26 @@ namespace merutilm::rff2 {
         }
         out.rotationMode = static_cast<VidRotationMode>(mode);
         out.rotationDirection = static_cast<VidRotationDirection>(direction);
+        out.rotationStartTime = 0.0f;
+        out.rotationEndTime = 0.0f;
+        if (!hasMore(in)) {
+            return;
+        }
+        const auto timePosition = in.tellg();
+        uint32_t timeMagic = 0;
+        IOUtilities::readAndDecode(in, &timeMagic);
+        if (in.fail()) {
+            return;
+        }
+        if (timeMagic != ROTATION_TIME_MAGIC) {
+            in.seekg(timePosition);
+            return;
+        }
+        IOUtilities::readAndDecode(in, &out.rotationStartTime);
+        IOUtilities::readAndDecode(in, &out.rotationEndTime);
+        if (in.fail() || !out.validRotationTime()) {
+            in.setstate(std::ios::failbit);
+        }
     }
 
     void TimelineIO::writeConfigBlock(std::ostream &out, const VidTimelineAttribute &timeline) {

@@ -61,6 +61,26 @@ namespace merutilm::rff2 {
     namespace {
         constexpr auto TIMELINE_WINDOW_CLASS = L"RFF2TLW";
         std::atomic<int> openTimelineWindows{0};
+
+        // Counted in cores rather than logical processors, since one thread per logical processor measured no faster at preloading.
+        uint32_t physicalCoreCount() {
+            DWORD length = 0;
+            GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &length);
+            std::vector<std::byte> buffer(length);
+            uint32_t cores = 0;
+            if (length != 0 &&
+                GetLogicalProcessorInformationEx(
+                    RelationProcessorCore, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()),
+                    &length)) {
+                for (DWORD offset = 0; offset < length;) {
+                    const auto *core =
+                        reinterpret_cast<const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *>(buffer.data() + offset);
+                    ++cores;
+                    offset += core->Size;
+                }
+            }
+            return cores ? cores : std::max(1u, std::thread::hardware_concurrency() / 2);
+        }
         constexpr UINT WM_TIMELINE_PREVIEW_READY = WM_APP + 0x251;
         constexpr UINT WM_TIMELINE_EXPORT_FINISHED = WM_APP + 0x252;
         constexpr UINT WM_TIMELINE_CACHE_PROGRESS = WM_APP + 0x25F;
@@ -247,9 +267,10 @@ namespace merutilm::rff2 {
             return TimelineTime::display(value);
         }
 
-        // Dragging a handle snaps to whole keyframes.
+        // Dragging a handle snaps to the Keyframe Snap step, whole keyframes unless set finer.
         float snapDepth(const float depth) {
-            return std::round(depth);
+            const float step = PreferencesIO::keyframeSnapStep();
+            return std::round(depth / step) * step;
         }
 
         int depthX(const float depth, const float startDepth, const float endDepth, const RECT &axis) {
@@ -888,7 +909,7 @@ namespace merutilm::rff2 {
         }
         int at = -1;
         for (int i = 0; i < static_cast<int>(current.keys.size()); ++i) {
-            if (std::abs(current.keys[i].depth - depth) < 1.0f) {
+            if (std::abs(current.keys[i].depth - depth) < PreferencesIO::keyframeSnapStep()) {
                 at = i;
                 break;
             }
@@ -946,7 +967,7 @@ namespace merutilm::rff2 {
             return;
         }
         for (auto &key : current.keys) {
-            if (std::abs(key.depth - depth) < 1.0f) {
+            if (std::abs(key.depth - depth) < PreferencesIO::keyframeSnapStep()) {
                 key.color = color;
                 commitTimeline();
                 return;
@@ -1186,9 +1207,106 @@ namespace merutilm::rff2 {
     }
 
     float TimelineWindow::viewDepthAt(const int x) const {
+        return axisDepthAt(x, nullptr);
+    }
+
+    float TimelineWindow::holdWidth(const VidTimelineHold &hold) const {
+        if (!(hold.seconds > 0.0f) || hold.depth > schedule.getStartDepth() || hold.depth < schedule.getEndDepth()) {
+            return 0.0f;
+        }
+        return hold.seconds * schedule.speedAt(hold.depth);
+    }
+
+    float TimelineWindow::axisDistance(const float depth, const bool pastHold) const {
+        float distance = schedule.getStartDepth() - depth;
+        for (const auto &hold : attribute.video.timeline.holds) {
+            if (hold.depth > depth || (pastHold && hold.depth == depth)) {
+                distance += holdWidth(hold);
+            }
+        }
+        return distance;
+    }
+
+    int TimelineWindow::axisX(const float depth, const RECT &axis, const bool pastHold) const {
+        if (attribute.video.timeline.holds.empty()) {
+            return depthX(depth, viewStartDepth, viewEndDepth, axis);
+        }
+        const float first = axisDistance(viewStartDepth, false);
+        const float span = std::max(axisDistance(viewEndDepth, true) - first, 1e-6f);
+        const float ratio = std::clamp((axisDistance(depth, pastHold) - first) / span, -64.0f, 64.0f);
+        return axis.left + static_cast<int>(ratio * static_cast<float>(axis.right - axis.left));
+    }
+
+    int TimelineWindow::timeX(const double seconds, const RECT &axis) const {
+        const float depth = schedule.depthAt(seconds);
+        for (const auto &hold : attribute.video.timeline.holds) {
+            if (hold.depth == depth && holdWidth(hold) > 0.0f) {
+                const double fraction = std::clamp((seconds - schedule.timeAt(depth)) / hold.seconds, 0.0, 1.0);
+                const int left = axisX(depth, axis, false);
+                const int right = axisX(depth, axis, true);
+                return left + static_cast<int>(std::lround(fraction * (right - left)));
+            }
+        }
+        return axisX(depth, axis);
+    }
+
+    int TimelineWindow::previewX(const RECT &axis) const {
+        // Inside a hold the depth stands still, so the playhead crosses the band by time instead.
+        const bool held = std::ranges::any_of(attribute.video.timeline.holds, [this](const VidTimelineHold &hold) {
+            return hold.depth == previewDepth && holdWidth(hold) > 0.0f;
+        });
+        return held ? timeX(previewSeconds(), axis) : axisX(previewDepth, axis);
+    }
+
+    float TimelineWindow::axisDepthAt(const int x, float *holdFraction) const {
+        if (holdFraction != nullptr) {
+            *holdFraction = -1.0f;
+        }
         const float width = static_cast<float>(std::max(timelineAxis.right - timelineAxis.left, 1L));
         const float ratio = std::clamp(static_cast<float>(x - timelineAxis.left) / width, 0.0f, 1.0f);
-        return viewStartDepth + (viewEndDepth - viewStartDepth) * ratio;
+        std::vector<std::pair<float, float>> bands;
+        for (const auto &hold : attribute.video.timeline.holds) {
+            if (const float band = holdWidth(hold); band > 0.0f) {
+                bands.emplace_back(hold.depth, band);
+            }
+        }
+        if (bands.empty()) {
+            return viewStartDepth + (viewEndDepth - viewStartDepth) * ratio;
+        }
+        std::ranges::sort(bands, std::greater{});
+        const float first = axisDistance(viewStartDepth, false);
+        const float target = first + (axisDistance(viewEndDepth, true) - first) * ratio;
+        const float startDepth = schedule.getStartDepth();
+        float shift = 0.0f;
+        for (const auto &[depth, band] : bands) {
+            const float bandStart = startDepth - depth + shift;
+            if (target < bandStart) {
+                break;
+            }
+            if (target <= bandStart + band) {
+                if (holdFraction != nullptr) {
+                    *holdFraction = (target - bandStart) / band;
+                }
+                return depth;
+            }
+            shift += band;
+        }
+        return std::clamp(startDepth - (target - shift), viewEndDepth, viewStartDepth);
+    }
+
+    double TimelineWindow::viewSecondsAt(const int x) const {
+        float fraction = -1.0f;
+        const float depth = axisDepthAt(x, &fraction);
+        double seconds = schedule.timeAt(depth);
+        if (fraction >= 0.0f) {
+            for (const auto &hold : attribute.video.timeline.holds) {
+                if (hold.depth == depth && holdWidth(hold) > 0.0f) {
+                    seconds += fraction * hold.seconds;
+                    break;
+                }
+            }
+        }
+        return seconds;
     }
 
     void TimelineWindow::resetView() {
@@ -1481,7 +1599,7 @@ namespace merutilm::rff2 {
             }
             for (int i = 0; i < static_cast<int>(current->keys.size()); ++i) {
                 const auto &key = current->keys[i];
-                const int x = depthX(key.depth, viewStartDepth, viewEndDepth, timelineAxis);
+                const int x = axisX(key.depth, timelineAxis);
                 if (!visibleX(x, timelineAxis, radius)) {
                     continue;
                 }
@@ -1672,13 +1790,15 @@ namespace merutilm::rff2 {
         const float startDepth = schedule.getStartDepth();
         const float endDepth = schedule.getEndDepth();
         float depth = snapDepth(viewDepthAt(point.x));
-        constexpr float gap = 1.0f;
-        if (selectedTrackKey > 0) {
-            depth = std::min(depth, current->keys[selectedTrackKey - 1].depth - gap);
-        }
-        if (selectedTrackKey + 1 < static_cast<int>(current->keys.size())) {
-            depth = std::max(depth, current->keys[selectedTrackKey + 1].depth + gap);
-        }
+        const float above = selectedTrackKey > 0 ? current->keys[selectedTrackKey - 1].depth
+                                                 : std::numeric_limits<float>::infinity();
+        const float below = selectedTrackKey + 1 < static_cast<int>(current->keys.size())
+                                ? current->keys[selectedTrackKey + 1].depth
+                                : -std::numeric_limits<float>::infinity();
+        // Neighbours typed closer than two snap steps keep the smallest gap instead, so a drag never reorders keys.
+        const float step = PreferencesIO::keyframeSnapStep();
+        const float gap = above - below >= 2.0f * step ? step : VidTimelineAttribute::MIN_KEY_GAP;
+        depth = std::max(std::min(depth, above - gap), below + gap);
         const TrackLayout *item = layout(selectedTrackTarget);
         if (item == nullptr) {
             return;
@@ -1720,7 +1840,7 @@ namespace merutilm::rff2 {
         const float endDepth = schedule.getEndDepth();
         const float depth = std::clamp(snapDepth(viewDepthAt(point.x)), endDepth, startDepth);
         for (int i = 0; i < static_cast<int>(current.keys.size()); ++i) {
-            if (std::abs(current.keys[i].depth - depth) < 1.0f) {
+            if (std::abs(current.keys[i].depth - depth) < PreferencesIO::keyframeSnapStep()) {
                 selectedTrackTarget = targetId;
                 selectedTrackKey = i;
                 previewDepth = current.keys[i].depth;
@@ -1904,6 +2024,28 @@ namespace merutilm::rff2 {
         adoptPanel(window);
     }
 
+    void TimelineWindow::openCameraSettings() {
+        if (settingsMenu == nullptr || renderScene == nullptr) {
+            return;
+        }
+        std::erase_if(settingsMenu->activeSettingsWindows,
+                      [](const SettingsMenu::ActiveSettingsWindow &active) {
+                          return !IsWindow(active.window->getWindow());
+                      });
+        const size_t before = settingsMenu->activeSettingsWindows.size();
+        CallbackVideo::CAMERA_SETTINGS(*settingsMenu, *renderScene);
+        if (settingsMenu->activeSettingsWindows.size() <= before) {
+            return;
+        }
+        SettingsWindow &window = *settingsMenu->activeSettingsWindows.back().window;
+        if (sourceAttribute != nullptr) {
+            // Camera values are keyed in the inspector, so only the whole-video rotation rows stay editable here.
+            const auto &camera = sourceAttribute->shader.camera;
+            window.disableRowsInObjectExcept(&camera, sizeof(camera), {});
+        }
+        adoptPanel(window);
+    }
+
     void TimelineWindow::openExportMenu() {
         if (exporting || window == nullptr) {
             return;
@@ -2042,6 +2184,9 @@ namespace merutilm::rff2 {
 
         stopFramePreviewWorker();
         destroyFramePreview();
+        if (frameSource != nullptr) {
+            opened->adoptFrames(*frameSource);
+        }
         frameSource = std::move(opened);
         keyframeLogZooms.clear();
         attribute.video.data.isStatic = frameSource->isStatic();
@@ -2181,14 +2326,19 @@ namespace merutilm::rff2 {
             uint64_t processedGeneration = initialGeneration;
             MEMORYSTATUSEX memory{sizeof(memory)};
             const uint64_t temporaryBytes = uint64_t(frameSource->getWidth()) * frameSource->getHeight() * 32;
+            const uint64_t available = GlobalMemoryStatusEx(&memory) ? memory.ullAvailPhys : 0;
+            // Auto takes one thread per physical core of this PC; each thread's working memory must fit in half the free RAM.
+            const uint32_t chosenThreads = PreferencesIO::previewLoadThreads();
+            const uint32_t wantedThreads = chosenThreads ? chosenThreads : physicalCoreCount();
+            const uint32_t threads = static_cast<uint32_t>(std::clamp<uint64_t>(
+                temporaryBytes ? available / 2 / temporaryBytes : wantedThreads, 1, wantedThreads));
+            const uint64_t workingBytes = temporaryBytes * threads;
             const uint64_t budget =
-                GlobalMemoryStatusEx(&memory) && memory.ullAvailPhys > temporaryBytes
-                    ? std::min<uint64_t>(memory.ullAvailPhys / 2, memory.ullAvailPhys - temporaryBytes)
-                    : 0;
+                available > workingBytes ? std::min<uint64_t>(available / 2, available - workingBytes) : 0;
             std::wstring error;
             ULONGLONG lastProgress = 0;
             const bool cached = frameSource->preload(
-                budget, cacheStop.get_token(),
+                budget, threads, cacheStop.get_token(),
                 [this, &lastProgress, &processedGeneration,
                  stopToken](const uint32_t done, const uint32_t count, const uint64_t bytes) {
                     const ULONGLONG now = GetTickCount64();
@@ -2731,8 +2881,19 @@ namespace merutilm::rff2 {
         }
         // A depth read at an edge of the view rounds to a keyframe just outside what the view
         // shows, where the playhead is drawn nowhere, so it snaps to the ones the view holds.
-        const float lowest = std::ceil(viewEndDepth);
-        const float highest = std::floor(viewStartDepth);
+        // Inside a hold's band the playhead stands on the hold and the clock moves through its pause.
+        float fraction = -1.0f;
+        (void)axisDepthAt(point.x, &fraction);
+        if (fraction >= 0.0f) {
+            const double seconds = viewSecondsAt(point.x);
+            previewDepth = schedule.depthAt(seconds);
+            syncPlaybackClock(seconds);
+            InvalidateRect(window, nullptr, FALSE);
+            return;
+        }
+        const float step = PreferencesIO::keyframeSnapStep();
+        const float lowest = std::ceil(viewEndDepth / step) * step;
+        const float highest = std::floor(viewStartDepth / step) * step;
         const float snapped = snapDepth(viewDepthAt(point.x));
         const float held = lowest <= highest ? std::clamp(snapped, lowest, highest)
                                              : std::clamp(snapped, viewEndDepth, viewStartDepth);
@@ -2741,8 +2902,8 @@ namespace merutilm::rff2 {
         InvalidateRect(window, nullptr, FALSE);
     }
 
-    void TimelineWindow::syncPlaybackClock() {
-        playSeconds = schedule.timeAt(previewDepth);
+    void TimelineWindow::syncPlaybackClock(const double seconds) {
+        playSeconds = seconds >= 0.0 ? seconds : schedule.timeAt(previewDepth);
         if (playing) {
             playTick = GetTickCount64();
             restartAudioPreview();
@@ -4222,7 +4383,7 @@ namespace merutilm::rff2 {
         const float firstTick = std::ceil(viewStartDistance / tickStep) * tickStep;
         const int tickCount = std::min(static_cast<int>((viewEndDistance - firstTick) / tickStep) + 1, 64);
         // The end of the video is marked with its distance and total time, so the stretch past the last tick reads too.
-        const int endX = depthX(fullEndDepth, viewStart, viewEnd, axis);
+        const int endX = axisX(fullEndDepth, axis, true);
         const bool endVisible = visibleX(endX, axis, 0);
         const std::wstring endDistanceLabel = std::format(L"d {:.1f}", displayDistance(fullEndDepth));
         const std::wstring endTimeLabel = durationText(schedule.getTotalSeconds());
@@ -4234,14 +4395,13 @@ namespace merutilm::rff2 {
         for (int i = 0; i < tickCount; ++i) {
             const float distance = firstTick + tickStep * static_cast<float>(i);
             const float depth = depthFromDistance(distance);
-            const int x = depthX(depth, viewStart, viewEnd, axis);
+            const int x = axisX(depth, axis);
             // The minor marks sit between this tick and the next, on the distance row alone.
             const HPEN minorPen = CreatePen(PS_SOLID, 1, theme.grid);
             const HGDIOBJ oldMinor = SelectObject(canvas, minorPen);
             for (int minor = 1; minor < 5; ++minor) {
                 const int minorX =
-                    depthX(depthFromDistance(distance + tickStep * static_cast<float>(minor) / 5.0f),
-                           viewStart, viewEnd, axis);
+                    axisX(depthFromDistance(distance + tickStep * static_cast<float>(minor) / 5.0f), axis);
                 if (!visibleX(minorX, axis, 0)) {
                     continue;
                 }
@@ -4272,6 +4432,22 @@ namespace merutilm::rff2 {
                      theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
             drawText(canvas, timeLabel, {labelLeft, timeRowTop, labelRight, timeRowTop + rulerRowHeight},
                      theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE, smallFont);
+        }
+        // Each zoom hold's band is tinted under the tracks, a fifth of the hold color over the background.
+        const auto tint = [](const COLORREF over, const COLORREF under) {
+            const auto mix = [](const int a, const int b) { return (a + 4 * b) / 5; };
+            return RGB(mix(GetRValue(over), GetRValue(under)), mix(GetGValue(over), GetGValue(under)),
+                       mix(GetBValue(over), GetBValue(under)));
+        };
+        for (const auto &hold : attribute.video.timeline.holds) {
+            if (holdWidth(hold) <= 0.0f) {
+                continue;
+            }
+            const RECT band = {std::max(axisX(hold.depth, axis, false), static_cast<int>(axis.left)), axis.top,
+                               std::min(axisX(hold.depth, axis, true), static_cast<int>(axis.right)), axis.bottom};
+            if (band.right > band.left) {
+                fillRect(canvas, band, tint(theme.hold, theme.background));
+            }
         }
         if (endVisible) {
             const HPEN endPen = CreatePen(PS_SOLID, 1, theme.mutedText);
@@ -4345,8 +4521,8 @@ namespace merutilm::rff2 {
                         const double endSeconds = double(clip.start + clip.duration()) / 1000000;
                         const double firstSecond = schedule.timeAt(viewStart), lastSecond = schedule.timeAt(viewEnd);
                         if (endSeconds < firstSecond || startSeconds > lastSecond || startSeconds >= schedule.getTotalSeconds()) continue;
-                        const int left = depthX(schedule.depthAt(startSeconds), viewStart, viewEnd, axis);
-                        const int right = depthX(schedule.depthAt(endSeconds), viewStart, viewEnd, axis);
+                        const int left = timeX(startSeconds, axis);
+                        const int right = timeX(endSeconds, axis);
                         RECT bounds{std::max<LONG>(axis.left, left), top + sc(7),
                                     std::min<LONG>(axis.right, std::max(right, left + sc(12))), bottom - sc(7)};
                         if (bounds.right <= bounds.left) continue;
@@ -4490,8 +4666,10 @@ namespace merutilm::rff2 {
                     const HPEN curve = CreatePen(PS_SOLID, sc(2), rowColor);
                     const HGDIOBJ oldCurve = SelectObject(canvas, curve);
                     for (int i = 0; i < samples; ++i) {
-                        const float depth = viewStart + (viewEnd - viewStart) * static_cast<float>(i) /
-                                                            static_cast<float>(samples - 1);
+                        const float depth = attribute.video.timeline.holds.empty()
+                                                ? viewStart + (viewEnd - viewStart) * static_cast<float>(i) /
+                                                                  static_cast<float>(samples - 1)
+                                                : viewDepthAt(axis.left + i);
                         const float value = evaluateDisplayedTrack(*track, targetId, depth, baseValue(targetId));
                         const int x = axis.left + i;
                         const int y = valueY(value, minValue, maxValue, rowRect);
@@ -4508,7 +4686,7 @@ namespace merutilm::rff2 {
                 if (track != nullptr) {
                     for (int keyIndex = 0; keyIndex < static_cast<int>(track->keys.size()); ++keyIndex) {
                         const auto &key = track->keys[keyIndex];
-                        const int x = depthX(key.depth, viewStart, viewEnd, axis);
+                        const int x = axisX(key.depth, axis);
                         if (!visibleX(x, axis, sc(8))) {
                             continue;
                         }
@@ -4666,7 +4844,7 @@ namespace merutilm::rff2 {
         drawText(canvas, guideText, guidance, theme.mutedText, DT_LEFT | DT_VCENTER | DT_SINGLELINE,
                  smallFont);
 
-        const int playheadX = depthX(previewDepth, viewStart, viewEnd, axis);
+        const int playheadX = previewX(axis);
         if (visibleX(playheadX, axis, 0)) {
             const HPEN playhead = CreatePen(PS_SOLID, sc(2), theme.accentText);
             const HGDIOBJ oldPlayhead = SelectObject(canvas, playhead);
@@ -4690,16 +4868,32 @@ namespace merutilm::rff2 {
         }
 
         for (const auto &hold : attribute.video.timeline.holds) {
-            const int x = depthX(hold.depth, viewStart, viewEnd, axis);
-            if (!visibleX(x, axis, 0)) {
+            const int x = axisX(hold.depth, axis, false);
+            const int endX = axisX(hold.depth, axis, true);
+            if (!visibleX(x, axis, 0) && !visibleX(endX, axis, 0) && !(x < axis.left && endX > axis.right)) {
                 continue;
             }
+            // The hold's start and end each get a line; with no length the two coincide.
             const HPEN holdPen = CreatePen(PS_DOT, 1, theme.hold);
             const HGDIOBJ oldHold = SelectObject(canvas, holdPen);
-            MoveToEx(canvas, x, axis.top, nullptr);
-            LineTo(canvas, x, axis.bottom);
+            for (const int lineX : {x, endX}) {
+                if (visibleX(lineX, axis, 0)) {
+                    MoveToEx(canvas, lineX, axis.top, nullptr);
+                    LineTo(canvas, lineX, axis.bottom);
+                }
+            }
             SelectObject(canvas, oldHold);
             DeleteObject(holdPen);
+            if (holdWidth(hold) <= 0.0f) {
+                continue;
+            }
+            const double resume = schedule.timeAt(hold.depth) + hold.seconds;
+            const std::wstring tabText = std::format(L"+{:.1f}s → {}", hold.seconds, durationText(resume));
+            const int tabWidth = textWidth(canvas, tabText, smallFont) + sc(10);
+            const int tabLeft = std::max(static_cast<int>(axis.left), std::min(x + sc(2), static_cast<int>(axis.right) - tabWidth));
+            const RECT tab = {tabLeft, axis.top + sc(2), tabLeft + tabWidth, axis.top + sc(20)};
+            fillRect(canvas, tab, theme.hold);
+            drawText(canvas, tabText, tab, theme.background, DT_CENTER | DT_VCENTER | DT_SINGLELINE, smallFont);
         }
 
         presentPaint(target, activeEditRect);
@@ -4780,7 +4974,7 @@ namespace merutilm::rff2 {
             const RECT plot{timelineAxis.left, top, timelineAxis.right, top + rowHeight};
             for (int key = 0; key < int(current->keys.size()); ++key) {
                 const auto &value = current->keys[key];
-                const int x = depthX(value.depth, viewStartDepth, viewEndDepth, timelineAxis),
+                const int x = axisX(value.depth, timelineAxis),
                           y = editableTarget(target) ? valueY(value.value, limits.first, limits.second, plot)
                                                      : top + rowHeight / 2;
                 Item keyItem{
@@ -5257,7 +5451,7 @@ namespace merutilm::rff2 {
         if (key == VK_INSERT) {
             if (const auto *row = layout(target); row && row->editable) {
                 lastUndoStep = 0;
-                const int x = std::clamp(depthX(previewDepth, viewStartDepth, viewEndDepth, timelineAxis),
+                const int x = std::clamp(axisX(previewDepth, timelineAxis),
                                          int(row->row.left), int(row->row.right) - 1);
                 addTrackKey(target, {x, (row->row.top + row->row.bottom) / 2});
                 if (selectedTrackKey >= 0) {
@@ -5270,8 +5464,7 @@ namespace merutilm::rff2 {
             if (const auto *row = layout(target)) {
                 POINT point{row->row.left + sc(12), (row->row.top + row->row.bottom) / 2};
                 if (selectedTrackKey >= 0) {
-                    point.x = depthX(current->keys[selectedTrackKey].depth, viewStartDepth, viewEndDepth,
-                                     timelineAxis);
+                    point.x = axisX(current->keys[selectedTrackKey].depth, timelineAxis);
                     point.y = row->editable ? valueY(current->keys[selectedTrackKey].value, row->minValue,
                                                      row->maxValue, row->row)
                                             : (row->row.top + row->row.bottom) / 2;
@@ -5626,7 +5819,7 @@ namespace merutilm::rff2 {
         case WM_MOUSEMOVE: {
             const POINT point = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             if (self->draggingAudio) {
-                const auto time = int64_t(std::llround(std::clamp(double(self->schedule.timeAt(self->viewDepthAt(point.x))), 0.0, 604800.0) * 1000000));
+                const auto time = int64_t(std::llround(std::clamp(self->viewSecondsAt(point.x), 0.0, 604800.0) * 1000000));
                 AudioClipEdit::apply(self->attribute.video.timeline.audio, self->audioDragBefore,
                                      self->audioDragEdge, time - self->audioDragTime);
                 InvalidateRect(hwnd, nullptr, FALSE);
@@ -5779,7 +5972,7 @@ namespace merutilm::rff2 {
                     self->audioDragBefore = *clip;
                     const int grip = std::max(4, int(std::lround(7 * self->uiDpi / 96.0)));
                     self->audioDragEdge = point.x < item.bounds.left + grip ? -1 : point.x >= item.bounds.right - grip ? 1 : 0;
-                    self->audioDragTime = int64_t(std::llround(std::clamp(double(self->schedule.timeAt(self->viewDepthAt(point.x))), 0.0, 604800.0) * 1000000));
+                    self->audioDragTime = int64_t(std::llround(std::clamp(self->viewSecondsAt(point.x), 0.0, 604800.0) * 1000000));
                     if (self->audioDragEdge < 0) self->audioDragTime = clip->start;
                     if (self->audioDragEdge > 0) self->audioDragTime = clip->start + clip->duration();
                     self->draggingAudio = true;

@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23, 2026-11-04, 2026-11-05
 //
 
 #version 450
@@ -242,6 +242,26 @@ layout (set = 2, binding = 0) uniform SlopeUBO {
     float groove_rounded;
     // Rounded Bands crease blur in 720-line pixels; 0 keeps the one-pixel slope filter.
     float groove_crease_blur;
+    // 0 shades Studio as Studio GGX, 1 as OpenPBR Surface; the values after it are read by OpenPBR Surface only.
+    float studio_model;
+    float openpbr_coat_ior;
+    float openpbr_coat_darkening;
+    float openpbr_coat_color_r;
+    float openpbr_coat_color_g;
+    float openpbr_coat_color_b;
+    float openpbr_edge_tint_r;
+    float openpbr_edge_tint_g;
+    float openpbr_edge_tint_b;
+    float openpbr_fuzz;
+    float openpbr_fuzz_roughness;
+    float openpbr_fuzz_color_r;
+    float openpbr_fuzz_color_g;
+    float openpbr_fuzz_color_b;
+    float openpbr_film_ior;
+    // Studio's anisotropy axis: 0 Fixed Angle, 1 Along Bands, 2 Across Bands.
+    float specular_anisotropy_direction;
+    // Iteration the Lustre relief stops rising at: the view's lowest escaped iteration plus Relief Cap periods; 0 is off.
+    float surface_relief_cap;
 
 } slope_attr;
 
@@ -512,6 +532,8 @@ vec3 shade_composite(vec3 base, float shade) {
 // Waves on Clear Coat Only: the coat's slope with the waves.
 vec2 coat_wave_slope = vec2(0.0);
 #include "studio_environment.glsl"
+#include "studio_anisotropy.glsl"
+#include "openpbr_surface.glsl"
 #include "studio_surface.glsl"
 #include "lustre_relief.glsl"
 
