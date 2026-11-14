@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-11, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-11-05, 2026-11-07
 //
 
 #include "div_reciprocal.glsl"
@@ -57,6 +57,20 @@ vec2 lustre_height(double value, double center, double c4, double invC4, double 
         h += 0.48 * slope_attr.surface_relief_waves * cos(middle) * sin(halfDelta);
     }
     return slope_attr.surface_invert_relief > 0.5 ? -vec2(h, calm) : vec2(h, calm);
+}
+
+// lustre_height's derivative in the tap's iteration at the centre, waved (x) and calm (y), for the dz/dc relief.
+vec2 lustre_dzdc_slope(double center, bool withWaves) {
+    double c = max(center, 1.0);
+    if (slope_attr.surface_relief_cap > 0.0 && c >= double(slope_attr.surface_relief_cap)) return vec2(0.0);
+    float zoomScale = slope_attr.surface_zoom_log2 < 0.0 ? exp2(slope_attr.surface_zoom_log2) : 1.0;
+    float calm = zoomScale / (float(c + 4.0) * 0.69314718);
+    float waved = calm;
+    if (withWaves) {
+        float phaseC = float(lustre_reduce_phase(c * double(slope_attr.surface_wave_frequency)));
+        waved += 0.24 * slope_attr.surface_relief_waves * cos(phaseC) * zoomScale * slope_attr.surface_wave_frequency;
+    }
+    return slope_attr.surface_invert_relief > 0.5 ? -vec2(waved, calm) : vec2(waved, calm);
 }
 
 // The ring radius a stencil actually uses: the requested one, shrunk so every tap stays inside the image.
@@ -174,6 +188,15 @@ void lustre_relief_pair(uvec2 coord, double center, bool wantWaves, out vec3 wav
             lustre_sobel(coord, ring, center, withWaves, wavedRings[i], calmRings[i]);
             evaluated[i] = ring;
         }
+    }
+    // Relief Source dz/dc: the fine and smoothed rings take the exact slope instead of their Sobel; the wide and AO rings keep theirs.
+    vec2 dzdcGradient;
+    if (center > 0.0 && center < iteration_info_attr.max_value && dzdc_gradient(coord, dzdcGradient)) {
+        vec2 slope = lustre_dzdc_slope(center, withWaves);
+        wavedRings[0].xy = dzdcGradient * slope.x;
+        calmRings[0].xy = dzdcGradient * slope.y;
+        wavedRings[1].xy = wavedRings[0].xy;
+        calmRings[1].xy = calmRings[0].xy;
     }
     waved = lustre_relief_from_rings(wavedRings, scale);
     calm = lustre_relief_from_rings(calmRings, scale);

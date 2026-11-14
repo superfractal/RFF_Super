@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-24
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-24, 2026-11-07
 //
 
 #include "../vulkan/GPCIterationPalette.hpp"
@@ -41,10 +41,12 @@ namespace merutilm::rff2 {
 
     void GPCIterationPalette::cmdRefreshIterations(const VkCommandBuffer cbh, const vkh::BufferContext &iterationSrc,
                                                    const vkh::BufferContext &escapeAngleSrc,
-                                                   const vkh::BufferContext &orbitTrapSrc) const {
+                                                   const vkh::BufferContext &orbitTrapSrc,
+                                                   const vkh::BufferContext &derivativeSrc) const {
         for (const auto &[src, result] : {std::pair{&iterationSrc, &getResultIterationBuffer()},
                                           std::pair{&escapeAngleSrc, &getResultEscapeAngleBuffer()},
-                                          std::pair{&orbitTrapSrc, &getResultOrbitTrapBuffer()}}) {
+                                          std::pair{&orbitTrapSrc, &getResultOrbitTrapBuffer()},
+                                          std::pair{&derivativeSrc, &getResultDerivativeBuffer()}}) {
             vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT, result->buffer, 0, result->bufferSize,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -74,9 +76,16 @@ namespace merutilm::rff2 {
         return trapSSBO.getBufferContext();
     }
 
+    const vkh::BufferContext &GPCIterationPalette::getResultDerivativeBuffer() const {
+        using namespace SharedDescriptorTemplate;
+        const auto &derivativeSSBO = *getDescriptor(SET_ITERATION).get<vkh::ShaderStorage>(
+            0, DescIteration::BINDING_SSBO_DERIVATIVE);
+        return derivativeSSBO.getBufferContext();
+    }
+
 
     void GPCIterationPalette::resetIterationBuffer(const uint32_t width, const uint32_t height,
-                                                   const uint32_t trapPlanes) {
+                                                   const uint32_t trapPlanes, const uint32_t derivativeFloats) {
         using namespace SharedDescriptorTemplate;
         auto &iterDesc = getDescriptor(SET_ITERATION);
         const auto &iterUBO = *iterDesc.get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO);
@@ -97,6 +106,7 @@ namespace merutilm::rff2 {
         iterSSBO.lock(wc.getCommandPool());
         DescIteration::resizeCaches(iterDesc, width, height, wc.getCommandPool());
         DescIteration::resizeEscapeAngles(iterDesc, width, height, trapPlanes, wc.getCommandPool());
+        DescIteration::resizeDerivatives(iterDesc, derivativeFloats, wc.getCommandPool());
         writeDescriptorMF(
             [&iterDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
                 iterDesc.queue(queue, frameIndex, {}, {DescIteration::BINDING_SSBO_ITERATION_MATRIX,
@@ -104,8 +114,30 @@ namespace merutilm::rff2 {
                                                        DescIteration::BINDING_SSBO_CHAOS_CACHE,
                                                        DescIteration::BINDING_SSBO_ESCAPE_ANGLE,
                                                        DescIteration::BINDING_SSBO_CHAOS_DEFOCUS,
-                                                       DescIteration::BINDING_SSBO_ORBIT_TRAP});
+                                                       DescIteration::BINDING_SSBO_ORBIT_TRAP,
+                                                       DescIteration::BINDING_SSBO_DERIVATIVE});
             });
+    }
+
+    void GPCIterationPalette::resizeDerivativeBuffer(const uint32_t derivativeFloats) {
+        using namespace SharedDescriptorTemplate;
+        auto &iterDesc = getDescriptor(SET_ITERATION);
+        DescIteration::resizeDerivatives(iterDesc, derivativeFloats, wc.getCommandPool());
+        writeDescriptorMF(
+            [&iterDesc](vkh::DescriptorUpdateQueue &queue, const uint32_t frameIndex) {
+                iterDesc.queue(queue, frameIndex, {}, {DescIteration::BINDING_SSBO_DERIVATIVE});
+            });
+    }
+
+    void GPCIterationPalette::setDerivativeGradient(const bool on) const {
+        using namespace SharedDescriptorTemplate;
+        const auto &info = *getDescriptor(SET_ITERATION).get<vkh::Uniform>(0, DescIteration::BINDING_UBO_ITERATION_INFO);
+        auto &host = info.getHostObject();
+        const glm::uvec2 value{on ? 1u : 0u, 0u};
+        if (host.get<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT) == value) return;
+        wc.core.getLogicalDevice().waitDeviceIdle();
+        host.set<glm::uvec2>(DescIteration::TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT, value);
+        info.update(DescIteration::TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT);
     }
 
     void GPCIterationPalette::resizeOrbitTrapBuffer(const uint32_t width, const uint32_t height,

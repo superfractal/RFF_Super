@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-08, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-08, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-14
 //
 
 #pragma once
@@ -23,6 +23,8 @@
 #include "ShdStudioEnvironmentSource.h"
 #include "ShdStudioMaterialModel.h"
 #include "ShdAnisotropyDirection.h"
+#include "ShdReliefSource.h"
+#include "ShdShadowQuality.h"
 #include "ShdSlopeTintBlend.h"
 
 namespace merutilm::rff2 {
@@ -72,6 +74,21 @@ namespace merutilm::rff2 {
         float specularAnisotropyAngle = 0.0f;  // 0 ~ 360: stretch direction (degrees)
         // Studio only: Along / Across Bands turn the stretch with the iteration bands, and the angle above twists it from there.
         ShdAnisotropyDirection specularAnisotropyDirection = ShdAnisotropyDirection::FIXED_ANGLE;
+        // dz/dc takes the fine relief of Slope and Lustre Relief from the derivative the calculation keeps, instead of from neighboring iterations.
+        ShdReliefSource reliefSource = ShdReliefSource::ITERATIONS;
+        // dz/dc only: darkens the pixels near the set's boundary by their distance to it; 0 is off.
+        float boundaryDarkness = 0.0f;
+        // How far that darkening reaches, in pixels of a 1280-wide picture.
+        float boundaryWidth = 12.0f;
+        // Cast shadow of the key light across the relief; 0 strength is off.
+        float shadowStrength = 0.0f;
+        // How far a shadow can reach, in pixels of a 1280-wide picture.
+        float shadowLength = 140.0f;
+        // Width of the shadow's soft edge, as a slope.
+        float shadowSoftness = 0.6f;
+        // log2 gain on how tall the relief stands for the shadow.
+        float shadowDepth = 0.0f;
+        ShdShadowQuality shadowQuality = ShdShadowQuality::STANDARD;
         float macroRelief = 0.0f;              // N3: 0 = single-scale relief (existing), >0 blends a wide Sobel for broad form
         float macroRadius = 8.0f;              // N3: macro Sobel sampling radius (1280px-reference pixels)
         // P6: how the shading meets the palette color. Overlay is the original composite.

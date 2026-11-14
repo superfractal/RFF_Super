@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01, 2026-10-07
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #include "AppearanceForms.hpp"
@@ -104,6 +104,11 @@ namespace merutilm::rff2::workspace {
         section.number("fillZenith", &Settings::fillZenith, L"Fill Zenith", 0.0f, std::nextafter(360.f, 0.f));
         section.number("fillAzimuth", &Settings::fillAzimuth, L"Fill Direction", 0.0f,
                        std::nextafter(360.f, 0.f));
+        section.number("shadowStrength", &Settings::shadowStrength, L"Shadow Strength", 0.0f, 1.0f);
+        section.number("shadowLength", &Settings::shadowLength, L"Shadow Length", 10.0f, 500.0f);
+        section.number("shadowSoftness", &Settings::shadowSoftness, L"Shadow Softness", 0.05f, 2.0f);
+        section.number("shadowDepth", &Settings::shadowDepth, L"Shadow Depth", -8.0f, 8.0f);
+        section.choice("shadowQuality", &Settings::shadowQuality, L"Shadow Quality");
         section.group = 2;
         section.number("specularIntensity", &Settings::specularIntensity, L"Specular Intensity", 0.0f, 1.0f);
         section.number("specularPower", &Settings::specularPower, L"Specular Power", 1.0f, 100000.0f);
@@ -120,6 +125,21 @@ namespace merutilm::rff2::workspace {
                        0.0f, std::nextafter(360.f, 0.f));
         section.choice("specularAnisotropyDirection", &Settings::specularAnisotropyDirection, L"Anisotropy Direction");
         section.group = 3;
+        section.choice("reliefSource", &Settings::reliefSource, L"Relief Source",
+                       L"Where Slope Shading and Lustre Relief take the fine slope of their relief from.\nIterations measures "
+                       L"it from the iterations of the neighboring pixels, as before.\ndz/dc takes the exact slope from the "
+                       L"derivative dz/dc, calculated along with each orbit. The relief stays smooth and even up to the "
+                       L"boundary of the set, where neighboring iterations jump and the measured slope breaks into grain. "
+                       L"Texture and pattern layers and Warp with UV Source Cycle x Band also take the direction of the bands "
+                       L"from dz/dc, so they no longer tear or twist near the boundary. Macro Relief, Cavity Shading and the "
+                       L"wider Lustre rings still read the neighboring iterations, and Normal Smoothing has nothing left to "
+                       L"smooth.\nSlower: choosing dz/dc calculates the view again, and each calculation takes about 8% "
+                       L"longer in shallow views and up to about 45% longer in deep ones. GPU Perturbation is not used while "
+                       L"it is on, so a view it would calculate is calculated on the CPU, which can take many times longer. "
+                       L"It keeps about 12 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, "
+                       L"360 views, drafts shown while navigating and custom formulas keep the Iterations relief.");
+        section.number("boundaryDarkness", &Settings::boundaryDarkness, L"Boundary Darkness", 0.0f, 1.0f);
+        section.number("boundaryWidth", &Settings::boundaryWidth, L"Boundary Width", 1.0f, 100.0f);
         section.number("macroRelief", &Settings::macroRelief, L"Macro Relief", 0.0f, 1.0f);
         section.number("macroRadius", &Settings::macroRadius, L"Macro Radius", 1.0f, 12.0f);
         section.number("aoIntensity", &Settings::aoIntensity, L"Cavity Intensity", 0.0f, 1.0f);
@@ -461,6 +481,12 @@ namespace merutilm::rff2::workspace {
                        NumericSettingLimits::vignetteRadius.maximum, L"Size of the untouched center.");
         section.number("vignetteRichness", &Settings::vignetteRichness, L"Vignette Richness", NumericSettingLimits::vignetteRichness.minimum,
                        NumericSettingLimits::vignetteRichness.maximum, L"Saturation added inside the dark rim.");
+        section.number("chromaticAberration", &Settings::chromaticAberration, L"Chromatic Aberration",
+                       NumericSettingLimits::chromaticAberration.minimum, NumericSettingLimits::chromaticAberration.maximum,
+                       L"Pixels the colors separate by at the corners of a 1080-pixel-high picture; 0 is off.");
+        section.number("chromaticAberrationStart", &Settings::chromaticAberrationStart, L"Chromatic Aberration Start",
+                       NumericSettingLimits::chromaticAberrationStart.minimum, NumericSettingLimits::chromaticAberrationStart.maximum,
+                       L"Where the fringe begins, from the center to the corners.");
         {
             using Settings = ShdBloomAttribute;
             AttributeFormSection section(

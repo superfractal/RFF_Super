@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-11-14
 //
 
 #pragma once
@@ -152,6 +153,10 @@ namespace merutilm::rff2::workspace {
         }
         if (id == "surface.ukiyoColors") {
             return L"Ukiyo-e flat posterize quantization color count";
+        }
+        // The rows are named Shadow ..., so the section's own name and its Japanese name find them too.
+        if (id.starts_with("slope.shadow") && id != "slope.shadowChroma") {
+            return L"Cast Shadow drop shadow occlusion relief 落ち影 影";
         }
         return {};
     }

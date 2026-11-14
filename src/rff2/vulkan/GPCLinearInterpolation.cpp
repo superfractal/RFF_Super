@@ -2,7 +2,7 @@
 // Created by Merutilm on 2025-08-31.
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-31
 // Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-13
+// Modified by Opus 5.5 on 2026-10-13, 2026-11-08
 //
 
 #include "GPCLinearInterpolation.hpp"
@@ -64,6 +64,15 @@ namespace merutilm::rff2 {
         host.set<float>(DescLinearInterpolation::TARGET_LAYER_QUANTIZE, slope.layerQuantize);
         host.set<float>(DescLinearInterpolation::TARGET_LAYER_VHS, slope.layerVhs);
         host.set<float>(DescLinearInterpolation::TARGET_LAYER_MONO, slope.layerMono);
+        ubo.update();
+    }
+
+    void GPCLinearInterpolation::setChromaticAberration(const ShdColorAttribute &color) const {
+        using namespace SharedDescriptorTemplate;
+        const auto &ubo = *getDescriptor(SET_LINEAR_INTERPOLATION).get<vkh::Uniform>(0, DescLinearInterpolation::BINDING_UBO_LINEAR_INTERPOLATION);
+        auto &host = ubo.getHostObject();
+        host.set<float>(DescLinearInterpolation::TARGET_CHROMATIC_ABERRATION, color.chromaticAberration);
+        host.set<float>(DescLinearInterpolation::TARGET_CHROMATIC_ABERRATION_START, color.chromaticAberrationStart);
         ubo.update();
     }
 

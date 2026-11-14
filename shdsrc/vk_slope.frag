@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-14
 //
 
 #version 450
@@ -41,6 +41,11 @@ layout (set = 1, binding = 1) buffer IterSSBO {
 layout (set = 1, binding = 2) buffer ReliefCacheSSBO {
     float relief[];
 } relief_cache;
+
+// Relief Source dz/dc: each pixel's smooth-iteration gradient as two half floats, log2 length low and angle + 4 high; 0 where there is none.
+layout (set = 1, binding = 7) readonly buffer DerivativeSSBO {
+    float values[];
+} derivative_attr;
 
 layout (set = 2, binding = 0) uniform SlopeUBO {
     float depth;
@@ -262,6 +267,18 @@ layout (set = 2, binding = 0) uniform SlopeUBO {
     float specular_anisotropy_direction;
     // Iteration the Lustre relief stops rising at: the view's lowest escaped iteration plus Relief Cap periods; 0 is off.
     float surface_relief_cap;
+    // 1 while Relief Source is dz/dc and the live view's dz/dc buffer is bound; 0 keeps the iteration Sobel.
+    float surface_relief_source;
+    // Boundary Darkness: 0 is off, 1 sinks the pixels near the set's boundary as far as it goes; needs the dz/dc buffer.
+    float boundary_darkness;
+    // Boundary Width: how far the darkening reaches from the boundary, in pixels of a 1280-wide canvas.
+    float boundary_width;
+    // Cast shadow of the key light: 0 strength is off; length in pixels of a 1280-wide picture; depth a log2 gain; quality the tap count.
+    float shadow_strength;
+    float shadow_length;
+    float shadow_softness;
+    float shadow_depth;
+    float shadow_quality;
 
 } slope_attr;
 
@@ -329,6 +346,39 @@ double get_iteration(uvec2 iter_coord, ivec2 offset){
     return 0.0;
 }
 
+// The smooth iteration's gradient per pixel from dz/dc, in the axes get_iteration's offsets run in; false where the pixel has none.
+bool dzdc_gradient(uvec2 coord, out vec2 gradient) {
+    gradient = vec2(0.0);
+    if (!(slope_attr.surface_relief_source > 0.5)) return false;
+    uvec2 last = iteration_info_attr.extent - 1u;
+    uint index = (last.y - min(coord.y, last.y)) * iteration_info_attr.extent.x + min(coord.x, last.x);
+    if (index >= uint(derivative_attr.values.length())) return false;
+    uint bits = floatBitsToUint(derivative_attr.values[index]);
+    if (bits == 0u) return false;
+    vec2 packed = unpackHalf2x16(bits);
+    float angle = packed.y - 4.0;
+    gradient = exp2(packed.x) * vec2(cos(angle), sin(angle));
+    return true;
+}
+
+// The palette code's iteration_gradient takes the dz/dc gradient through this hook in the Slope pass.
+#define ITERATION_GRADIENT_DZDC
+bool iteration_gradient_dzdc(ivec2 c, out vec2 gradient) {
+    return dzdc_gradient(uvec2(max(c, ivec2(0))), gradient);
+}
+
+// Boundary Darkness's factor: a thin dark line on the boundary and a shadow over the Boundary Width beside it, from the dz/dc distance.
+float boundary_darkening(uvec2 coord) {
+    vec2 gradient;
+    if (!(slope_attr.boundary_darkness > 0.0) || !dzdc_gradient(coord, gradient)) return 1.0;
+    // The smooth iteration's gradient is 1 / (2 ln2 d), so its length gives the distance d to the boundary.
+    float distance = 1.0 / (2.0 * 0.69314718 * max(length(gradient), 1.0e-30));
+    distance *= 1280.0 / float(max(iteration_info_attr.canvas_extent.x, 1u));
+    float line = smoothstep(0.0, 1.0, 0.7 * distance);
+    float shadow = mix(0.35, 1.0, 1.0 - exp(-distance / max(slope_attr.boundary_width, 0.001)));
+    return mix(1.0, line * shadow, clamp(slope_attr.boundary_darkness, 0.0, 1.0));
+}
+
 // log2(1 + x), as a series rather than through log().
 //
 // Vulkan pins log() to an ABSOLUTE error of 2^-21 for arguments in [0.5, 2], not a relative one.
@@ -373,9 +423,7 @@ float height_rel(double it, double center) {
     // the ratio reaches float as a small number carrying its full relative precision - all 24 bits
     // spent on the difference itself rather than on the magnitude the two taps share.
     double dr = (a - b) / b;
-    // The series is truncated at the fifth term, so it is worth 0.45% at dr = 0.5 and 0.66% at
-    // -0.5, and the switch below would hand those over as a step. It is worth 7e-5 at 0.25, where
-    // the far branch's own cancellation is smaller still, so the two meet with nothing to see.
+    // log2_1p runs to x^11 and is within 2.3e-8 relative at |dr| = 0.25, below float rounding, so the far branch takes over with no step.
     if (abs(dr) <= 0.25) {
         return log2_1p(float(dr));
     }
@@ -531,11 +579,14 @@ vec3 shade_composite(vec3 base, float shade) {
 
 // Waves on Clear Coat Only: the coat's slope with the waves.
 vec2 coat_wave_slope = vec2(0.0);
+// The key light's cast shadow at this pixel, 1 where it is lit; Studio GGX and OpenPBR Surface scale their key lobes by it.
+float key_shadow = 1.0;
 #include "studio_environment.glsl"
 #include "studio_anisotropy.glsl"
 #include "openpbr_surface.glsl"
 #include "studio_surface.glsl"
 #include "lustre_relief.glsl"
+#include "relief_shadow.glsl"
 
 // The ordered stages share one Lustre evaluation per pixel: three floats per pixel, indexed like the iteration buffer.
 uint relief_cache_index(uvec2 coord) {
@@ -691,6 +742,14 @@ void shade_surface() {
     float dx = (h_rd - h_ld) + 2.0 * (h_r - h_l) + (h_ru - h_lu);
     float dy = (h_lu - h_ld) + 2.0 * (h_u - h_d) + (h_ru - h_rd);
 
+    // Relief Source dz/dc: the exact slope of the same height, d log2(it) = d it / (it ln2), at the Sobel's weight of 8.
+    vec2 dzdcGradient;
+    if (centerIt > 0.0 && centerIt < iteration_info_attr.max_value && dzdc_gradient(relief_coord, dzdcGradient)) {
+        vec2 exact = dzdcGradient * (8.0 / (float(centerClamped) * 0.69314718));
+        dx = exact.x;
+        dy = exact.y;
+    }
+
     // Dual-scale relief: blend a wider-radius Sobel for broad undulation. macro_relief=0 keeps existing output.
     if (slope_attr.macro_relief > 0.0) {
         vec2 m = macro_gradient(relief_coord, multiplier, centerIt);
@@ -802,6 +861,14 @@ void shade_surface() {
     // its own normal.
     float rawShade = (cos(zRad) - sin(zRad) * (cos(aRad) * dzDx + sin(aRad) * dzDy)) * invSlopeLen;
 
+    // Cast shadow dims the key light alone, before the fill joins it; a side already turned away keeps its own darkness.
+    if (slope_attr.shadow_strength > 0.0) {
+        bool shadowLustre = slope_attr.surface_lustre_relief > 0.5;
+        bool shadowWaves = shadowLustre && slope_attr.surface_relief_waves > 0.0 && !(slope_attr.surface_waves_coat_only > 0.5);
+        key_shadow = relief_shadow(relief_coord, centerIt, shadowLustre, shadowWaves);
+        rawShade = rawShade > 0.0 ? rawShade * key_shadow : rawShade;
+    }
+
     // The fill light: a second diffuse source folded in ahead of the floor, the terminator and the
     // gamma, so every one of them shapes the two lights as the one lit surface they now form. A
     // surface turned away from the fill adds nothing - a fill lifts shadows, it never casts its own.
@@ -910,7 +977,8 @@ void shade_surface() {
             float power = max(slope_attr.specular_power, 0.1);
             if (slope_attr.specular_anisotropy > 0.0) {
                 float axisRad = radians(slope_attr.specular_anisotropy_angle);
-                float dir = cos(2.0 * (aspect - axisRad)); // +1 parallel, -1 perpendicular
+                // aspect is minus the normal's screen angle, so the axis is added to measure it counterclockwise as Studio and the azimuth do.
+                float dir = cos(2.0 * (aspect + axisRad)); // +1 parallel, -1 perpendicular
                 float k = 1.0 + slope_attr.specular_anisotropy * 3.0;
                 power = max(power * pow(k, -dir), 0.1);
             }
@@ -921,6 +989,7 @@ void shade_surface() {
 
             // Brightness is folded back in here so the highlight's shadow falloff is unchanged.
             specular *= clamp(shade * slope_attr.brightness, 0.0, 1.0); // Reduce specular in shadow
+            if (slope_attr.shadow_strength > 0.0) specular *= key_shadow;
         }
 
         // Rim Light Calculation (Fresnel effect)
@@ -1211,8 +1280,12 @@ void shade_layers() {
 void main() {
     shade_layers();
     if (!ordered_layers() || layer_is(1)) {
-        color.rgb = apply_band_decoration(uvec2(gl_FragCoord.xy), color.rgb,
-                                          ordered_layers() || slope_attr.studio_use > 0.5 ||
-                                          effects_attr.context.x > 0.5);
+        bool linearColor = ordered_layers() || slope_attr.studio_use > 0.5 || effects_attr.context.x > 0.5;
+        color.rgb = apply_band_decoration(uvec2(gl_FragCoord.xy), color.rgb, linearColor);
+        // Darkened in linear light, whichever encoding the color is in here.
+        if (slope_attr.boundary_darkness > 0.0) {
+            float darkening = boundary_darkening(uvec2(gl_FragCoord.xy));
+            color.rgb = linearColor ? color.rgb * darkening : linear_to_srgb(srgb_to_linear(color.rgb) * darkening);
+        }
     }
 }

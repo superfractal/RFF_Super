@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-18, 2026-09-19, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-08, 2026-11-04
+// Modified by Opus 5.5 on 2026-10-08, 2026-11-04, 2026-11-14
 //
 
 // Artist-directed GGX and dielectric coating over native relief; equation provenance is recorded in NOTICE.
@@ -59,6 +59,8 @@ vec3 studio_surface(
     vec3 key = srgb_to_linear(vec3(
         slope_attr.specular_color_r, slope_attr.specular_color_g, slope_attr.specular_color_b
     ));
+    // The cast shadow falls on the key light alone; the fill and the environment stay lit.
+    if (key_shadow < 1.0) key *= key_shadow;
     vec3 sky = srgb_to_linear(vec3(
         slope_attr.sky_color_r, slope_attr.sky_color_g, slope_attr.sky_color_b
     ));

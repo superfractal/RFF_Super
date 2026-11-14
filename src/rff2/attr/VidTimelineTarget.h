@@ -4,7 +4,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Opus 5 on 2026-08-27, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-11-04
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-11-04, 2026-11-08
 //
 
 #pragma once
@@ -95,6 +95,8 @@ namespace merutilm::rff2 {
         COLOR_VIGNETTE_RADIUS = 407,
         COLOR_VIGNETTE_RICHNESS = 408,
         COLOR_VIGNETTE_SHAPE = 409,
+        COLOR_CHROMATIC_ABERRATION = 410,
+        COLOR_CHROMATIC_ABERRATION_START = 411,
 
         FOG_RADIUS = 500,
         FOG_OPACITY = 501,

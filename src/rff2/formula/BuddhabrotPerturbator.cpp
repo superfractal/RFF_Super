@@ -1,5 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-26.
+// Modified by Opus 5.5 on 2026-11-07
 //
 
 #include "BuddhabrotPerturbator.h"
@@ -54,8 +55,10 @@ namespace merutilm::rff2 {
         return dex::value(dcMax);
     }
 
-    double BuddhabrotPerturbator::iterate(const dex &, const dex &, float *escapeAngle, OrbitTrap *trap) const {
+    double BuddhabrotPerturbator::iterate(const dex &, const dex &, float *escapeAngle, OrbitTrap *trap,
+                                          EscapeDerivative *derivative) const {
         if (escapeAngle != nullptr) *escapeAngle = 0.0f;
+        if (derivative != nullptr) *derivative = EscapeDerivative{};
         if (trap != nullptr) *trap = OrbitTrap{};
         return static_cast<double>(calc.maxIteration);
     }

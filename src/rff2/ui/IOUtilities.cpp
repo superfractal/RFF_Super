@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-14
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-14, 2026-09-21, 2026-09-22, 2026-09-23
+// Modified by Opus 5.5 on 2026-11-07, 2026-11-10
 //
 
 #include "IOUtilities.h"
@@ -12,6 +13,7 @@
 #include <atomic>
 #include <filesystem>
 #include <opencv2/imgcodecs.hpp>
+#include <shobjidl.h>
 
 #include "Utilities.h"
 #include "../constants/Constants.hpp"
@@ -58,6 +60,84 @@ namespace merutilm::rff2 {
                                         static_cast<int>(extension.size()), extension.data(),
                                         static_cast<int>(extension.size()), TRUE) == CSTR_EQUAL;
         }
+
+        // Releases a COM interface when it leaves scope.
+        template<typename T>
+        struct Released {
+            T *pointer = nullptr;
+            ~Released() {
+                if (pointer != nullptr) {
+                    pointer->Release();
+                }
+            }
+            Released() = default;
+            Released(const Released &) = delete;
+            Released &operator=(const Released &) = delete;
+        };
+
+        constexpr DWORD NOTE_CONTROL = 100;
+        constexpr DWORD CHECK_CONTROL = 101;
+        // Keeps a save dialog's extension on the chosen type, and reads the checkbox as OK is pressed.
+        class DialogEvents final : public IFileDialogEvents {
+            LONG references = 1;
+            const std::vector<std::wstring> *extensions;
+            // The checkbox read as OK is pressed, which is when the dialog guarantees its state.
+            bool *checked;
+
+        public:
+            DialogEvents(const std::vector<std::wstring> *typeExtensions, bool *checkState)
+                : extensions(typeExtensions), checked(checkState) {}
+            virtual ~DialogEvents() = default;
+
+            IFACEMETHODIMP QueryInterface(REFIID riid, void **object) override {
+                if (object == nullptr) {
+                    return E_POINTER;
+                }
+                if (IsEqualIID(riid, IID_IUnknown) || IsEqualIID(riid, IID_IFileDialogEvents)) {
+                    *object = static_cast<IFileDialogEvents *>(this);
+                    AddRef();
+                    return S_OK;
+                }
+                *object = nullptr;
+                return E_NOINTERFACE;
+            }
+            IFACEMETHODIMP_(ULONG) AddRef() override {
+                return static_cast<ULONG>(InterlockedIncrement(&references));
+            }
+            IFACEMETHODIMP_(ULONG) Release() override {
+                const LONG left = InterlockedDecrement(&references);
+                if (left == 0) {
+                    delete this;
+                }
+                return static_cast<ULONG>(left);
+            }
+            IFACEMETHODIMP OnFileOk(IFileDialog *dialog) override {
+                Released<IFileDialogCustomize> customize;
+                if (checked != nullptr && SUCCEEDED(dialog->QueryInterface(IID_IFileDialogCustomize,
+                                                                          reinterpret_cast<void **>(&customize.pointer)))) {
+                    BOOL state = FALSE;
+                    if (SUCCEEDED(customize.pointer->GetCheckButtonState(CHECK_CONTROL, &state))) {
+                        *checked = state != FALSE;
+                    }
+                }
+                return S_OK;
+            }
+            IFACEMETHODIMP OnFolderChanging(IFileDialog *, IShellItem *) override { return S_OK; }
+            IFACEMETHODIMP OnFolderChange(IFileDialog *) override { return S_OK; }
+            IFACEMETHODIMP OnSelectionChange(IFileDialog *) override { return S_OK; }
+            IFACEMETHODIMP OnShareViolation(IFileDialog *, IShellItem *, FDE_SHAREVIOLATION_RESPONSE *) override {
+                return S_OK;
+            }
+            IFACEMETHODIMP OnTypeChange(IFileDialog *dialog) override {
+                UINT index = 0;
+                if (extensions != nullptr && SUCCEEDED(dialog->GetFileTypeIndex(&index)) && index >= 1 &&
+                    index <= extensions->size() && !(*extensions)[index - 1].empty()) {
+                    dialog->SetDefaultExtension((*extensions)[index - 1].c_str());
+                }
+                return S_OK;
+            }
+            IFACEMETHODIMP OnOverwrite(IFileDialog *, IShellItem *, FDE_OVERWRITE_RESPONSE *) override { return S_OK; }
+        };
 
         bool confirmCompletedSavePath(const HWND owner, const std::wstring &path, const char type) {
             if (type != IOUtilities::SAVE_FILE) {
@@ -177,6 +257,128 @@ namespace merutilm::rff2 {
                 result.append(end);
                 if (!confirmCompletedSavePath(owner, result, type)) {
                     return nullptr;
+                }
+            }
+        }
+        return std::make_unique<std::filesystem::path>(result);
+    }
+
+    std::unique_ptr<std::filesystem::path> IOUtilities::fileDialog(FileDialogRequest &request) {
+        // Torn down last, after every interface below has been released.
+        struct ComScope {
+            bool active;
+            ~ComScope() {
+                if (active) {
+                    CoUninitialize();
+                }
+            }
+        } com{SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE))};
+        const bool save = request.type == SAVE_FILE;
+        Released<IFileDialog> dialog;
+        if (FAILED(CoCreateInstance(save ? CLSID_FileSaveDialog : CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                    IID_IFileDialog, reinterpret_cast<void **>(&dialog.pointer)))) {
+            return ioFileDialogMulti(request.title, request.type, request.filters);
+        }
+
+        // The same filter list ioFileDialogMulti offers, a combined entry first when opening.
+        std::vector<std::wstring> names;
+        std::vector<std::wstring> patterns;
+        std::vector<std::wstring> extByIndex;
+        if (!save && request.filters.size() > 1) {
+            std::wstring combined;
+            for (size_t i = 0; i < request.filters.size(); ++i) {
+                if (i) combined += L";";
+                combined += std::format(L"*.{}", request.filters[i].second);
+            }
+            names.push_back(std::format(L"{} ({})", UiLanguage::text(L"Supported"), combined));
+            patterns.push_back(combined);
+            extByIndex.emplace_back();
+        }
+        for (const auto &[desc, ext] : request.filters) {
+            names.push_back(std::format(L"{} (*.{})", UiLanguage::text(desc), ext));
+            patterns.push_back(std::format(L"*.{}", ext));
+            extByIndex.push_back(ext);
+        }
+        std::vector<COMDLG_FILTERSPEC> types;
+        for (size_t i = 0; i < names.size(); ++i) {
+            types.push_back({names[i].c_str(), patterns[i].c_str()});
+        }
+        if (!types.empty()) {
+            dialog.pointer->SetFileTypes(static_cast<UINT>(types.size()), types.data());
+            dialog.pointer->SetFileTypeIndex(1);
+        }
+        const std::wstring title = UiLanguage::text(request.title);
+        dialog.pointer->SetTitle(title.c_str());
+        FILEOPENDIALOGOPTIONS options = 0;
+        dialog.pointer->GetOptions(&options);
+        options |= FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_NOCHANGEDIR;
+        options |= save ? FOS_OVERWRITEPROMPT : FOS_FILEMUSTEXIST;
+        dialog.pointer->SetOptions(options);
+        if (save && !extByIndex.empty() && !extByIndex.front().empty()) {
+            dialog.pointer->SetDefaultExtension(extByIndex.front().c_str());
+        }
+
+        Released<IFileDialogCustomize> customize;
+        const bool customized = (!request.note.empty() || !request.checkLabel.empty()) &&
+                                SUCCEEDED(dialog.pointer->QueryInterface(IID_IFileDialogCustomize,
+                                                                         reinterpret_cast<void **>(&customize.pointer)));
+        if (customized) {
+            if (!request.note.empty()) {
+                customize.pointer->AddText(NOTE_CONTROL, UiLanguage::text(request.note).c_str());
+            }
+            if (!request.checkLabel.empty()) {
+                customize.pointer->AddCheckButton(CHECK_CONTROL, UiLanguage::text(request.checkLabel).c_str(),
+                                                  request.checked ? TRUE : FALSE);
+            }
+        }
+
+        DialogEvents *events = nullptr;
+        DWORD cookie = 0;
+        const bool hasCheck = customized && !request.checkLabel.empty();
+        bool checkedAtOk = request.checked;
+        if ((save && extByIndex.size() > 1) || hasCheck) {
+            events = new DialogEvents(save ? &extByIndex : nullptr, hasCheck ? &checkedAtOk : nullptr);
+            if (FAILED(dialog.pointer->Advise(events, &cookie))) {
+                cookie = 0;
+            }
+        }
+
+        const HWND owner = dialogOwner();
+        HRESULT shown;
+        {
+            const ModalDialogScope modal;
+            shown = dialog.pointer->Show(owner);
+        }
+        if (events != nullptr) {
+            if (cookie != 0) {
+                dialog.pointer->Unadvise(cookie);
+            }
+            events->Release();
+        }
+        if (hasCheck) {
+            request.checked = checkedAtOk;
+        }
+        if (FAILED(shown) || ownerLost(owner)) {
+            return nullptr;
+        }
+        Released<IShellItem> item;
+        PWSTR name = nullptr;
+        if (FAILED(dialog.pointer->GetResult(&item.pointer)) ||
+            FAILED(item.pointer->GetDisplayName(SIGDN_FILESYSPATH, &name)) || name == nullptr) {
+            return nullptr;
+        }
+        std::wstring result = name;
+        CoTaskMemFree(name);
+        if (save) {
+            UINT index = 1;
+            dialog.pointer->GetFileTypeIndex(&index);
+            const size_t slot = index >= 1 && index <= extByIndex.size() ? index - 1 : 0;
+            if (slot < extByIndex.size() && !extByIndex[slot].empty()) {
+                if (const std::wstring end = std::format(L".{}", extByIndex[slot]); !endsWithExtension(result, end)) {
+                    result.append(end);
+                    if (!confirmCompletedSavePath(owner, result, request.type)) {
+                        return nullptr;
+                    }
                 }
             }
         }

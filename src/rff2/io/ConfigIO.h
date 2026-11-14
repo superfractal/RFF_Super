@@ -5,7 +5,7 @@
 // Modified by GPT-5 on 2026-08-21
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-09-24, 2026-09-25
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-26
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-26, 2026-11-07
 //
 
 #pragma once
@@ -46,6 +46,11 @@ namespace merutilm::rff2 {
         // The saved resolution (client size) is returned via width/height.
         static bool load(const std::filesystem::path &path, Attribute &out,
                          uint16_t *width, uint16_t *height);
+
+        // A whole config read into a fresh attribute rather than over the session's, for looking at a
+        // file without taking it up. False when the file cannot be read.
+        static bool loadDetached(const std::filesystem::path &path, Attribute &out,
+                                 uint16_t *width, uint16_t *height);
 
         // Only the shader of a config, for taking a look out of a settings file and leaving the
         // location and everything else in it alone. Leaves out untouched when the file cannot be read.

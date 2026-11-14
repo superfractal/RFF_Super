@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08
 //
 
 #pragma once
@@ -113,6 +113,8 @@ namespace merutilm::rff2 {
         std::chrono::steady_clock::time_point computeStartedAt = {};
         // Bumped per recompute so a cancelled compute cannot mark the scene idle behind its successor.
         std::atomic<uint64_t> computeGeneration{0};
+        // Bumped whenever a loaded file replaces what the canvas shows; see viewStamp.
+        std::atomic<uint64_t> viewEpoch{0};
         std::atomic<bool> isVideoGenerationActive{false};
         std::atomic<bool> isVideoExportActive{false};
         // Set while a paused-preview video export has shrunk the canvas images; the computed map waits in releasedMatrix.
@@ -122,6 +124,8 @@ namespace merutilm::rff2 {
         std::unique_ptr<Matrix<float>> releasedEscapeAngleMatrix = nullptr;
         // The orbit traps that belong to releasedMatrix, kept and put back with it.
         std::unique_ptr<OrbitTrapMatrix> releasedOrbitTrapMatrix = nullptr;
+        // The dz/dc relief that belongs to releasedMatrix, kept and put back with it.
+        std::unique_ptr<Matrix<float>> releasedDerivativeMatrix = nullptr;
         std::atomic<bool> longJobBusy{false};
 
 
@@ -136,6 +140,10 @@ namespace merutilm::rff2 {
         std::unique_ptr<OrbitTrapMatrix> orbitTrapMatrix = nullptr;
         // The Orbit Trap Shape the live shape planes are being measured with; disabled while there are none.
         TrapShapeParams liveTrapShape{};
+        // EscapeDerivative::pack of each pixel of iterationMatrix while Relief Source is dz/dc, nullptr otherwise; EMPTY draws the iteration relief.
+        std::unique_ptr<Matrix<float>> derivativeMatrix = nullptr;
+        // Whether the latest compute of the live view was asked for dz/dc, so turning Relief Source to dz/dc knows to recompute.
+        bool liveDerivatives = false;
 
         // The compute threads own iterationMatrix and never touch the staging buffer the GPU copies
         // from; the render thread lifts snapshots of it across, so that buffer has a single writer.
@@ -399,6 +407,18 @@ namespace merutilm::rff2 {
         // Reallocates the live trap planes when Orbit Trap Coloring moved onto or off Shape; called with no compute running.
         void matchOrbitTrapPlanes(const Attribute &settings);
 
+        // True while Relief Source asks the calculation for dz/dc.
+        [[nodiscard]] static bool wantsDerivatives(const Attribute &settings);
+
+        // The dz/dc staging buffer for a w x h view: full size while on, a single float while off.
+        [[nodiscard]] std::unique_ptr<GraphicsMatrixBuffer<float>> createDerivativeStaging(uint16_t w, uint16_t h, bool on) const;
+
+        // Allocates or frees the live dz/dc buffers when Relief Source moved onto or off dz/dc; called with no compute running.
+        void matchDerivatives(const Attribute &settings);
+
+        // Tells the Slope pass whether the live dz/dc buffer holds a full map, after anything that replaced the buffers.
+        void syncDerivativeAvailability() const;
+
         // Takes the canvas size from the swapchain images as they now stand.
         void refreshCanvasExtent();
 
@@ -518,7 +538,7 @@ namespace merutilm::rff2 {
         bool computeBuddhabrot(const Attribute &geometry, uint16_t w, uint16_t h, double fullW, double fullH,
                                Matrix<double> &matrix, std::atomic<int> &renderPixelsCount);
 
-        // Clears the escape angles and orbit traps on the matrices and staging buffers, for a picture put there by anything but a compute of this view.
+        // Clears the escape angles, orbit traps and dz/dc on the matrices and staging buffers, for a picture put there by anything but a compute of this view.
         void clearEscapeAngles();
 
         // The GPU engine, built on first use; nullptr when this device cannot run it.
@@ -728,6 +748,17 @@ namespace merutilm::rff2 {
             return idleCompute && !smoothZoomActive;
         }
 
+        // Changes when the view is recomputed or replaced by a loaded file, so a thumbnail asked for
+        // of one view is never taken of the next.
+        [[nodiscard]] uint64_t viewStamp() const {
+            return (viewEpoch.load() << 40) ^ computeGeneration.load();
+        }
+
+        // Writes a thumbnail of the view on screen to target once its calculation has finished, unless
+        // the view has changed by then. Nothing is queued while a video export holds the canvas.
+        void requestThumbnail(const std::filesystem::path &target, uint32_t width,
+                              const std::shared_ptr<ExportProgress> &progress = {});
+
         // True when the shutdown now under way leaves a view that was asked for and never arrived.
         // The compute is threaded, so the window keeps answering however heavy it gets: closing it
         // is how a view too slow to wait for is given up on, and that is the ending whose settings
@@ -899,6 +930,8 @@ namespace merutilm::rff2 {
                 color.vignetteRadius = attr.shader.color.vignetteRadius;
                 color.vignetteRichness = attr.shader.color.vignetteRichness;
                 color.vignetteShape = attr.shader.color.vignetteShape;
+                color.chromaticAberration = attr.shader.color.chromaticAberration;
+                color.chromaticAberrationStart = attr.shader.color.chromaticAberrationStart;
                 attr.shader.color = color;
             }
             if constexpr (std::is_base_of_v<Presets::ShaderPresets::FogPreset, P>) {

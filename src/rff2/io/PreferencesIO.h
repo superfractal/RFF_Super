@@ -1,10 +1,11 @@
 //
 // Created by Opus 5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-18, 2026-09-19, 2026-09-23
-// Modified by Opus 5.5 on 2026-11-01
+// Modified by Opus 5.5 on 2026-11-01, 2026-11-07
 //
 
 #pragma once
+#include <algorithm>
 #include <cstdint>
 
 namespace merutilm::rff2 {
@@ -41,6 +42,28 @@ namespace merutilm::rff2 {
         }
         static float keyframeSnapStep() {
             return keyframeSnap() == 2 ? 0.01f : keyframeSnap() == 1 ? 0.1f : 1.0f;
+        }
+
+        // Whether Save Settings, Save Map and Save Appearance Settings leave a thumbnail beside the file.
+        static bool &thumbnailsForSaves() {
+            static bool attach = true;
+            return attach;
+        }
+
+        // Whether each generated keyframe gets a thumbnail; off by default because a run writes many of them.
+        static bool &thumbnailsForKeyframes() {
+            static bool attach = false;
+            return attach;
+        }
+
+        // Width of a thumbnail: 0 = 128, 1 = 256, 2 = 512 pixels.
+        static constexpr uint8_t MAX_THUMBNAIL_SIZE = 2;
+        static uint8_t &thumbnailSize() {
+            static uint8_t size = 1;
+            return size;
+        }
+        static uint32_t thumbnailWidth() {
+            return 128u << std::min<uint8_t>(thumbnailSize(), MAX_THUMBNAIL_SIZE);
         }
 
         // Reads the file into the live flags. A missing or unreadable file leaves them at their defaults.

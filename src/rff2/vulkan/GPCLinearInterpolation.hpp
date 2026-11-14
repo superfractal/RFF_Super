@@ -2,11 +2,13 @@
 // Created by Merutilm on 2025-08-31.
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-31
 // Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-23
+// Modified by Opus 5.5 on 2026-11-08
 //
 
 #pragma once
 #include "ShaderLayerControl.hpp"
 #include "../../vulkan_helper/configurator/GeneralPostProcessGraphicsPipelineConfigurator.hpp"
+#include "../attr/ShdColorAttribute.h"
 #include "../attr/ShdHdrAttribute.h"
 #include "../attr/ShdSlopeAttribute.h"
 #include "../attr/VidHdrTransfer.h"
@@ -36,6 +38,9 @@ namespace merutilm::rff2 {
         void setDither(bool use) const;
 
         void setSurface(const ShdSlopeAttribute &slope) const;
+
+        // The fringe reads neighboring pixels, which the Color pass cannot, so its values live in this pass.
+        void setChromaticAberration(const ShdColorAttribute &color) const;
 
         // The last pass owns the output transform, so it is also the only one that knows what the frame is for.
         void setToneMap(

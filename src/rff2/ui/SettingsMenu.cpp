@@ -4,10 +4,11 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07, 2026-11-10
 //
 
 #include "NativeDialogs.hpp"
+#include "GalleryWindow.hpp"
 #include "LocalAiWindow.hpp"
 #include "SettingsMenu.hpp"
 #include "UiLanguage.hpp"
@@ -15,6 +16,7 @@
 #include "UiDpi.hpp"
 
 #include <algorithm>
+#include <format>
 #include <functional>
 #include <memory>
 #include <string>
@@ -441,14 +443,13 @@ namespace merutilm::rff2 {
         // New, open and the two settings saves in the order every other program has them, then the
         // appearance part of the settings and what the render produced. One load opens them all.
         addChildItem(currentMenu, "New Document", CallbackFile::NEW_CONFIG);
-        addChildItem(currentMenu, "Load File", CallbackFile::LOAD_FILE);
-        addChildItem(currentMenu, "Save Settings",
-                     [](SettingsMenu &, RenderScene &scene) { CallbackFile::saveCurrentConfig(scene); });
-        addChildItem(currentMenu, "Save Settings As", CallbackFile::SAVE_CONFIG);
-        addSeparator(currentMenu);
-        addChildItem(currentMenu, "Save Appearance Settings", CallbackShader::SAVE_PRESET);
-        addChildItem(currentMenu, "Save Map", CallbackFile::SAVE_MAP);
-        addChildItem(currentMenu, "Save Image", CallbackFile::SAVE_IMAGE);
+        // Files are opened and saved in the Gallery, one entry for each so the two never mix; Save Settings overwrites.
+        addChildItem(currentMenu, "Gallery (Open)",
+                     [](SettingsMenu &menu, RenderScene &scene) { GalleryWindow::open(menu, scene, GalleryWindow::Mode::BROWSE); });
+        addChildItem(currentMenu, "Gallery (Save)",
+                     [](SettingsMenu &menu, RenderScene &scene) { GalleryWindow::open(menu, scene, GalleryWindow::Mode::SAVE); });
+        addChildItem(currentMenu, "Save Settings", CallbackFile::SAVE_SETTINGS);
+        // The thumbnail choices for saves live in the Gallery's Settings button; the keyframe one in Video.
 
         currentMenu = addChildMenu(menubar, "Fractal");
         addWorkspaceItem(currentMenu, "Reference", 0, 2, CallbackFractal::REFERENCE);
@@ -609,6 +610,10 @@ namespace merutilm::rff2 {
         }
         addWorkspaceItem(currentMenu, "Video Encoding", 3, 3, CallbackVideo::EXPORT_SETTINGS);
         addChildItem(currentMenu, "Generate Keyframes", CallbackVideo::GENERATE_VID_KEYFRAME);
+        add(
+            currentMenu, "Attach Thumbnails to Keyframes",
+            [](SettingsMenu &, RenderScene &) { PreferencesIO::save(); }, false, true,
+            [](RenderScene &, bool) -> bool * { return &PreferencesIO::thumbnailsForKeyframes(); });
         addChildItem(currentMenu, "Export Video", CallbackVideo::EXPORT_ZOOM_VID);
         currentMenu = addChildMenu(menubar, "View");
         const auto languageMenu = addChildMenu(currentMenu, "Language / 言語 (restart required)");

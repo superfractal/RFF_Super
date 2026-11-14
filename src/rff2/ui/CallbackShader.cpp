@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-10, 2026-11-14
 //
 
 #include "NativeDialogs.hpp"
@@ -1732,6 +1732,13 @@ namespace merutilm::rff2 {
             HWND specularAnisotropy = nullptr;
             HWND specularAnisotropyAngle = nullptr;
             HWND specularAnisotropyDirection = nullptr;
+            HWND boundaryDarkness = nullptr;
+            HWND boundaryWidth = nullptr;
+            HWND shadowStrength = nullptr;
+            HWND shadowLength = nullptr;
+            HWND shadowSoftness = nullptr;
+            HWND shadowDepth = nullptr;
+            HWND shadowQuality = nullptr;
             HWND reliefResponse = nullptr;
             HWND ambientSkyColor = nullptr;
             HWND ambientGroundColor = nullptr;
@@ -2424,6 +2431,37 @@ namespace merutilm::rff2 {
             L"of color. It shades deeper than Overlay does, so raise Slope Brightness to match.");
 
         window->registerSectionHeader(L"Relief Detail");
+        window->registerSelectionInput<ShdReliefSource>(
+            L"Relief Source", &slope_attr.reliefSource, [requestSlopeShader] { requestSlopeShader(); },
+            L"Relief Source",
+            L"Where Slope Shading and Lustre Relief take the fine slope of their relief from.\nIterations measures "
+            L"it from the iterations of the neighboring pixels, as before.\ndz/dc takes the exact slope from the "
+            L"derivative dz/dc, calculated along with each orbit. The relief stays smooth and even up to the "
+            L"boundary of the set, where neighboring iterations jump and the measured slope breaks into grain. "
+            L"Texture and pattern layers and Warp with UV Source Cycle x Band also take the direction of the bands "
+            L"from dz/dc, so they no longer tear or twist near the boundary. Macro Relief, Cavity Shading and the "
+            L"wider Lustre rings still read the neighboring iterations, and Normal Smoothing has nothing left to "
+            L"smooth.\nSlower: choosing dz/dc calculates the view again, and each calculation takes about 8% "
+            L"longer in shallow views and up to about 45% longer in deep ones. GPU Perturbation is not used while "
+            L"it is on, so a view it would calculate is calculated on the CPU, which can take many times longer. "
+            L"It keeps about 12 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, "
+            L"360 views, drafts shown while navigating and custom formulas keep the Iterations relief.");
+        controls->boundaryDarkness = window->registerSliderInput(
+            L"Boundary Darkness", &slope_attr.boundaryDarkness, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::FLOAT_ZERO_TO_ONE, [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Boundary Darkness",
+            L"Darkens the pixels near the boundary of the set by their distance to it, worked out from dz/dc: a "
+            L"thin dark line runs along the boundary and a shadow sinks the surface beside it, so filaments and "
+            L"spirals stand out against the dark. 0 is off; 1 darkens the line to black and the shadow to about a "
+            L"third. Needs Relief Source dz/dc and adds no calculation time. It darkens the whole picture of this "
+            L"pass, palette included, wherever dz/dc is kept.");
+        controls->boundaryWidth = window->registerSliderInput(
+            L"Boundary Width", &slope_attr.boundaryWidth, 1.0f, 100.0f, Unparser::floatFixed(1), Parser::FLOAT,
+            ValidCondition::floatInRange(1.0f, 100.0f), [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Boundary Width",
+            L"How far Boundary Darkness reaches from the boundary, in pixels of a 1280-pixel-wide picture, so it "
+            L"keeps its look at any resolution. The thin line on the boundary itself stays the same width.");
+        window->setSliderFractionalSteps(controls->boundaryWidth);
         window->registerSliderInput(
             L"Macro Relief", &slope_attr.macroRelief, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
             ValidCondition::FLOAT_ZERO_TO_ONE, [requestSlopeShader] { requestSlopeShader(); },
@@ -2450,6 +2488,43 @@ namespace merutilm::rff2 {
             L"Light Direction", &slope_attr.azimuth, 0.0f, 359.0f, angleUnparser, angleParser,
             ValidCondition::FLOAT_DEGREE, [requestSlopeShader] { requestSlopeShader(); }, L"Set Azimuth",
             L"Sets the azimuth of the slope. Range: 0 <= x < 360 degrees.");
+
+        window->registerSectionHeader(L"Cast Shadow");
+        controls->shadowStrength = window->registerSliderInput(
+            L"Shadow Strength", &slope_attr.shadowStrength, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::FLOAT_ZERO_TO_ONE, [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Shadow Strength",
+            L"Lets the relief cast soft shadows of the light across itself, from Light Zenith and Light Direction: "
+            L"a raised form darkens the lower surface behind it. Only the main light is shadowed; the fill light, "
+            L"the environment and the rim stay lit. It also dims the main light's highlights, and under Studio its "
+            L"clear coat reflection. 0 is off; "
+            L"1 shadows fully. A light straight overhead casts no shadow.");
+        controls->shadowLength = window->registerSliderInput(
+            L"Shadow Length", &slope_attr.shadowLength, 10.0f, 500.0f, Unparser::floatFixed(0), Parser::FLOAT,
+            ValidCondition::floatInRange(10.0f, 500.0f), [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Shadow Length",
+            L"How far a shadow can reach, in pixels of a 1280-pixel-wide picture, so it keeps its look at any "
+            L"resolution. Longer lets tall forms shade more of the surface, at the same cost.");
+        controls->shadowSoftness = window->registerSliderInput(
+            L"Shadow Softness", &slope_attr.shadowSoftness, 0.05f, 2.0f, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(0.05f, 2.0f), [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Shadow Softness",
+            L"Width of the shadow's edge. Low draws a crisp edge; high fades it out gradually, and more so the "
+            L"farther the shadow falls from what casts it.");
+        window->setSliderFractionalSteps(controls->shadowSoftness);
+        controls->shadowDepth = window->registerSliderInput(
+            L"Shadow Depth", &slope_attr.shadowDepth, -8.0f, 8.0f, Unparser::floatFixed(1), Parser::FLOAT,
+            ValidCondition::floatInRange(-8.0f, 8.0f), [requestSlopeShader] { requestSlopeShader(); },
+            L"Set Shadow Depth",
+            L"How tall the relief stands for the shadow, as a power of two: each step up doubles the height, so "
+            L"shadows grow longer and cover more. 0 matches Lustre Depth under Lustre Relief. Shading Depth does "
+            L"not change the shadow, since it saturates the slope over most of a view.");
+        window->setSliderFractionalSteps(controls->shadowDepth);
+        controls->shadowQuality = window->registerSelectionInput<ShdShadowQuality>(
+            L"Shadow Quality", &slope_attr.shadowQuality, [requestSlopeShader] { requestSlopeShader(); },
+            L"Shadow Quality",
+            L"How many points the shadow is tested at toward the light. Fine is smoother and costs more; Fast "
+            L"leaves more grain at the shadow's edge. Supersampling smooths the grain further.");
 
         window->registerSectionHeader(L"Fill Light");
         controls->fillIntensity = window->registerSliderInput(
@@ -2776,6 +2851,12 @@ namespace merutilm::rff2 {
             enable(controls->fillIntensity, slopeActive);
             enable(controls->fillZenith, fillActive);
             enable(controls->fillDirection, fillActive);
+            const bool shadowActive = slopeActive && slope_attr.shadowStrength > 0.0f;
+            enable(controls->shadowStrength, slopeActive);
+            enable(controls->shadowLength, shadowActive);
+            enable(controls->shadowSoftness, shadowActive);
+            enable(controls->shadowDepth, shadowActive);
+            enable(controls->shadowQuality, shadowActive);
             for (const HWND item : controls->studio) {
                 enable(item, studioActive);
             }
@@ -2801,6 +2882,9 @@ namespace merutilm::rff2 {
             enable(controls->specularAnisotropyAngle, specularActive && slope_attr.specularAnisotropy > 0.0f);
             enable(controls->specularAnisotropyDirection, specularActive && studioActive && slope_attr.specularAnisotropy > 0.0f);
             enable(controls->reliefResponse, specularActive);
+            const bool boundaryActive = slope_attr.reliefSource == ShdReliefSource::DZDC;
+            enable(controls->boundaryDarkness, boundaryActive);
+            enable(controls->boundaryWidth, boundaryActive && slope_attr.boundaryDarkness > 0.0f);
             // Every one of these shapes the lightness Relief Lightness scales, so at 0 they do nothing.
             const bool lumaActive = slopeActive && slope_attr.lumaAmount > 0.0f;
             enable(controls->shadowFloor, lumaActive);
@@ -2845,7 +2929,7 @@ namespace merutilm::rff2 {
                                                                                             &settingsMenu,
                                                                                         RenderScene &scene) {
         auto &[gamma, exposure, hue, saturation, brightness, contrast, vignette, vignetteRadius, vignetteRichness,
-               vignetteShape] = scene.getAttribute().shader.color;
+               vignetteShape, chromaticAberration, chromaticAberrationStart] = scene.getAttribute().shader.color;
         auto window = std::make_unique<SettingsWindow>(L"Color");
         window->registerTextInput<float>(
             L"Gamma", &gamma, Unparser::floatFixed(2), Parser::FLOAT, NumericSettingLimits::gamma,
@@ -2935,6 +3019,35 @@ namespace merutilm::rff2 {
             winPtr->setRowEnabled(controls->richness, color_attr.vignette > 0.0f);
         };
         (*updateEnabled)();
+
+        auto fringeStart = std::make_shared<HWND>(nullptr);
+        auto requestFringe = [&scene, fringeStart, winPtr = window.get(),
+                              &color_attr = scene.getAttribute().shader.color] {
+            scene.getRequests().requestShader();
+            if (*fringeStart) {
+                winPtr->setRowEnabled(*fringeStart, color_attr.chromaticAberration > 0.0f);
+            }
+        };
+        window->registerSectionHeader(L"Chromatic Aberration");
+        window->registerSliderInput(
+            L"Chromatic Aberration", &chromaticAberration, NumericSettingLimits::chromaticAberration.minimum,
+            NumericSettingLimits::chromaticAberration.maximum, Unparser::floatFixed(1), Parser::FLOAT,
+            NumericSettingLimits::chromaticAberration, [requestFringe] { requestFringe(); },
+            L"Set Chromatic Aberration",
+            L"Separates the colors toward the edges of the frame like a lens: red is drawn in toward the center "
+            L"and blue pushed out toward the edges, through a soft rainbow fringe. The value is how many pixels "
+            L"each moves at the corners of a 1080-pixel-high picture, and it scales with the picture size. "
+            L"0 = off.\nApplied after Fog and "
+            L"Bloom; with Layer Order on, it moves with the HDR & Tone Mapping layer.");
+        *fringeStart = window->registerSliderInput(
+            L"Chromatic Aberration Start", &chromaticAberrationStart,
+            NumericSettingLimits::chromaticAberrationStart.minimum,
+            NumericSettingLimits::chromaticAberrationStart.maximum, Unparser::floatFixed(2), Parser::FLOAT,
+            NumericSettingLimits::chromaticAberrationStart, [requestFringe] { requestFringe(); },
+            L"Set Chromatic Aberration Start",
+            L"Where the fringe begins, from 0 at the center to 1 at the corners. Inside it the picture is "
+            L"untouched, and from there the fringe grows toward the corners.");
+        window->setRowEnabled(*fringeStart, chromaticAberration > 0.0f);
 
         window->setWindowCloseFunction(
             [&settingsMenu] { settingsMenu.setCurrentActiveSettingsWindow(nullptr); });
@@ -3591,29 +3704,17 @@ namespace merutilm::rff2 {
                                     [&scene]() -> ShaderAttribute & { return scene.getAttribute().shader; },
                                     [&scene] { scene.getRequests().requestShader(); }));
     };
-    const std::function<void(SettingsMenu &, RenderScene &)> CallbackShader::SAVE_PRESET =
-        [](SettingsMenu &, RenderScene &scene) {
-            const auto path =
-                IOUtilities::ioFileDialog(L"Save Appearance Settings", Constants::Extension::DESC_SHADER_PRESET,
-                                          IOUtilities::SAVE_FILE, Constants::Extension::SHADER_PRESET);
-            if (path == nullptr) {
-                return;
-            }
-            if (!ShaderPresetIO::save(*path, scene.getAttribute().shader)) {
-                NativeDialogs::message(nullptr, L"Failed to save shader preset", L"Error",
-                                       MB_OK | MB_ICONERROR);
-            }
-        };
-    void CallbackShader::loadPreset(SettingsMenu &settingsMenu, RenderScene &scene,
+    bool CallbackShader::loadPreset(SettingsMenu &settingsMenu, RenderScene &scene,
                                     const std::filesystem::path &path) {
         // Every shader panel is bound to the values this replaces, so none of them can stay open.
         settingsMenu.closeShaderSettingsWindows();
         if (ShaderPresetIO::load(path, scene.getAttribute().shader)) {
             scene.getRequests().requestShader();
             CallbackFile::warnMissingTextureImages(scene.getAttribute().shader);
-        } else {
-            NativeDialogs::message(nullptr, L"Failed to load shader preset", L"Error",
-                                   MB_OK | MB_ICONERROR);
+            return true;
         }
+        NativeDialogs::message(nullptr, L"Failed to load shader preset", L"Error",
+                               MB_OK | MB_ICONERROR);
+        return false;
     }
 } // namespace merutilm::rff2

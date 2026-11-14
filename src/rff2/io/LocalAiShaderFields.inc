@@ -1,5 +1,5 @@
 // Modified by GPT-6 on 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-22, 2026-10-23, 2026-11-04
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-20, 2026-10-22, 2026-10-23, 2026-11-04, 2026-11-07, 2026-11-14
 #define AI_FIELD(member, label, minimum, maximum)                                                            \
     appendShaderField(                                                                                       \
         registeredFields, registeredAddresses, referenceShader, #member, label,                              \
@@ -50,6 +50,15 @@ AI_ENUM(slope.lightBlend, "Slope / Light blend", 0, 1, R"({"0":"Direct","1":"Lin
 AI_ENUM(slope.tintBlend, "Slope / Tint blend", 0, 1, R"({"0":"Multiply","1":"OKLab"})");
 AI_ENUM(slope.specularAnisotropyDirection, "Slope / Studio anisotropy direction", 0, 2,
         R"({"0":"Fixed Angle","1":"Along Bands","2":"Across Bands"})");
+AI_ENUM(slope.reliefSource, "Slope / Relief source (dz/dc recalculates the view more slowly)", 0, 1,
+        R"({"0":"Iterations","1":"dz/dc"})");
+AI_FIELD(slope.boundaryDarkness, "Slope / Boundary darkness (needs relief source dz/dc)", 0, 1);
+AI_FIELD(slope.boundaryWidth, "Slope / Boundary darkness width", 1, 100);
+AI_FIELD(slope.shadowStrength, "Slope / Cast shadow strength (0 = off)", 0, 1);
+AI_FIELD(slope.shadowLength, "Slope / Cast shadow length (px of a 1280-wide picture)", 10, 500);
+AI_FIELD(slope.shadowSoftness, "Slope / Cast shadow softness", 0.05, 2);
+AI_FIELD(slope.shadowDepth, "Slope / Cast shadow depth (log2 gain on relief height)", -8, 8);
+AI_ENUM(slope.shadowQuality, "Slope / Cast shadow quality", 0, 2, R"({"0":"Fast, 8 taps","1":"Standard, 16 taps","2":"Fine, 32 taps"})");
 AI_ENUM(slope.glossSource, "Slope / Gloss source", 0, 3,
         R"({"0":"Shading","1":"Relief","2":"Aspect","3":"Fine shading"})");
 AI_FIELD(slope.glossIntensity, "Slope / Gloss intensity", 0, 4);

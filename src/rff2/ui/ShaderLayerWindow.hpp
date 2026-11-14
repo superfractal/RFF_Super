@@ -1,5 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-17, 2026-09-22, 2026-09-30
+// Modified by Opus 5.5 on 2026-11-07
 //
 
 #pragma once
@@ -206,7 +207,7 @@ namespace merutilm::rff2 {
                 {{L"Compositing",
                   L"All visual shader effects can be reordered. Palette and Warp supply the coordinates; "
                   L"display encoding and antialiasing remain at the output. Custom compositing can change "
-                  L"brightness. Save Settings or File > Save Appearance Settings stores the order."}});
+                  L"brightness. Save Settings, or Appearance only under Other Saves... in Gallery (Save), stores the order."}});
             window->setWindowCloseFunction([state] {});
             state->refresh();
             SendMessageW(state->list, LB_SETTOPINDEX,

@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-10-01
-// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #pragma once
@@ -32,6 +32,7 @@ namespace merutilm::rff2::workspace {
             if (id == "bloom.threshold" || id == "bloom.radius" || id == "bloom.softness" || id == "bloom.linearAdd")
                 field.dependencies.push_back("bloom.intensity");
             if (id == "color.vignetteShape" || id == "color.vignetteRadius" || id == "color.vignetteRichness") field.dependencies.push_back("color.vignette");
+            if (id == "color.chromaticAberrationStart") field.dependencies.push_back("color.chromaticAberration");
             if (id == "fog.radius" || id == "fog.centerStart" || id == "fog.centerInvert" || id == "fog.rimMask" ||
                 id == "fog.rimMaskBoost" || id == "fog.rimBlur")
                 field.dependencies.push_back("fog.opacity");
@@ -41,6 +42,8 @@ namespace merutilm::rff2::workspace {
             if (id == "palette.glossColor") field.dependencies.push_back("palette.enableGloss");
             if (id == "palette.escapeAngleAmount") field.dependencies.push_back("palette.escapeAngleColoring");
             if (id == "slope.macroRadius") field.dependencies.push_back("slope.macroRelief");
+            if (id == "slope.boundaryDarkness") field.dependencies.push_back("slope.reliefSource");
+            if (id == "slope.boundaryWidth") field.dependencies.insert(field.dependencies.end(), {"slope.reliefSource", "slope.boundaryDarkness"});
             if (id == "slope.iridescence") field.dependencies.insert(field.dependencies.end(), {"slope.depth", "slope.opacity", "studio.use"});
             if (id.starts_with("warp.") && id != "warp.enabled") field.dependencies.push_back("warp.enabled");
             if (id == "warp.octaves") field.dependencies.push_back("warp.source");
@@ -77,6 +80,9 @@ namespace merutilm::rff2::workspace {
                 field.dependencies.insert(field.dependencies.end(), {"slope.depth", "slope.opacity", "slope.specularIntensity"});
             }
             if (id == "slope.specularAnisotropyDirection") field.dependencies.insert(field.dependencies.end(), {"studio.use", "slope.specularAnisotropy"});
+            if (id == "slope.shadowStrength") field.dependencies.insert(field.dependencies.end(), {"slope.depth", "slope.opacity"});
+            if (id == "slope.shadowLength" || id == "slope.shadowSoftness" || id == "slope.shadowDepth" || id == "slope.shadowQuality")
+                field.dependencies.insert(field.dependencies.end(), {"slope.depth", "slope.opacity", "slope.shadowStrength"});
             if (id == "slope.specularPower" || id == "slope.specularColor" ||
                 id == "slope.specularIndependent" || id == "slope.specularZenith" || id == "slope.specularAzimuth")
                 field.dependencies.push_back("studio.use");
@@ -126,6 +132,7 @@ namespace merutilm::rff2::workspace {
                 if (id == "bloom.threshold" || id == "bloom.radius" || id == "bloom.softness" || id == "bloom.linearAdd")
                     return number("bloom.intensity") > 0;
                 if (id == "color.vignetteShape" || id == "color.vignetteRadius" || id == "color.vignetteRichness") return number("color.vignette") > 0;
+                if (id == "color.chromaticAberrationStart") return number("color.chromaticAberration") > 0;
                 if (id == "fog.radius" || id == "fog.centerStart" || id == "fog.centerInvert" || id == "fog.rimMask" ||
                     id == "fog.rimMaskBoost" || id == "fog.rimBlur") {
                     if (number("fog.opacity") <= 0) return false;
@@ -139,6 +146,11 @@ namespace merutilm::rff2::workspace {
                 if (id == "palette.escapeAngleAmount")
                     return values.number<int>("palette.escapeAngleColoring").value_or(0) != int(ShdPalEscapeAngleColoring::NONE);
                 if (id == "slope.macroRadius") return number("slope.macroRelief") > 0;
+                if (id == "slope.boundaryDarkness")
+                    return values.number<int>("slope.reliefSource").value_or(0) == int(ShdReliefSource::DZDC);
+                if (id == "slope.boundaryWidth")
+                    return values.number<int>("slope.reliefSource").value_or(0) == int(ShdReliefSource::DZDC) &&
+                           number("slope.boundaryDarkness") > 0;
                 if (id.starts_with("warp.") && id != "warp.enabled") {
                     if (!on("warp.enabled")) return false;
                     if (id == "warp.octaves" && values.number<int>("warp.source").value_or(0) != int(ShdWarpSource::NOISE)) return false;
@@ -214,6 +226,9 @@ namespace merutilm::rff2::workspace {
                 if (id == "slope.specularAnisotropyDirection") return specular && studio && number("slope.specularAnisotropy") > 0;
                 if (id == "slope.fillZenith" || id == "slope.fillAzimuth") return slope && number("slope.fillIntensity") > 0;
                 if (id == "slope.zenith" || id == "slope.azimuth" || id == "slope.fillIntensity" || id == "slope.shadingBlend") return slope;
+                if (id == "slope.shadowStrength") return slope;
+                if (id == "slope.shadowLength" || id == "slope.shadowSoftness" || id == "slope.shadowDepth" || id == "slope.shadowQuality")
+                    return slope && number("slope.shadowStrength") > 0;
                 if (id == "slope.gamma" || id == "slope.reflectionRatio" || id == "slope.terminatorSoftness") return slope && number("slope.lumaAmount") > 0;
                 if (id == "slope.skyColor" || id == "slope.groundColor") return studio || (slope && number("slope.ambientIntensity") > 0);
                 if (id == "slope.tintResponse" || id == "slope.tintBlend" || id == "slope.shadowChroma")

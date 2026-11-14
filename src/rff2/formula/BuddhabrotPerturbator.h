@@ -1,5 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-26.
+// Modified by Opus 5.5 on 2026-11-07
 //
 
 #pragma once
@@ -35,7 +36,8 @@ namespace merutilm::rff2 {
         dex getDcMaxAsDoubleExp() const override;
 
         // A Buddhabrot pixel has no orbit of its own, so every point reads as inside; render() draws the view.
-        double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const override;
+        double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                       EscapeDerivative *derivative) const override;
         using MandelbrotPerturbator::iterate;
 
         // Fills matrix with 1 + 4 x the orbit density, below Max Iteration; false when interrupted.

@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-05
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #include "NativeDialogs.hpp"
@@ -24,6 +24,7 @@
 #include "CallbackExplore.hpp"
 #include "IOUtilities.h"
 #include "../io/RFFStaticMapBinary.h"
+#include "../io/ThumbnailIO.hpp"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
 #include "workspace/PreviewGeometry.hpp"
 #include "../vulkan/RCC1.hpp"
@@ -218,6 +219,10 @@ namespace merutilm::rff2 {
         const auto* angles = reinterpret_cast<const float*>(renderer->escapeAngleStagingBufferContext->getContext().mappedMemory);
         for (uint32_t i = 0; i < escapeAngleMatrix->getLength(); ++i) escapeAngleMatrix->storeRelaxed(i, angles[i]);
         orbitTrapMatrix->copyFrom(reinterpret_cast<const float*>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
+        if (derivativeMatrix != nullptr && derivativeMatrix->getLength() == renderer->derivativeStagingBufferContext->getLength()) {
+            const auto* derivatives = reinterpret_cast<const float*>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
+            for (uint32_t i = 0; i < derivativeMatrix->getLength(); ++i) derivativeMatrix->storeRelaxed(i, derivatives[i]);
+        }
         renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
         previewUploadPending = false;
         idleCompute = true;
@@ -372,6 +377,12 @@ namespace merutilm::rff2 {
                         orbitTrapMatrix->getPlaneCount() == smoothZoomPreviewTraps->getPlaneCount();
                     if (!angles) clearEscapeAngles();
                     else if (!traps && orbitTrapMatrix != nullptr) orbitTrapMatrix->clear();
+                    // A draft is calculated without dz/dc, so it shows the iteration relief until the full view lands.
+                    if (derivativeMatrix != nullptr) {
+                        for (uint32_t i = 0, length = derivativeMatrix->getLength(); i < length; ++i) {
+                            derivativeMatrix->storeRelaxed(i, EscapeDerivative::EMPTY);
+                        }
+                    }
                     for (uint16_t y = 0; y < fh; ++y) {
                         const auto sy = SmoothZoomMotion::previewPixel(y, ph, fh);
                         for (uint16_t x = 0; x < fw; ++x) {
@@ -479,6 +490,12 @@ namespace merutilm::rff2 {
                 shape.enabled && shape != liveTrapShape) {
                 requests.requestRecompute();
             }
+            // Relief Source turned to dz/dc on a view calculated without it needs the orbits again too.
+            if (wantsDerivatives(attr) && !liveDerivatives) {
+                requests.requestRecompute();
+            }
+            // The palette pass has no Relief Source of its own, so its dz/dc switch follows the setting here.
+            syncDerivativeAvailability();
             // The shader is where a change lands that never recomputes, so the snapshot has to
             // follow it here as well as at a compute - throttled, because a dragged slider asks
             // for this every frame.
@@ -1451,6 +1468,7 @@ namespace merutilm::rff2 {
 
 
     void RenderScene::applyLoadedConfig() {
+        ++viewEpoch;
         pickedFreezeColors.clear();
         // The config restores the location, max-iteration and auto-iteration directly.
         if (attr.fractal.formulaType != FractalFormulaType::MANDELBROT) {
@@ -1642,24 +1660,31 @@ namespace merutilm::rff2 {
         }
     }
 
+    void RenderScene::requestThumbnail(const std::filesystem::path &target, const uint32_t width,
+                                       const std::shared_ptr<ExportProgress> &progress) {
+        if (target.empty() || isPreviewImagesReleased() || getVideoExportActive()) {
+            return;
+        }
+        requests.requestCreateImage(RenderSceneRequests::CreateImageRequest{
+            .downsample = false, .progress = progress, .thumbnail = target, .thumbnailWidth = width,
+            .image = false, .sceneStamp = viewStamp()});
+    }
+
     void RenderScene::applyCreateImage(RenderSceneRequests::CreateImageRequest request) {
         ExportCompletion completion{request.progress};
+        if (!request.image && (request.sceneStamp != viewStamp() || isPreviewImagesReleased())) {
+            // The view it was asked of is gone; a thumbnail of another view would mislabel the file.
+            reportImageSaveProgress(request.progress, completion, request.thumbnail, L"", true);
+            return;
+        }
         if (request.progress) {
             if (request.progress->cancelRequested) {
                 return;
             }
-            request.progress->report(ExportProgress::Phase::RENDERING, L"Rendering image...");
-        }
-        // The dialog runs before the fence wait so cancelling costs nothing, and returns nullptr when closed.
-        if (request.filename.empty()) {
-            const auto path = IOUtilities::ioFileDialog(L"Save Image", Constants::Extension::DESC_IMAGE,
-                                                        IOUtilities::SAVE_FILE, Constants::Extension::IMAGE);
-            if (path == nullptr) {
-                return;
+            if (request.image) {
+                request.progress->report(ExportProgress::Phase::RENDERING, L"Rendering image...");
             }
-            request.filename = *path;
         }
-
         // The compute thread writes the map straight into the persistently mapped staging buffer the GPU
         // samples, and this runs before execute() in the render loop, so the newest presented frame can
         // predate the end of the render. Reading it back saved whatever rows the progressive renderer had
@@ -1677,6 +1702,14 @@ namespace merutilm::rff2 {
         // readbackImageContextToMat clones before unmapping; the inline copy here read mappedMemory after vkUnmapMemory.
         cv::Mat img = readbackImageContextToMat(wc, imgCtx);
         cv::cvtColor(img, img, cv::COLOR_RGBA2BGRA);
+        if (!request.thumbnail.empty() && request.thumbnailWidth > 0) {
+            // Shrunk straight from the full frame, which averages the supersamples the way a downsample would.
+            ThumbnailIO::write(request.thumbnail, img, request.thumbnailWidth);
+        }
+        if (!request.image) {
+            reportImageSaveProgress(request.progress, completion, request.thumbnail, L"", true);
+            return;
+        }
         bool saved = false;
         if (const uint32_t ssaa = attr.render.ssaa; ssaa > 1 && request.downsample) {
             const cv::Mat resized = SsaaResolve::resize(
@@ -1736,6 +1769,14 @@ namespace merutilm::rff2 {
             static_cast<uint64_t>(orbitTrapMatrix->getLength()) * orbitTrapMatrix->getPlaneCount() ==
             renderer->orbitTrapStagingBufferContext->getLength()) {
             orbitTrapMatrix->copyTo(reinterpret_cast<float *>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
+        }
+        // The dz/dc relief goes across whole too; an unreached pixel holds EMPTY, which draws the iteration relief.
+        if (derivativeMatrix != nullptr && renderer->derivativeStagingBufferContext != nullptr &&
+            derivativeMatrix->getLength() == renderer->derivativeStagingBufferContext->getLength()) {
+            auto *derivatives = reinterpret_cast<float *>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
+            for (uint32_t i = 0, length = derivativeMatrix->getLength(); i < length; ++i) {
+                derivatives[i] = derivativeMatrix->loadRelaxed(i);
+            }
         }
 
         // Read one element at a time rather than by block: the compute threads are still writing
@@ -1817,6 +1858,11 @@ namespace merutilm::rff2 {
                         wc.core, width, static_cast<uint32_t>(height) * trapPlanes,
                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
                     trapStaging->fillZero();
+                    const bool derivativesFit = derivativeMatrix != nullptr && iterationMatrix != nullptr &&
+                                                iterationMatrix->getWidth() == width && iterationMatrix->getHeight() == height &&
+                                                derivativeMatrix->getLength() == iterationMatrix->getLength();
+                    auto derivativeStaging = createDerivativeStaging(width, height, derivativesFit);
+                    if (derivativesFit) derivativeStaging->fill(derivativeMatrix->getCanvas());
                     if (iterationMatrix != nullptr && iterationMatrix->getWidth() == width &&
                         iterationMatrix->getHeight() == height) {
                         staging->fill(iterationMatrix->getCanvas());
@@ -1830,7 +1876,10 @@ namespace merutilm::rff2 {
                     renderer->iterationStagingBufferContext = std::move(staging);
                     renderer->escapeAngleStagingBufferContext = std::move(angleStaging);
                     renderer->orbitTrapStagingBufferContext = std::move(trapStaging);
-                    renderer->rendererIteration->resetIterationBuffer(width, height, trapPlanes);
+                    renderer->derivativeStagingBufferContext = std::move(derivativeStaging);
+                    renderer->rendererIteration->resetIterationBuffer(width, height, trapPlanes,
+                                                                      renderer->derivativeStagingBufferContext->getLength());
+                    syncDerivativeAvailability();
                     renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
                     const auto blurExtent = getBlurredImageExtent();
                     const auto presentExtent = getSwapchainRenderContextExtent();
@@ -1856,6 +1905,7 @@ namespace merutilm::rff2 {
                 auto staging = std::move(renderer->iterationStagingBufferContext);
                 auto angleStaging = std::move(renderer->escapeAngleStagingBufferContext);
                 auto trapStaging = std::move(renderer->orbitTrapStagingBufferContext);
+                auto derivativeStaging = std::move(renderer->derivativeStagingBufferContext);
                 // The old renderer cannot go while its surface shader is still compiling.
                 awaitDeferredSlope();
                 renderer.reset();
@@ -1872,6 +1922,7 @@ namespace merutilm::rff2 {
                     renderer->iterationStagingBufferContext = std::move(staging);
                     renderer->escapeAngleStagingBufferContext = std::move(angleStaging);
                     renderer->orbitTrapStagingBufferContext = std::move(trapStaging);
+                    renderer->derivativeStagingBufferContext = std::move(derivativeStaging);
                     const uint32_t iterationWidth = getIterationBufferWidth(attr);
                     const uint32_t iterationHeight = getIterationBufferHeight(attr);
                     // The kept staging buffer decides the plane count, since every frame copies it whole.
@@ -1879,7 +1930,9 @@ namespace merutilm::rff2 {
                     const auto trapPlanes = static_cast<uint32_t>(
                         trapPixels == 0 ? OrbitTrap::PLANE_COUNT
                                         : renderer->orbitTrapStagingBufferContext->getLength() / trapPixels);
-                    renderer->rendererIteration->resetIterationBuffer(iterationWidth, iterationHeight, trapPlanes);
+                    renderer->rendererIteration->resetIterationBuffer(iterationWidth, iterationHeight, trapPlanes,
+                                                                      renderer->derivativeStagingBufferContext->getLength());
+                    syncDerivativeAvailability();
                     renderer->rendererIteration->setMaxIteration(maximum);
                     renderer->rendererIteration->phases = phases;
                     renderer->rendererIteration->previewClock = previewClock;
@@ -1915,6 +1968,7 @@ namespace merutilm::rff2 {
         renderer->rendererSlope->setReliefZoom(attr.shader.slope, attr.fractal.logZoom);
         renderer->rendererSlope->setReliefCap(attr.shader.slope.reliefCapIteration(lastLowestEscaped, lastPeriod));
         renderer->rendererColor->setColor(attr.shader.color, attr.shader.sceneLinear());
+        renderer->rendererLinearInterpolation->setChromaticAberration(attr.shader.color);
         renderer->rendererFog->setFog(attr.shader.fog);
         renderer->rendererSlope->setEffects(attr.shader.effects, attr.shader.sceneLinear());
         renderer->rendererIteration->setEffects(attr.shader.effects);
@@ -1938,8 +1992,13 @@ namespace merutilm::rff2 {
         renderer->rendererDownsampleForBlur->setRescaledResolution(1, {dWidth, dHeight});
         renderer->rendererPresent->setRescaledResolution({sWidth, sHeight});
         const uint32_t trapPlanes = orbitTrapPlaneCountOf(attr);
-        renderer->rendererIteration->resetIterationBuffer(iw, ih, trapPlanes);
+        const bool derivatives = wantsDerivatives(attr);
+        renderer->derivativeStagingBufferContext = createDerivativeStaging(iw, ih, derivatives);
+        derivativeMatrix = derivatives ? std::make_unique<Matrix<float> >(iw, ih) : nullptr;
+        renderer->rendererIteration->resetIterationBuffer(iw, ih, trapPlanes,
+                                                          renderer->derivativeStagingBufferContext->getLength());
         iterationMatrix = std::make_unique<Matrix<double> >(iw, ih);
+        syncDerivativeAvailability();
         renderer->iterationStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<double> >(
             wc.core, iw, ih, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         // The picture a resize seeds carries no angles, so both start at 0.
@@ -1973,6 +2032,45 @@ namespace merutilm::rff2 {
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         renderer->orbitTrapStagingBufferContext->fillZero();
         renderer->rendererIteration->resizeOrbitTrapBuffer(w, h, planes);
+    }
+
+    bool RenderScene::wantsDerivatives(const Attribute &settings) {
+        return settings.shader.slope.reliefSource == ShdReliefSource::DZDC;
+    }
+
+    std::unique_ptr<GraphicsMatrixBuffer<float>> RenderScene::createDerivativeStaging(const uint16_t w, const uint16_t h,
+                                                                                    const bool on) const {
+        auto staging = std::make_unique<GraphicsMatrixBuffer<float> >(
+            wc.core, on ? w : 1, on ? h : 1, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        staging->fillZero();
+        return staging;
+    }
+
+    void RenderScene::matchDerivatives(const Attribute &settings) {
+        if (iterationMatrix == nullptr || renderer == nullptr || renderer->derivativeStagingBufferContext == nullptr) {
+            return;
+        }
+        const bool on = wantsDerivatives(settings);
+        if (on == (derivativeMatrix != nullptr) &&
+            (!on || derivativeMatrix->getLength() == iterationMatrix->getLength())) {
+            return;
+        }
+        // The new buffer starts empty: the compute about to run fills it, and an empty pixel draws the iteration relief.
+        const uint16_t w = iterationMatrix->getWidth();
+        const uint16_t h = iterationMatrix->getHeight();
+        derivativeMatrix = on ? std::make_unique<Matrix<float> >(w, h) : nullptr;
+        renderer->derivativeStagingBufferContext = createDerivativeStaging(w, h, on);
+        renderer->rendererIteration->resizeDerivativeBuffer(renderer->derivativeStagingBufferContext->getLength());
+        syncDerivativeAvailability();
+    }
+
+    void RenderScene::syncDerivativeAvailability() const {
+        if (renderer == nullptr || renderer->derivativeStagingBufferContext == nullptr) return;
+        const bool full = derivativeMatrix != nullptr && iterationMatrix != nullptr &&
+                          derivativeMatrix->getLength() == iterationMatrix->getLength() &&
+                          renderer->derivativeStagingBufferContext->getLength() == derivativeMatrix->getLength();
+        renderer->rendererSlope->setDerivativeAvailable(full);
+        renderer->rendererIteration->setDerivativeGradient(full && wantsDerivatives(attr));
     }
 
     void RenderScene::initRenderer(bool prepareAll) {
@@ -2033,6 +2131,7 @@ namespace merutilm::rff2 {
             releasedMatrix = std::move(iterationMatrix);
             releasedEscapeAngleMatrix = std::move(escapeAngleMatrix);
             releasedOrbitTrapMatrix = std::move(orbitTrapMatrix);
+            releasedDerivativeMatrix = std::move(derivativeMatrix);
             previewImagesReleased = true;
             applyResize();
             return;
@@ -2044,6 +2143,7 @@ namespace merutilm::rff2 {
         std::unique_ptr<Matrix<double> > kept = std::move(releasedMatrix);
         std::unique_ptr<Matrix<float> > keptAngles = std::move(releasedEscapeAngleMatrix);
         std::unique_ptr<OrbitTrapMatrix> keptTraps = std::move(releasedOrbitTrapMatrix);
+        std::unique_ptr<Matrix<float> > keptDerivatives = std::move(releasedDerivativeMatrix);
         if (kept == nullptr) {
             requests.requestRecompute();
             return;
@@ -2061,6 +2161,12 @@ namespace merutilm::rff2 {
                 keptTraps->getPlaneCount() == orbitTrapMatrix->getPlaneCount()) {
                 keptTraps->copyTo(reinterpret_cast<float *>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
                 orbitTrapMatrix = std::move(keptTraps);
+            }
+            if (keptDerivatives != nullptr && derivativeMatrix != nullptr &&
+                keptDerivatives->getLength() == derivativeMatrix->getLength() &&
+                renderer->derivativeStagingBufferContext->getLength() == keptDerivatives->getLength()) {
+                renderer->derivativeStagingBufferContext->fill(keptDerivatives->getCanvas());
+                derivativeMatrix = std::move(keptDerivatives);
             }
             previewUploadPending = false;
             previewSeedGeneration = 0;
@@ -2085,6 +2191,14 @@ namespace merutilm::rff2 {
         }
         if (renderer != nullptr && renderer->orbitTrapStagingBufferContext != nullptr) {
             renderer->orbitTrapStagingBufferContext->fillZero();
+        }
+        if (derivativeMatrix != nullptr) {
+            for (uint32_t i = 0, length = derivativeMatrix->getLength(); i < length; ++i) {
+                derivativeMatrix->storeRelaxed(i, EscapeDerivative::EMPTY);
+            }
+        }
+        if (renderer != nullptr && renderer->derivativeStagingBufferContext != nullptr) {
+            renderer->derivativeStagingBufferContext->fillZero();
         }
     }
 
@@ -2112,6 +2226,7 @@ namespace merutilm::rff2 {
         // The magnified picture keeps its iterations but not the angles or traps laid out for the old view.
         renderer->escapeAngleStagingBufferContext->fillZero();
         renderer->orbitTrapStagingBufferContext->fillZero();
+        renderer->derivativeStagingBufferContext->fillZero();
 
         auto *dst = reinterpret_cast<double *>(staging.getContext().mappedMemory);
         // The magnified picture reads pixels the same pass is overwriting, so the source is taken aside first.
@@ -2252,6 +2367,7 @@ namespace merutilm::rff2 {
 
     bool RenderScene::overwriteMatrixFromMap(const RFFDynamicMapBinary &map) {
         ++previewRevision;
+        ++viewEpoch;
         const uint32_t iw = getIterationBufferWidth(attr);
         const uint32_t ih = getIterationBufferHeight(attr);
         if (iw != map.getMatrix().getWidth() || ih != map.getMatrix().getHeight()) {
@@ -2943,6 +3059,8 @@ namespace merutilm::rff2 {
         Attribute settings = overrideSettings ? *overrideSettings : attr; //clone the attr
         // Nothing reads the trap buffers while the device is idle and no compute runs, so the shape planes come and go here.
         matchOrbitTrapPlanes(settings);
+        matchDerivatives(settings);
+        liveDerivatives = wantsDerivatives(settings);
         liveTrapShape = orbitTrapMatrix != nullptr && orbitTrapMatrix->hasShapePlanes()
                             ? TrapShapeParams::of(settings.shader.palette) : TrapShapeParams{};
         beforeCompute(settings);
@@ -3314,6 +3432,36 @@ namespace merutilm::rff2 {
         currentPerturbator->setTrapShape(traps != nullptr && traps->hasShapePlanes()
                                              ? TrapShapeParams::of(attr.shader.palette) : TrapShapeParams{});
 
+        // dz/dc is kept for the live view only, and only on the flat plane, where one pixel's dc step holds across the view.
+        const bool liveMatrix = angleOutput == nullptr && &matrix == iterationMatrix.get();
+        Matrix<float>* derivatives = liveMatrix && derivativeMatrix != nullptr &&
+                                     derivativeMatrix->getLength() == matrix.getLength() ? derivativeMatrix.get() : nullptr;
+        if (derivatives != nullptr) {
+            for (uint32_t i = 0, length = derivatives->getLength(); i < length; ++i) {
+                derivatives->storeRelaxed(i, EscapeDerivative::EMPTY);
+            }
+        }
+        EscapeDerivative::PixelStep derivativeStep{};
+        if (derivatives != nullptr) {
+            bool sky0 = false, skyX = false, skyY = false;
+            const auto x0 = static_cast<uint16_t>(std::min<uint32_t>(w / 2u, std::max<uint32_t>(w, 2u) - 2u));
+            const auto y0 = static_cast<uint16_t>(std::min<uint32_t>(h / 2u, std::max<uint32_t>(h, 2u) - 2u));
+            const auto c0 = coordinate(x0, y0, &sky0);
+            const auto cx = coordinate(static_cast<uint16_t>(x0 + 1), y0, &skyX);
+            const auto cy = coordinate(x0, static_cast<uint16_t>(y0 + 1), &skyY);
+            const dex scale = currentPerturbator->getDcMaxAsDoubleExp();
+            derivativeStep = {
+                static_cast<double>((cx[0] - c0[0]) / scale), static_cast<double>((cx[1] - c0[1]) / scale),
+                static_cast<double>((cy[0] - c0[0]) / scale), static_cast<double>((cy[1] - c0[1]) / scale)
+            };
+            const bool finiteStep = std::isfinite(derivativeStep.xr) && std::isfinite(derivativeStep.xi) &&
+                                    std::isfinite(derivativeStep.yr) && std::isfinite(derivativeStep.yi);
+            if (w < 2 || h < 2 || sky0 || skyX || skyY || !finiteStep ||
+                effectiveProjection(geometry.fractal.projectionMethod) != FrtProjectionMethod::PLANAR) {
+                derivatives = nullptr;
+            }
+        }
+
 
         std::atomic renderPixelsCount = 0;
 
@@ -3353,7 +3501,8 @@ namespace merutilm::rff2 {
 
         if (buddhabrot) {
             computeBuddhabrot(geometry, w, h, fullW, fullH, matrix, renderPixelsCount);
-        } else if (computeOnGpu(attr, coordinate, w, h, matrix, escapeAngles, traps, renderPixelsCount)) {
+        } else if (derivatives == nullptr &&
+                   computeOnGpu(attr, coordinate, w, h, matrix, escapeAngles, traps, renderPixelsCount)) {
             // The GPU filled the matrix, or was interrupted while doing so.
         } else if (useBoundaryTrace) {
             const uint16_t tileSize = std::clamp<uint16_t>(
@@ -3365,13 +3514,16 @@ namespace merutilm::rff2 {
             const uint32_t numTiles = static_cast<uint32_t>(tilesX) * tilesY;
 
             std::atomic<uint32_t> tileIndex = 0;
-            const auto computePixel = [this, &coordinate, &matrix, escapeAngles, traps, &renderPixelsCount, useWhiteFill,
-                                       maxItValue](const uint16_t x, const uint16_t y) {
+            const auto computePixel = [this, &coordinate, &matrix, escapeAngles, traps, derivatives, &derivativeStep,
+                                       &renderPixelsCount, useWhiteFill, maxItValue](const uint16_t x, const uint16_t y) {
                 bool sky = false;
                 const auto dc = coordinate(x, y, &sky);
                 float angle = 0.0f;
                 OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
-                const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr);
+                EscapeDerivative derivative;
+                const double it = sky ? maxItValue : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr,
+                                                                                derivatives != nullptr ? &derivative : nullptr);
+                if (derivatives != nullptr) derivatives->storeRelaxed(x, y, EscapeDerivative::pack(derivative, derivativeStep));
                 const double stored = (useWhiteFill && it != maxItValue) ? whiteFillValue : it;
                 matrix.storeRelaxed(x, y, stored);
                 if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
@@ -3481,6 +3633,8 @@ namespace merutilm::rff2 {
                                 matrix.storeRelaxed(x, y, stored);
                                 if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
                                 if (traps != nullptr) traps->storeRelaxed(x, y, trap);
+                                // One sample stands for the whole block, so it carries no slope of its own.
+                                if (derivatives != nullptr) derivatives->storeRelaxed(x, y, EscapeDerivative::EMPTY);
                             }
                         }
                     }
@@ -3509,15 +3663,18 @@ namespace merutilm::rff2 {
             // front down as it uploads, which is what leaves this buffer to a single writer.
             auto previewer = ParallelArrayDispatcher<double>(
                 state, matrix, attr.render.threads,
-                [attr, this, &coordinate, escapeAngles, traps, &renderPixelsCount](const uint16_t x, const uint16_t y, uint16_t,
-                                                 uint16_t, float, float, uint32_t, double) {
+                [attr, this, &coordinate, escapeAngles, traps, derivatives, &derivativeStep, &renderPixelsCount](
+                    const uint16_t x, const uint16_t y, uint16_t, uint16_t, float, float, uint32_t, double) {
                     bool sky = false;
                     const auto dc = coordinate(x, y, &sky);
                     float angle = 0.0f;
                     OrbitTrap trap{0.0f, 0.0f, 0.0f, 0.0f};
+                    EscapeDerivative derivative;
                     const double iteration = sky
                                                  ? static_cast<double>(attr.fractal.maxIteration)
-                                                 : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr);
+                                                 : currentPerturbator->iterate(dc[0], dc[1], &angle, traps != nullptr ? &trap : nullptr,
+                                                                               derivatives != nullptr ? &derivative : nullptr);
+                    if (derivatives != nullptr) derivatives->storeRelaxed(x, y, EscapeDerivative::pack(derivative, derivativeStep));
                     if (escapeAngles != nullptr) escapeAngles->storeRelaxed(x, y, angle);
                     if (traps != nullptr) traps->storeRelaxed(x, y, trap);
                     ++renderPixelsCount;
@@ -3717,6 +3874,12 @@ namespace merutilm::rff2 {
         auto &matrix = *iterationMatrix;
         const uint16_t w = matrix.getWidth(), h = matrix.getHeight();
         if (w != getIterationBufferWidth(settings) || h != getIterationBufferHeight(settings)) return;
+        // A reprojected view has no dz/dc of its own, so Slope keeps the iteration relief on it.
+        if (derivativeMatrix != nullptr) {
+            for (uint32_t i = 0, length = derivativeMatrix->getLength(); i < length; ++i) {
+                derivativeMatrix->storeRelaxed(i, EscapeDerivative::EMPTY);
+            }
+        }
         const uint32_t sw = source.getWidth(), sh = source.getHeight();
         const double radians = static_cast<double>(settings.fractal.rotation) * std::numbers::pi / 180.0;
         // Held two pixels inside the source edge, in horizon radii, so every bilinear tap is a computed pixel.

@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-25, 2026-10-28. -->
+<!-- Modified by Opus 5.5 on 2026-10-25, 2026-10-28, 2026-11-07. -->
 # Presets, recovery, and diagnostics
 
 [Manual](user-manual.md) · [Calculation explanation](exploration-and-calculation.md)
@@ -47,7 +47,7 @@ The Shader preset menu groups **Palette**, **Stripe**, **Slope**, **Color**, **F
 
 Palette choices include classic/rainbow, random smooth, cinematic, natural, and glossy families. The visual and numerical behavior of palette interval, smoothing, phase, random recipes, import, and layer blending is covered in the [shader overview](shader-overview.md). Recipe-based palettes retain their preset ID and seed; use the same recipe/seed for reproducibility rather than manually recreating its displayed colors.
 
-**Load KFR Color** opens the palette's KFR Color section, and **Import Color** its Colors from Settings section for RFC and RFSP files; in both, the file is read when chosen and then applied. These are color workflows, not general import of another renderer's entire calculation project. **Save Appearance Settings** writes `.rfsp` files and **Load File** opens them, for reuse within RFF_Super. Keep external texture images available when transferring an appearance.
+**Load KFR Color** opens the palette's KFR Color section, and **Import Color** its Colors from Settings section for RFC and RFSP files; in both, the file is read when chosen and then applied. These are color workflows, not general import of another renderer's entire calculation project. **Appearance only** under Other Saves... in **Gallery (Save)** writes `.rfsp` files and **Gallery (Open)** opens them, for reuse within RFF_Super. Keep external texture images available when transferring an appearance.
 
 Example menu entries are collected from available files. Their count and names can differ between installations; an absent example file is not a missing rendering feature. See the [source menu mapping](feature-coverage.md) and [full shader fields](settings-reference.md).
 

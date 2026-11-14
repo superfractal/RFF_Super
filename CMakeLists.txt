@@ -3,7 +3,7 @@
 # Modified by Opus 5 on 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-18, 2026-08-20, 2026-08-21, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 
 # Modified by GPT-6 on 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
-# Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-18, 2026-10-21, 2026-10-23, 2026-10-26
+# Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-18, 2026-10-21, 2026-10-23, 2026-10-26, 2026-11-07, 2026-11-12
 cmake_minimum_required(VERSION 4.1.2)
 project(RFF_Super)
 
@@ -230,6 +230,12 @@ add_executable(
     src/rff2/ui/SettingsMenu.hpp
     src/rff2/ui/CallbackFile.cpp
     src/rff2/ui/CallbackFile.hpp
+    src/rff2/ui/GalleryWindow.cpp
+    src/rff2/ui/GalleryWindow.hpp
+    src/rff2/io/GalleryIO.cpp
+    src/rff2/io/GalleryIO.hpp
+    src/rff2/io/ThumbnailIO.cpp
+    src/rff2/io/ThumbnailIO.hpp
     src/rff2/ui/CallbackFractal.cpp
     src/rff2/ui/CallbackFractal.hpp
     src/rff2/ui/CallbackRender.cpp
@@ -614,6 +620,14 @@ if(RFF_DISTRIBUTION)
 else()
     target_include_directories(RFF_Super PRIVATE "${CMAKE_SOURCE_DIR}/include")
 endif()
+
+# The Gallery's folder picture (Fluent Emoji, MIT; see NOTICE) is compiled in as bytes, so no file has to ship beside the exe.
+set(RFF_FOLDER_PNG "${CMAKE_SOURCE_DIR}/res/gallery/folder.png")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RFF_FOLDER_PNG}")
+file(READ "${RFF_FOLDER_PNG}" RFF_FOLDER_PNG_HEX HEX)
+string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," RFF_FOLDER_PNG_BYTES "${RFF_FOLDER_PNG_HEX}")
+file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/generated/GalleryFolderPng.inc" CONTENT "${RFF_FOLDER_PNG_BYTES}\n" @ONLY)
+target_include_directories(RFF_Super PRIVATE "${CMAKE_BINARY_DIR}/generated")
 target_include_directories(RFF_Super PRIVATE
     # standard include
     # extern sources

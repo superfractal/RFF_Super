@@ -4,6 +4,7 @@
 // Modified by Opus 5 on 2026-08-14
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-09-25
+// Modified by Opus 5.5 on 2026-11-07, 2026-11-10
 //
 
 #pragma once
@@ -41,6 +42,21 @@ namespace merutilm::rff2 {
         // The returned path keeps its extension, so callers branch on path.extension().
         static std::unique_ptr<std::filesystem::path> ioFileDialogMulti(std::wstring_view title, char type,
             const std::vector<std::pair<std::wstring, std::wstring>> &filters);
+
+        // A file dialog that can explain itself and offer a checkbox.
+        struct FileDialogRequest {
+            std::wstring title;
+            char type = OPEN_FILE;
+            std::vector<std::pair<std::wstring, std::wstring>> filters;
+            // Shown inside the dialog under the file name; empty for none.
+            std::wstring note;
+            // A checkbox under the note; empty for none. checked is read before and written after.
+            std::wstring checkLabel;
+            bool checked = false;
+        };
+
+        // Same results as ioFileDialogMulti, which it falls back to when the newer dialog cannot be created.
+        static std::unique_ptr<std::filesystem::path> fileDialog(FileDialogRequest &request);
 
         static std::unique_ptr<std::filesystem::path> ioDirectoryDialog(std::wstring_view title);
 

@@ -3,7 +3,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-18
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-11-07
 //
 
 #include "DeepMandelbrotPerturbator.h"
@@ -46,7 +46,20 @@ namespace merutilm::rff2 {
     }
 
 
-    double DeepMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const {
+    double DeepMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                                              EscapeDerivative *derivative) const {
+        // Two instantiations, so a render without dz/dc runs the loop it ran before.
+        if (derivative != nullptr) {
+            *derivative = EscapeDerivative{};
+            return iterateOrbit<true>(dcr, dci, escapeAngle, trap, derivative);
+        }
+        return iterateOrbit<false>(dcr, dci, escapeAngle, trap, nullptr);
+    }
+
+
+    template<bool WithDerivative>
+    double DeepMandelbrotPerturbator::iterateOrbit(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                                                   EscapeDerivative *derivative) const {
         if (escapeAngle != nullptr) *escapeAngle = 0.0f;
         if (trap != nullptr) *trap = OrbitTrap{};
         if (state.interruptRequested()) return 0.0;
@@ -62,6 +75,28 @@ namespace merutilm::rff2 {
         dex dzi = dex::ZERO;
         dex zr = dex::ZERO;
         dex zi = dex::ZERO;
+        // D = dcMax * dz/dc, in dex because it starts at dcMax, far below double range at deep zoom.
+        dex ddr = dex::ZERO;
+        dex ddi = dex::ZERO;
+        // Scratch for the D update, apart from temps so the dz arithmetic below is untouched.
+        auto dTemps = std::array<dex, 4>();
+        const dex one = dex::value(1);
+        // D' = a D + b dcMax for complex a and b, written into ddr and ddi.
+        const auto stepDerivative = [&](const dex &ar, const dex &ai, const dex &br, const dex &bi) {
+            dex::mul(&dTemps[0], ar, ddr);
+            dex::mul(&dTemps[1], ai, ddi);
+            dex::sub(&dTemps[0], dTemps[0], dTemps[1]);
+            dex::mul(&dTemps[1], br, dcMax);
+            dex::add(&dTemps[0], dTemps[0], dTemps[1]);
+            dex::mul(&dTemps[2], ar, ddi);
+            dex::mul(&dTemps[3], ai, ddr);
+            dex::add(&dTemps[2], dTemps[2], dTemps[3]);
+            dex::mul(&dTemps[3], bi, dcMax);
+            dex::add(&ddi, dTemps[2], dTemps[3]);
+            dex::cpy(&ddr, dTemps[0]);
+            ddr.try_normalize();
+            ddi.try_normalize();
+        };
 
 
         const dex zrMin = dex::value(-2);
@@ -104,6 +139,8 @@ namespace merutilm::rff2 {
             if (table != nullptr) {
                 if (const DeepPA *mpaPtr = table->lookup(refIteration, dzr, dzi, temps); mpaPtr != nullptr) {
                     const DeepPA &mpa = *mpaPtr;
+                    // The skip is linear in dz and dc, so D follows it as D * A + B * dcMax.
+                    if constexpr (WithDerivative) stepDerivative(mpa.anr, mpa.ani, mpa.bnr, mpa.bni);
 
                     dex::mul(&temps[0], mpa.anr, dzr);
                     dex::mul(&temps[1], mpa.ani, dzi);
@@ -145,6 +182,22 @@ namespace merutilm::rff2 {
 
 
             if (refIteration != maxRefIteration) {
+                if constexpr (WithDerivative) {
+                    // D' = 2 z D + dcMax, with z = Z + dz taken before dz moves on; index 0 is Z = 0, as below.
+                    const uint64_t index = ArrayCompressor::compress(reference->compressor, refIteration);
+                    dex cr;
+                    dex ci;
+                    if (index == 0) {
+                        dex::cpy(&cr, dzr);
+                        dex::cpy(&ci, dzi);
+                    } else {
+                        dex::add(&cr, reference->refReal[index], dzr);
+                        dex::add(&ci, reference->refImag[index], dzi);
+                    }
+                    dex::mul_2exp(&cr, cr, 1);
+                    dex::mul_2exp(&ci, ci, 1);
+                    stepDerivative(cr, ci, one, dex::ZERO);
+                }
                 if (const uint64_t index = ArrayCompressor::compress(reference->compressor, refIteration);
                     index == 0) {
                     dex::cpy(&temps[0], dzr);
@@ -212,6 +265,11 @@ namespace merutilm::rff2 {
             dzi.try_normalize();
             if (cd > bailout2) {
                 if (escapeAngle != nullptr) *escapeAngle = escapeAngleOf(zr0, zi0);
+                if constexpr (WithDerivative) {
+                    const auto dr = static_cast<double>(ddr);
+                    const auto di = static_cast<double>(ddi);
+                    *derivative = EscapeDerivative{zr0, zi0, dr, di, std::isfinite(dr) && std::isfinite(di)};
+                }
                 break;
             }
             if (absIteration % Constants::Fractal::EXIT_CHECK_INTERVAL == 0 && state.interruptRequested()) return 0.0;

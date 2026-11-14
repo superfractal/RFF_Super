@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-08-15.
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-13, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-13, 2026-11-05, 2026-11-07
 //
 
 #pragma once
@@ -57,6 +57,8 @@ namespace merutilm::rff2 {
         void setReliefZoom(const ShdSlopeAttribute &slope, float logZoom) const;
         // The iteration Relief Cap flattens the Lustre relief above, from ShdSlopeAttribute::reliefCapIteration; 0 is off.
         void setReliefCap(double capIteration) const;
+        // Whether the iteration set's dz/dc buffer holds a full map; only the live view's renderer ever has one, so a video renderer keeps Relief Source on Iterations.
+        void setDerivativeAvailable(bool available) const;
 
         // Orders the INITIALIZE stage's relief cache writes after the previous frame's reads, and before this frame's.
         void cmdReliefCacheBeforeWrite(VkCommandBuffer cbh) const;
@@ -72,6 +74,10 @@ namespace merutilm::rff2 {
         void configureDescriptors(std::vector<vkh::DescriptorPtr> &descriptors) override;
 
     private:
+        // What setSlope and setDerivativeAvailable each last set; the shader takes dz/dc only when both hold.
+        mutable bool derivativeRequested = false;
+        mutable bool derivativeAvailable = false;
+
         [[nodiscard]] const vkh::BufferContext &reliefCacheBuffer() const;
     };
 }

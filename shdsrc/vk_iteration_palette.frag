@@ -5,7 +5,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-07
 //
 
 #version 450
@@ -14,7 +14,28 @@
 #define PALETTE_DATA_SET 1
 #define PALETTE_TIME_SET 2
 #define PALETTE_TEXTURE_SET 3
+#define ITERATION_GRADIENT_DZDC
 #include "palette_sampling.glsl"
+
+// Relief Source dz/dc: each pixel's smooth-iteration gradient as two half floats, log2 length low and angle + 4 high; 0 where there is none.
+layout (set = 0, binding = 7) readonly buffer DerivativeSSBO {
+    float values[];
+} derivative_attr;
+
+bool iteration_gradient_dzdc(ivec2 c, out vec2 gradient) {
+    gradient = vec2(0.0);
+    if (iteration_info_attr.derivative_gradient.x == 0u) return false;
+    ivec2 last = ivec2(iteration_info_attr.extent) - 1;
+    ivec2 p = clamp(c, ivec2(0), last);
+    uint index = uint(last.y - p.y) * iteration_info_attr.extent.x + uint(p.x);
+    if (index >= uint(derivative_attr.values.length())) return false;
+    uint bits = floatBitsToUint(derivative_attr.values[index]);
+    if (bits == 0u) return false;
+    vec2 packed = unpackHalf2x16(bits);
+    float angle = packed.y - 4.0;
+    gradient = exp2(packed.x) * vec2(cos(angle), sin(angle));
+    return true;
+}
 #include "orbit_trap_relief.glsl"
 
 #define ESCAPE_ANGLE_NONE 0u

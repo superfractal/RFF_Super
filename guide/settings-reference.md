@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06, 2026-11-07, 2026-11-08. -->
 # RFF_Super complete field reference
 
 Read the [shader feature overview](shader-overview.md) for an explanation of each group, and use the [coverage checklist](shader-coverage.md) to locate features by their source panel. Surface editor names can differ from the registry labels below; see [Surface editor display names](#surface-editor-display-names).
@@ -78,6 +78,9 @@ Field names, choices, and defaults were read from current production form models
 
 | Setting | Fresh default | What changing it does / dependency | Choices or input note |
 | --- | --- | --- | --- |
+| Relief Source | Iterations | Where Slope Shading and Lustre Relief take the fine slope of their relief from. dz/dc takes the exact slope from the derivative calculated with each orbit, so the relief stays smooth up to the boundary of the set; Cycle x Band textures, patterns and Warp follow the band direction from dz/dc too. It recalculates the view, each calculation takes about 8% longer in shallow views and up to about 45% in deep ones, and GPU Perturbation is not used while it is on. Macro Relief and Cavity Shading still read neighboring iterations; the Timeline Editor preview, video export, 360 views and custom formulas keep the Iterations relief. | Iterations / dz/dc |
+| Boundary Darkness | 0 | With Relief Source dz/dc, darkens pixels near the boundary of the set by their distance to it: a thin dark line along the boundary and a shadow beside it. 1 darkens the line to black and the shadow to about a third. Adds no calculation time. | 0 to 1 |
+| Boundary Width | 12 | How far Boundary Darkness reaches, in pixels of a 1280-pixel-wide picture; requires Boundary Darkness above 0. | 1 to 100 |
 | Macro Relief | 0 | Mixes a broader relief normal into the fine normal; 0 uses fine relief only. | 0 to 1 |
 | Macro Radius | 8 | Neighborhood sampled for broad relief; requires Macro Relief. | 1 to 12 |
 | Cavity Intensity | 0 | Darkens cavities to separate recessed details. | 0 to 1 |
@@ -241,6 +244,8 @@ These fields apply separately to Layers 1–4. Check Enabled, Opacity, mask, and
 | Vignette Shape | Ellipse | Ellipse darkens toward the corners in a rounded shape fitted to the frame. Frame runs a band of the same width along all four edges, slightly deeper in the corners. Requires Vignette above zero. | Ellipse, Frame |
 | Vignette Radius | 0.5 | How far the untouched center reaches. With Ellipse, a fraction of the way from the center to the middle of each edge; with Frame, each edge band is (1 − Radius) of half the frame height wide. Requires Vignette above zero. | 0 to 0.95 |
 | Vignette Richness | 0.5 | Saturation added where the vignette begins, so colors deepen before they darken; 0 only darkens. Requires Vignette above zero. | 0 to 2 |
+| Chromatic Aberration | 0 | Separates the colors toward the frame edges like a lens: red is drawn toward the center and blue toward the edges, through a soft rainbow fringe. The value is how many pixels each moves at the corners of a 1080-pixel-high picture and scales with the picture size; 0 is off and draws exactly as before. Applied after Fog and Bloom; with Layer Order on, it moves with the HDR & Tone Mapping layer. | 0 to 32 |
+| Chromatic Aberration Start | 0.25 | Where the fringe begins, from 0 at the center to 1 at the corners; inside it the picture is untouched. Requires Chromatic Aberration above zero. | 0 to 0.95 |
 
 ### Bloom
 
@@ -909,7 +914,7 @@ These controls are in Export Settings (Video Output), which the Timeline Editor 
 | Reset Layer | Restores the selected Texture, Pattern, or Animated Materials layer to its defaults. |
 | Copy to Next Layer | Overwrites the next layer with the current layer's settings. |
 | Move Toward Bottom / Move Toward Top | Swaps neighboring layer slots; available directions depend on the selected slot. |
-| Save Appearance Settings / Load File | Saves appearance settings in `.rfsp`; Load File restores them from an `.rfsp`. Full location/configuration uses `.rfc`. |
+| Gallery (Save) Appearance only / Gallery (Open) | Other Saves... → Appearance only in Gallery (Save) saves appearance settings in `.rfsp`; opening an `.rfsp` in Gallery (Open) restores them. Full location/configuration uses `.rfc`. |
 | Surface: Reset selected value/color | Restores the selected control's default. |
 | Surface: Reset effect | Restores the selected effect category's controls. |
 | Clear added effects (keep base style) | Clears additional surface effect contributions while keeping the base style. |

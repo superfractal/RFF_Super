@@ -5,7 +5,7 @@
 // Modified by Opus 5 on 2026-08-06, 2026-08-16
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-10-01
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-11-07
 //
 
 #include "CustomFormulaPerturbator.h"
@@ -35,8 +35,11 @@ namespace merutilm::rff2 {
         return dex::value(dcMax);
     }
 
-    double CustomFormulaPerturbator::iterate(const dex& dcr, const dex& dci, float* escapeAngle, OrbitTrap* trap) const {
+    double CustomFormulaPerturbator::iterate(const dex& dcr, const dex& dci, float* escapeAngle, OrbitTrap* trap,
+                                             EscapeDerivative* derivative) const {
          if (escapeAngle != nullptr) *escapeAngle = 0.0f;
+         // Custom formulas carry no dz/dc, so Slope keeps its iteration relief for them.
+         if (derivative != nullptr) *derivative = EscapeDerivative{};
          if (trap != nullptr) *trap = OrbitTrap{};
          // If parse failed, return max iteration (treat all points as inside set)
          if (hasParseError) {

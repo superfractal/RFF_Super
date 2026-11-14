@@ -11,6 +11,7 @@
 #include "UnsavedChangesDialog.hpp"
 #include "PipelinePreparationWindow.hpp"
 #include "Application.hpp"
+#include "GalleryWindow.hpp"
 #include "CallbackShader.hpp"
 #include "CallbackFractal.hpp"
 #include "CallbackVideo.hpp"
@@ -125,7 +126,7 @@ namespace merutilm::rff2 {
                     CallbackShader::PALETTE(*settingsMenu, *scene);
                 }
                 if (action == 5) {
-                    CallbackFile::saveCurrentConfig(*scene);
+                    CallbackFile::SAVE_SETTINGS(*settingsMenu, *scene);
                 }
             },
             Utilities::getConfigFile(L"workspace-favorites.txt"));
@@ -522,6 +523,7 @@ namespace merutilm::rff2 {
         }
         const bool dark = darkSettingsMode();
         VideoWindow::applyWorkspaceTheme(dark);
+        GalleryWindow::applyTheme();
         if (scene) {
         }
         applyDarkWindowFrame(masterWindow);
@@ -975,7 +977,7 @@ namespace merutilm::rff2 {
             }
             if ((GetKeyState(VK_CONTROL) & 0x8000) && !(GetKeyState(VK_MENU) & 0x8000) &&
                 message.wParam == 'S') {
-                CallbackFile::saveCurrentConfig(*scene);
+                CallbackFile::SAVE_SETTINGS(*settingsMenu, *scene);
                 return true;
             }
             return workspaceShell && workspaceShell->handleShortcut(message);
@@ -1011,7 +1013,7 @@ namespace merutilm::rff2 {
         window.setListener(WM_KEYDOWN, [this](vkh::GraphicsContextWindowRef, const HWND hwnd,
                                               const WPARAM wparam, const LPARAM lparam) {
             if ((GetKeyState(VK_CONTROL) & 0x8000) && wparam == 'S') {
-                CallbackFile::saveCurrentConfig(*scene);
+                CallbackFile::SAVE_SETTINGS(*settingsMenu, *scene);
                 return static_cast<LRESULT>(0);
             }
             if (scene->runKeyAction(wparam)) {
@@ -1294,6 +1296,8 @@ namespace merutilm::rff2 {
             DestroyWindow(timelineWorkspace);
             timelineWorkspace = nullptr;
         }
+        // It opens files into the scene, so it goes before the scene does.
+        GalleryWindow::close();
         customMenu.reset();
         workspaceShell.reset();
         if (statusFont) {

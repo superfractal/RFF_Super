@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-13, 2026-10-20, 2026-10-23, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-13, 2026-10-20, 2026-10-23, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-14
 //
 
 #include "GPCSlope.hpp"
@@ -275,8 +275,30 @@ namespace merutilm::rff2 {
         slopeUBOHost.set<float>(DescSlope::TARGET_LAYER_COMMON, slope.layerCommon);
         slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_ENVIRONMENT_ROTATION, slope.studioEnvironmentRotation);
         slopeUBOHost.set<float>(DescSlope::TARGET_STUDIO_ENVIRONMENT_FOLLOW, slope.studioEnvironmentFollow);
+        derivativeRequested = slope.reliefSource == ShdReliefSource::DZDC;
+        slopeUBOHost.set<float>(DescSlope::TARGET_SURFACE_RELIEF_SOURCE,
+                                derivativeRequested && derivativeAvailable ? 1.0f : 0.0f);
+        slopeUBOHost.set<float>(DescSlope::TARGET_BOUNDARY_DARKNESS, slope.boundaryDarkness);
+        slopeUBOHost.set<float>(DescSlope::TARGET_BOUNDARY_WIDTH, slope.boundaryWidth);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SHADOW_STRENGTH, slope.shadowStrength);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SHADOW_LENGTH, slope.shadowLength);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SHADOW_SOFTNESS, slope.shadowSoftness);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SHADOW_DEPTH, slope.shadowDepth);
+        slopeUBOHost.set<float>(DescSlope::TARGET_SHADOW_QUALITY, shadowQualityTaps(slope.shadowQuality));
 
         slopeUBO->update();
+    }
+
+    void GPCSlope::setDerivativeAvailable(const bool available) const {
+        using namespace SharedDescriptorTemplate;
+        derivativeAvailable = available;
+        const auto &ubo = getDescriptor(SET_SLOPE).get<vkh::Uniform>(0, DescSlope::BINDING_UBO_SLOPE);
+        auto &host = ubo->getHostObject();
+        const float value = derivativeRequested && derivativeAvailable ? 1.0f : 0.0f;
+        if (host.get<float>(DescSlope::TARGET_SURFACE_RELIEF_SOURCE) == value) return;
+        wc.core.getLogicalDevice().waitDeviceIdle();
+        host.set<float>(DescSlope::TARGET_SURFACE_RELIEF_SOURCE, value);
+        ubo->update();
     }
 
     void GPCSlope::setGroove(const ShdPaletteAttribute &palette) const {

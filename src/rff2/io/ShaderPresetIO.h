@@ -6,7 +6,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #pragma once
@@ -238,6 +238,38 @@ namespace merutilm::rff2 {
 
         // Without the block Relief Cap loads off; another marker is left unread, a bad block fails the stream.
         static void readReliefCap(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Relief Source block, written only off Iterations: uint32 source (1 dz/dc).
+        static constexpr uint32_t RELIEF_SOURCE_MAGIC = 0x31525352; // "RSR1"
+
+        static void writeReliefSource(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Relief Source loads as Iterations; another marker is left unread, a bad block fails the stream.
+        static void readReliefSource(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Boundary Darkness block, written only off the defaults: float32 darkness, float32 width.
+        static constexpr uint32_t BOUNDARY_DARKNESS_MAGIC = 0x314B4442; // "BDK1"
+
+        static void writeBoundaryDarkness(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Boundary Darkness loads off at its default width; another marker is left unread, a bad block fails the stream.
+        static void readBoundaryDarkness(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Chromatic Aberration block, written only off the defaults: float32 amount, float32 start.
+        static constexpr uint32_t CHROMATIC_ABERRATION_MAGIC = 0x31424143; // "CAB1"
+
+        static void writeChromaticAberration(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Chromatic Aberration loads off at its default start; another marker is left unread, a bad block fails the stream.
+        static void readChromaticAberration(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Cast Shadow block, written only off the defaults: float32 strength, length, softness, depth, then uint32 quality.
+        static constexpr uint32_t CAST_SHADOW_MAGIC = 0x31485343; // "CSH1"
+
+        static void writeCastShadow(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block Cast Shadow loads off at its defaults; another marker is left unread, a bad block fails the stream.
+        static void readCastShadow(std::ifstream &in, ShaderAttribute &shader);
 
         // Marks the Orbit Trap look block: float32 offset and speed, four float32 glow color, float32 strength
         // and sharpness, uint32 blend, then float32 border width and border darkness.

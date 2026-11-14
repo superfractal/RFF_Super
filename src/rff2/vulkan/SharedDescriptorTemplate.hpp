@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #pragma once
@@ -100,6 +100,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         // Orbit trap planes held per pixel, the live buffer's in x and the video's zoomed keyframe's in y; a shader's
         // length() of a trap buffer past 2 GiB comes back wrong, so the host says how much it uploaded.
         static constexpr uint32_t TARGET_UBO_ITERATION_TRAP_PLANES = 6;
+        // x is 1 while the palette pass may take the band direction from dz/dc; see GPCIterationPalette::setDerivativeGradient.
+        static constexpr uint32_t TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT = 7;
 
         static constexpr uint32_t TARGET_SSBO_ITERATION_BUFFER = 0;
 
@@ -116,6 +118,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t BINDING_SSBO_CHAOS_DEFOCUS = 5;
         // Each pixel's OrbitTrap, plane-major, copied in from RenderSceneRenderer's staging buffer; iteration plane 0 where there is none.
         static constexpr uint32_t BINDING_SSBO_ORBIT_TRAP = 6;
+        // Each pixel's dz/dc relief gradient, two half floats per float, copied in from RenderSceneRenderer's staging buffer; 0 where there is none.
+        static constexpr uint32_t BINDING_SSBO_DERIVATIVE = 7;
 
         // Sizes both per-pixel caches to the iteration buffer whenever it is resized; the caller then queues their bindings.
         static void resizeCaches(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
@@ -130,6 +134,11 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
                                        const uint32_t trapPlanes, vkh::CommandPoolRef commandPool) {
             resizeFloatCache(descriptor, BINDING_SSBO_ESCAPE_ANGLE, width * height, commandPool);
             resizeOrbitTraps(descriptor, width, height, trapPlanes, commandPool);
+        }
+
+        // floats must equal the staging buffer's length, since the whole staging buffer is copied in; 1 while dz/dc is off.
+        static void resizeDerivatives(vkh::DescriptorRef descriptor, const uint32_t floats, vkh::CommandPoolRef commandPool) {
+            resizeFloatCache(descriptor, BINDING_SSBO_DERIVATIVE, floats, commandPool);
         }
 
         // trapPlanes must equal the staging buffer's, since the whole staging buffer is copied in.
@@ -153,6 +162,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_CANVAS_EXTENT);
             infoManager->reserve<glm::ivec2>(TARGET_UBO_ITERATION_CANVAS_OFFSET);
             infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_PLANES);
+            infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT);
 
             auto bufferManager = vkh::factory::create<vkh::HostDataObjectManager>();
             bufferManager->reserveArray<double>(TARGET_SSBO_ITERATION_BUFFER, 1);
@@ -168,6 +178,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             descManager->appendSSBO(BINDING_SSBO_ESCAPE_ANGLE, STAGE, createFloatCache(core));
             descManager->appendSSBO(BINDING_SSBO_CHAOS_DEFOCUS, STAGE, createFloatCache(core));
             descManager->appendSSBO(BINDING_SSBO_ORBIT_TRAP, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_DERIVATIVE, STAGE, createFloatCache(core));
 
             managers.emplace_back(std::move(descManager));
         }
@@ -556,6 +567,16 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_SLOPE_SPECULAR_ANISOTROPY_DIRECTION = 203;
         // Set per view from the iteration map, not from the settings; see GPCSlope::setReliefCap.
         static constexpr uint32_t TARGET_SURFACE_RELIEF_CAP = 204;
+        // 1 while Relief Source is dz/dc and this renderer holds the live view's dz/dc buffer; see GPCSlope::setDerivativeAvailable.
+        static constexpr uint32_t TARGET_SURFACE_RELIEF_SOURCE = 205;
+        static constexpr uint32_t TARGET_BOUNDARY_DARKNESS = 206;
+        static constexpr uint32_t TARGET_BOUNDARY_WIDTH = 207;
+        // Cast shadow: strength, length, softness, depth and the tap count, in that order.
+        static constexpr uint32_t TARGET_SHADOW_STRENGTH = 208;
+        static constexpr uint32_t TARGET_SHADOW_LENGTH = 209;
+        static constexpr uint32_t TARGET_SHADOW_SOFTNESS = 210;
+        static constexpr uint32_t TARGET_SHADOW_DEPTH = 211;
+        static constexpr uint32_t TARGET_SHADOW_QUALITY = 212;
 
 
 
@@ -742,6 +763,12 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             }
             bufferManager->reserve<float>(TARGET_SLOPE_SPECULAR_ANISOTROPY_DIRECTION);
             bufferManager->reserve<float>(TARGET_SURFACE_RELIEF_CAP);
+            bufferManager->reserve<float>(TARGET_SURFACE_RELIEF_SOURCE);
+            bufferManager->reserve<float>(TARGET_BOUNDARY_DARKNESS);
+            bufferManager->reserve<float>(TARGET_BOUNDARY_WIDTH);
+            for (uint32_t target = TARGET_SHADOW_STRENGTH; target <= TARGET_SHADOW_QUALITY; ++target) {
+                bufferManager->reserve<float>(target);
+            }
 
 
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
@@ -952,6 +979,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_LAYER_QUANTIZE = 39;
         static constexpr uint32_t TARGET_LAYER_VHS = 40;
         static constexpr uint32_t TARGET_LAYER_MONO = 41;
+        static constexpr uint32_t TARGET_CHROMATIC_ABERRATION = 42;
+        static constexpr uint32_t TARGET_CHROMATIC_ABERRATION_START = 43;
 
 
         void configure(const vkh::CoreRef core,
@@ -999,6 +1028,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<float>(TARGET_LAYER_QUANTIZE);
             bufferManager->reserve<float>(TARGET_LAYER_VHS);
             bufferManager->reserve<float>(TARGET_LAYER_MONO);
+            bufferManager->reserve<float>(TARGET_CHROMATIC_ABERRATION);
+            bufferManager->reserve<float>(TARGET_CHROMATIC_ABERRATION_START);
             auto ubo = vkh::factory::create<vkh::Uniform>(core, std::move(bufferManager), vkh::BufferLock::LOCK_UNLOCK, false);
             auto descManager = vkh::factory::create<vkh::DescriptorManager>();
             descManager->appendUBO(BINDING_UBO_LINEAR_INTERPOLATION, STAGE, std::move(ubo));

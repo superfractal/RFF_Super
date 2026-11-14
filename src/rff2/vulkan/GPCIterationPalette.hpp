@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-10, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-18, 2026-08-26
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-11, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-08, 2026-10-12, 2026-10-16, 2026-10-24
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-08, 2026-10-12, 2026-10-16, 2026-10-24, 2026-11-07
 //
 
 #pragma once
@@ -69,7 +69,8 @@ namespace merutilm::rff2 {
         // Copies both staging buffers, the iterations and the escape angles, onto the GPU buffers the passes read.
         void cmdRefreshIterations(VkCommandBuffer cbh, const vkh::BufferContext &iterationSrc,
                                   const vkh::BufferContext &escapeAngleSrc,
-                                  const vkh::BufferContext &orbitTrapSrc) const;
+                                  const vkh::BufferContext &orbitTrapSrc,
+                                  const vkh::BufferContext &derivativeSrc) const;
 
         const vkh::BufferContext &getResultIterationBuffer() const;
 
@@ -77,11 +78,20 @@ namespace merutilm::rff2 {
 
         const vkh::BufferContext &getResultOrbitTrapBuffer() const;
 
+        const vkh::BufferContext &getResultDerivativeBuffer() const;
+
         // trapPlanes is the plane count of the orbit trap staging buffer copied in each frame.
-        void resetIterationBuffer(uint32_t width, uint32_t height, uint32_t trapPlanes);
+        // derivativeFloats is the length of the dz/dc staging buffer, 1 while Relief Source is not dz/dc.
+        void resetIterationBuffer(uint32_t width, uint32_t height, uint32_t trapPlanes, uint32_t derivativeFloats);
 
         // Resizes only the orbit trap buffer, for a staging buffer that changed its plane count.
         void resizeOrbitTrapBuffer(uint32_t width, uint32_t height, uint32_t trapPlanes);
+
+        // Resizes only the dz/dc buffer, for a staging buffer turned on or off.
+        void resizeDerivativeBuffer(uint32_t derivativeFloats);
+
+        // Whether texture, pattern and warp bands follow dz/dc: only while Relief Source is dz/dc and the live dz/dc buffer is full.
+        void setDerivativeGradient(bool on) const;
 
         void setMaxIteration(double maxIteration) const;
 

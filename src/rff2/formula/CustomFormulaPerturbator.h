@@ -4,7 +4,7 @@
 //
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-10-01
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-11-07
 //
 
 #pragma once
@@ -27,7 +27,8 @@ namespace merutilm::rff2 {
         const MandelbrotReference* getReference() const override;
         dex getDcMaxAsDoubleExp() const override;
 
-        double iterate(const dex& dcr, const dex& dci, float* escapeAngle, OrbitTrap* trap) const override;
+        double iterate(const dex& dcr, const dex& dci, float* escapeAngle, OrbitTrap* trap,
+                       EscapeDerivative* derivative) const override;
         using MandelbrotPerturbator::iterate;
     };
 }

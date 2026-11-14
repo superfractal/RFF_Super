@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-11-04
-// Modified by Opus 5.5 on 2026-11-06
+// Modified by Opus 5.5 on 2026-11-06, 2026-11-14
 //
 
 // OpenPBR Surface (ASWF specification 1.1, Apache-2.0) layered over native relief; independent GPL-3.0-only code from its published equations, see NOTICE.
@@ -208,6 +208,8 @@ vec3 openpbr_surface(
     vec3 key = srgb_to_linear(vec3(
         slope_attr.specular_color_r, slope_attr.specular_color_g, slope_attr.specular_color_b
     ));
+    // The cast shadow falls on the key light alone; the fill and the environment stay lit.
+    if (key_shadow < 1.0) key *= key_shadow;
     vec3 sky = srgb_to_linear(vec3(
         slope_attr.sky_color_r, slope_attr.sky_color_g, slope_attr.sky_color_b
     ));

@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-11
 // Modified by Opus 5 on 2026-09-04
 // Modified by GPT-6 on 2026-09-18
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-11-06
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-11-06, 2026-11-07
 //
 
 #include "LightMandelbrotPerturbator.h"
@@ -53,7 +53,20 @@ namespace merutilm::rff2 {
     }
 
 
-    double LightMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const {
+    double LightMandelbrotPerturbator::iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                                               EscapeDerivative *derivative) const {
+        // Two instantiations, so a render without dz/dc runs the loop it ran before.
+        if (derivative != nullptr) {
+            *derivative = EscapeDerivative{};
+            return iterateOrbit<true>(dcr, dci, escapeAngle, trap, derivative);
+        }
+        return iterateOrbit<false>(dcr, dci, escapeAngle, trap, nullptr);
+    }
+
+
+    template<bool WithDerivative>
+    double LightMandelbrotPerturbator::iterateOrbit(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                                                    EscapeDerivative *derivative) const {
         if (escapeAngle != nullptr) *escapeAngle = 0.0f;
         if (trap != nullptr) *trap = OrbitTrap{};
         if (state.interruptRequested()) return 0.0;
@@ -70,6 +83,9 @@ namespace merutilm::rff2 {
         double dzi = 0;
         double zr = 0; // z
         double zi = 0;
+        // D = dcMax * dz/dc; the scale keeps it inside double from the first iteration to the escape.
+        double ddr = 0;
+        double ddi = 0;
 
         double cd = 0;
         double pd = cd;
@@ -99,6 +115,13 @@ namespace merutilm::rff2 {
                     const LightPA &mpa = *mpaPtr;
                     const double dzr1 = mpa.anr * dzr - mpa.ani * dzi + mpa.bnr * dcr1 - mpa.bni * dci1;
                     const double dzi1 = mpa.anr * dzi + mpa.ani * dzr + mpa.bnr * dci1 + mpa.bni * dcr1;
+                    if constexpr (WithDerivative) {
+                        // The skip is linear in dz and dc, so D follows it as D * A + B * dcMax.
+                        const double ddr1 = mpa.anr * ddr - mpa.ani * ddi + mpa.bnr * dcMax;
+                        const double ddi1 = mpa.anr * ddi + mpa.ani * ddr + mpa.bni * dcMax;
+                        ddr = ddr1;
+                        ddi = ddi1;
+                    }
 
                     dzr = dzr1;
                     dzi = dzi1;
@@ -124,6 +147,15 @@ namespace merutilm::rff2 {
 
             if (refIteration != maxRefIteration) {
                 const uint64_t index = ArrayCompressor::compress(reference->compressor, refIteration);
+                if constexpr (WithDerivative) {
+                    // D' = 2 z D + dcMax, with z = Z + dz taken before dz moves on.
+                    const double cr = reference->refReal[index] + dzr;
+                    const double ci = reference->refImag[index] + dzi;
+                    const double ddr1 = 2 * (cr * ddr - ci * ddi) + dcMax;
+                    const double ddi1 = 2 * (cr * ddi + ci * ddr);
+                    ddr = ddr1;
+                    ddi = ddi1;
+                }
                 const double zr1 = reference->refReal[index] * 2 + dzr;
                 const double zi1 = reference->refImag[index] * 2 + dzi;
 
@@ -165,6 +197,9 @@ namespace merutilm::rff2 {
 
             if (cd > bailout2) {
                 if (escapeAngle != nullptr) *escapeAngle = escapeAngleOf(zr, zi);
+                if constexpr (WithDerivative) {
+                    *derivative = EscapeDerivative{zr, zi, ddr, ddi, std::isfinite(ddr) && std::isfinite(ddi)};
+                }
                 break;
             }
 

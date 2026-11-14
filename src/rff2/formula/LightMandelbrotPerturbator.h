@@ -1,7 +1,7 @@
 //
 // Created by Merutilm on 2025-05-10.
 // Modified by GPT-6 on 2026-09-18
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-11-07
 //
 
 #pragma once
@@ -32,7 +32,15 @@ namespace merutilm::rff2 {
 
         using MandelbrotPerturbator::iterate;
 
-        double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap) const override;
+        double iterate(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                       EscapeDerivative *derivative) const override;
+
+    private:
+        template<bool WithDerivative>
+        double iterateOrbit(const dex &dcr, const dex &dci, float *escapeAngle, OrbitTrap *trap,
+                            EscapeDerivative *derivative) const;
+
+    public:
 
         std::unique_ptr<LightMandelbrotPerturbator> reuse(const FractalAttribute &calc, double dcMax, ApproxTableCache &tableRef);
 

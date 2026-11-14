@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01. -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07, 2026-11-11. -->
 # Feature coverage map
 
 [Manual](user-manual.md) · [Shader coverage audit](shader-coverage.md) · [UI gallery](ui-gallery.md)
@@ -14,12 +14,10 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 | Menu action | Description |
 | --- | --- |
 | New Document | [Detailed workflow](workspace-and-files.md) |
-| Load File | [Detailed workflow](workspace-and-files.md) |
+| Gallery (Open) | [Detailed workflow](workspace-and-files.md#gallery-open-and-gallery-save) |
+| Gallery (Save) | [Detailed workflow](workspace-and-files.md#gallery-open-and-gallery-save) |
 | Save Settings | [Detailed workflow](workspace-and-files.md) |
-| Save Settings As | [Detailed workflow](workspace-and-files.md) |
-| Save Appearance Settings | [Detailed workflow](shader-overview.md) |
-| Save Map | [Detailed workflow](workspace-and-files.md) |
-| Save Image | [Detailed workflow](workspace-and-files.md) |
+| Appearance only (Gallery (Save), Other Saves...) | [Detailed workflow](shader-overview.md) |
 
 ## Fractal
 
@@ -88,6 +86,7 @@ Menu visibility is configurable. Local AI appearance and Timeline AI Edit are hi
 | Timeline Editor | [Detailed workflow](animation-and-export.md) |
 | Video Encoding | [Detailed workflow](animation-and-export.md) |
 | Generate Keyframes | [Detailed workflow](animation-and-export.md) |
+| Attach Thumbnails to Keyframes | [Detailed workflow](workspace-and-files.md) |
 | Export Video | [Detailed workflow](animation-and-export.md) |
 
 ## View

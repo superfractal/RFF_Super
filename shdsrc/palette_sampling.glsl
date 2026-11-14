@@ -5,7 +5,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-07
 //
 
 #define NONE 0
@@ -66,6 +66,8 @@ layout (set = 0, binding = 0) uniform IterUBO {
     ivec2 canvas_offset;
     // Orbit trap planes per pixel the host uploaded (x); read in place of length(), which fails past 2 GiB.
     uvec2 orbit_trap_planes;
+    // x is 1 while Relief Source is dz/dc and the live view's dz/dc buffer is bound.
+    uvec2 derivative_gradient;
 } iteration_info_attr;
 
 layout (set = 0, binding = 1) buffer IterSSBO {
@@ -901,9 +903,19 @@ double fetch_iteration(ivec2 c) {
     return iteration_attr.iterations[(e.y - 1 - c.y) * e.x + c.x];
 }
 
+#ifdef ITERATION_GRADIENT_DZDC
+// Defined by the including pass: the exact gradient from dz/dc in iteration_gradient's axes, false where the pixel has none.
+bool iteration_gradient_dzdc(ivec2 c, out vec2 gradient);
+#endif
+
 // Iteration gradient in iterations per pixel. Interior neighbours hold no usable value, so those
 // sides fall back to a one-sided difference against the centre pixel.
 vec2 iteration_gradient(ivec2 c, double center) {
+#ifdef ITERATION_GRADIENT_DZDC
+    // Relief Source dz/dc: the exact gradient, which stays whole where the neighbours' iterations jump.
+    vec2 exact;
+    if (iteration_gradient_dzdc(c, exact)) return exact;
+#endif
     double mv = iteration_info_attr.max_value;
     ivec2 extent = ivec2(iteration_info_attr.extent);
     double l = fetch_iteration(c + ivec2(-1, 0));

@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-21
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-21, 2026-11-07
 //
 
 #pragma once
@@ -59,6 +59,8 @@ namespace merutilm::rff2 {
         std::unique_ptr<GraphicsMatrixBuffer<float> > escapeAngleStagingBufferContext = nullptr;
         // Each pixel's OrbitTrap, plane-major (OrbitTrap::PLANE_COUNT planes of the iteration buffer's size), copied beside the angles.
         std::unique_ptr<GraphicsMatrixBuffer<float> > orbitTrapStagingBufferContext = nullptr;
+        // Each pixel's packed dz/dc relief gradient while Relief Source is dz/dc, a single float otherwise; copied beside the traps.
+        std::unique_ptr<GraphicsMatrixBuffer<float> > derivativeStagingBufferContext = nullptr;
 
         // Off unless the Debug menu turns it on, and pushed in by RenderScene before each frame: the
         // renderer is thrown away and rebuilt on every resize, so the switch cannot live here.
@@ -274,6 +276,7 @@ namespace merutilm::rff2 {
             vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), iterationStagingBufferContext->getContext());
             vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), escapeAngleStagingBufferContext->getContext());
             vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), orbitTrapStagingBufferContext->getContext());
+            vkh::BufferContext::flush(wc.core.getLogicalDevice().getLogicalDeviceHandle(), derivativeStagingBufferContext->getContext());
         }
 
 
@@ -309,7 +312,8 @@ namespace merutilm::rff2 {
 
             rendererIteration->cmdRefreshIterations(
                 wc.getCommandBuffer().getCommandBufferHandle(frameIndex), iterationStagingBufferContext->getContext(),
-                escapeAngleStagingBufferContext->getContext(), orbitTrapStagingBufferContext->getContext());
+                escapeAngleStagingBufferContext->getContext(), orbitTrapStagingBufferContext->getContext(),
+                derivativeStagingBufferContext->getContext());
 
             auto &ctx = rendererIteration->getResultIterationBuffer();
             vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, ctx.buffer, 0, ctx.bufferSize,
@@ -319,6 +323,9 @@ namespace merutilm::rff2 {
                                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             auto &trapCtx = rendererIteration->getResultOrbitTrapBuffer();
             vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, trapCtx.buffer, 0, trapCtx.bufferSize,
+                                                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+            auto &derivativeCtx = rendererIteration->getResultDerivativeBuffer();
+            vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, derivativeCtx.buffer, 0, derivativeCtx.bufferSize,
                                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
             // [BARRIER] Safe-copy iteration buffer
@@ -539,6 +546,7 @@ namespace merutilm::rff2 {
             iterationStagingBufferContext = nullptr;
             escapeAngleStagingBufferContext = nullptr;
             orbitTrapStagingBufferContext = nullptr;
+            derivativeStagingBufferContext = nullptr;
         }
     };
 }

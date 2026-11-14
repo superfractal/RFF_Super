@@ -1,6 +1,6 @@
 <!-- Modified by GPT-6 on 2026-09-11, 2026-09-24, 2026-09-25, 2026-09-30, 2026-10-01 -->
 <!-- Modified by GPT-6 on 2026-09-25. -->
-<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25 -->
+<!-- Modified by Opus 5.5 on 2026-10-04, 2026-10-25, 2026-11-07, 2026-11-10 -->
 
 <p align="center">
   <img src="res/icon.png" alt="RFF_Super application icon" width="112" height="112">
@@ -63,10 +63,10 @@ Use **Windows x64** with a suitable **Vulkan-capable GPU and driver**. Keep the 
 
 ### Make your first image
 
-1. Launch `bin/RFF_Super.exe` and use **File > Load File** to open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
+1. Launch `bin/RFF_Super.exe`, choose **File > Gallery (Open)**, go to the `guide/examples` folder from its drive along the top, and open the supplied [example settings](guide/examples/source-2.rfc). Download the file first if you are browsing on GitHub.
 2. Wait for the fractal calculation to finish. Open **Surface Effects** and start with the palette or lighting controls.
 3. Change one setting and choose **Apply & Render**. Use **Ctrl+F** to find a control, or compare appearances in the Comparison module.
-4. Choose **File → Save Settings As** and a new `.rfc` filename to keep your version. After that, **Ctrl+S** updates that file. Use **Save Image** to export the rendered picture.
+4. Choose **File → Gallery (Save)**, type a name in **Name** and choose **Save Work** to keep your version: the settings and an image of it, side by side. After that, **Ctrl+S** updates the settings file.
 5. For a zoom film, continue with [animation and export](guide/animation-and-export.md): generate source keyframes, edit the timeline, then export.
 
 The [illustrated settings guide](guide/SETTINGS_GUIDE.md) includes downloadable examples and explains what each adjustment changes. To switch the interface language, use **View → Language / 言語** and restart the application.

@@ -3,6 +3,7 @@
 // Modified by Opus 5 on 2026-08-15, 2026-08-19, 2026-08-21, 2026-08-24, 2026-08-31
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by GPT-6 on 2026-09-10, 2026-09-13, 2026-09-16, 2026-09-19, 2026-09-23, 2026-09-25, 2026-09-30, 2026-10-03
+// Modified by Opus 5.5 on 2026-11-08
 //
 
 #version 450
@@ -53,6 +54,9 @@ layout(set = 1, binding = 0) uniform LinearInterpolationUBO{
     float layer_quantize;
     float layer_vhs;
     float layer_mono;
+    // Appended at the tail to keep existing offsets fixed (must match DescLinearInterpolation reserve order).
+    float chromatic_aberration;
+    float chromatic_aberration_start;
 } linear_interpolation_attr;
 
 layout(location = 0) out vec4 color;
@@ -100,6 +104,46 @@ vec4 apply_dither(vec4 c, ivec2 coord) {
 vec4 safeTexelFetch(sampler2D tex, ivec2 coord, ivec2 texSize) {
     ivec2 clampedCoord = clamp(coord, ivec2(0), texSize - ivec2(1));
     return texelFetch(tex, clampedCoord, 0);
+}
+
+// The canvas sampler is nearest, so sub-pixel offsets are blended here from the four surrounding texels.
+vec3 canvas_bilinear(vec2 pixel, ivec2 texSize) {
+    vec2 p = pixel - 0.5;
+    ivec2 base = ivec2(floor(p));
+    vec2 f = p - vec2(base);
+    vec3 a = safeTexelFetch(canvas, base, texSize).rgb;
+    vec3 b = safeTexelFetch(canvas, base + ivec2(1, 0), texSize).rgb;
+    vec3 c = safeTexelFetch(canvas, base + ivec2(0, 1), texSize).rgb;
+    vec3 d = safeTexelFetch(canvas, base + ivec2(1, 1), texSize).rgb;
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// Original RFF_Super lens fringe, GPL-3.0-only; see NOTICE.
+// Returns the change to add: samples along the radius at most 1.5 pixels apart, so red is drawn toward the center and blue toward the edges.
+vec3 chromatic_fringe(ivec2 coord, ivec2 texSize) {
+    vec2 size = vec2(texSize);
+    vec2 center = 0.5 * size;
+    vec2 offset = vec2(coord) + 0.5 - center;
+    float r = length(offset) / length(center);
+    float start = clamp(linear_interpolation_attr.chromatic_aberration_start, 0.0, 0.95);
+    float k = linear_interpolation_attr.chromatic_aberration * size.y / 1080.0 * smoothstep(start, 1.0, r) / length(center);
+    if (k <= 0.0) {
+        return vec3(0.0);
+    }
+    int count = clamp(int(ceil(2.0 * k * length(offset) / 1.5)) + 1, 9, 65);
+    vec3 base = texelFetch(canvas, coord, 0).rgb;
+    vec3 sum = vec3(0.0);
+    vec3 weight = vec3(0.0);
+    for (int i = 0; i < count; i++) {
+        float t = float(i) / float(count - 1);
+        vec2 at = center + offset * (1.0 + (t - 0.5) * 2.0 * k);
+        // A sample past the frame takes the pixel's own color, so the edge row is not smeared into a colored band.
+        bool inside = all(greaterThanEqual(at, vec2(0.0))) && all(lessThanEqual(at, size));
+        vec3 w = max(vec3(0.0), 1.0 - abs(vec3(t) - vec3(1.0, 0.5, 0.0)) * 1.6);
+        sum += (inside ? canvas_bilinear(at, texSize) : base) * w;
+        weight += w;
+    }
+    return sum / weight - base;
 }
 
 // Krzysztof Narkowicz's 2015 curve fit to the ACES RRT+ODT, not the ACES transform itself.
@@ -215,6 +259,12 @@ void main() {
         c = (center + near + diagonal) / 25;
     } else {
         c = texelFetch(canvas, coord, 0);
+    }
+
+    // With Layer Order on, the fringe goes with the Tone Map layer, which sits where the unordered path applies it.
+    bool fringe = linear_interpolation_attr.chromatic_aberration > 0.0 && (!ordered_layers() || layer_is(26));
+    if (fringe) {
+        c.rgb += chromatic_fringe(coord, texSize);
     }
 
     if (ordered_layers()) {

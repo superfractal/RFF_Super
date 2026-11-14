@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-11-01, 2026-11-04
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-11-01, 2026-11-04, 2026-11-08
 //
 
 #pragma once
@@ -513,6 +513,8 @@ namespace merutilm::rff2::workspace {
                 color.vignetteRadius = kept.vignetteRadius;
                 color.vignetteRichness = kept.vignetteRichness;
                 color.vignetteShape = kept.vignetteShape;
+                color.chromaticAberration = kept.chromaticAberration;
+                color.chromaticAberrationStart = kept.chromaticAberrationStart;
             }
             selected = 0;
             record(std::move(before), std::move(source));

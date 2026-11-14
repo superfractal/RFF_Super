@@ -1,15 +1,9 @@
 {
   "File": {
     "New Document": true,
-    "Save Settings": true,
-    "Save Map": true,
-    "Save Image": true,
-    "Save Location / Settings": true,
-    "Load Map": true,
-    "Load Image": true,
-    "Load Location / Settings": true,
-    "Save Appearance Settings": true,
-    "Load Appearance Settings": true
+    "Gallery (Open)": true,
+    "Gallery (Save)": true,
+    "Save Settings": true
   },
   "Fractal": {
     "Reference": true,

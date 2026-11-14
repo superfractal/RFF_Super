@@ -1,7 +1,7 @@
 //
 // Created by Opus 5 on 2026-09-01
 // Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-21, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-04, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-04, 2026-11-01, 2026-11-07
 //
 
 #include "PreferencesIO.h"
@@ -89,6 +89,20 @@ namespace merutilm::rff2 {
                 keyframeSnap() = snap;
             }
         }
+
+        if (hasMoreBytes(in)) {
+            bool saves = thumbnailsForSaves();
+            bool keyframes = thumbnailsForKeyframes();
+            uint8_t size = thumbnailSize();
+            IOUtilities::readAndDecode(in, &saves);
+            IOUtilities::readAndDecode(in, &keyframes);
+            IOUtilities::readAndDecode(in, &size);
+            if (!in.fail() && size <= MAX_THUMBNAIL_SIZE) {
+                thumbnailsForSaves() = saves;
+                thumbnailsForKeyframes() = keyframes;
+                thumbnailSize() = size;
+            }
+        }
     }
 
     void PreferencesIO::save() {
@@ -108,5 +122,8 @@ namespace merutilm::rff2 {
         IOUtilities::encodeAndWrite(out, showSettingDescriptions());
         IOUtilities::encodeAndWrite(out, previewLoadThreads());
         IOUtilities::encodeAndWrite(out, keyframeSnap());
+        IOUtilities::encodeAndWrite(out, thumbnailsForSaves());
+        IOUtilities::encodeAndWrite(out, thumbnailsForKeyframes());
+        IOUtilities::encodeAndWrite(out, thumbnailSize());
     }
 } // namespace merutilm::rff2

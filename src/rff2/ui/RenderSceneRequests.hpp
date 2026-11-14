@@ -4,6 +4,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-23
 // Modified by Opus 5 on 2026-08-26
 // Modified by GPT-6 on 2026-09-14, 2026-09-23
+// Modified by Opus 5.5 on 2026-11-07, 2026-11-14
 //
 
 #pragma once
@@ -24,6 +25,13 @@ namespace merutilm::rff2 {
             std::filesystem::path filename;
             bool downsample = true;
             std::shared_ptr<ExportProgress> progress;
+            // A thumbnail of the same frame written here too, thumbnailWidth pixels across; empty for none.
+            std::filesystem::path thumbnail;
+            uint32_t thumbnailWidth = 0;
+            // False for a thumbnail alone: no picture file and no dialog asking for one.
+            bool image = true;
+            // The view the thumbnail was asked for; a request outlived by another view is dropped.
+            uint64_t sceneStamp = 0;
         };
 
         std::atomic<bool> defaultAttrRequested = false;
@@ -62,11 +70,18 @@ namespace merutilm::rff2 {
             recomputeRequested = true;
         }
 
-        void requestCreateImage(const std::filesystem::path &filename = {},
+        void requestCreateImage(const std::filesystem::path &filename,
                                 const bool downsample = true,
                                 const std::shared_ptr<ExportProgress> &progress = {}) {
             std::scoped_lock lock(createImageMutex);
             pendingCreateImages.push_back(CreateImageRequest{filename, downsample, progress});
+            createImageRequested.store(true, std::memory_order_release);
+        }
+
+        // Queues a request built by the caller, thumbnail fields included.
+        void requestCreateImage(CreateImageRequest request) {
+            std::scoped_lock lock(createImageMutex);
+            pendingCreateImages.push_back(std::move(request));
             createImageRequested.store(true, std::memory_order_release);
         }
 

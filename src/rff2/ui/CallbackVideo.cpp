@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01, 2026-11-05, 2026-11-07
 //
 
 #include "NativeDialogs.hpp"
@@ -24,6 +24,7 @@
 #include "VideoWindow.hpp"
 #include "../io/RFFStaticMapBinary.h"
 #include "../io/RFFOrbitTrapBinary.h"
+#include "../io/ThumbnailIO.hpp"
 #include "../io/MapLimits.hpp"
 #include "../preset/shader/bloom/ShdBloomPresets.h"
 #include "../preset/shader/fog/ShdFogPresets.h"
@@ -628,6 +629,13 @@ namespace merutilm::rff2 {
                 message(nullptr, L"Cannot save the keyframe settings. Generation has stopped.",
                                        L"Keyframe generation", MB_OK | MB_ICONERROR);
                 return;
+            }
+            // Asked for per run: a run writes hundreds of keyframes, and a static one has its picture already.
+            if (!videoSettings.data.isStatic && PreferencesIO::thumbnailsForKeyframes()) {
+                scene.requestThumbnail(ThumbnailIO::pathFor(configPath), PreferencesIO::thumbnailWidth());
+                if (!thread.waitUntil([&scene] { return !scene.getRequests().createImageRequested; })) {
+                    return;
+                }
             }
             logZoom -= increment;
             nextFrame = true;

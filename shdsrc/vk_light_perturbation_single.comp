@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 8/24/26.
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-12, 2026-11-06
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-12, 2026-11-06, 2026-11-14
 //
 
 // Derived from Merutilm RFF 2.3.0 shaders/src/vk_iterate.comp (single precision), GPL-3.0; see NOTICE.
@@ -173,6 +173,15 @@ void main() {
     s.dzi = d.dzi;
     s.pd = d.pd;
     s.cd = d.cd;
+
+    // Float stopped at FLOAT_ESCAPE2, not at the bailout, so the point it stopped on gets the double bailout test first.
+    if (left_float_range) {
+        const dvec2 z = reference.orbit[uint(s.ref_iteration)] + dvec2(s.dzr, s.dzi);
+        s.cd = z.x * z.x + z.y * z.y;
+        if (s.cd > params.bailout2) {
+            s.status = STATUS_FINISHED;
+        }
+    }
 
     for (uint step = 0; left_float_range && s.status == STATUS_RUNNING && step < DOUBLE_TAIL_STEPS; ++step) {
         if (s.iteration >= params.max_iteration) {

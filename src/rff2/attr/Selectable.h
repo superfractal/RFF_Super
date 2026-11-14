@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-07, 2026-11-14
 //
 
 #pragma once
@@ -25,6 +25,8 @@
 #include "ShdStudioEnvironmentSource.h"
 #include "ShdStudioMaterialModel.h"
 #include "ShdAnisotropyDirection.h"
+#include "ShdReliefSource.h"
+#include "ShdShadowQuality.h"
 #include "ShdSurfaceStyle.h"
 #include "ShdSlopeLightBlend.h"
 #include "ShdSlopeShadingBlend.h"
@@ -252,6 +254,21 @@ namespace merutilm::rff2 {
                     FIXED_ANGLE,
                     ALONG_BANDS,
                     ACROSS_BANDS
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdReliefSource>) {
+                using enum ShdReliefSource;
+                return {
+                    ITERATIONS,
+                    DZDC
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdShadowQuality>) {
+                using enum ShdShadowQuality;
+                return {
+                    FAST,
+                    STANDARD,
+                    FINE
                 };
             }
             if constexpr (std::is_same_v<E, ShdStudioEnvironmentSource>) {
@@ -748,6 +765,23 @@ namespace merutilm::rff2 {
                     case FIXED_ANGLE: return L"Fixed Angle";
                     case ALONG_BANDS: return L"Along Bands";
                     case ACROSS_BANDS: return L"Across Bands";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdReliefSource>) {
+                switch (value) {
+                    using enum ShdReliefSource;
+                    case ITERATIONS: return L"Iterations";
+                    case DZDC: return L"dz/dc";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdShadowQuality>) {
+                switch (value) {
+                    using enum ShdShadowQuality;
+                    case FAST: return L"Fast (8 Taps)";
+                    case STANDARD: return L"Standard (16 Taps)";
+                    case FINE: return L"Fine (32 Taps)";
                     default: break;
                 }
             }

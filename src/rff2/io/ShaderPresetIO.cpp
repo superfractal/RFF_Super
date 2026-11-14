@@ -8,7 +8,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
 //
 
 #include "ShaderPresetIO.h"
@@ -60,6 +60,12 @@ namespace merutilm::rff2 {
 
         bool validReliefCap(const float periods) {
             return finiteInRange(periods, 0.0f, 8.0f);
+        }
+
+        bool validCastShadow(const ShdSlopeAttribute &slope) {
+            return finiteInRange(slope.shadowStrength, 0.0f, 1.0f) && finiteInRange(slope.shadowLength, 10.0f, 500.0f) &&
+                   finiteInRange(slope.shadowSoftness, 0.05f, 2.0f) && finiteInRange(slope.shadowDepth, -8.0f, 8.0f) &&
+                   enumInRange(slope.shadowQuality, 0, 2);
         }
 
         bool validOpenPbr(const ShdStudioAttribute &studio) {
@@ -550,13 +556,17 @@ namespace merutilm::rff2 {
             studio.environmentIntensity < 0.0f || studio.environmentIntensity > 8.0f ||
             studio.clearcoat < 0.0f ||
             studio.clearcoat > 1.0f || studio.clearcoatRoughness < 0.04f ||
-            studio.clearcoatRoughness > 1.0f || !validOpenPbr(studio) || !enumInRange(slope.specularAnisotropyDirection, 0, 2)) {
+            studio.clearcoatRoughness > 1.0f || !validOpenPbr(studio) || !enumInRange(slope.specularAnisotropyDirection, 0, 2) ||
+            !enumInRange(slope.reliefSource, 0, 1) || !(slope.boundaryDarkness >= 0.0f && slope.boundaryDarkness <= 1.0f) ||
+            !(slope.boundaryWidth >= 1.0f && slope.boundaryWidth <= 100.0f) || !validCastShadow(slope)) {
             return false;
         }
 
         const auto &color = shader.color;
         if (!NumericSettingLimits::vignette(color.vignette) || !NumericSettingLimits::vignetteRadius(color.vignetteRadius) ||
-            !NumericSettingLimits::vignetteRichness(color.vignetteRichness) || !enumInRange(color.vignetteShape, 0, 1)) {
+            !NumericSettingLimits::vignetteRichness(color.vignetteRichness) || !enumInRange(color.vignetteShape, 0, 1) ||
+            !NumericSettingLimits::chromaticAberration(color.chromaticAberration) ||
+            !NumericSettingLimits::chromaticAberrationStart(color.chromaticAberrationStart)) {
             return false;
         }
         const auto &fog = shader.fog;
@@ -1890,6 +1900,171 @@ namespace merutilm::rff2 {
             return;
         }
         shader.slope.reliefCap = periods;
+    }
+
+    void ShaderPresetIO::writeReliefSource(std::ostream &out, const ShaderAttribute &shader) {
+        // On Iterations the file stays as it was.
+        if (shader.slope.reliefSource == ShdReliefSource::ITERATIONS) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, RELIEF_SOURCE_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.slope.reliefSource));
+    }
+
+    void ShaderPresetIO::readReliefSource(std::ifstream &in, ShaderAttribute &shader) {
+        shader.slope.reliefSource = ShdReliefSource::ITERATIONS;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != RELIEF_SOURCE_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t source = 0;
+        IOUtilities::readAndDecode(in, &source);
+        if (in.fail() || source > static_cast<uint32_t>(ShdReliefSource::DZDC)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.reliefSource = static_cast<ShdReliefSource>(source);
+    }
+
+    void ShaderPresetIO::writeBoundaryDarkness(std::ostream &out, const ShaderAttribute &shader) {
+        // At the defaults the file stays as it was.
+        const ShdSlopeAttribute defaults{};
+        if (shader.slope.boundaryDarkness == defaults.boundaryDarkness && shader.slope.boundaryWidth == defaults.boundaryWidth) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, BOUNDARY_DARKNESS_MAGIC);
+        IOUtilities::encodeAndWrite(out, shader.slope.boundaryDarkness);
+        IOUtilities::encodeAndWrite(out, shader.slope.boundaryWidth);
+    }
+
+    void ShaderPresetIO::readBoundaryDarkness(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdSlopeAttribute defaults{};
+        shader.slope.boundaryDarkness = defaults.boundaryDarkness;
+        shader.slope.boundaryWidth = defaults.boundaryWidth;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != BOUNDARY_DARKNESS_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        float darkness = 0.0f;
+        float width = 0.0f;
+        IOUtilities::readAndDecode(in, &darkness);
+        IOUtilities::readAndDecode(in, &width);
+        if (in.fail() || !(darkness >= 0.0f && darkness <= 1.0f) || !(width >= 1.0f && width <= 100.0f)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        shader.slope.boundaryDarkness = darkness;
+        shader.slope.boundaryWidth = width;
+    }
+
+    void ShaderPresetIO::writeChromaticAberration(std::ostream &out, const ShaderAttribute &shader) {
+        // At the defaults the file stays as it was.
+        const ShdColorAttribute defaults{};
+        const auto &c = shader.color;
+        if (c.chromaticAberration == defaults.chromaticAberration && c.chromaticAberrationStart == defaults.chromaticAberrationStart) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, CHROMATIC_ABERRATION_MAGIC);
+        IOUtilities::encodeAndWrite(out, c.chromaticAberration);
+        IOUtilities::encodeAndWrite(out, c.chromaticAberrationStart);
+    }
+
+    void ShaderPresetIO::readChromaticAberration(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdColorAttribute defaults{};
+        auto &c = shader.color;
+        c.chromaticAberration = defaults.chromaticAberration;
+        c.chromaticAberrationStart = defaults.chromaticAberrationStart;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != CHROMATIC_ABERRATION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        float amount = 0.0f;
+        float from = 0.0f;
+        IOUtilities::readAndDecode(in, &amount);
+        IOUtilities::readAndDecode(in, &from);
+        if (in.fail() || !NumericSettingLimits::chromaticAberration(amount) ||
+            !NumericSettingLimits::chromaticAberrationStart(from)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        c.chromaticAberration = amount;
+        c.chromaticAberrationStart = from;
+    }
+
+    void ShaderPresetIO::writeCastShadow(std::ostream &out, const ShaderAttribute &shader) {
+        // At the defaults the file stays as it was.
+        const ShdSlopeAttribute defaults{};
+        const auto &s = shader.slope;
+        if (s.shadowStrength == defaults.shadowStrength && s.shadowLength == defaults.shadowLength &&
+            s.shadowSoftness == defaults.shadowSoftness && s.shadowDepth == defaults.shadowDepth &&
+            s.shadowQuality == defaults.shadowQuality) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, CAST_SHADOW_MAGIC);
+        IOUtilities::encodeAndWrite(out, s.shadowStrength);
+        IOUtilities::encodeAndWrite(out, s.shadowLength);
+        IOUtilities::encodeAndWrite(out, s.shadowSoftness);
+        IOUtilities::encodeAndWrite(out, s.shadowDepth);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(s.shadowQuality));
+    }
+
+    void ShaderPresetIO::readCastShadow(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdSlopeAttribute defaults{};
+        auto &s = shader.slope;
+        s.shadowStrength = defaults.shadowStrength;
+        s.shadowLength = defaults.shadowLength;
+        s.shadowSoftness = defaults.shadowSoftness;
+        s.shadowDepth = defaults.shadowDepth;
+        s.shadowQuality = defaults.shadowQuality;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != CAST_SHADOW_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        ShdSlopeAttribute read = defaults;
+        uint32_t quality = 0;
+        IOUtilities::readAndDecode(in, &read.shadowStrength);
+        IOUtilities::readAndDecode(in, &read.shadowLength);
+        IOUtilities::readAndDecode(in, &read.shadowSoftness);
+        IOUtilities::readAndDecode(in, &read.shadowDepth);
+        IOUtilities::readAndDecode(in, &quality);
+        read.shadowQuality = static_cast<ShdShadowQuality>(quality);
+        if (in.fail() || quality > static_cast<uint32_t>(ShdShadowQuality::FINE) || !validCastShadow(read)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        s.shadowStrength = read.shadowStrength;
+        s.shadowLength = read.shadowLength;
+        s.shadowSoftness = read.shadowSoftness;
+        s.shadowDepth = read.shadowDepth;
+        s.shadowQuality = read.shadowQuality;
     }
 
     void ShaderPresetIO::writeEffectStyles(std::ostream &out, const ShaderAttribute &shader) {
@@ -3494,6 +3669,10 @@ namespace merutilm::rff2 {
         writeOpenPbr(out, shader);
         writeAnisotropyDirection(out, shader);
         writeReliefCap(out, shader);
+        writeReliefSource(out, shader);
+        writeBoundaryDarkness(out, shader);
+        writeChromaticAberration(out, shader);
+        writeCastShadow(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -3679,6 +3858,10 @@ namespace merutilm::rff2 {
         readOpenPbr(in, s);
         readAnisotropyDirection(in, s);
         readReliefCap(in, s);
+        readReliefSource(in, s);
+        readBoundaryDarkness(in, s);
+        readChromaticAberration(in, s);
+        readCastShadow(in, s);
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");
             return false;

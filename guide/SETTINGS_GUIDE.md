@@ -1,6 +1,6 @@
 <!-- Created by GPT-6 on 2026-09-24. -->
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-30, 2026-10-01. -->
-<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-28, 2026-11-01, 2026-11-05. -->
+<!-- Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-28, 2026-11-01, 2026-11-05, 2026-11-14. -->
 # RFF_Super settings guide
 
 Learn what each group of settings changes, see before-and-after renders, and understand calculation settings. The instructions are reviewed against the **October 4, 2026** source tree. Images and their recorded measurements retain their original capture dates; see [validation](validation.md).
@@ -41,7 +41,7 @@ The overview now includes more images alongside the explanations. The **[24 addi
 
 Fractal comparisons below are actual renders. The six workflow diagrams in the animation section explain timeline, audio, camera, and export behavior; they are labeled illustrations, not application screenshots or additional rendering benchmarks.
 
-The supplied `1.rfc` and `2.rfc` from `C:\video_frame\10` provide these two locations. The pictures are real RFF_Super Vulkan renders, not illustrative mockups. They are reduced to **800 × 450**, with **2× SSAA in each dimension**, Clarity 1, and Precision Level −7. The log zoom is adjusted by `log10(800/1280)` to preserve the original field of view. The supplied files are preserved unchanged.
+Two supplied settings files, `1.rfc` and `2.rfc`, provide these two locations. The pictures are real RFF_Super Vulkan renders, not illustrative mockups. They are reduced to **800 × 450**, with **2× SSAA in each dimension**, Clarity 1, and Precision Level −7. The log zoom is adjusted by `log10(800/1280)` to preserve the original field of view. The supplied files are preserved unchanged.
 
 | Location 1: overview | Location 2: detail |
 | --- | --- |
