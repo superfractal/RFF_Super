@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03
+// Modified by Opus 5.5 on 2026-10-03, 2026-11-15
 //
 
 #pragma once
@@ -11,8 +11,8 @@
 
 namespace merutilm::rff2::workspace {
     struct TimelineTransportLayout {
-        // Play/Pause, Stop and Loop.
-        std::array<RECT, 3> buttons{};
+        // Reverse, Play/Pause, Stop and Loop.
+        std::array<RECT, 4> buttons{};
         std::array<RECT, 4> fields{};
         RECT separator{};
         RECT status{};

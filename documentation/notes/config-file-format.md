@@ -1,5 +1,16 @@
 # Config File Format (ConfigIO)
 
+## Timeline Reverse (2026-11-15)
+
+Modified by Opus 5.5 on 2026-11-15. The timeline gains Reverse (default off), which runs the video
+from the deepest keyframe out to the first; keys and holds keep their depths. RFC appends TRV1
+(uint32 0x31565254) after CSH1 and before BDB1, and the timeline file (RFVT) appends it after the
+overlay timing block; both are followed by 1 as uint32. TRV1 is written only while Reverse is on,
+so every other file is byte-identical to before. The reader looks at the next marker and leaves
+anything other than TRV1 unread; a missing block loads Reverse off. A partial block or a value
+above 1 rejects the load. Readers without TRV1 open such a timeline file running forward; an RFC
+reader that also reads BDB1 rejects the file. Versions and existing offsets are unchanged.
+
 ## Cast Shadow (2026-11-14)
 
 Modified by Opus 5.5 on 2026-11-14. Slope gains Shadow Strength (0 to 1, default 0 = off), Shadow

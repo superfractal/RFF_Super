@@ -220,7 +220,7 @@ namespace merutilm::rff2 {
         for (uint32_t i = 0; i < escapeAngleMatrix->getLength(); ++i) escapeAngleMatrix->storeRelaxed(i, angles[i]);
         orbitTrapMatrix->copyFrom(reinterpret_cast<const float*>(renderer->orbitTrapStagingBufferContext->getContext().mappedMemory));
         if (derivativeMatrix != nullptr && derivativeMatrix->getLength() == renderer->derivativeStagingBufferContext->getLength()) {
-            const auto* derivatives = reinterpret_cast<const float*>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
+            const auto* derivatives = reinterpret_cast<const EscapeDerivative::Packed*>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
             for (uint32_t i = 0; i < derivativeMatrix->getLength(); ++i) derivativeMatrix->storeRelaxed(i, derivatives[i]);
         }
         renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
@@ -1773,7 +1773,7 @@ namespace merutilm::rff2 {
         // The dz/dc relief goes across whole too; an unreached pixel holds EMPTY, which draws the iteration relief.
         if (derivativeMatrix != nullptr && renderer->derivativeStagingBufferContext != nullptr &&
             derivativeMatrix->getLength() == renderer->derivativeStagingBufferContext->getLength()) {
-            auto *derivatives = reinterpret_cast<float *>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
+            auto *derivatives = reinterpret_cast<EscapeDerivative::Packed *>(renderer->derivativeStagingBufferContext->getContext().mappedMemory);
             for (uint32_t i = 0, length = derivativeMatrix->getLength(); i < length; ++i) {
                 derivatives[i] = derivativeMatrix->loadRelaxed(i);
             }
@@ -1878,7 +1878,7 @@ namespace merutilm::rff2 {
                     renderer->orbitTrapStagingBufferContext = std::move(trapStaging);
                     renderer->derivativeStagingBufferContext = std::move(derivativeStaging);
                     renderer->rendererIteration->resetIterationBuffer(width, height, trapPlanes,
-                                                                      renderer->derivativeStagingBufferContext->getLength());
+                                                                      renderer->derivativeStagingBufferContext->getLength() * EscapeDerivative::FLOATS_PER_PIXEL);
                     syncDerivativeAvailability();
                     renderer->rendererIteration->setMaxIteration(static_cast<double>(lastMaxIteration));
                     const auto blurExtent = getBlurredImageExtent();
@@ -1931,7 +1931,7 @@ namespace merutilm::rff2 {
                         trapPixels == 0 ? OrbitTrap::PLANE_COUNT
                                         : renderer->orbitTrapStagingBufferContext->getLength() / trapPixels);
                     renderer->rendererIteration->resetIterationBuffer(iterationWidth, iterationHeight, trapPlanes,
-                                                                      renderer->derivativeStagingBufferContext->getLength());
+                                                                      renderer->derivativeStagingBufferContext->getLength() * EscapeDerivative::FLOATS_PER_PIXEL);
                     syncDerivativeAvailability();
                     renderer->rendererIteration->setMaxIteration(maximum);
                     renderer->rendererIteration->phases = phases;
@@ -1994,9 +1994,9 @@ namespace merutilm::rff2 {
         const uint32_t trapPlanes = orbitTrapPlaneCountOf(attr);
         const bool derivatives = wantsDerivatives(attr);
         renderer->derivativeStagingBufferContext = createDerivativeStaging(iw, ih, derivatives);
-        derivativeMatrix = derivatives ? std::make_unique<Matrix<float> >(iw, ih) : nullptr;
+        derivativeMatrix = derivatives ? std::make_unique<Matrix<EscapeDerivative::Packed> >(iw, ih) : nullptr;
         renderer->rendererIteration->resetIterationBuffer(iw, ih, trapPlanes,
-                                                          renderer->derivativeStagingBufferContext->getLength());
+                                                          renderer->derivativeStagingBufferContext->getLength() * EscapeDerivative::FLOATS_PER_PIXEL);
         iterationMatrix = std::make_unique<Matrix<double> >(iw, ih);
         syncDerivativeAvailability();
         renderer->iterationStagingBufferContext = std::make_unique<GraphicsMatrixBuffer<double> >(
@@ -2038,9 +2038,9 @@ namespace merutilm::rff2 {
         return settings.shader.slope.reliefSource == ShdReliefSource::DZDC;
     }
 
-    std::unique_ptr<GraphicsMatrixBuffer<float>> RenderScene::createDerivativeStaging(const uint16_t w, const uint16_t h,
-                                                                                    const bool on) const {
-        auto staging = std::make_unique<GraphicsMatrixBuffer<float> >(
+    std::unique_ptr<GraphicsMatrixBuffer<EscapeDerivative::Packed>> RenderScene::createDerivativeStaging(
+        const uint16_t w, const uint16_t h, const bool on) const {
+        auto staging = std::make_unique<GraphicsMatrixBuffer<EscapeDerivative::Packed> >(
             wc.core, on ? w : 1, on ? h : 1, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         staging->fillZero();
         return staging;
@@ -2058,9 +2058,10 @@ namespace merutilm::rff2 {
         // The new buffer starts empty: the compute about to run fills it, and an empty pixel draws the iteration relief.
         const uint16_t w = iterationMatrix->getWidth();
         const uint16_t h = iterationMatrix->getHeight();
-        derivativeMatrix = on ? std::make_unique<Matrix<float> >(w, h) : nullptr;
+        derivativeMatrix = on ? std::make_unique<Matrix<EscapeDerivative::Packed> >(w, h) : nullptr;
         renderer->derivativeStagingBufferContext = createDerivativeStaging(w, h, on);
-        renderer->rendererIteration->resizeDerivativeBuffer(renderer->derivativeStagingBufferContext->getLength());
+        renderer->rendererIteration->resizeDerivativeBuffer(renderer->derivativeStagingBufferContext->getLength() *
+                                                            EscapeDerivative::FLOATS_PER_PIXEL);
         syncDerivativeAvailability();
     }
 
@@ -2143,7 +2144,7 @@ namespace merutilm::rff2 {
         std::unique_ptr<Matrix<double> > kept = std::move(releasedMatrix);
         std::unique_ptr<Matrix<float> > keptAngles = std::move(releasedEscapeAngleMatrix);
         std::unique_ptr<OrbitTrapMatrix> keptTraps = std::move(releasedOrbitTrapMatrix);
-        std::unique_ptr<Matrix<float> > keptDerivatives = std::move(releasedDerivativeMatrix);
+        std::unique_ptr<Matrix<EscapeDerivative::Packed> > keptDerivatives = std::move(releasedDerivativeMatrix);
         if (kept == nullptr) {
             requests.requestRecompute();
             return;
@@ -3434,7 +3435,7 @@ namespace merutilm::rff2 {
 
         // dz/dc is kept for the live view only, and only on the flat plane, where one pixel's dc step holds across the view.
         const bool liveMatrix = angleOutput == nullptr && &matrix == iterationMatrix.get();
-        Matrix<float>* derivatives = liveMatrix && derivativeMatrix != nullptr &&
+        Matrix<EscapeDerivative::Packed>* derivatives = liveMatrix && derivativeMatrix != nullptr &&
                                      derivativeMatrix->getLength() == matrix.getLength() ? derivativeMatrix.get() : nullptr;
         if (derivatives != nullptr) {
             for (uint32_t i = 0, length = derivatives->getLength(); i < length; ++i) {

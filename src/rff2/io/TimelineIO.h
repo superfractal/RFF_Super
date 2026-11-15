@@ -2,7 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
-// Modified by Opus 5.5 on 2026-11-01
+// Modified by Opus 5.5 on 2026-11-01, 2026-11-15
 //
 
 #pragma once
@@ -30,6 +30,7 @@ namespace merutilm::rff2 {
         // bytes to the block below; the marker is what tells the two apart.
         static constexpr uint32_t CONFIG_BLOCK_MAGIC = 0x424C5456; // "VTLB"
         static constexpr uint32_t ROTATION_TIME_MAGIC = 0x314D5452; // "RTM1"
+        static constexpr uint32_t DIRECTION_MAGIC = 0x31565254; // "TRV1"
 
         static bool save(const std::filesystem::path &path, const VidTimelineAttribute &timeline);
 
@@ -57,6 +58,10 @@ namespace merutilm::rff2 {
 
         static void writeRotation(std::ostream &out, const VidTimelineAttribute &timeline);
         static void readRotation(std::ifstream &in, VidTimelineAttribute &out);
+
+        // TRV1 block, written only while Reverse is on, so every other file stays byte-identical.
+        static void writeDirection(std::ostream &out, const VidTimelineAttribute &timeline);
+        static void readDirection(std::ifstream &in, VidTimelineAttribute &timeline);
 
         // The same behind CONFIG_BLOCK_MAGIC. The read leaves the timeline untouched when the
         // marker is not the one written, which is also where it stops: past an unknown field

@@ -136,7 +136,7 @@ namespace merutilm::rff2::workspace {
                        L"smooth.\nSlower: choosing dz/dc calculates the view again, and each calculation takes about 8% "
                        L"longer in shallow views and up to about 45% longer in deep ones. GPU Perturbation is not used while "
                        L"it is on, so a view it would calculate is calculated on the CPU, which can take many times longer. "
-                       L"It keeps about 12 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, "
+                       L"It keeps about 24 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, "
                        L"360 views, drafts shown while navigating and custom formulas keep the Iterations relief.");
         section.number("boundaryDarkness", &Settings::boundaryDarkness, L"Boundary Darkness", 0.0f, 1.0f);
         section.number("boundaryWidth", &Settings::boundaryWidth, L"Boundary Width", 1.0f, 100.0f);

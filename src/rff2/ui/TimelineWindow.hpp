@@ -2,7 +2,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-24, 2026-08-26, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-10, 2026-10-11, 2026-10-25, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-10, 2026-10-11, 2026-10-25, 2026-11-01, 2026-11-15
 //
 
 #pragma once
@@ -205,6 +205,8 @@ namespace merutilm::rff2 {
         RECT fullscreenButton = {};
         // Plays while stopped or paused, and pauses while playing.
         RECT playButton = {};
+        // Turns the whole timeline around: the video runs from the deepest keyframe out to the first.
+        RECT reverseButton = {};
         RECT stopButton = {};
         RECT loopButton = {};
         RECT zoomPresetButton = {};
@@ -262,6 +264,7 @@ namespace merutilm::rff2 {
         bool hoverTheme = false;
         bool hoverFullscreen = false;
         bool hoverPlay = false;
+        bool hoverReverse = false;
         bool hoverStop = false;
         bool hoverLoop = false;
         bool hoverZoomPreset = false;
@@ -513,6 +516,9 @@ namespace merutilm::rff2 {
 
         [[nodiscard]] float viewSpan() const;
 
+        // -1 while the timeline is reversed, where the axis runs deep to shallow from the left.
+        [[nodiscard]] float axisSign() const;
+
         [[nodiscard]] float viewDepthAt(int x) const;
 
         // Zoom holds take width on the axis: each spans the distance its zoom would have covered meanwhile.
@@ -563,6 +569,8 @@ namespace merutilm::rff2 {
         void toggleFullscreen();
 
         void setPlaying(bool play);
+
+        void toggleReversed();
 
         void stopPlayback();
 

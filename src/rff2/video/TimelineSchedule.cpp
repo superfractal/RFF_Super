@@ -3,6 +3,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
 // Modified by Opus 5 on 2026-08-25, 2026-08-31
 // Modified by GPT-6 on 2026-09-23, 2026-09-26, 2026-09-30
+// Modified by Opus 5.5 on 2026-11-15
 //
 
 #include "TimelineSchedule.hpp"
@@ -113,6 +114,7 @@ namespace merutilm::rff2 {
         schedule.startDepth = startDepth;
         schedule.endDepth = std::min(endDepth, startDepth);
         schedule.uniformSpeed = clampSpeed(fallbackSpeed);
+        schedule.reversed = timeline.reversed;
 
         const VidTimelineTrack *activeSpeedTrack = timeline.enabled
                                                        ? findTrack(timeline, vidTimelineTargetId(VidTimelineTarget::SPEED))
@@ -304,6 +306,24 @@ namespace merutilm::rff2 {
     }
 
     double TimelineSchedule::timeAt(const float depth) const {
+        if (!reversed) {
+            return forwardTimeAt(depth);
+        }
+        // Run backward, a hold is reached after its own length rather than before it.
+        double ownHold = 0.0;
+        for (const auto &hold: holds) {
+            if (hold.depth == depth) {
+                ownHold += hold.seconds;
+            }
+        }
+        return std::max(totalSeconds - forwardTimeAt(depth) - ownHold, 0.0);
+    }
+
+    float TimelineSchedule::depthAt(const double sec) const {
+        return forwardDepthAt(reversed ? totalSeconds - sec : sec);
+    }
+
+    double TimelineSchedule::forwardTimeAt(const float depth) const {
         double held = 0.0f;
         for (const auto &hold: holds) {
             if (hold.depth > depth) {
@@ -313,7 +333,7 @@ namespace merutilm::rff2 {
         return integralAt(depth) + held;
     }
 
-    float TimelineSchedule::depthAt(const double sec) const {
+    float TimelineSchedule::forwardDepthAt(const double sec) const {
         if (sec <= 0.0f) {
             return startDepth;
         }

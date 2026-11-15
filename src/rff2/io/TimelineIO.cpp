@@ -3,7 +3,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31, 2026-09-01
 // Modified by Opus 5 on 2026-08-25, 2026-08-26
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-26, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-28, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-28, 2026-11-01, 2026-11-15
 //
 
 #include "TimelineIO.h"
@@ -513,6 +513,36 @@ namespace merutilm::rff2 {
         }
     }
 
+    void TimelineIO::writeDirection(std::ostream &out, const VidTimelineAttribute &timeline) {
+        if (!timeline.reversed) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, DIRECTION_MAGIC);
+        IOUtilities::encodeAndWrite(out, uint32_t{1});
+    }
+
+    void TimelineIO::readDirection(std::ifstream &in, VidTimelineAttribute &timeline) {
+        timeline.reversed = false;
+        if (in.fail() || !hasMore(in)) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != DIRECTION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t reversed = 0;
+        IOUtilities::readAndDecode(in, &reversed);
+        if (in.fail() || reversed > 1) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        timeline.reversed = reversed != 0;
+    }
+
     void TimelineIO::writeConfigBlock(std::ostream &out, const VidTimelineAttribute &timeline) {
         IOUtilities::encodeAndWrite(out, CONFIG_BLOCK_MAGIC);
         writeTimeline(out, timeline, false);
@@ -563,6 +593,7 @@ namespace merutilm::rff2 {
         writeOverlayIterations(out, timeline.legacyOverlay());
         writeIterationAppearance(out, timeline);
         writeOverlayTiming(out, timeline);
+        writeDirection(out, timeline);
         out.close();
         if (out.fail() || !IOUtilities::commitTemporaryFile(temporary, path)) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -600,6 +631,7 @@ namespace merutilm::rff2 {
         readOverlayIterations(in, loadedTimeline.zoomOverlay);
         readIterationAppearance(in, loadedTimeline);
         readOverlayTiming(in, loadedTimeline);
+        readDirection(in, loadedTimeline);
         try {
             AudioTimelineIO::resolvePaths(loadedTimeline.audio, path);
         } catch (const std::filesystem::filesystem_error &) {

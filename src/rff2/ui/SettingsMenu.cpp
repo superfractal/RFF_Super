@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-09, 2026-08-10, 2026-08-11, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-16, 2026-08-17, 2026-08-18, 2026-08-19, 2026-08-20, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-03
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07, 2026-11-10
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07, 2026-11-10, 2026-11-15
 //
 
 #include "NativeDialogs.hpp"
@@ -591,7 +591,7 @@ namespace merutilm::rff2 {
         currentMenu = addChildMenu(menubar, "Video");
         addWorkspaceItem(currentMenu, "Keyframes", 2, 3, CallbackVideo::DATA_SETTINGS);
         addWorkspaceItem(currentMenu, "Color Animation", 2, 0, CallbackVideo::ANIMATION_SETTINGS);
-        addChildItem(currentMenu, "Timeline Editor", CallbackVideo::TIMELINE_EDITOR);
+        addChildItem(currentMenu, "Timeline (Unstable)", CallbackVideo::TIMELINE_EDITOR);
         // Taken up the next time the Timeline Editor preloads its previews.
         static constexpr uint8_t PRELOAD_THREAD_CHOICES[] = {0, 1, 2, 4, 6, 8, 12, 16};
         constexpr UINT lastPreloadChoice = UINT(std::size(PRELOAD_THREAD_CHOICES) - 1);

@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21
 // Modified by Opus 5 on 2026-08-10, 2026-08-19
 // Modified by GPT-6 on 2026-09-15, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-25, 2026-11-05
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-13, 2026-10-25, 2026-11-05, 2026-11-15
 //
 
 #pragma once
@@ -34,7 +34,7 @@ namespace merutilm::rff2 {
         ShaderAttribute liveShader;
         TimelineEvaluator timelineEvaluator;
         std::unique_ptr<TimelineAnimationPhases> animationIntegrator;
-        std::array<double, 3> animationScheduleKey{};
+        std::array<double, 4> animationScheduleKey{};
         bool animationInputsChanged = true;
         bool submitTimingLog = false;
         double gpuTimeoutMs = 2000.0;

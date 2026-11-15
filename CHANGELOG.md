@@ -1,6 +1,22 @@
 <!-- Modified by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-08. -->
-<!-- Modified by Opus 5.5 on 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-16, 2026-10-17, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05, 2026-11-06, 2026-11-07, 2026-11-08, 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14. -->
+<!-- Modified by Opus 5.5 on 2026-09-29, 2026-09-30, 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-16, 2026-10-17, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-28, 2026-10-29, 2026-11-01, 2026-11-02, 2026-11-04, 2026-11-05, 2026-11-06, 2026-11-07, 2026-11-08, 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-15. -->
 # Update History
+
+## 2026/11/15
+
+* **3.2.2.1 - Reverse Timeline**
+  * Added Reverse (Timeline Editor, left of Play / Pause): the whole timeline turns around, so the video opens on the deepest keyframe, past it by Extra Final Zoom-in, and zooms out to the first. The preview, playback and video export all run this way, and the timeline can be edited from the deep end.
+    * While it is on, the deepest keyframe stands at the left of the timeline, and Distance, the Time ruler and playback count from there; Home and End go to the first and last frames of the reversed video.
+    * Keys and zoom holds stay on the keyframes they were placed at, and each stretch of the zoom keeps its speed, so the video is as long as before and turning Reverse off brings back the same timeline. Undo takes it back like any other edit.
+    * Color animation, texture and pattern scrolling, Constant Period rotation, the zoom and iteration text with its display times, and the audio still run forward in time.
+    * Reverse off, the default, renders exactly as before. Timeline files and settings files retain it; older files open with it off. A settings file saved with Reverse on needs this version or later to open, and earlier versions open such a timeline file running forward.
+  * The Timeline Editor opens from Timeline (Unstable) in the Video menu and Open Timeline (Unstable) in the Export workspace, which name it as still unstable. A menu-visibility file that hides Timeline Editor keeps it hidden.
+  * In Gallery (Save), the bar along the bottom now starts at the left edge of the cards, under the folder lists, and no longer shows Saves into: with the folder's path; the folder path along the top shows where the files go.
+  * Also save the map has moved from the bar along the bottom of Gallery (Save) to the Settings menu at the top right, as Save Work Also Saves the Map. It still only adds the compressed map to Save Work, is greyed out in Gallery (Open), and is now kept after the Gallery closes and RFF_Super restarts; it starts off.
+  * In Gallery (Open), a double-click or Enter now opens the kind listed first on the card, the settings before the location, the map, the image and the appearance, whichever kind the list is narrowed to; Images no longer opens the image of a work that has settings. The details panel describes that same file, and its Open button sits on top.
+* **Fixes**
+  * After a file is read with Load KFR File or Load Settings File (Palette), pressing Enter now applies the colors with Apply KFR Colors or Apply Colors instead of opening the file selection again. After Browse... chooses a texture image or an audio file (Timeline Editor), or Color... chooses a color, the field takes the choice and Enter applies it instead of opening the selection again.
+  * With Relief Source dz/dc, the relief, Effects such as Ripples, and texture and pattern layers and Warp with UV Source Cycle x Band no longer break into fine curved lines and pixel-sized grain that fan out across the picture and stay at any SSAA; they now follow the bands smoothly. dz/dc now keeps about 24 bytes of memory per rendered pixel instead of 12, and the Relief Source description in the program says the same.
 
 ## 2026/11/14
 

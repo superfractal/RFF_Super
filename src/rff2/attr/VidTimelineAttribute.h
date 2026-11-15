@@ -3,7 +3,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-31
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-11-01
+// Modified by Opus 5.5 on 2026-11-01, 2026-11-15
 //
 
 #pragma once
@@ -92,6 +92,8 @@ namespace merutilm::rff2 {
         // Video seconds Constant Period turns between, holding its angle outside them; an end of 0 means the video end.
         float rotationStartTime = 0.0f;
         float rotationEndTime = 0.0f;
+        // Runs the video from the deepest keyframe out to the first; keys and holds keep their depths.
+        bool reversed = false;
 
         [[nodiscard]] bool validRotationTime() const {
             return std::isfinite(rotationStartTime) && std::isfinite(rotationEndTime) && rotationStartTime >= 0.0f &&

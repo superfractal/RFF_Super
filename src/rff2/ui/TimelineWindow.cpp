@@ -2,7 +2,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31
 // Modified by Opus 5 on 2026-08-19, 2026-08-20, 2026-08-21, 2026-08-22, 2026-08-23, 2026-08-25, 2026-08-26, 2026-08-31, 2026-09-01, 2026-09-03
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-10, 2026-10-11, 2026-10-13, 2026-10-16, 2026-10-25, 2026-10-27, 2026-11-01
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-10, 2026-10-11, 2026-10-13, 2026-10-16, 2026-10-25, 2026-10-27, 2026-11-01, 2026-11-15
 //
 
 #include "UiLanguage.hpp"
@@ -652,7 +652,7 @@ namespace merutilm::rff2 {
             DeleteObject(brush);
         }
 
-        enum class TransportGlyph { PLAY, PAUSE, STOP, LOOP };
+        enum class TransportGlyph { PLAY, REVERSE, PAUSE, STOP, LOOP };
 
         // The transport glyphs are drawn rather than typed, so no symbol font has to be present.
         void drawTransportButton(const HDC hdc, const RECT &rect, const TransportGlyph glyph,
@@ -678,6 +678,26 @@ namespace merutilm::rff2 {
                 const POINT points[3] = {
                     {cx - size + sc(2), cy - size}, {cx + size, cy}, {cx - size + sc(2), cy + size}};
                 Polygon(hdc, points, 3);
+                break;
+            }
+            case TransportGlyph::REVERSE: {
+                // Two opposed arrows: the upper runs right, the lower runs back left.
+                const int reach = size + sc(2);
+                const int head = std::max(size / 2 + sc(1), sc(3));
+                const int upper = cy - head;
+                const int lower = cy + head;
+                MoveToEx(hdc, cx - reach, upper, nullptr);
+                LineTo(hdc, cx + reach - head, upper);
+                MoveToEx(hdc, cx + reach, lower, nullptr);
+                LineTo(hdc, cx - reach + head, lower);
+                const POINT right[3] = {{cx + reach - head, upper - head},
+                                        {cx + reach - head, upper + head},
+                                        {cx + reach, upper}};
+                const POINT left[3] = {{cx - reach + head, lower - head},
+                                       {cx - reach + head, lower + head},
+                                       {cx - reach, lower}};
+                Polygon(hdc, right, 3);
+                Polygon(hdc, left, 3);
                 break;
             }
             case TransportGlyph::PAUSE:
@@ -809,7 +829,7 @@ namespace merutilm::rff2 {
         linkColorCycle = colorCycleTracksLinked(attribute.video.timeline, true);
         undoBaseline = sourceAttribute->video.timeline;
         undoBaselineStatic = sourceAttribute->video.data.isStatic;
-        previewDepth = schedule.getStartDepth();
+        previewDepth = schedule.getFirstDepth();
         resetView();
     }
 
@@ -1195,11 +1215,16 @@ namespace merutilm::rff2 {
     }
 
     float TimelineWindow::displayDistance(const float depth) const {
-        return schedule.getStartDepth() - depth;
+        // Measured from the frame the video opens on, so a reversed video counts up from its deepest keyframe.
+        return schedule.isReversed() ? depth - schedule.getEndDepth() : schedule.getStartDepth() - depth;
     }
 
     float TimelineWindow::depthFromDistance(const float distance) const {
-        return schedule.getStartDepth() - distance;
+        return schedule.isReversed() ? schedule.getEndDepth() + distance : schedule.getStartDepth() - distance;
+    }
+
+    float TimelineWindow::axisSign() const {
+        return schedule.isReversed() ? -1.0f : 1.0f;
     }
 
     float TimelineWindow::viewSpan() const {
@@ -1228,13 +1253,17 @@ namespace merutilm::rff2 {
     }
 
     int TimelineWindow::axisX(const float depth, const RECT &axis, const bool pastHold) const {
+        int x = 0;
         if (attribute.video.timeline.holds.empty()) {
-            return depthX(depth, viewStartDepth, viewEndDepth, axis);
+            x = depthX(depth, viewStartDepth, viewEndDepth, axis);
+        } else {
+            const float first = axisDistance(viewStartDepth, false);
+            const float span = std::max(axisDistance(viewEndDepth, true) - first, 1e-6f);
+            const float ratio = std::clamp((axisDistance(depth, pastHold) - first) / span, -64.0f, 64.0f);
+            x = axis.left + static_cast<int>(ratio * static_cast<float>(axis.right - axis.left));
         }
-        const float first = axisDistance(viewStartDepth, false);
-        const float span = std::max(axisDistance(viewEndDepth, true) - first, 1e-6f);
-        const float ratio = std::clamp((axisDistance(depth, pastHold) - first) / span, -64.0f, 64.0f);
-        return axis.left + static_cast<int>(ratio * static_cast<float>(axis.right - axis.left));
+        // Reversed, the deep end the video opens on stands at the left.
+        return schedule.isReversed() ? static_cast<int>(axis.left + axis.right) - x : x;
     }
 
     int TimelineWindow::timeX(const double seconds, const RECT &axis) const {
@@ -1242,9 +1271,10 @@ namespace merutilm::rff2 {
         for (const auto &hold : attribute.video.timeline.holds) {
             if (hold.depth == depth && holdWidth(hold) > 0.0f) {
                 const double fraction = std::clamp((seconds - schedule.timeAt(depth)) / hold.seconds, 0.0, 1.0);
-                const int left = axisX(depth, axis, false);
-                const int right = axisX(depth, axis, true);
-                return left + static_cast<int>(std::lround(fraction * (right - left)));
+                // A hold is crossed the way the video runs, which a reversed axis has turned around.
+                const int enter = axisX(depth, axis, schedule.isReversed());
+                const int leave = axisX(depth, axis, !schedule.isReversed());
+                return enter + static_cast<int>(std::lround(fraction * (leave - enter)));
             }
         }
         return axisX(depth, axis);
@@ -1263,7 +1293,8 @@ namespace merutilm::rff2 {
             *holdFraction = -1.0f;
         }
         const float width = static_cast<float>(std::max(timelineAxis.right - timelineAxis.left, 1L));
-        const float ratio = std::clamp(static_cast<float>(x - timelineAxis.left) / width, 0.0f, 1.0f);
+        const int forwardX = schedule.isReversed() ? static_cast<int>(timelineAxis.left + timelineAxis.right) - x : x;
+        const float ratio = std::clamp(static_cast<float>(forwardX - timelineAxis.left) / width, 0.0f, 1.0f);
         std::vector<std::pair<float, float>> bands;
         for (const auto &hold : attribute.video.timeline.holds) {
             if (const float band = holdWidth(hold); band > 0.0f) {
@@ -1301,7 +1332,7 @@ namespace merutilm::rff2 {
         if (fraction >= 0.0f) {
             for (const auto &hold : attribute.video.timeline.holds) {
                 if (hold.depth == depth && holdWidth(hold) > 0.0f) {
-                    seconds += fraction * hold.seconds;
+                    seconds += (schedule.isReversed() ? 1.0f - fraction : fraction) * hold.seconds;
                     break;
                 }
             }
@@ -1358,7 +1389,8 @@ namespace merutilm::rff2 {
                                        0.0f, 1.0f);
         const float fullSpan = std::max(schedule.getStartDepth() - schedule.getEndDepth(), 1e-6f);
         const float span = viewSpan();
-        viewStartDepth = schedule.getStartDepth() - (fullSpan - span) * ratio;
+        const float scrolled = schedule.isReversed() ? 1.0f - ratio : ratio;
+        viewStartDepth = schedule.getStartDepth() - (fullSpan - span) * scrolled;
         viewEndDepth = viewStartDepth - span;
         clampView();
         if (window != nullptr) {
@@ -1367,7 +1399,7 @@ namespace merutilm::rff2 {
     }
 
     void TimelineWindow::pageScrollView(const POINT point) {
-        panView(point.x < scrollThumb.left ? viewSpan() : -viewSpan());
+        panView((point.x < scrollThumb.left ? viewSpan() : -viewSpan()) * axisSign());
         if (window != nullptr) {
             InvalidateRect(window, nullptr, FALSE);
         }
@@ -1471,6 +1503,7 @@ namespace merutilm::rff2 {
             TimelineIO::writeOverlayIterations(out, value.legacyOverlay());
             TimelineIO::writeIterationAppearance(out, value);
             TimelineIO::writeOverlayTiming(out, value);
+            TimelineIO::writeDirection(out, value);
             return std::move(out).str();
         }
     } // namespace
@@ -2675,9 +2708,9 @@ namespace merutilm::rff2 {
         fieldDragMoved = true;
         float depth = fieldDragDepth;
         if (fieldDrag == FieldDrag::DEPTH) {
-            depth -= travel * viewSpan() / axisWidth;
+            depth -= travel * viewSpan() / axisWidth * axisSign();
         } else {
-            const double shownSeconds = schedule.timeAt(viewEndDepth) - schedule.timeAt(viewStartDepth);
+            const double shownSeconds = std::abs(schedule.timeAt(viewEndDepth) - schedule.timeAt(viewStartDepth));
             depth = schedule.depthAt(schedule.timeAt(fieldDragDepth) + travel * shownSeconds / axisWidth);
         }
         previewDepth = std::clamp(snapDepth(depth), schedule.getEndDepth(), schedule.getStartDepth());
@@ -2855,7 +2888,7 @@ namespace merutilm::rff2 {
         // The further the pointer is held past the edge the faster the view follows it, up to a cap.
         const float rate = std::clamp(static_cast<float>(past) / static_cast<float>(margin), -3.0f, 3.0f);
         const float previousStart = viewStartDepth;
-        panView(-viewSpan() * SCRUB_EDGE_RATE * rate);
+        panView(-viewSpan() * SCRUB_EDGE_RATE * rate * axisSign());
         return viewStartDepth != previousStart;
     }
 
@@ -3565,11 +3598,24 @@ namespace merutilm::rff2 {
         playSeconds = previewSeconds();
         if (playSeconds >= schedule.getTotalSeconds() - 1e-3f) {
             playSeconds = 0.0f;
-            previewDepth = schedule.getStartDepth();
+            previewDepth = schedule.getFirstDepth();
         }
         playTick = GetTickCount64();
         SetTimer(window, PLAYBACK_TIMER, PLAYBACK_INTERVAL, nullptr);
         restartAudioPreview();
+    }
+
+    void TimelineWindow::toggleReversed() {
+        if (!commitFieldEdit()) return;
+        if (inspector && !inspector->applyPending()) return;
+        setPlaying(false);
+        // The frame on screen stays where it is; only the way the video runs past it turns around.
+        const float held = previewDepth;
+        attribute.video.timeline.reversed = !attribute.video.timeline.reversed;
+        commitTimeline();
+        previewDepth = held;
+        syncPlaybackClock();
+        InvalidateRect(window, nullptr, FALSE);
     }
 
     void TimelineWindow::stopPlayback() {
@@ -3577,7 +3623,7 @@ namespace merutilm::rff2 {
         accessibilityDirty = true;
         setPlaying(false);
         playSeconds = 0.0f;
-        previewDepth = schedule.getStartDepth();
+        previewDepth = schedule.getFirstDepth();
         requestFramePreview();
     }
 
@@ -4213,9 +4259,12 @@ namespace merutilm::rff2 {
         const auto transportLayout = workspace::TimelineTransportLayout::arrange(
             transport, transportRight, uiDpi, narrow, textWidth(canvas, fields[3][1], valueFont), fieldOrder,
             std::max(dip(14), fontHeight(canvas, captionFont)) + fontHeight(canvas, valueFont) + dip(7));
-        playButton = transportLayout.buttons[0];
-        stopButton = transportLayout.buttons[1];
-        loopButton = transportLayout.buttons[2];
+        reverseButton = transportLayout.buttons[0];
+        playButton = transportLayout.buttons[1];
+        stopButton = transportLayout.buttons[2];
+        loopButton = transportLayout.buttons[3];
+        drawTransportButton(canvas, reverseButton, TransportGlyph::REVERSE, hoverReverse,
+                            attribute.video.timeline.reversed, theme);
         // The one Play/Pause button shows what a click will do: pause while playing, play otherwise.
         drawTransportButton(canvas, playButton, playing ? TransportGlyph::PAUSE : TransportGlyph::PLAY, hoverPlay,
                             playing, theme);
@@ -4362,7 +4411,8 @@ namespace merutilm::rff2 {
             return;
         }
 
-        const float fullEndDepth = schedule.getEndDepth();
+        // The depth the video closes on, which a reversed video reaches at the top of the axis.
+        const float fullEndDepth = schedule.getLastDepth();
         clampView();
         const float viewStart = viewStartDepth;
         const float viewEnd = viewEndDepth;
@@ -4378,12 +4428,12 @@ namespace merutilm::rff2 {
         const int tickSlots = std::clamp(static_cast<int>((axis.right - axis.left) / sc(132)), 2, 16);
         const float tickStep = depthTickStep(viewStart - viewEnd, tickSlots);
         const int tickDecimals = tickStep < 0.095f ? 2 : tickStep < 0.95f ? 1 : 0;
-        const float viewStartDistance = displayDistance(viewStart);
-        const float viewEndDistance = displayDistance(viewEnd);
+        const float viewStartDistance = std::min(displayDistance(viewStart), displayDistance(viewEnd));
+        const float viewEndDistance = std::max(displayDistance(viewStart), displayDistance(viewEnd));
         const float firstTick = std::ceil(viewStartDistance / tickStep) * tickStep;
         const int tickCount = std::min(static_cast<int>((viewEndDistance - firstTick) / tickStep) + 1, 64);
         // The end of the video is marked with its distance and total time, so the stretch past the last tick reads too.
-        const int endX = axisX(fullEndDepth, axis, true);
+        const int endX = axisX(fullEndDepth, axis, !schedule.isReversed());
         const bool endVisible = visibleX(endX, axis, 0);
         const std::wstring endDistanceLabel = std::format(L"d {:.1f}", displayDistance(fullEndDepth));
         const std::wstring endTimeLabel = durationText(schedule.getTotalSeconds());
@@ -4443,8 +4493,10 @@ namespace merutilm::rff2 {
             if (holdWidth(hold) <= 0.0f) {
                 continue;
             }
-            const RECT band = {std::max(axisX(hold.depth, axis, false), static_cast<int>(axis.left)), axis.top,
-                               std::min(axisX(hold.depth, axis, true), static_cast<int>(axis.right)), axis.bottom};
+            const int bandA = axisX(hold.depth, axis, false);
+            const int bandB = axisX(hold.depth, axis, true);
+            const RECT band = {std::max(std::min(bandA, bandB), static_cast<int>(axis.left)), axis.top,
+                               std::min(std::max(bandA, bandB), static_cast<int>(axis.right)), axis.bottom};
             if (band.right > band.left) {
                 fillRect(canvas, band, tint(theme.hold, theme.background));
             }
@@ -4519,7 +4571,8 @@ namespace merutilm::rff2 {
                     for (const auto &clip : audio.clips) {
                         const double startSeconds = double(clip.start) / 1000000;
                         const double endSeconds = double(clip.start + clip.duration()) / 1000000;
-                        const double firstSecond = schedule.timeAt(viewStart), lastSecond = schedule.timeAt(viewEnd);
+                        const double firstSecond = std::min(schedule.timeAt(viewStart), schedule.timeAt(viewEnd));
+                        const double lastSecond = std::max(schedule.timeAt(viewStart), schedule.timeAt(viewEnd));
                         if (endSeconds < firstSecond || startSeconds > lastSecond || startSeconds >= schedule.getTotalSeconds()) continue;
                         const int left = timeX(startSeconds, axis);
                         const int right = timeX(endSeconds, axis);
@@ -4666,8 +4719,10 @@ namespace merutilm::rff2 {
                     const HPEN curve = CreatePen(PS_SOLID, sc(2), rowColor);
                     const HGDIOBJ oldCurve = SelectObject(canvas, curve);
                     for (int i = 0; i < samples; ++i) {
+                        // Reversed, the deep end stands at the left, so the curve is sampled from there like the keys.
+                        const int forwardI = schedule.isReversed() ? samples - 1 - i : i;
                         const float depth = attribute.video.timeline.holds.empty()
-                                                ? viewStart + (viewEnd - viewStart) * static_cast<float>(i) /
+                                                ? viewStart + (viewEnd - viewStart) * static_cast<float>(forwardI) /
                                                                   static_cast<float>(samples - 1)
                                                 : viewDepthAt(axis.left + i);
                         const float value = evaluateDisplayedTrack(*track, targetId, depth, baseValue(targetId));
@@ -4782,7 +4837,10 @@ namespace merutilm::rff2 {
             const int scrollWidth = static_cast<int>(scrollTrack.right - scrollTrack.left);
             const int thumbWidth = std::clamp(static_cast<int>(scrollWidth * (shownSpan / fullSpan)),
                                               std::min(sc(28), scrollWidth), scrollWidth);
-            const float scrolled = std::clamp((startDepth - viewStart) / (fullSpan - shownSpan), 0.0f, 1.0f);
+            float scrolled = std::clamp((startDepth - viewStart) / (fullSpan - shownSpan), 0.0f, 1.0f);
+            if (schedule.isReversed()) {
+                scrolled = 1.0f - scrolled;
+            }
             const int thumbLeft = scrollTrack.left + static_cast<int>((scrollWidth - thumbWidth) * scrolled);
             scrollThumb = {thumbLeft, scrollTrack.top, thumbLeft + thumbWidth, scrollTrack.bottom};
             // The bar is drawn slimmer than the strip that takes the clicks, so it stays easy to grab.
@@ -4868,8 +4926,10 @@ namespace merutilm::rff2 {
         }
 
         for (const auto &hold : attribute.video.timeline.holds) {
-            const int x = axisX(hold.depth, axis, false);
-            const int endX = axisX(hold.depth, axis, true);
+            const int holdA = axisX(hold.depth, axis, false);
+            const int holdB = axisX(hold.depth, axis, true);
+            const int x = std::min(holdA, holdB);
+            const int endX = std::max(holdA, holdB);
             if (!visibleX(x, axis, 0) && !visibleX(endX, axis, 0) && !(x < axis.left && endX > axis.right)) {
                 continue;
             }
@@ -4921,6 +4981,9 @@ namespace merutilm::rff2 {
         add(Id::ai, L"AI Edit", aiButton);
         add(Id::theme, L"Theme", themeButton);
         add(Id::fullscreen, L"Fullscreen", fullscreenButton);
+        add(Id::reverse, L"Reverse", reverseButton,
+            L"Run the video from the deepest keyframe out to the first, in the editor and in the export.",
+            ROLE_SYSTEM_CHECKBUTTON);
         add(Id::play, L"Play / Pause", playButton, L"Play or pause at the current time.",
             ROLE_SYSTEM_CHECKBUTTON);
         add(Id::stop, L"Stop", stopButton, L"Stop playback and return to the beginning.");
@@ -5003,7 +5066,8 @@ namespace merutilm::rff2 {
         RECT client;
         GetClientRect(window, &client);
         for (auto &item : items) {
-            if ((item.id == Id::play && playing) || (item.id == Id::loop && loopPlayback)) {
+            if ((item.id == Id::play && playing) || (item.id == Id::loop && loopPlayback) ||
+                (item.id == Id::reverse && attribute.video.timeline.reversed)) {
                 item.state |= STATE_SYSTEM_CHECKED;
             }
             if (item.id == Id::distance || item.id == Id::keyframe || item.id == Id::time) {
@@ -5160,6 +5224,9 @@ namespace merutilm::rff2 {
             break;
         case Id::play:
             setPlaying(!playing);
+            break;
+        case Id::reverse:
+            toggleReversed();
             break;
         case Id::stop:
             stopPlayback();
@@ -5349,7 +5416,7 @@ namespace merutilm::rff2 {
                 previewDepth =
                     keyboardFocus == Id::time
                         ? schedule.depthAt(seconds)
-                        : std::clamp(previewDepth - step, schedule.getEndDepth(), schedule.getStartDepth());
+                        : std::clamp(previewDepth - step * axisSign(), schedule.getEndDepth(), schedule.getStartDepth());
                 syncPlaybackClock();
                 if (keyboardFocus == Id::time) {
                     playSeconds = seconds;
@@ -5432,14 +5499,15 @@ namespace merutilm::rff2 {
                 return true;
             }
             int next = selectedTrackKey;
-            if (key == VK_HOME) {
-                next = 0;
-            } else if (key == VK_END) {
-                next = int(current->keys.size()) - 1;
+            // Keys are held deepest last, which a reversed axis draws leftmost.
+            const int last = int(current->keys.size()) - 1;
+            const bool towardLast = (key == VK_RIGHT || key == VK_END) != schedule.isReversed();
+            if (key == VK_HOME || key == VK_END) {
+                next = towardLast ? last : 0;
             } else if (next < 0) {
-                next = key == VK_RIGHT ? 0 : int(current->keys.size()) - 1;
+                next = towardLast ? 0 : last;
             } else {
-                next += key == VK_RIGHT ? 1 : -1;
+                next += towardLast ? 1 : -1;
             }
             (void)focusItem(itemIds.key(target, std::clamp(next, 0, int(current->keys.size()) - 1)));
             return true;
@@ -5888,6 +5956,7 @@ namespace merutilm::rff2 {
             const bool trackThumb = contains(self->trackScrollThumb, point);
             const bool full = contains(self->fullscreenButton, point);
             const bool play = contains(self->playButton, point);
+            const bool reverse = contains(self->reverseButton, point);
             const bool emptyFrames = contains(self->emptyFramesButton, point);
             const bool stop = contains(self->stopButton, point);
             const bool loop = contains(self->loopButton, point);
@@ -5904,7 +5973,7 @@ namespace merutilm::rff2 {
                 load != self->hoverLoad || save != self->hoverSave || exportVideo != self->hoverExport || ai != self->hoverAi ||
                 thumb != self->hoverScrollThumb || theme != self->hoverTheme ||
                 trackThumb != self->hoverTrackScrollThumb || full != self->hoverFullscreen ||
-                play != self->hoverPlay || emptyFrames != self->hoverEmptyFrames || stop != self->hoverStop ||
+                play != self->hoverPlay || reverse != self->hoverReverse || emptyFrames != self->hoverEmptyFrames || stop != self->hoverStop ||
                 loop != self->hoverLoop || zoomPreset != self->hoverZoomPreset ||
                 formulaField != self->hoveredFieldEdit || controls != self->hoverControls) {
                 self->hoveredTrackKey = hoveredKey;
@@ -5918,6 +5987,7 @@ namespace merutilm::rff2 {
                 self->hoverTrackScrollThumb = trackThumb;
                 self->hoverFullscreen = full;
                 self->hoverPlay = play;
+                self->hoverReverse = reverse;
                 self->hoverEmptyFrames = emptyFrames;
                 self->hoverStop = stop;
                 self->hoverLoop = loop;
@@ -5945,7 +6015,7 @@ namespace merutilm::rff2 {
             if ((GetKeyState(VK_CONTROL) & 0x8000) != 0 || point.x < self->timelineAxis.left) {
                 self->scrollTracks(static_cast<int>(-steps * static_cast<float>(sc(38))));
             } else if ((GetKeyState(VK_SHIFT) & 0x8000) != 0) {
-                self->panView(self->viewSpan() * 0.25f * steps);
+                self->panView(self->viewSpan() * 0.25f * steps * self->axisSign());
             } else {
                 self->zoomView(self->viewDepthAt(point.x), std::pow(1.3f, steps));
             }
@@ -6364,13 +6434,13 @@ namespace merutilm::rff2 {
                 }
                 break;
             case VK_HOME:
-                self->previewDepth = self->schedule.getStartDepth();
+                self->previewDepth = self->schedule.getFirstDepth();
                 self->syncPlaybackClock();
                 self->requestFramePreview();
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             case VK_END:
-                self->previewDepth = self->schedule.getEndDepth();
+                self->previewDepth = self->schedule.getLastDepth();
                 self->syncPlaybackClock();
                 self->requestFramePreview();
                 InvalidateRect(hwnd, nullptr, FALSE);
@@ -6412,11 +6482,11 @@ namespace merutilm::rff2 {
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             case VK_LEFT:
-                self->panView(self->viewSpan() * 0.1f);
+                self->panView(self->viewSpan() * 0.1f * self->axisSign());
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             case VK_RIGHT:
-                self->panView(-self->viewSpan() * 0.1f);
+                self->panView(-self->viewSpan() * 0.1f * self->axisSign());
                 InvalidateRect(hwnd, nullptr, FALSE);
                 return 0;
             case VK_UP:

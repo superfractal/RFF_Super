@@ -42,9 +42,9 @@ layout (set = 1, binding = 2) buffer ReliefCacheSSBO {
     float relief[];
 } relief_cache;
 
-// Relief Source dz/dc: each pixel's smooth-iteration gradient as two half floats, log2 length low and angle + 4 high; 0 where there is none.
+// Relief Source dz/dc: each pixel's smooth-iteration gradient as float32 log2 length (x) and angle + 4 (y); 0 where there is none.
 layout (set = 1, binding = 7) readonly buffer DerivativeSSBO {
-    float values[];
+    vec2 values[];
 } derivative_attr;
 
 layout (set = 2, binding = 0) uniform SlopeUBO {
@@ -353,9 +353,8 @@ bool dzdc_gradient(uvec2 coord, out vec2 gradient) {
     uvec2 last = iteration_info_attr.extent - 1u;
     uint index = (last.y - min(coord.y, last.y)) * iteration_info_attr.extent.x + min(coord.x, last.x);
     if (index >= uint(derivative_attr.values.length())) return false;
-    uint bits = floatBitsToUint(derivative_attr.values[index]);
-    if (bits == 0u) return false;
-    vec2 packed = unpackHalf2x16(bits);
+    vec2 packed = derivative_attr.values[index];
+    if (packed.y == 0.0) return false;
     float angle = packed.y - 4.0;
     gradient = exp2(packed.x) * vec2(cos(angle), sin(angle));
     return true;

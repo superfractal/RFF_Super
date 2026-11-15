@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-07-09, 2026-08-21, 2026-08-23, 2026-08-27
 // Modified by Opus 5 on 2026-08-05, 2026-08-07, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-25, 2026-08-26, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-25, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-21, 2026-10-24, 2026-11-05, 2026-11-08
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-13, 2026-10-21, 2026-10-24, 2026-11-05, 2026-11-08, 2026-11-15
 //
 
 #include "VideoRenderScene.hpp"
@@ -334,8 +334,8 @@ namespace merutilm::rff2 {
     }
 
     void VideoRenderScene::setTimelineSchedule(const TimelineSchedule &schedule) {
-        const std::array<double, 3> key{schedule.getStartDepth(), schedule.getEndDepth(),
-                                       schedule.getTotalSeconds()};
+        const std::array<double, 4> key{schedule.getStartDepth(), schedule.getEndDepth(),
+                                       schedule.getTotalSeconds(), schedule.isReversed() ? 1.0 : 0.0};
         if (!animationIntegrator || animationInputsChanged || animationScheduleKey != key) {
             animationIntegrator = std::make_unique<TimelineAnimationPhases>(schedule,
                 baseAttribute.video.timeline, gradeBase());

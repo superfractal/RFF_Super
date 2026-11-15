@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-29, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-13, 2026-11-14
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-29, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-11, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-18, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-26, 2026-10-27, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-13, 2026-11-14, 2026-11-15
 //
 
 {L"Load keyframes to start", L"キーフレームを読み込んで開始"},
@@ -927,7 +927,7 @@
 {L"Fast (8 Taps)",L"高速（8点）"},
 {L"Standard (16 Taps)",L"標準（16点）"},
 {L"Fine (32 Taps)",L"高精細（32点）"},
-{L"Where Slope Shading and Lustre Relief take the fine slope of their relief from.\nIterations measures it from the iterations of the neighboring pixels, as before.\ndz/dc takes the exact slope from the derivative dz/dc, calculated along with each orbit. The relief stays smooth and even up to the boundary of the set, where neighboring iterations jump and the measured slope breaks into grain. Texture and pattern layers and Warp with UV Source Cycle x Band also take the direction of the bands from dz/dc, so they no longer tear or twist near the boundary. Macro Relief, Cavity Shading and the wider Lustre rings still read the neighboring iterations, and Normal Smoothing has nothing left to smooth.\nSlower: choosing dz/dc calculates the view again, and each calculation takes about 8% longer in shallow views and up to about 45% longer in deep ones. GPU Perturbation is not used while it is on, so a view it would calculate is calculated on the CPU, which can take many times longer. It keeps about 12 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, 360 views, drafts shown while navigating and custom formulas keep the Iterations relief.",L"Slope Shading と Lustre Relief が、凹凸の細かな傾きをどこから取るかを選びます。\n反復回数は、これまでどおり隣のピクセルの反復回数から傾きを測ります。\ndz/dc は、各軌道と一緒に計算した導関数 dz/dc から正確な傾きを取ります。隣どうしの反復回数が飛んで測った傾きがざらつく集合の境界の近くでも、凹凸がなめらかで均一なまま保たれます。UV座標の参照元が Cycle x Band のテクスチャ・パターンレイヤーとワープも帯の向きを dz/dc から取るので、境界の近くで裂けたりねじれたりしなくなります。大域的な凹凸、くぼみの陰影、Lustre の広いリングはこれまでどおり隣の反復回数を読み、法線の平滑化は平滑化するものがなくなります。\n遅くなります：dz/dc を選ぶと表示を計算し直し、毎回の計算は浅い表示で約 8%、深い表示で最大約 45% 長くかかります。オンの間は GPU Perturbation を使わないため、GPU で計算していた表示は CPU で計算され、何倍も時間がかかることがあります。描画ピクセルあたり約 12 バイトのメモリを使います。\nタイムラインエディターのプレビュー、動画の書き出し、360 表示、移動中に表示される下書き、カスタム数式では、反復回数の凹凸のままです。"},
+{L"Where Slope Shading and Lustre Relief take the fine slope of their relief from.\nIterations measures it from the iterations of the neighboring pixels, as before.\ndz/dc takes the exact slope from the derivative dz/dc, calculated along with each orbit. The relief stays smooth and even up to the boundary of the set, where neighboring iterations jump and the measured slope breaks into grain. Texture and pattern layers and Warp with UV Source Cycle x Band also take the direction of the bands from dz/dc, so they no longer tear or twist near the boundary. Macro Relief, Cavity Shading and the wider Lustre rings still read the neighboring iterations, and Normal Smoothing has nothing left to smooth.\nSlower: choosing dz/dc calculates the view again, and each calculation takes about 8% longer in shallow views and up to about 45% longer in deep ones. GPU Perturbation is not used while it is on, so a view it would calculate is calculated on the CPU, which can take many times longer. It keeps about 24 bytes of memory per rendered pixel.\nThe Timeline Editor preview, video export, 360 views, drafts shown while navigating and custom formulas keep the Iterations relief.",L"Slope Shading と Lustre Relief が、凹凸の細かな傾きをどこから取るかを選びます。\n反復回数は、これまでどおり隣のピクセルの反復回数から傾きを測ります。\ndz/dc は、各軌道と一緒に計算した導関数 dz/dc から正確な傾きを取ります。隣どうしの反復回数が飛んで測った傾きがざらつく集合の境界の近くでも、凹凸がなめらかで均一なまま保たれます。UV座標の参照元が Cycle x Band のテクスチャ・パターンレイヤーとワープも帯の向きを dz/dc から取るので、境界の近くで裂けたりねじれたりしなくなります。大域的な凹凸、くぼみの陰影、Lustre の広いリングはこれまでどおり隣の反復回数を読み、法線の平滑化は平滑化するものがなくなります。\n遅くなります：dz/dc を選ぶと表示を計算し直し、毎回の計算は浅い表示で約 8%、深い表示で最大約 45% 長くかかります。オンの間は GPU Perturbation を使わないため、GPU で計算していた表示は CPU で計算され、何倍も時間がかかることがあります。描画ピクセルあたり約 24 バイトのメモリを使います。\nタイムラインエディターのプレビュー、動画の書き出し、360 表示、移動中に表示される下書き、カスタム数式では、反復回数の凹凸のままです。"},
 {L"Cavity Intensity",L"くぼみの強度"},
 {L"AO Radius",L"AOの半径"},
 {L"Ambient",L"環境光"},
@@ -1053,7 +1053,8 @@
 {L"Render from PNG Images",L"PNG画像から描画"},
 {L"Create Video After Keyframes",L"キーフレーム生成後に動画を作成"},
 {L"Pause Preview During Generation",L"生成中はプレビューを停止"},
-{L"Open Timeline Editor",L"タイムラインエディタを開く"},
+{L"Open Timeline (Unstable)",L"タイムライン(不安定)を開く"},
+{L"Timeline (Unstable)",L"タイムライン(不安定)"},
 {L"Play / Pause Timeline",L"タイムラインを再生・一時停止"},
 {L"Stop Timeline",L"タイムラインを停止"},
 {L"Load Keyframe Folder",L"キーフレームフォルダーを読み込む"},
@@ -1070,6 +1071,7 @@
 {L"Timeline zoom",L"タイムラインのズーム"},
 {L"Keyframe",L"キーフレーム"},
 {L"Play / Pause",L"再生・一時停止"},
+{L"Reverse",L"逆向き"},
 {L"Play",L"再生"},
 {L"Pause",L"一時停止"},
 {L"Stop",L"停止"},
@@ -1569,6 +1571,7 @@
 {L"Preview paused. Video export uses saved speeds.",L"プレビューは停止中です。動画は保存した速度で書き出します。"},
 {L"Preview playing. Settings are shared with video export.",L"プレビューを再生中です。設定は動画書き出しと共通です。"},
 {L"Play or pause at the current time.",L"現在の時刻から再生・一時停止します。"},
+{L"Run the video from the deepest keyframe out to the first, in the editor and in the export.",L"動画を最も深いキーフレームから最初のキーフレームへ向けて進めます。編集画面と書き出しの両方に適用されます。"},
 {L"Stop playback and return to the beginning.",L"再生を停止して先頭に戻ります。"},
 {L"Repeat playback.",L"繰り返し再生します。"},
 {L"Show or hide tracks while playback continues.",L"再生を続けながらトラックの表示を切り替えます。"},
@@ -2236,9 +2239,8 @@
 {L"Gallery (Open)", L"ギャラリー（開く）"},
 {L"Gallery (Save)", L"ギャラリー（保存）"},
 {L"Name", L"名前"},
-{L"Also save the map", L"マップも保存"},
+{L"Save Work Also Saves the Map", L"作品として保存でマップも保存"},
 {L"Other Saves...", L"その他の保存..."},
-{L"Saves into:", L"保存先："},
 {L"Settings only - to continue working later (.rfc)", L"設定だけ - あとで続きから作業できる（.rfc）"},
 {L"Location only - the place, zoom and iteration limit (.rfl)", L"位置だけ - 場所・ズーム・最大反復回数（.rfl）"},
 {L"Map only - change colors later, make videos (.rfmz)", L"マップだけ - あとで色を変えられる・動画の素材（.rfmz）"},

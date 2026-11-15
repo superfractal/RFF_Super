@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-23, 2026-10-01, 2026-10-08
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01, 2026-11-15
 //
 
 #pragma once
@@ -79,6 +79,8 @@ namespace merutilm::rff2::workspace {
         bool allowPending = false;
         bool allowDuringJob = false;
         std::string section;
+        // After invoke, the label of the action whose button takes the focus, so Enter goes on to it; empty keeps it here.
+        std::function<std::wstring()> next;
     };
 
     struct WorkspaceForm {

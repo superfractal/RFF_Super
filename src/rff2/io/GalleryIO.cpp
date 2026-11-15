@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-11-07
-// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-13
+// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-13, 2026-11-15
 //
 
 #include "GalleryIO.hpp"
@@ -86,6 +86,9 @@ namespace merutilm::rff2 {
             }
             if (const auto shown = root.find("showExtensions"); shown != root.end() && shown->is_boolean()) {
                 state.showExtensions = shown->get<bool>();
+            }
+            if (const auto map = root.find("saveMapWithWork"); map != root.end() && map->is_boolean()) {
+                state.saveMapWithWork = map->get<bool>();
             }
             if (const auto recent = root.find("recent"); recent != root.end() && recent->is_array()) {
                 for (const auto &entry : *recent) {
@@ -203,6 +206,7 @@ namespace merutilm::rff2 {
         root["folderSplit"] = live.folderSplit;
         root["closeAfterOpen"] = live.closeAfterOpen;
         root["showExtensions"] = live.showExtensions;
+        root["saveMapWithWork"] = live.saveMapWithWork;
         Json recent = Json::array();
         for (const auto &file : live.recent) {
             recent.push_back(toUtf8(file));

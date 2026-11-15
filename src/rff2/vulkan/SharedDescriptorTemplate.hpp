@@ -118,7 +118,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t BINDING_SSBO_CHAOS_DEFOCUS = 5;
         // Each pixel's OrbitTrap, plane-major, copied in from RenderSceneRenderer's staging buffer; iteration plane 0 where there is none.
         static constexpr uint32_t BINDING_SSBO_ORBIT_TRAP = 6;
-        // Each pixel's dz/dc relief gradient, two half floats per float, copied in from RenderSceneRenderer's staging buffer; 0 where there is none.
+        // Each pixel's dz/dc relief gradient, two floats per pixel, copied in from RenderSceneRenderer's staging buffer; 0 where there is none.
         static constexpr uint32_t BINDING_SSBO_DERIVATIVE = 7;
 
         // Sizes both per-pixel caches to the iteration buffer whenever it is resized; the caller then queues their bindings.
@@ -136,7 +136,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             resizeOrbitTraps(descriptor, width, height, trapPlanes, commandPool);
         }
 
-        // floats must equal the staging buffer's length, since the whole staging buffer is copied in; 1 while dz/dc is off.
+        // floats must equal the staging buffer's length times EscapeDerivative::FLOATS_PER_PIXEL, since the whole staging buffer is copied in.
         static void resizeDerivatives(vkh::DescriptorRef descriptor, const uint32_t floats, vkh::CommandPoolRef commandPool) {
             resizeFloatCache(descriptor, BINDING_SSBO_DERIVATIVE, floats, commandPool);
         }

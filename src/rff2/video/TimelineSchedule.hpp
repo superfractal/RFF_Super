@@ -2,6 +2,7 @@
 // Created by Opus 5 on 2026-08-18.
 // Modified by GPT-5 on 2026-08-18, 2026-08-23
 // Modified by GPT-6 on 2026-09-23, 2026-09-26
+// Modified by Opus 5.5 on 2026-11-15
 //
 
 #pragma once
@@ -37,6 +38,14 @@ namespace merutilm::rff2 {
 
         // True when the mapping is one constant speed with no holds - the pre-timeline behaviour.
         [[nodiscard]] bool isUniform() const { return uniform; }
+
+        // True when the video runs from endDepth up to startDepth; depths, speeds and holds are unchanged.
+        [[nodiscard]] bool isReversed() const { return reversed; }
+
+        // The depths the video opens and closes on, whichever way it runs.
+        [[nodiscard]] float getFirstDepth() const { return reversed ? endDepth : startDepth; }
+
+        [[nodiscard]] float getLastDepth() const { return reversed ? startDepth : endDepth; }
 
         [[nodiscard]] float getStartDepth() const { return startDepth; }
 
@@ -74,6 +83,7 @@ namespace merutilm::rff2 {
         };
 
         bool uniform = true;
+        bool reversed = false;
         float startDepth = 0.0f;
         float endDepth = 0.0f;
         float depthStep = 0.0f;
@@ -92,5 +102,10 @@ namespace merutilm::rff2 {
         [[nodiscard]] double integralAt(float depth) const;
 
         [[nodiscard]] float invertIntegral(double sec) const;
+
+        // The mapping of the video run from startDepth down, which a reversed one reads backward.
+        [[nodiscard]] double forwardTimeAt(float depth) const;
+
+        [[nodiscard]] float forwardDepthAt(double sec) const;
     };
 }

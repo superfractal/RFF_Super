@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-23
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-25
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-25, 2026-11-15
 //
 
 #include "TimelineWindow.hpp"
@@ -140,7 +140,7 @@ namespace merutilm::rff2 {
         request->prompt = TimelineJsonIO::systemPrompt(request->shader);
         const uint32_t count = frameSource->getFrameCount();
         nlohmann::json context{{"startDepth", schedule.getStartDepth()}, {"endDepth", schedule.getEndDepth()},
-            {"totalSeconds", schedule.getTotalSeconds()}, {"source", frameSource->isStatic() ? "PNG" : "RFM/RFMZ"},
+            {"totalSeconds", schedule.getTotalSeconds()}, {"reversed", schedule.isReversed()}, {"source", frameSource->isStatic() ? "PNG" : "RFM/RFMZ"},
             {"keyframeCount", count}, {"defaultSpeed", attribute.video.animation.mps},
             {"imageGrid", aiImageSide}, {"imagePageCount", (count - 1) / uint32_t(aiImageSide * aiImageSide) + 1}};
         request->prompt += "\nRead-only current context:\n" + context.dump(2) +

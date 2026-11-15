@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-31
 // Modified by GPT-5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-21, 2026-11-07
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-21, 2026-11-07, 2026-11-14
 //
 
 #pragma once
@@ -12,6 +12,7 @@
 #include "../../vulkan_helper/impl/Renderer.hpp"
 #include "../../vulkan_helper/executor/RenderPassFullscreenRecorder.hpp"
 #include "../data/GraphicsMatrixStagingBuffer.h"
+#include "../formula/EscapeDerivative.h"
 #include "../vulkan/CPCBoxBlur.hpp"
 #include "../vulkan/CPCChaosIrregularity.hpp"
 #include "../vulkan/GPCBloom.hpp"
@@ -59,8 +60,8 @@ namespace merutilm::rff2 {
         std::unique_ptr<GraphicsMatrixBuffer<float> > escapeAngleStagingBufferContext = nullptr;
         // Each pixel's OrbitTrap, plane-major (OrbitTrap::PLANE_COUNT planes of the iteration buffer's size), copied beside the angles.
         std::unique_ptr<GraphicsMatrixBuffer<float> > orbitTrapStagingBufferContext = nullptr;
-        // Each pixel's packed dz/dc relief gradient while Relief Source is dz/dc, a single float otherwise; copied beside the traps.
-        std::unique_ptr<GraphicsMatrixBuffer<float> > derivativeStagingBufferContext = nullptr;
+        // Each pixel's packed dz/dc relief gradient while Relief Source is dz/dc, a single pixel otherwise; copied beside the traps.
+        std::unique_ptr<GraphicsMatrixBuffer<EscapeDerivative::Packed> > derivativeStagingBufferContext = nullptr;
 
         // Off unless the Debug menu turns it on, and pushed in by RenderScene before each frame: the
         // renderer is thrown away and rebuilt on every resize, so the switch cannot live here.

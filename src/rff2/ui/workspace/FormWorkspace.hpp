@@ -1,7 +1,7 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01, 2026-10-07, 2026-10-08
 // Modified by GPT-5 on 2026-09-17
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-14, 2026-10-25, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-14, 2026-10-25, 2026-11-01, 2026-11-15
 //
 
 #pragma once
@@ -832,6 +832,25 @@ namespace merutilm::rff2::workspace {
                 setValue(row, path.data());
             }
             capture(row);
+            // The chooser gives the focus back to its button; on the field instead, Enter applies the choice rather than opening it again.
+            if (row.picker && GetFocus() == row.picker && row.field->choices.empty()) {
+                SetFocus(row.control);
+                const int end = GetWindowTextLengthW(row.control);
+                SendMessageW(row.control, EM_SETSEL, end, end);
+            }
+        }
+        // Puts the focus on the button of the action with this label, if it is shown.
+        void focusAction(const std::wstring &label) {
+            for (size_t i = 0; i < form.actions.size(); ++i) {
+                if (form.actions[i].label != label) continue;
+                for (HWND control : actionControls) {
+                    if (GetDlgCtrlID(control) == int(100 + i) && IsWindowVisible(control) && IsWindowEnabled(control)) {
+                        SetFocus(control);
+                        reveal(control);
+                        return;
+                    }
+                }
+            }
         }
         void updateValues(bool includeFocus = false) {
             syncing = true;
@@ -1749,13 +1768,17 @@ namespace merutilm::rff2::workspace {
                         self->invalidate();
                         return 0;
                     }
+                    const size_t index = LOWORD(w) - 100;
+                    std::wstring next;
                     try {
-                        self->form.actions[LOWORD(w) - 100].invoke();
+                        self->form.actions[index].invoke();
+                        if (self->form.actions[index].next) next = self->form.actions[index].next();
                     } catch (const std::exception &) {
                         self->message =
                             L"This tool could not complete. Check the current render and settings.";
                     }
                     self->updateValues();
+                    if (!next.empty()) self->focusAction(next);
                     self->invalidate();
                     return 0;
                 }

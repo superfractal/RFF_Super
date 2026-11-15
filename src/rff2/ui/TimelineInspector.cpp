@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-07, 2026-10-08
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-11-01, 2026-11-15
 //
 
 #include "TimelineWindow.hpp"
@@ -39,6 +39,7 @@ namespace merutilm::rff2 {
             TimelineIO::writeOverlayIterations(bytes, value.legacyOverlay());
             TimelineIO::writeIterationAppearance(bytes, value);
             TimelineIO::writeOverlayTiming(bytes, value);
+            TimelineIO::writeDirection(bytes, value);
             return bytes.str();
         }
         bool offered(const TimelineParamDesc &parameter, bool staticSource) {

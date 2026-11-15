@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-11-07
-// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-13
+// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-13, 2026-11-15
 //
 
 #pragma once
@@ -36,6 +36,8 @@ namespace merutilm::rff2 {
             bool closeAfterOpen = true;
             // Cards and the details panel name the files by their extensions, such as .rfc and .rfth, instead of by kind.
             bool showExtensions = false;
+            // Save Work in Gallery (Save) writes the compressed map beside the settings and the image.
+            bool saveMapWithWork = false;
             std::vector<std::filesystem::path> recent;
         };
 

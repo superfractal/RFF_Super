@@ -1,6 +1,6 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-21, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-11-01, 2026-11-04, 2026-11-08
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-07, 2026-10-22, 2026-10-23, 2026-10-25, 2026-10-27, 2026-11-01, 2026-11-04, 2026-11-08, 2026-11-15
 //
 
 #pragma once
@@ -68,6 +68,8 @@ namespace merutilm::rff2::workspace {
         // each is shown beside the colors it holds until they are applied.
         std::wstring importedName, settingsImportedName, sourceMessage;
         bool linkRgb = true;
+        // Whether the last Load KFR File or Load Settings File read a file.
+        bool justRead = false;
         std::optional<ShdPaletteAttribute> stopPreviewBefore;
         std::optional<ShaderAttribute> imported, settingsImported;
         ShdPaletteAttribute &palette() const {
@@ -782,9 +784,12 @@ namespace merutilm::rff2::workspace {
             form.actions.push_back({4, L"Apply Palette Preset",
                                     [self] { self->usePreset(self->libraryIndex, self->librarySeed); }});
             // Loading only reads the file, so it does not wait for pending edits; applying does.
-            form.actions.push_back({5, L"Load KFR File", [self] { self->readImport(); }, true});
+            // A file read hands the focus to its Apply, so Enter applies the colors instead of choosing a file again.
+            form.actions.push_back({5, L"Load KFR File", [self] { self->justRead = self->readImport(); }, true});
+            form.actions.back().next = [self] { return self->justRead ? std::wstring(L"Apply KFR Colors") : std::wstring(); };
             form.actions.push_back({5, L"Apply KFR Colors", [self] { self->applyImport(); }});
-            form.actions.push_back({6, L"Load Settings File", [self] { self->readSettingsImport(); }, true});
+            form.actions.push_back({6, L"Load Settings File", [self] { self->justRead = self->readSettingsImport(); }, true});
+            form.actions.back().next = [self] { return self->justRead ? std::wstring(L"Apply Colors") : std::wstring(); };
             form.actions.push_back({6, L"Apply Colors", [self] { self->applySettingsImport(false); }});
             form.actions.push_back(
                 {6, L"Apply Colors and Color Correction", [self] { self->applySettingsImport(true); }});

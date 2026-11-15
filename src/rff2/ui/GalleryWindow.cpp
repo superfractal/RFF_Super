@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-11-07
-// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14
+// Modified by Opus 5.5 on 2026-11-09, 2026-11-10, 2026-11-11, 2026-11-12, 2026-11-13, 2026-11-14, 2026-11-15
 //
 
 #include "GalleryWindow.hpp"
@@ -74,13 +74,13 @@ namespace merutilm::rff2 {
             L"Settings", L"Location", L"Map", L"Image", L"Appearance"};
         constexpr std::array<const wchar_t *, KIND_COUNT> OPEN_LABELS = {
             L"Open Settings", L"Open Location", L"Open Map", L"Open Image", L"Open Appearance"};
-        // Which kind a double-click opens when the filter does not say: the one that brings back the most.
+        // Which kind a double-click opens: the one that brings back the most, in the order the cards list the kinds.
         constexpr std::array<Kind, KIND_COUNT> OPEN_ORDER = {Kind::SETTINGS, Kind::LOCATION, Kind::MAP, Kind::IMAGE,
                                                              Kind::APPEARANCE};
 
         enum ButtonId : int {
             BUTTON_SORT = 2, BUTTON_SETTINGS = 3, BUTTON_FILTER = 10, BUTTON_OPEN = 20,
-            BUTTON_SAVE_WORK = 40, BUTTON_SAVE_MAP = 41, BUTTON_OTHER_SAVES = 42, BUTTON_OPEN_FOLDER = 43, BUTTON_CRUMB = 100
+            BUTTON_SAVE_WORK = 40, BUTTON_OTHER_SAVES = 42, BUTTON_OPEN_FOLDER = 43, BUTTON_CRUMB = 100
         };
         constexpr int NAME_ID = 11;
         // Waits after a save for the image and thumbnail written once the view has finished calculating, then reads the folder again.
@@ -683,10 +683,8 @@ namespace merutilm::rff2 {
             bool walkingHistory = false;
             // Gallery (Save) when set: the save bar along the bottom and no Open buttons. Gallery (Open) otherwise.
             bool saving = false;
-            bool saveMap = false;
             RECT nameLabel{};
             RECT nameFrame{};
-            RECT saveHint{};
             // The Recent Folders pane on the left: its frame, its title, and the scrolled list inside it.
             FolderPane nearby;
             FolderPane recentPane;
@@ -825,23 +823,8 @@ namespace merutilm::rff2 {
                 InvalidateRect(nameEdit, nullptr, TRUE);
             }
 
-            // The kind a double-click or Enter opens for this entry under the current filter.
-            [[nodiscard]] std::optional<Kind> primaryKind(const Entry &entry) const {
-                const auto first = [&entry](std::initializer_list<Kind> kinds) -> std::optional<Kind> {
-                    for (const Kind kind : kinds) {
-                        if (entry.has(kind)) {
-                            return kind;
-                        }
-                    }
-                    return std::nullopt;
-                };
-                switch (filter) {
-                case Filter::SETTINGS: return first({Kind::SETTINGS, Kind::LOCATION});
-                case Filter::MAPS: return first({Kind::MAP});
-                case Filter::IMAGES: return first({Kind::IMAGE});
-                case Filter::APPEARANCE: return first({Kind::APPEARANCE});
-                default: break;
-                }
+            // The kind a double-click or Enter opens for this entry: the leftmost listed on its card, whatever the filter.
+            [[nodiscard]] static std::optional<Kind> primaryKind(const Entry &entry) {
                 for (const Kind kind : OPEN_ORDER) {
                     if (entry.has(kind)) {
                         return kind;
@@ -1605,7 +1588,8 @@ namespace merutilm::rff2 {
                 // The save bar along the bottom, saving into the folder shown above.
                 const int barTop = saving ? client.bottom - pad - rowHeight : client.bottom - pad + px(12);
                 if (saving) {
-                    int bx = pad;
+                    // Starts at the grid's left edge, under the folder lists' column.
+                    int bx = pad + px(224) + pad;
                     const std::wstring label = UiLanguage::text(L"Name");
                     nameLabel = {bx, barTop, bx + textWidth(label) + px(4), barTop + rowHeight};
                     bx = nameLabel.right + px(8);
@@ -1615,15 +1599,9 @@ namespace merutilm::rff2 {
                     const int workWidth = textWidth(workLabel) + px(36);
                     buttons.push_back({{bx, barTop, bx + workWidth, barTop + rowHeight}, BUTTON_SAVE_WORK, workLabel, true});
                     bx += workWidth + px(8);
-                    const std::wstring mapLabel = UiLanguage::text(L"Also save the map");
-                    const int mapWidth = textWidth(mapLabel) + px(28);
-                    buttons.push_back({{bx, barTop, bx + mapWidth, barTop + rowHeight}, BUTTON_SAVE_MAP, mapLabel, false, saveMap});
-                    bx += mapWidth + px(8);
                     const std::wstring otherSaves = UiLanguage::text(L"Other Saves...");
                     const int otherSavesWidth = textWidth(otherSaves) + px(28);
                     buttons.push_back({{bx, barTop, bx + otherSavesWidth, barTop + rowHeight}, BUTTON_OTHER_SAVES, otherSaves});
-                    bx += otherSavesWidth + pad;
-                    saveHint = {bx, barTop, client.right - pad, barTop + rowHeight};
                     if (nameEdit != nullptr) {
                         const int inset = px(8);
                         const int editHeight = px(20);
@@ -1919,7 +1897,7 @@ namespace merutilm::rff2 {
 
                 paintDetails(dc);
 
-                // The save bar's label, the name field's frame and where the save goes.
+                // The save bar's label and the name field's frame.
                 if (saving) {
                 SetTextColor(dc, theme.text);
                 const std::wstring nameText = UiLanguage::text(L"Name");
@@ -1929,12 +1907,6 @@ namespace merutilm::rff2 {
                     roundFrame(dc, nameFrame, static_cast<float>(px(8)), theme.textFieldBackground,
                                GetFocus() == nameEdit ? std::optional(theme.previewBorderSelected) : fieldEdge);
                 }
-                SelectObject(dc, smallFont);
-                SetTextColor(dc, theme.rangeText);
-                const std::wstring hint = UiLanguage::text(L"Saves into:") + L" " + folder.wstring();
-                RECT hintRect = saveHint;
-                DrawTextW(dc, hint.c_str(), -1, &hintRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS | DT_NOPREFIX);
-                SelectObject(dc, font);
                 }
 
                 SelectObject(dc, oldFont);
@@ -2343,7 +2315,7 @@ namespace merutilm::rff2 {
                                            MB_OK | MB_ICONWARNING);
                     return;
                 }
-                if (!CallbackFile::saveInto(scene, kind, folder, name, saveMap)) {
+                if (!CallbackFile::saveInto(scene, kind, folder, name, GalleryIO::state().saveMapWithWork)) {
                     return;
                 }
                 if (!IsWindow(window)) {
@@ -2388,12 +2360,14 @@ namespace merutilm::rff2 {
 
             // The Settings button's menu: Close After Opening and the thumbnail choices, dropped below the button.
             void chooseSetting() {
-                enum : UINT { CLOSE_AFTER = 1, ATTACH_SAVES = 2, SHOW_EXTENSIONS = 3, WIDTH_FIRST = 10 };
+                enum : UINT { CLOSE_AFTER = 1, ATTACH_SAVES = 2, SHOW_EXTENSIONS = 3, SAVE_MAP = 4, WIDTH_FIRST = 10 };
                 ThemedPopup popup(window, dpi);
                 const HMENU top = popup.top();
                 popup.item(top, CLOSE_AFTER, UiLanguage::text(L"Close After Opening"), !saving, GalleryIO::state().closeAfterOpen);
                 popup.item(top, SHOW_EXTENSIONS, UiLanguage::text(L"Show File Extensions"), true, GalleryIO::state().showExtensions);
                 popup.separator(top);
+                // Only Save Work reads it, so Gallery (Open) shows it greyed out, as Close After Opening is in Gallery (Save).
+                popup.item(top, SAVE_MAP, UiLanguage::text(L"Save Work Also Saves the Map"), saving, GalleryIO::state().saveMapWithWork);
                 popup.item(top, ATTACH_SAVES, UiLanguage::text(L"Attach Thumbnails When Saving"), true, PreferencesIO::thumbnailsForSaves());
                 const HMENU widthMenu = popup.menu();
                 for (UINT i = 0; i <= PreferencesIO::MAX_THUMBNAIL_SIZE; ++i) {
@@ -2419,6 +2393,9 @@ namespace merutilm::rff2 {
                     GalleryIO::save();
                     selectionChanged();
                     InvalidateRect(grid, nullptr, FALSE);
+                } else if (chosen == SAVE_MAP) {
+                    GalleryIO::state().saveMapWithWork = !GalleryIO::state().saveMapWithWork;
+                    GalleryIO::save();
                 } else if (chosen == ATTACH_SAVES) {
                     PreferencesIO::thumbnailsForSaves() = !PreferencesIO::thumbnailsForSaves();
                     PreferencesIO::save();
@@ -2800,10 +2777,6 @@ namespace merutilm::rff2 {
                     chooseSetting();
                 } else if (id == BUTTON_SAVE_WORK) {
                     save(CallbackFile::SaveKind::WORK);
-                } else if (id == BUTTON_SAVE_MAP) {
-                    saveMap = !saveMap;
-                    layout();
-                    InvalidateRect(window, nullptr, FALSE);
                 } else if (id == BUTTON_OTHER_SAVES) {
                     chooseOtherSave();
                 } else if (id >= BUTTON_OPEN && id < BUTTON_OPEN + static_cast<int>(KIND_COUNT)) {
