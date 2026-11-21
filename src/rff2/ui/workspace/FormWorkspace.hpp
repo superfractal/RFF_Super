@@ -2,6 +2,7 @@
 // Modified by GPT-6 on 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-10-01, 2026-10-07, 2026-10-08
 // Modified by GPT-5 on 2026-09-17
 // Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-14, 2026-10-25, 2026-11-01, 2026-11-15
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
@@ -22,6 +23,7 @@
 #include <cwctype>
 #include <memory>
 #include <windowsx.h>
+#include <commctrl.h>
 #include <commdlg.h>
 
 namespace merutilm::rff2::workspace {
@@ -34,6 +36,16 @@ namespace merutilm::rff2::workspace {
             std::vector<HWND> swatches;
             // The height of a choice picker in this row, measured with the row; 0 for other editors.
             int pickerHeight = 0;
+            // A keypad's buttons: the pad, the page tabs, every page's function keys, then the examples.
+            std::vector<HWND> keys;
+            // Where the keypad starts below the row's top, measured with the row.
+            int keypadOffset = 0;
+        };
+        // Which part of a keypad a key button belongs to, stored on the button.
+        enum KeyPart : int { PAD_KEY = 1, PAGE_TAB, FUNCTION_KEY, EXAMPLE_KEY };
+        struct KeypadLayout {
+            std::vector<RECT> keys; // in Row::keys order, from the keypad's top left
+            int tabsBottom = 0, captionTop = 0, height = 0;
         };
         WorkspaceForm form;
         HWND window = nullptr, viewport = nullptr, groupControl = nullptr, applyControl = nullptr,
@@ -73,9 +85,300 @@ namespace merutilm::rff2::workspace {
         std::function<void()> changed;
         std::function<void(int)> leaveFocus;
         std::function<void()> resetSearch;
+        // The function page each keypad shows, by field id, kept across rebuilds.
+        std::map<std::string, int> keypadPages;
+        HFONT keyFont = nullptr;
+        HWND keyTips = nullptr;
 
         int px(int value) const {
             return int(value * scale + .5f);
+        }
+        static int keyPart(HWND key) {
+            return int(INT_PTR(GetPropW(key, L"RFF.Key.Part")));
+        }
+        static int keyPage(HWND key) {
+            return int(INT_PTR(GetPropW(key, L"RFF.Key.Page"))) - 1;
+        }
+        static const FormKey *keyDefinition(HWND key) {
+            return static_cast<const FormKey *>(GetPropW(key, L"RFF.Key.Definition"));
+        }
+        int keypadPage(const FormField &field) const {
+            const auto found = keypadPages.find(field.id);
+            const int pages = field.keypad ? int(field.keypad->pages.size()) : 0;
+            return found == keypadPages.end() || pages == 0 ? 0 : std::clamp(found->second, 0, pages - 1);
+        }
+        // Columns share the width the way a grid with gaps does, so the last key ends at the right edge.
+        KeypadLayout keypadLayout(const FormKeypad &pad, int width) const {
+            KeypadLayout result;
+            const int gap = px(4);
+            const auto edge = [&](int column, int columns) { return MulDiv(column, width + gap, columns); };
+            int y = 0;
+            if (!pad.pad.empty()) {
+                const int columns = std::max(1, pad.padColumns), height = px(32);
+                int column = 0, top = 0;
+                for (const auto &key : pad.pad) {
+                    const int span = std::clamp(key.span, 1, columns);
+                    if (column + span > columns) {
+                        column = 0;
+                        top += height + gap;
+                    }
+                    result.keys.push_back({edge(column, columns), y + top, edge(column + span, columns) - gap, y + top + height});
+                    column += span;
+                }
+                y += top + height + px(12);
+            }
+            if (!pad.pages.empty()) {
+                const int count = int(pad.pages.size());
+                for (int i = 0; i < count; ++i) {
+                    result.keys.push_back({edge(i, count), y, edge(i + 1, count), y + px(28)});
+                }
+                result.tabsBottom = y + px(28);
+                y += px(28) + px(8);
+                const int columns = std::max(1, width < px(280) ? std::min(4, pad.pageColumns) : pad.pageColumns);
+                int rows = 0;
+                for (const auto &[label, keys] : pad.pages) {
+                    for (int k = 0; k < int(keys.size()); ++k) {
+                        const int top = y + (k / columns) * (px(28) + gap);
+                        result.keys.push_back({edge(k % columns, columns), top, edge(k % columns + 1, columns) - gap, top + px(28)});
+                    }
+                    rows = std::max(rows, (int(keys.size()) + columns - 1) / columns);
+                }
+                y += rows * (px(28) + gap) - gap + px(12);
+            }
+            if (!pad.examples.empty()) {
+                result.captionTop = y;
+                y += px(20);
+                const int columns = width < px(320) ? 1 : 2;
+                for (int k = 0; k < int(pad.examples.size()); ++k) {
+                    const int top = y + (k / columns) * (px(28) + gap);
+                    result.keys.push_back({edge(k % columns, columns), top, edge(k % columns + 1, columns) - gap, top + px(28)});
+                }
+                y += (int(pad.examples.size()) + columns - 1) / columns * (px(28) + gap) - gap;
+            }
+            result.height = y;
+            return result;
+        }
+        void createKeys(Row &row) {
+            const auto &pad = *row.field->keypad;
+            if (!keyFont) {
+                LOGFONTW face{};
+                GetObjectW(font, sizeof(face), &face);
+                face.lfHeight = face.lfHeight * 11 / 10;
+                face.lfWeight = FW_NORMAL;
+                face.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
+                wcscpy_s(face.lfFaceName, L"Consolas");
+                keyFont = CreateFontIndirectW(&face);
+            }
+            if (!keyTips) {
+                keyTips = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                          CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, window, nullptr,
+                                          GetModuleHandleW(nullptr), nullptr);
+                SendMessageW(keyTips, TTM_SETMAXTIPWIDTH, 0, px(320));
+            }
+            const std::wstring id(row.field->id.begin(), row.field->id.end());
+            const auto add = [&](KeyPart part, int page, const FormKey *key, const std::wstring &caption, const std::wstring &tip) {
+                const HWND button = CreateWindowExW(0, L"BUTTON", L"", WS_CHILD | BS_OWNERDRAW, 0, 0, 1, 1, viewport, nullptr,
+                                                    GetModuleHandleW(nullptr), nullptr);
+                SetPropW(button, L"RFF.Key.Part", HANDLE(INT_PTR(part)));
+                SetPropW(button, L"RFF.Key.Page", HANDLE(INT_PTR(page + 1)));
+                if (key) SetPropW(button, L"RFF.Key.Definition", const_cast<FormKey *>(key));
+                WorkspaceButton::attach(button);
+                const auto text = UiLanguage::text(caption);
+                SetWindowTextW(button, text.c_str());
+                const auto description = UiLanguage::text(tip);
+                AccessibleControl::describe(button, text.empty() ? description : text, description,
+                                            id + L".key." + std::to_wstring(row.keys.size()));
+                if (!description.empty()) {
+                    TTTOOLINFOW tool{};
+                    tool.cbSize = sizeof(tool);
+                    tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+                    tool.hwnd = viewport;
+                    tool.uId = reinterpret_cast<UINT_PTR>(button);
+                    tool.lpszText = const_cast<LPWSTR>(description.c_str());
+                    SendMessageW(keyTips, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+                }
+                row.keys.push_back(button);
+            };
+            for (const auto &key : pad.pad) add(PAD_KEY, -1, &key, key.label, key.tip);
+            for (int i = 0; i < int(pad.pages.size()); ++i) add(PAGE_TAB, i, nullptr, pad.pages[size_t(i)].first, {});
+            for (int i = 0; i < int(pad.pages.size()); ++i)
+                for (const auto &key : pad.pages[size_t(i)].second) add(FUNCTION_KEY, i, &key, key.label, key.tip);
+            for (const auto &key : pad.examples) add(EXAMPLE_KEY, -1, &key, key.label, key.tip);
+        }
+        void destroyKeys(const Row &row) {
+            for (HWND key : row.keys) {
+                if (keyTips) {
+                    TTTOOLINFOW tool{};
+                    tool.cbSize = sizeof(tool);
+                    tool.hwnd = viewport;
+                    tool.uId = reinterpret_cast<UINT_PTR>(key);
+                    SendMessageW(keyTips, TTM_DELTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
+                }
+                for (const auto *property : {L"RFF.Key.Part", L"RFF.Key.Page", L"RFF.Key.Definition", L"RFF.Key.Selected"})
+                    RemovePropW(key, property);
+                DestroyWindow(key);
+            }
+        }
+        // Shows the pad, the tabs, the examples and the function keys of the chosen page.
+        void showKeys(const Row &row) {
+            if (!row.field->keypad) return;
+            const int page = keypadPage(*row.field);
+            for (HWND key : row.keys) {
+                const int part = keyPart(key);
+                ShowWindow(key, part != FUNCTION_KEY || keyPage(key) == page ? SW_SHOWNA : SW_HIDE);
+                if (part == PAGE_TAB && (GetPropW(key, L"RFF.Key.Selected") != nullptr) != (keyPage(key) == page)) {
+                    if (keyPage(key) == page) SetPropW(key, L"RFF.Key.Selected", HANDLE(1));
+                    else RemovePropW(key, L"RFF.Key.Selected");
+                    InvalidateRect(key, nullptr, FALSE);
+                }
+            }
+        }
+        // Types a key into its field at the cursor, the way the old Formula window's chips did.
+        void pressKey(Row &row, HWND key) {
+            const HWND edit = row.control;
+            if (!IsWindowEnabled(edit)) return;
+            DWORD start = 0, end = 0;
+            SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
+            // Taking the focus back puts the cursor at the end, so the selection is restored after it.
+            SetFocus(edit);
+            SendMessageW(edit, EM_SETSEL, start, end);
+            if (keyPart(key) == PAGE_TAB) {
+                keypadPages[row.field->id] = keyPage(key);
+                showKeys(row);
+                return;
+            }
+            const auto *definition = keyDefinition(key);
+            if (!definition) return;
+            const DWORD length = DWORD(GetWindowTextLengthW(edit));
+            std::wstring text(length + 1, L'\0');
+            GetWindowTextW(edit, text.data(), int(length) + 1);
+            text.resize(length);
+            start = std::min(start, length);
+            end = std::clamp(end, start, length);
+            const auto place = [&](DWORD caret) {
+                SendMessageW(edit, EM_SETSEL, caret, caret);
+                SendMessageW(edit, EM_SCROLLCARET, 0, 0);
+            };
+            // Replacing through the selection keeps the field's own Ctrl+Z working.
+            const auto replace = [&](DWORD from, DWORD to, const std::wstring &with, DWORD caret) {
+                SendMessageW(edit, EM_SETSEL, from, to);
+                SendMessageW(edit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(with.c_str()));
+                place(caret);
+            };
+            using Action = FormKey::Action;
+            switch (definition->action) {
+            case Action::INSERT:
+                replace(start, end, definition->text, start + DWORD(definition->text.size()));
+                break;
+            case Action::WRAP: {
+                const auto inside = text.substr(start, end - start);
+                const auto with = definition->text + L"(" + inside + L")";
+                replace(start, end, with, start + DWORD(inside.empty() ? definition->text.size() + 1 : with.size()));
+                break;
+            }
+            case Action::REPLACE:
+                replace(0, length, definition->text, DWORD(definition->text.size()));
+                break;
+            case Action::CLEAR:
+                replace(0, length, L"", 0);
+                break;
+            case Action::BACKSPACE:
+                if (start != end) {
+                    replace(start, end, L"", start);
+                } else if (start > 0) {
+                    DWORD from = start - 1;
+                    if (text[from] == L'(') {
+                        while (from > 0 && std::iswalpha(text[from - 1])) --from;
+                    }
+                    replace(from, start, L"", from);
+                }
+                break;
+            case Action::LEFT:
+                place(start != end ? start : start > 0 ? start - 1 : 0);
+                break;
+            case Action::RIGHT:
+                place(start != end ? end : std::min(end + 1, length));
+                break;
+            }
+        }
+        void drawKeyIcon(HDC dc, const RECT &r, FormKey::Action action, COLORREF color) const {
+            const int cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+            const HPEN pen = CreatePen(PS_SOLID, std::max(1, int(1.5f * scale + .5f)), color);
+            const HGDIOBJ previous = SelectObject(dc, pen);
+            const auto line = [&](std::initializer_list<POINT> points) {
+                std::vector<POINT> path(points);
+                Polyline(dc, path.data(), int(path.size()));
+            };
+            if (action == FormKey::Action::LEFT) {
+                line({{cx + px(2), cy - px(5)}, {cx - px(3), cy}, {cx + px(2), cy + px(5)}});
+            } else if (action == FormKey::Action::RIGHT) {
+                line({{cx - px(2), cy - px(5)}, {cx + px(3), cy}, {cx - px(2), cy + px(5)}});
+            } else {
+                // A tag pointing left with a cross in it, the usual backspace mark.
+                line({{cx - px(9), cy}, {cx - px(4), cy - px(6)}, {cx + px(9), cy - px(6)}, {cx + px(9), cy + px(6)},
+                      {cx - px(4), cy + px(6)}, {cx - px(9), cy}});
+                line({{cx - px(1), cy - px(3)}, {cx + px(5), cy + px(3)}});
+                line({{cx + px(5), cy - px(3)}, {cx - px(1), cy + px(3)}});
+            }
+            SelectObject(dc, previous);
+            DeleteObject(pen);
+        }
+        void drawKey(const DRAWITEMSTRUCT &target) const {
+            PanelBackBuffer keyBuffer;
+            auto item = target;
+            const HDC bufferDc = keyBuffer.begin(target.hDC, target.rcItem.right, target.rcItem.bottom);
+            if (bufferDc) item.hDC = bufferDc;
+            const HDC dc = item.hDC;
+            const RECT r = item.rcItem;
+            const HWND key = item.hwndItem;
+            const bool disabled = (item.itemState & ODS_DISABLED) != 0;
+            const bool pressed = (item.itemState & ODS_SELECTED) != 0;
+            const bool hover = GetPropW(key, L"RFF.Button.Hover") != nullptr;
+            std::wstring caption(GetWindowTextLengthW(key) + 1, L'\0');
+            GetWindowTextW(key, caption.data(), int(caption.size()));
+            caption.resize(wcslen(caption.c_str()));
+            PanelDrawing::fill(dc, r, theme.background);
+            if (keyPart(key) == PAGE_TAB) {
+                const bool selected = GetPropW(key, L"RFF.Key.Selected") != nullptr;
+                PanelDrawing::fill(dc, {r.left, r.bottom - 1, r.right, r.bottom}, theme.track);
+                if (selected) PanelDrawing::fill(dc, {r.left, r.bottom - px(2), r.right, r.bottom}, disabled ? theme.track : theme.accent);
+                PanelDrawing::text(dc, caption, {r.left + px(4), r.top, r.right - px(4), r.bottom - px(2)},
+                                   !disabled && (selected || hover) ? theme.foreground : theme.secondary, font, DT_CENTER);
+            } else if (const auto *definition = keyDefinition(key)) {
+                using Action = FormKey::Action;
+                const COLORREF face = pressed && !disabled ? theme.selected
+                                      : disabled || definition->symbol ? theme.background : theme.field;
+                PanelDrawing::rounded(dc, r, face, !disabled && hover ? theme.accent : theme.track, px(6));
+                // A second line along the bottom edge gives the keys a keycap's lip.
+                if (!pressed) PanelDrawing::fill(dc, {r.left + px(3), r.bottom - 2, r.right - px(3), r.bottom - 1}, theme.track);
+                const COLORREF ink = disabled ? theme.secondary : theme.foreground;
+                if (definition->action == Action::BACKSPACE || definition->action == Action::LEFT ||
+                    definition->action == Action::RIGHT) {
+                    drawKeyIcon(dc, r, definition->action, disabled ? theme.secondary : theme.foreground);
+                } else if (definition->action == Action::CLEAR) {
+                    PanelDrawing::text(dc, caption, r, ink, font, DT_CENTER);
+                } else if (definition->action == Action::REPLACE) {
+                    RECT text{r.left + px(10), r.top, r.right - px(10), r.bottom - 1};
+                    const int saved = SaveDC(dc);
+                    SelectObject(dc, keyFont);
+                    SIZE extent{};
+                    GetTextExtentPoint32W(dc, definition->text.c_str(), int(definition->text.size()), &extent);
+                    SelectObject(dc, font);
+                    const auto name = UiLanguage::text(definition->name);
+                    SIZE nameExtent{};
+                    GetTextExtentPoint32W(dc, name.c_str(), int(name.size()), &nameExtent);
+                    RestoreDC(dc, saved);
+                    PanelDrawing::text(dc, definition->text, text, ink, keyFont);
+                    // The name follows the formula only when both fit; the formula is what the key types.
+                    if (extent.cx + px(10) + nameExtent.cx <= text.right - text.left) {
+                        PanelDrawing::text(dc, name, {text.left + extent.cx + px(10), text.top, text.right, text.bottom},
+                                           theme.secondary, font);
+                    }
+                } else {
+                    PanelDrawing::text(dc, caption, {r.left, r.top, r.right, r.bottom - 1}, ink, keyFont, DT_CENTER);
+                }
+            }
+            if (bufferDc) keyBuffer.present(target.hDC);
         }
         // A search keeps its header even when the owner draws the title.
         int headerSpace() const {
@@ -292,9 +595,12 @@ namespace merutilm::rff2::workspace {
                 }
                 const auto error = errors.find(row.field->id);
                 const auto &hint = error == errors.end() ? visibleHintFor(*row.field) : error->second;
+                int hintPixels = wrappedHeight(dc, hint, width);
+                // Two lines stay set aside above a keypad, so an error appearing as keys are pressed does not move them.
+                if (row.field->keypad) hintPixels = std::max(hintPixels, 2 * wrappedHeight(dc, L"A", width));
                 auto layout =
                     FormLayout::measuredRow(wrappedHeight(dc, row.field->label + L" *", width),
-                                            wrappedHeight(dc, hint, width), scale,
+                                            hintPixels, scale,
                                             checkbox(*row.field) ? FormLayout::checkboxHeight : FormLayout::inputHeight);
                 row.pickerHeight =
                     ChoicePicker::handles(*row.field) ? ChoicePicker::height(*row.field, width, dc, pickerLook()) : 0;
@@ -302,6 +608,11 @@ namespace merutilm::rff2::workspace {
                 const int extra = (row.slider ? px(32) : 0) + (row.field->previewColors ? px(28) : 0) + (row.field->swatches ? px(32) : 0) + pickerExtra;
                 layout.hintOffset += extra;
                 layout.height += extra;
+                row.keypadOffset = 0;
+                if (row.field->keypad) {
+                    row.keypadOffset = layout.hintOffset + hintPixels + px(8);
+                    layout.height = row.keypadOffset + keypadLayout(*row.field->keypad, width).height + px(20);
+                }
                 if (row.field->divider && !rowOffsets.empty()) next += px(FormLayout::dividerSpace);
                 rowOffsets.push_back(next);
                 rowLayouts.push_back(layout);
@@ -347,6 +658,15 @@ namespace merutilm::rff2::workspace {
                 const int cell = std::max(1L, (r.right - px(40)) / 8);
                 for (size_t j = 0; j < row.swatches.size(); ++j)
                     positionControl(row.swatches[j], px(20) + int(j % 8) * cell, y + px(int(j / 8) * 30), std::max(1, cell - px(4)), px(26));
+                if (row.field->keypad) {
+                    const auto keypad = keypadLayout(*row.field->keypad, std::max(1, int(r.right) - px(40)));
+                    const int top = rowTop(int(i)) + row.keypadOffset;
+                    for (size_t j = 0; j < row.keys.size() && j < keypad.keys.size(); ++j) {
+                        const auto &key = keypad.keys[j];
+                        positionControl(row.keys[j], px(20) + key.left, top + key.top, std::max(1L, key.right - key.left),
+                                        std::max(1L, key.bottom - key.top));
+                    }
+                }
             }
             for (size_t i = 0; i < actionControls.size(); ++i) {
                 positionControl(actionControls[i], px(20),
@@ -379,7 +699,8 @@ namespace merutilm::rff2::workspace {
                     // Native offscreen child coordinates saturate at 32767; scrolling uses logical content positions.
                     top = inputTop(int(i));
                     bottom = top + (checkbox(*rows[i].field) ? px(FormLayout::checkboxHeight) : px(FormLayout::inputHeight));
-                    if (height >= rowLayouts[i].height) {
+                    // A keypad row only brings its field into view, so pressing a key never scrolls the keys away.
+                    if (height >= rowLayouts[i].height && !rows[i].field->keypad) {
                         top = rowTop(int(i));
                         bottom = top + rowLayouts[i].height;
                     }
@@ -441,6 +762,7 @@ namespace merutilm::rff2::workspace {
                 if (row.picker) EnableWindow(row.picker, enabled);
                 if (row.slider) EnableWindow(row.slider, enabled);
                 for (HWND swatch : row.swatches) EnableWindow(swatch, enabled);
+                for (HWND key : row.keys) EnableWindow(key, enabled);
                 const bool faded = dimmed(*row.field);
                 if (faded != (GetPropW(row.control, dimmedProperty) != nullptr)) {
                     setFlag(row.control, dimmedProperty, faded);
@@ -524,6 +846,29 @@ namespace merutilm::rff2::workspace {
                                               error == errors.end() ? std::wstring_view{} : error->second);
                 if (wasInvalid != errors.contains(row.field->id)) {
                     RedrawWindow(row.control, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME);
+                }
+                if (row.field->errorSpan) {
+                    // The edit drawing underlines these characters; both are stored plus one so zero means none.
+                    INT_PTR start = 0, length = 0;
+                    if (error != errors.end()) {
+                        const auto pending = draft.find(row.field->id);
+                        const auto [first, count] = row.field->errorSpan(pending == draft.end() ? row.field->read() : pending->second);
+                        if (first != std::wstring::npos) {
+                            start = INT_PTR(first) + 1;
+                            length = INT_PTR(count) + 1;
+                        }
+                    }
+                    if (INT_PTR(GetPropW(row.control, L"RFF.Form.ErrorStart")) != start ||
+                        INT_PTR(GetPropW(row.control, L"RFF.Form.ErrorLength")) != length) {
+                        if (start) {
+                            SetPropW(row.control, L"RFF.Form.ErrorStart", HANDLE(start));
+                            SetPropW(row.control, L"RFF.Form.ErrorLength", HANDLE(length));
+                        } else {
+                            RemovePropW(row.control, L"RFF.Form.ErrorStart");
+                            RemovePropW(row.control, L"RFF.Form.ErrorLength");
+                        }
+                        RedrawWindow(row.control, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME);
+                    }
                 }
             }
             placeContent();
@@ -701,7 +1046,14 @@ namespace merutilm::rff2::workspace {
                 invalidate();
             }
             updateSwatches(row, draft.contains(row.field->id) ? draft.at(row.field->id) : row.field->read());
-            const bool hadError = errors.erase(row.field->id) > 0;
+            bool hadError = errors.erase(row.field->id) > 0;
+            // A field with keys is checked as it is typed, so a mistake shows before Apply & Render.
+            if (row.field->keypad && draft.contains(row.field->id)) {
+                if (auto error = validate(*row.field, draft.at(row.field->id)); !error.empty()) {
+                    errors[row.field->id] = std::move(error);
+                    hadError = true;
+                }
+            }
             message.clear();
             const bool feedbackChanged = updateFeedback();
             if (hadError || feedbackChanged) {
@@ -1005,6 +1357,10 @@ namespace merutilm::rff2::workspace {
                         rows.back().swatches.push_back(button);
                     }
                 }
+                if (field->keypad) {
+                    if (previous != previousRows.end()) rows.back().keys = previous->keys;
+                    else createKeys(rows.back());
+                }
                 if (pickable) {
                     auto &picker = rows.back().picker;
                     picker = previous == previousRows.end()
@@ -1036,6 +1392,7 @@ namespace merutilm::rff2::workspace {
                 applyDarkThemeClass(control, combo);
             }
             for (const auto &row : previousRows) {
+                destroyKeys(row);
                 for (HWND swatch : row.swatches) DestroyWindow(swatch);
                 if (row.slider) DestroyWindow(row.slider);
                 DestroyWindow(row.control);
@@ -1098,6 +1455,7 @@ namespace merutilm::rff2::workspace {
                 if (row.picker) {
                     ShowWindow(row.picker, SW_SHOWNA);
                 }
+                showKeys(row);
             }
             for (HWND control : actionControls) {
                 ShowWindow(control, SW_SHOWNA);
@@ -1236,8 +1594,23 @@ namespace merutilm::rff2::workspace {
                     const bool invalid = error != errors.end();
                     const auto &help = invalid ? error->second : visibleHintFor(field);
                     SetTextColor(dc, invalid ? theme.error : theme.secondary);
-                    RECT hint{px(20), y + layout.hintOffset, r.right - px(20), y + layout.height - px(12)};
+                    RECT hint{px(20), y + layout.hintOffset, r.right - px(20),
+                              y + (field.keypad ? rows[i].keypadOffset - px(4) : layout.height - px(12))};
                     UiLanguage::drawText(dc, help.c_str(), int(help.size()), &hint, DT_WORDBREAK | DT_NOPREFIX);
+                    if (field.keypad) {
+                        const auto keypad = keypadLayout(*field.keypad, std::max(1L, r.right - px(40)));
+                        const int top = y + rows[i].keypadOffset;
+                        // The tabs' rule runs the full width, under tabs that each draw their own part of it.
+                        if (keypad.tabsBottom) {
+                            PanelDrawing::fill(dc, {px(20), top + keypad.tabsBottom - 1, r.right - px(20), top + keypad.tabsBottom}, theme.track);
+                        }
+                        if (!field.keypad->examples.empty()) {
+                            SetTextColor(dc, theme.secondary);
+                            RECT caption{px(20), top + keypad.captionTop, r.right - px(20), top + keypad.captionTop + px(20)};
+                            const auto &label = field.keypad->examplesCaption;
+                            UiLanguage::drawText(dc, label.c_str(), int(label.size()), &caption, DT_SINGLELINE | DT_TOP | DT_NOPREFIX);
+                        }
+                    }
                     if (field.previewColors) {
                         const int width = std::max(1L, r.right - px(40));
                         const auto colors = field.previewColors(draft, width);
@@ -1577,6 +1950,8 @@ namespace merutilm::rff2::workspace {
             if (message == WM_NCDESTROY) {
                 RemovePropW(control, checkedProperty);
                 RemovePropW(control, dimmedProperty);
+                RemovePropW(control, L"RFF.Form.ErrorStart");
+                RemovePropW(control, L"RFF.Form.ErrorLength");
                 RemoveWindowSubclass(control, controlProcedure, id);
             }
             return DefSubclassProc(control, message, w, l);
@@ -1681,6 +2056,10 @@ namespace merutilm::rff2::workspace {
                     SelectObject(item->hDC, oldFont);
                     return TRUE;
                 }
+                if (item->CtlType == ODT_BUTTON && keyPart(item->hwndItem)) {
+                    self->drawKey(*item);
+                    return TRUE;
+                }
                 if (item->CtlType == ODT_BUTTON) {
                     WorkspaceButton::draw(*item, self->comboContext);
                     return TRUE;
@@ -1724,6 +2103,10 @@ namespace merutilm::rff2::workspace {
                     return 0;
                 }
                 for (auto &row : self->rows) {
+                    if (HIWORD(w) == BN_CLICKED && std::ranges::find(row.keys, reinterpret_cast<HWND>(l)) != row.keys.end()) {
+                        self->pressKey(row, reinterpret_cast<HWND>(l));
+                        return 0;
+                    }
                     if (row.control == reinterpret_cast<HWND>(l) && HIWORD(w) == BN_CLICKED && checkbox(*row.field)) {
                         self->toggle(row);
                         return 0;
@@ -1883,6 +2266,7 @@ namespace merutilm::rff2::workspace {
                 DestroyWindow(window);
             }
             DeleteObject(brush);
+            if (keyFont) DeleteObject(keyFont);
         }
         const std::vector<std::wstring> &groups() const {
             return form.groups;
@@ -2055,6 +2439,24 @@ namespace merutilm::rff2::workspace {
             errors.clear();
             message.clear();
             validationAttempted = false;
+            updateValues(true);
+            refreshErrors();
+        }
+        // Returns a field's pending draft text when the user has unapplied edits in this form.
+        std::optional<std::wstring> draftValue(const std::string &id) const {
+            if (const auto found = draft.find(id); found != draft.end()) {
+                return found->second;
+            }
+            return std::nullopt;
+        }
+        // Syncs only the specified fields from the model while keeping other pending drafts intact.
+        void syncFields(std::initializer_list<std::string_view> ids) {
+            for (const auto id : ids) {
+                const std::string key(id);
+                draft.erase(key);
+                errors.erase(key);
+            }
+            message.clear();
             updateValues(true);
             refreshErrors();
         }

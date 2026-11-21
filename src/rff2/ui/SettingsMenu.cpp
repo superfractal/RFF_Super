@@ -5,6 +5,7 @@
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-26, 2026-09-29, 2026-09-30
 // Modified by Opus 5.5 on 2026-09-29, 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-25, 2026-10-27, 2026-10-28, 2026-11-01, 2026-11-07, 2026-11-10, 2026-11-15
+// Modified by Gemini 4 Neon on 2026-11-21
 //
 
 #include "NativeDialogs.hpp"
@@ -693,9 +694,25 @@ namespace merutilm::rff2 {
             }
         });
         addChildItem(currentMenu, "Version", [](const SettingsMenu &, const RenderScene &) {
-            NativeDialogs::message(
-                nullptr, std::string("RFF_Super ").append(Constants::Win32::APPLICATION_VERSION).c_str(),
-                "Version", MB_OK | MB_ICONINFORMATION);
+            // Displays GPLv3 Section 5(d) Appropriate Legal Notices in English or Japanese.
+            const std::string_view versionAscii(Constants::Win32::APPLICATION_VERSION);
+            const std::wstring version(versionAscii.begin(), versionAscii.end());
+            const bool japanese = UiLanguage::current() == Language::Japanese;
+            const std::wstring body = japanese
+                ? (L"RFF_Super " + version +
+                   L"\n\nCopyright (C) 2025-2026 Merutilm (RFF-2.0)\n"
+                   L"Copyright (C) 2025-2026 SuperFractal (RFF_Super)\n\n"
+                   L"本プログラムは GNU General Public License v3 (GPLv3) に基づくフリーソフトウェアであり、無保証で提供されます。\n"
+                   L"GPLv3 の条件に従い、再配布および改変が可能です。\n\n"
+                   L"ライセンス全文およびサードパーティ表記は、同梱の LICENSE および NOTICE ファイルを参照してください。")
+                : (L"RFF_Super " + version +
+                   L"\n\nCopyright (C) 2025-2026 Merutilm (original RFF-2.0)\n"
+                   L"Copyright (C) 2025-2026 SuperFractal (RFF_Super)\n\n"
+                   L"This program comes with ABSOLUTELY NO WARRANTY.\n"
+                   L"This is free software, and you are welcome to redistribute it under the GNU General Public License v3 (GPLv3).\n\n"
+                   L"See the LICENSE and NOTICE files included with this program for the full license text and third-party notices.");
+            NativeDialogs::message(NativeDialogs::owner(), body.c_str(), UiLanguage::label(L"Version"),
+                                   MB_OK | MB_ICONINFORMATION);
         });
         // The Timeline Editor's AI Edit button is not a menu item, so its switch is listed by hand.
         menuVisibilityTemplate[AI_EDIT_FEATURE[0]][AI_EDIT_FEATURE[1]] = false;

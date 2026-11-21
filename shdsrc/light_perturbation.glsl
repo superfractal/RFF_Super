@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 8/24/26.
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29, 2026-11-01, 2026-11-06
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29, 2026-11-01, 2026-11-06, 2026-11-16
 //
 
 // Derived from Merutilm RFF 2.3.0 shaders/include/desc_render_meta_double.glsl and desc_batch_result.glsl, GPL-3.0; see NOTICE.
@@ -71,6 +71,8 @@ struct PixelState {
     float trap_shape;
     uint trap_shape_iteration;
     float trap_shape_angle;
+    // First Touch and Last Touch: 1 once an orbit point came within trap_touch_limit; fills the struct's tail padding.
+    uint trap_shape_touched;
 };
 
 // What the host reads back after each batch; it finishes the smoothing itself.
@@ -118,6 +120,9 @@ layout (std430, set = 0, binding = 0) readonly buffer Params {
     double trap_half_sin;
     double trap_inner_x;
     double trap_inner_y;
+    // ShdPalOrbitTrapStatistic: 0 Nearest, 1 First Touch, 2 Last Touch; and 2^Orbit Trap Width a touch comes within.
+    uint trap_statistic;
+    double trap_touch_limit;
 } params;
 
 layout (std430, set = 0, binding = 1) readonly buffer Orbit { dvec2 orbit[]; } reference;
@@ -194,6 +199,9 @@ float log2_wide(const double v) {
     const double m = frexp(v, e);
     return float(e) + log2(float(m));
 }
+
+const uint TRAP_NEAREST = 0;
+const uint TRAP_LAST_TOUCH = 2;
 
 const uint TRAP_SHAPE_POINT = 1;
 const uint TRAP_SHAPE_CIRCLE = 2;
@@ -381,7 +389,20 @@ void sample_trap(inout PixelState s, const double zr, const double zi, const dou
     const float cross = log2_wide(min(abs(zr), abs(zi)));
     const float point = log2_wide(norm);
     const uint iteration = uint(s.iteration % uint64_t(TRAP_ITERATION_WRAP));
-    if (params.trap_shape_kind != 0) {
+    if (params.trap_shape_kind != 0 && params.trap_statistic != TRAP_NEAREST) {
+        // OrbitTrapAccumulator::sampleShape's touch branch: First Touch measures nothing once touched.
+        if (s.trap_shape_touched == 0u || params.trap_statistic == TRAP_LAST_TOUCH) {
+            precise const double dr = zr - params.trap_center_r;
+            precise const double di = zi - params.trap_center_i;
+            const double d = trap_shape_distance(dr, di);
+            if (d == 0.0LF || d < params.trap_touch_limit) {
+                s.trap_shape = log2_wide(d);
+                s.trap_shape_iteration = iteration;
+                s.trap_shape_angle = trap_angle(dr, di);
+                s.trap_shape_touched = 1u;
+            }
+        }
+    } else if (params.trap_shape_kind != 0) {
         precise const double dr = zr - params.trap_center_r;
         precise const double di = zi - params.trap_center_i;
         const float shape = log2_wide(trap_shape_distance(dr, di));
@@ -436,7 +457,8 @@ void store_pixel(const uint index, const PixelState s) {
     r.trap_point = s.trap_samples > 0 ? max(0.5 * s.trap_point, TRAP_HIT_LOG2) : TRAP_FAR_LOG2;
     r.trap_second = s.trap_samples > 1 ? max(0.5 * s.trap_second, TRAP_HIT_LOG2) : TRAP_FAR_LOG2;
     r.trap_iteration = float(s.trap_iteration + 1u);
-    const bool shaped = params.trap_shape_kind != 0 && s.trap_samples > 0;
+    const bool shaped = params.trap_shape_kind != 0 &&
+                        (params.trap_statistic != TRAP_NEAREST ? s.trap_shape_touched != 0u : s.trap_samples > 0);
     r.trap_shape = shaped ? max(s.trap_shape, TRAP_HIT_LOG2) : TRAP_FAR_LOG2;
     r.trap_shape_iteration = shaped ? float(s.trap_shape_iteration + 1u) : 0.0;
     r.trap_shape_angle = shaped ? s.trap_shape_angle : 0.0;

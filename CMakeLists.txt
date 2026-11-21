@@ -4,6 +4,7 @@
 
 # Modified by GPT-6 on 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 # Modified by Opus 5.5 on 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-18, 2026-10-21, 2026-10-23, 2026-10-26, 2026-11-07, 2026-11-12
+# Modified by Gemini 4 Neon on 2026-11-19
 cmake_minimum_required(VERSION 4.1.2)
 project(RFF_Super)
 
@@ -54,6 +55,7 @@ endif()
 set_source_files_properties(
     src/rff2/formula/CustomFormulaPerturbator.cpp
     src/rff2/formula/ExpressionParser.cpp
+    src/rff2/ui/FormulaStudioWindow.cpp
     PROPERTIES COMPILE_OPTIONS "-fno-fast-math;-ffp-contract=off"
 )
 
@@ -232,6 +234,8 @@ add_executable(
     src/rff2/ui/CallbackFile.hpp
     src/rff2/ui/GalleryWindow.cpp
     src/rff2/ui/GalleryWindow.hpp
+    src/rff2/ui/FormulaStudioWindow.cpp
+    src/rff2/ui/FormulaStudioWindow.hpp
     src/rff2/io/GalleryIO.cpp
     src/rff2/io/GalleryIO.hpp
     src/rff2/io/ThumbnailIO.cpp

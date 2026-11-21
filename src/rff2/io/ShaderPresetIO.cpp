@@ -8,7 +8,8 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-29
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #include "ShaderPresetIO.h"
@@ -193,7 +194,12 @@ namespace merutilm::rff2 {
             !(std::abs(palette.orbitTrapCenterImag) <= ShdPaletteAttribute::ORBIT_TRAP_CENTER_LIMIT) ||
             !(palette.orbitTrapRadius >= 0.0) || !(palette.orbitTrapRadius <= ShdPaletteAttribute::ORBIT_TRAP_RADIUS_MAX) ||
             !(std::abs(palette.orbitTrapAngle) <= ShdPaletteAttribute::ORBIT_TRAP_ANGLE_LIMIT) ||
-            !enumInRange(palette.orbitTrapMapping, 0, 2) || palette.orbitTrapArms < 1 ||
+            !enumInRange(palette.orbitTrapMapping, 0, static_cast<int32_t>(ORBIT_TRAP_MAPPING_LAST)) ||
+            !enumInRange(palette.orbitTrapStatistic, 0, 2) ||
+            !(std::abs(palette.orbitTrapBumpHeight) <= ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT) ||
+            !(palette.orbitTrapBumpRoundness >= ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MIN) ||
+            !(palette.orbitTrapBumpRoundness <= ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MAX) ||
+            palette.orbitTrapArms < 1 ||
             palette.orbitTrapArms > ShdPaletteAttribute::ORBIT_TRAP_ARMS_MAX ||
             !(palette.animationMode == ShdPaletteAnimationMode::LINEAR ||
               palette.animationMode == ShdPaletteAnimationMode::PSYCHEDELIC ||
@@ -2067,6 +2073,114 @@ namespace merutilm::rff2 {
         s.shadowQuality = read.shadowQuality;
     }
 
+    void ShaderPresetIO::writeOrbitTrapStatistic(std::ostream &out, const ShaderAttribute &shader) {
+        // Nearest leaves the file as it was.
+        if (shader.palette.orbitTrapStatistic == ShdPalOrbitTrapStatistic::NEAREST) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_STATISTIC_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(shader.palette.orbitTrapStatistic));
+    }
+
+    void ShaderPresetIO::readOrbitTrapStatistic(std::ifstream &in, ShaderAttribute &shader) {
+        auto &p = shader.palette;
+        p.orbitTrapStatistic = ShdPaletteAttribute{}.orbitTrapStatistic;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ORBIT_TRAP_STATISTIC_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t statistic = 0;
+        IOUtilities::readAndDecode(in, &statistic);
+        if (in.fail() || statistic > static_cast<uint32_t>(ShdPalOrbitTrapStatistic::LAST_TOUCH)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        p.orbitTrapStatistic = static_cast<ShdPalOrbitTrapStatistic>(statistic);
+    }
+
+    void ShaderPresetIO::writeOrbitTrapBump(std::ostream &out, const ShaderAttribute &shader) {
+        // At the defaults the file stays as it was.
+        const ShdPaletteAttribute defaults{};
+        const auto &p = shader.palette;
+        if (p.orbitTrapBumpHeight == defaults.orbitTrapBumpHeight &&
+            p.orbitTrapBumpRoundness == defaults.orbitTrapBumpRoundness) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_BUMP_MAGIC);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapBumpHeight);
+        IOUtilities::encodeAndWrite(out, p.orbitTrapBumpRoundness);
+    }
+
+    void ShaderPresetIO::readOrbitTrapBump(std::ifstream &in, ShaderAttribute &shader) {
+        const ShdPaletteAttribute defaults{};
+        auto &p = shader.palette;
+        p.orbitTrapBumpHeight = defaults.orbitTrapBumpHeight;
+        p.orbitTrapBumpRoundness = defaults.orbitTrapBumpRoundness;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ORBIT_TRAP_BUMP_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        float height = 0.0f;
+        float roundness = 0.0f;
+        IOUtilities::readAndDecode(in, &height);
+        IOUtilities::readAndDecode(in, &roundness);
+        if (in.fail() || !(std::abs(height) <= ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT) ||
+            !(roundness >= ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MIN) ||
+            !(roundness <= ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MAX)) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        p.orbitTrapBumpHeight = height;
+        p.orbitTrapBumpRoundness = roundness;
+    }
+
+    void ShaderPresetIO::writeOrbitTrapMappingExtension(std::ostream &out, const ShaderAttribute &shader) {
+        const auto &p = shader.palette;
+        // Distance, Angle and Bands are carried by OTM1 alone, so those files stay as they were.
+        if (static_cast<uint32_t>(p.orbitTrapMapping) <= static_cast<uint32_t>(ShdPalOrbitTrapMapping::BANDS)) {
+            return;
+        }
+        IOUtilities::encodeAndWrite(out, ORBIT_TRAP_MAPPING_EXTENSION_MAGIC);
+        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(p.orbitTrapMapping));
+    }
+
+    void ShaderPresetIO::readOrbitTrapMappingExtension(std::ifstream &in, ShaderAttribute &shader) {
+        auto &p = shader.palette;
+        if (in.fail() || in.rdbuf()->sgetc() == std::char_traits<char>::eof()) {
+            return;
+        }
+        const auto start = in.tellg();
+        uint32_t marker = 0;
+        IOUtilities::readAndDecode(in, &marker);
+        // The block is optional mid-stream, so any other marker belongs to the block that follows.
+        if (!in.fail() && marker != ORBIT_TRAP_MAPPING_EXTENSION_MAGIC) {
+            in.seekg(start);
+            return;
+        }
+        uint32_t mapping = 0;
+        IOUtilities::readAndDecode(in, &mapping);
+        if (in.fail() || mapping <= static_cast<uint32_t>(ShdPalOrbitTrapMapping::BANDS) ||
+            mapping > ORBIT_TRAP_MAPPING_LAST) {
+            in.setstate(std::ios::failbit);
+            return;
+        }
+        p.orbitTrapMapping = static_cast<ShdPalOrbitTrapMapping>(mapping);
+    }
+
     void ShaderPresetIO::writeEffectStyles(std::ostream &out, const ShaderAttribute &shader) {
         IOUtilities::encodeAndWrite(out, EFFECT_STYLES_MAGIC);
         for (const auto &e : shader.effects) {
@@ -2199,8 +2313,15 @@ namespace merutilm::rff2 {
 
     void ShaderPresetIO::writeOrbitTrapMapping(std::ostream &out, const ShaderAttribute &shader) {
         const auto &p = shader.palette;
+        // Mappings past Bands go in OTM2; OTM1 keeps a stand-in older readers accept.
+        uint32_t mapping = static_cast<uint32_t>(p.orbitTrapMapping);
+        if (mapping > static_cast<uint32_t>(ShdPalOrbitTrapMapping::BANDS)) {
+            mapping = orbitTrapMappingUsesArms(p.orbitTrapMapping)
+                          ? static_cast<uint32_t>(ShdPalOrbitTrapMapping::ANGLE)
+                          : static_cast<uint32_t>(ShdPalOrbitTrapMapping::DISTANCE);
+        }
         IOUtilities::encodeAndWrite(out, ORBIT_TRAP_MAPPING_MAGIC);
-        IOUtilities::encodeAndWrite(out, static_cast<uint32_t>(p.orbitTrapMapping));
+        IOUtilities::encodeAndWrite(out, mapping);
         IOUtilities::encodeAndWrite(out, p.orbitTrapArms);
         IOUtilities::encodeAndWrite(out, uint32_t(p.orbitTrapRelief));
     }
@@ -3673,6 +3794,9 @@ namespace merutilm::rff2 {
         writeBoundaryDarkness(out, shader);
         writeChromaticAberration(out, shader);
         writeCastShadow(out, shader);
+        writeOrbitTrapStatistic(out, shader);
+        writeOrbitTrapBump(out, shader);
+        writeOrbitTrapMappingExtension(out, shader);
         out.close();
         if (out.fail()) {
             IOUtilities::discardTemporaryFile(temporary);
@@ -3862,6 +3986,9 @@ namespace merutilm::rff2 {
         readBoundaryDarkness(in, s);
         readChromaticAberration(in, s);
         readCastShadow(in, s);
+        readOrbitTrapStatistic(in, s);
+        readOrbitTrapBump(in, s);
+        readOrbitTrapMappingExtension(in, s);
         if (in.fail() || !validate(s)) {
             vkh::logger::w_log(L"ERROR : Shader preset file is corrupted");
             return false;

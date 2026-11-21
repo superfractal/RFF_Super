@@ -29,6 +29,39 @@ namespace merutilm::rff2::workspace {
         std::wstring label;
     };
 
+    // A button under a text field that types into it.
+    struct FormKey {
+        enum class Action {
+            INSERT,    // types text at the cursor, over any selection
+            WRAP,      // text is a function name: name(selection), or name() with the cursor inside
+            REPLACE,   // replaces the whole field with text
+            BACKSPACE, // deletes before the cursor; a function name goes with its "("
+            CLEAR,
+            LEFT,
+            RIGHT
+        };
+        std::wstring label;
+        std::wstring text;
+        std::wstring tip;
+        Action action = Action::INSERT;
+        // A key that types an operator is drawn on the quieter face.
+        bool symbol = false;
+        // Columns the key spans in the pad.
+        int span = 1;
+        // REPLACE: the name drawn after the formula.
+        std::wstring name;
+    };
+
+    // Calculator keys under a text field: a pad, pages of function keys picked with tabs, and examples.
+    struct FormKeypad {
+        std::vector<FormKey> pad;
+        int padColumns = 6;
+        std::vector<std::pair<std::wstring, std::vector<FormKey>>> pages;
+        int pageColumns = 5;
+        std::wstring examplesCaption;
+        std::vector<FormKey> examples;
+    };
+
     struct FormField {
         // How a field with choices is shown; ChoiceEditors picks one for each field a form leaves as TEXT.
         enum class Editor {
@@ -70,6 +103,10 @@ namespace merutilm::rff2::workspace {
         bool divider = false;
         std::string section;
         bool initiallyExpanded = false;
+        // Keys drawn under a TEXT field; a field with keys is also checked as it is typed.
+        std::shared_ptr<const FormKeypad> keypad;
+        // For an error found in this text: the first character and the count to underline; npos when none applies.
+        std::function<std::pair<size_t, size_t>(const std::wstring &)> errorSpan;
     };
 
     struct FormAction {

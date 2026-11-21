@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-08, 2026-09-11, 2026-09-16, 2026-09-17, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-05, 2026-10-08, 2026-10-09, 2026-10-13, 2026-10-16, 2026-10-24, 2026-10-25, 2026-11-05
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-05, 2026-10-08, 2026-10-09, 2026-10-13, 2026-10-16, 2026-10-24, 2026-10-25, 2026-11-05, 2026-11-17
 //
 
 #include "CPC2MapIterationStripe.hpp"
@@ -430,6 +430,7 @@ namespace merutilm::rff2 {
         outputIterations.upload();
         outputIterations.lock(wc.getCommandPool());
         DescIteration::resizeCaches(outputIterationsDescriptor, width, height, wc.getCommandPool());
+        DescIteration::resizeTrapDistance(outputIterationsDescriptor, width, height, wc.getCommandPool());
 
         const auto &outputIterationInfo = *outputIterationsDescriptor.get<vkh::Uniform>(
             0, DescIteration::BINDING_UBO_ITERATION_INFO);
@@ -453,7 +454,8 @@ namespace merutilm::rff2 {
                                               DescIteration::BINDING_SSBO_ITERATION_MATRIX,
                                               DescIteration::BINDING_SSBO_RELIEF_CACHE,
                                               DescIteration::BINDING_SSBO_CHAOS_CACHE,
-                                              DescIteration::BINDING_SSBO_CHAOS_DEFOCUS});
+                                              DescIteration::BINDING_SSBO_CHAOS_DEFOCUS,
+                                              DescIteration::BINDING_SSBO_TRAP_DISTANCE});
         });
     }
 

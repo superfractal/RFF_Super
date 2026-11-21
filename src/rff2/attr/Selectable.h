@@ -6,7 +6,8 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-15, 2026-09-16, 2026-09-20, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-07, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-07, 2026-11-14, 2026-11-16
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
@@ -45,6 +46,7 @@
 #include "ShdPalOrbitTrapColoring.h"
 #include "ShdPalOrbitTrapMapping.h"
 #include "ShdPalOrbitTrapRegion.h"
+#include "ShdPalOrbitTrapStatistic.h"
 #include "ShdPalOrbitTrapShape.h"
 #include "RndSsaaFilter.h"
 #include "VidUpscaleFilter.h"
@@ -342,7 +344,19 @@ namespace merutilm::rff2 {
                 return {
                     DISTANCE,
                     ANGLE,
-                    BANDS
+                    BANDS,
+                    ITERATION,
+                    ITERATION_DISTANCE,
+                    POLAR_PETALS,
+                    POLAR_CHECKER
+                };
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapStatistic>) {
+                using enum ShdPalOrbitTrapStatistic;
+                return {
+                    NEAREST,
+                    FIRST_TOUCH,
+                    LAST_TOUCH
                 };
             }
             if constexpr (std::is_same_v<E, ShdPalOrbitTrapRegion>) {
@@ -864,6 +878,19 @@ namespace merutilm::rff2 {
                     case DISTANCE: return L"Distance";
                     case ANGLE: return L"Angle";
                     case BANDS: return L"Bands";
+                    case ITERATION: return L"Iteration";
+                    case ITERATION_DISTANCE: return L"Iteration & Distance";
+                    case POLAR_PETALS: return L"Polar Petals";
+                    case POLAR_CHECKER: return L"Polar Checker";
+                    default: break;
+                }
+            }
+            if constexpr (std::is_same_v<E, ShdPalOrbitTrapStatistic>) {
+                switch (value) {
+                    using enum ShdPalOrbitTrapStatistic;
+                    case NEAREST: return L"Nearest";
+                    case FIRST_TOUCH: return L"First Touch";
+                    case LAST_TOUCH: return L"Last Touch";
                     default: break;
                 }
             }

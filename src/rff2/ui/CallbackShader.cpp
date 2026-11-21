@@ -7,7 +7,8 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-14, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-29, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-10, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-10, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #include "NativeDialogs.hpp"
@@ -810,6 +811,14 @@ namespace merutilm::rff2 {
             L"Polygon and Star only: the polygon's sides or the star's points, from 3 to 64. Changing it "
             L"recalculates the view.\nUp/Down arrows nudge by 1 (Shift = 10).",
             1.0);
+        window->registerSelectionInput<ShdPalOrbitTrapStatistic>(
+            L"Orbit Trap Sample", &palette.orbitTrapStatistic,
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Sample",
+            L"Shape only: which point of each orbit colors the pixel.\nNearest takes the point nearest the trap, as "
+            L"before. First Touch takes the first point that comes within Orbit Trap Width of the trap, and Last "
+            L"Touch the last one; a pixel whose orbit never comes that close keeps the iteration palette. Distance, "
+            L"Angle and Bands then read that point's distance and direction.\nUnder First or Last Touch, changing "
+            L"Orbit Trap Width recalculates the view. Changing this recalculates the view.");
         window->registerSelectionInput<ShdPalOrbitTrapMapping>(
             L"Orbit Trap Mapping", &palette.orbitTrapMapping,
             [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Mapping",
@@ -817,13 +826,17 @@ namespace merutilm::rff2 {
             L"trap, as before. Angle turns the palette with the direction the orbit came from when it was nearest "
             L"the trap, Orbit Trap Arms times per turn, drawing petals and rays. Bands lays the palette in rings "
             L"of equal distance, a quarter cycle per halving times Orbit Trap Density, with a dark seam between "
-            L"rings.\nNo recalculation is needed.");
+            L"rings. Iteration colors each approach by the iteration that hit the trap, and Iteration & Distance "
+            L"combines that layer with the distance across it. Polar Petals and Polar Checker draw polar motifs "
+            L"from distance, direction and hit iteration, controlled by Orbit Trap Arms and Density.\nNo recalculation "
+            L"is needed.");
         window->registerTextInput<uint32_t>(
             L"Orbit Trap Arms", &palette.orbitTrapArms, Unparser::U_LONG, Parser::U_LONG,
             [](const uint32_t &v) { return v >= 1 && v <= ShdPaletteAttribute::ORBIT_TRAP_ARMS_MAX; },
             [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Arms",
-            L"Shape with Angle mapping only: how many times the palette runs around one full turn, from 1 to 64. "
-            L"Whole numbers leave no seam where the angle wraps.\nUp/Down arrows nudge by 1 (Shift = 10).",
+            L"Shape with Angle, Polar Petals or Polar Checker mapping: how many turns, petals or sector pairs run "
+            L"around one full turn, from 1 to 64. Whole numbers leave no seam where the angle wraps.\nUp/Down "
+            L"arrows nudge by 1 (Shift = 10).",
             1.0);
         window->registerCheckboxInput(
             L"Orbit Trap Relief", &palette.orbitTrapRelief,
@@ -833,6 +846,29 @@ namespace merutilm::rff2 {
             L"highlight, and it is lit from the Slope light's Azimuth and Zenith. Outside the tube the picture "
             L"only takes the tube's shadow.\nA Cross trap draws tubes along the Pickover stalks, a Circle draws "
             L"rings and a Point draws spheres. Off draws exactly as before.");
+        window->registerSliderInput(
+            L"Orbit Trap Bump Height", &palette.orbitTrapBumpHeight, -ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT,
+            ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT, Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(-ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT,
+                                         ShdPaletteAttribute::ORBIT_TRAP_BUMP_HEIGHT_LIMIT),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Bump Height",
+            L"Cross Glow and Shape only: raises the trap into the Slope surface as a ridge whose width is Orbit Trap "
+            L"Width, so the Slope light, Lustre Relief and the Studio materials shade it with the rest of the relief. "
+            L"The bump is measured on screen, so thin traps rise steeply while wide areas only swell; below 0 it cuts a "
+            L"groove instead. The trap's colour widens with the bump, out to where it is about a tenth of a unit high; under "
+            L"First and Last Touch the touches widen with it, so changing it there recalculates the view. 0 leaves the surface as "
+            L"before.\nSlope must be visible (Opacity above 0). At Depth 0 the rest of the picture keeps its brightness and only "
+            L"the trap is lit, from Slope's Azimuth and Zenith.");
+        window->registerSliderInput(
+            L"Orbit Trap Bump Roundness", &palette.orbitTrapBumpRoundness,
+            ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MIN, ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MAX,
+            Unparser::floatFixed(2), Parser::FLOAT,
+            ValidCondition::floatInRange(ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MIN,
+                                         ShdPaletteAttribute::ORBIT_TRAP_BUMP_ROUNDNESS_MAX),
+            [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Bump Roundness",
+            L"The shape of the bump across the trap, from 0.15 to 3: the height falls as (1 - u^2)^Roundness from the "
+            L"centerline (u = 0) to Orbit Trap Width (u = 1). 0.50 is a round tube, lower values a sharp crest, "
+            L"higher ones a flat top with steep sides.");
         window->registerSliderInput(
             L"Orbit Trap Amount", &palette.orbitTrapAmount, 0.0f, 1.0f, Unparser::floatFixed(2), Parser::FLOAT,
             ValidCondition::floatInRange(0.0f, 1.0f),
@@ -846,7 +882,8 @@ namespace merutilm::rff2 {
             [&scene] { scene.getRequests().requestShader(); }, L"Set Orbit Trap Width",
             L"The trap distance where the glow falls to half, as a power of two: -5.0 is 1/32. Deep zooms bring "
             L"the orbits far closer to the trap, so lower it there until the glow thins to lines again; values "
-            L"down to -100000 can be typed.");
+            L"down to -100000 can be typed.\nUnder Orbit Trap Sample First or Last Touch it is also how close an "
+            L"orbit point must come to touch the trap, and changing it recalculates the view.");
         window->registerSliderInput(
             L"Orbit Trap Density", &palette.orbitTrapDensity, -ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT,
             ShdPaletteAttribute::ORBIT_TRAP_DENSITY_LIMIT, Unparser::floatFixed(2), Parser::FLOAT,

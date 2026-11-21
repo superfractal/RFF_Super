@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-13
-// Modified by Opus 5.5 on 2026-10-16, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-16, 2026-10-29, 2026-11-16
 //
 
 #include "RFFOrbitTrapBinary.h"
@@ -44,10 +44,9 @@ namespace merutilm::rff2 {
             return values;
         }
 
-        // The fields of the shape trap's later settings, fixed until those settings exist: Fast, Minimum, no
-        // observation transform, and a capture window of every iteration.
+        // The fields of the shape trap's later settings, fixed until those settings exist: Fast, no observation
+        // transform, and a capture window of every iteration. The statistic byte carries ShdPalOrbitTrapStatistic.
         constexpr uint8_t SHAPE_ACCURACY = 0;
-        constexpr uint8_t SHAPE_STATISTIC = 0;
         constexpr uint8_t SHAPE_OBSERVATION = 0;
         constexpr uint64_t SHAPE_CAPTURE_START = 1;
         constexpr uint64_t SHAPE_CAPTURE_END = 0;
@@ -83,15 +82,16 @@ namespace merutilm::rff2 {
             return false;
         }
         IOUtilities::encodeAndWrite(out, MAGIC, sizeof(MAGIC));
-        const bool withSides = withShape && shape.sides != 0;
-        IOUtilities::encodeAndWrite(out, withSides ? SIDES_VERSION : withShape ? SHAPE_VERSION : VERSION);
+        const bool withTouch = withShape && orbitTrapStatisticTouches(shape.statistic);
+        const bool withSides = withShape && (shape.sides != 0 || withTouch);
+        IOUtilities::encodeAndWrite(out, withTouch ? TOUCH_VERSION : withSides ? SIDES_VERSION : withShape ? SHAPE_VERSION : VERSION);
         IOUtilities::encodeAndWrite(out, width);
         IOUtilities::encodeAndWrite(out, height);
         IOUtilities::encodeAndWrite(out, planeCount);
         if (withShape) {
             IOUtilities::encodeAndWrite(out, static_cast<uint8_t>(shape.shape));
             IOUtilities::encodeAndWrite(out, SHAPE_ACCURACY);
-            IOUtilities::encodeAndWrite(out, SHAPE_STATISTIC);
+            IOUtilities::encodeAndWrite(out, static_cast<uint8_t>(shape.statistic));
             IOUtilities::encodeAndWrite(out, SHAPE_OBSERVATION);
             IOUtilities::encodeAndWrite(out, shape.centerReal);
             IOUtilities::encodeAndWrite(out, shape.centerImag);
@@ -101,6 +101,9 @@ namespace merutilm::rff2 {
             IOUtilities::encodeAndWrite(out, SHAPE_CAPTURE_END);
             if (withSides) {
                 IOUtilities::encodeAndWrite(out, shape.sides);
+            }
+            if (withTouch) {
+                IOUtilities::encodeAndWrite(out, shape.touchWidth);
             }
         }
         IOUtilities::encodeAndWrite(out, static_cast<uint64_t>(raw.size()));
@@ -137,7 +140,7 @@ namespace merutilm::rff2 {
         uint8_t shapeKind = 0, accuracy = 0, statistic = 0, observation = 0;
         uint64_t captureStart = 0, captureEnd = 0;
         TrapShapeParams stored;
-        const bool shapeVersion = version == SHAPE_VERSION || version == SIDES_VERSION;
+        const bool shapeVersion = version == SHAPE_VERSION || version == SIDES_VERSION || version == TOUCH_VERSION;
         if (shapeVersion) {
             IOUtilities::readAndDecode(in, &shapeKind);
             IOUtilities::readAndDecode(in, &accuracy);
@@ -149,11 +152,15 @@ namespace merutilm::rff2 {
             IOUtilities::readAndDecode(in, &stored.angleDegrees);
             IOUtilities::readAndDecode(in, &captureStart);
             IOUtilities::readAndDecode(in, &captureEnd);
-            if (version == SIDES_VERSION) {
+            if (version == SIDES_VERSION || version == TOUCH_VERSION) {
                 IOUtilities::readAndDecode(in, &stored.sides);
+            }
+            if (version == TOUCH_VERSION) {
+                IOUtilities::readAndDecode(in, &stored.touchWidth);
             }
             stored.enabled = true;
             stored.shape = static_cast<ShdPalOrbitTrapShape>(shapeKind);
+            stored.statistic = static_cast<ShdPalOrbitTrapStatistic>(statistic);
         }
         IOUtilities::readAndDecode(in, &rawSize);
         IOUtilities::readAndDecode(in, &compressedSize);
@@ -174,8 +181,13 @@ namespace merutilm::rff2 {
             return {};
         }
         // Shape planes measured under other settings than the ones drawing them are dropped, leaving the first four.
-        const bool shapeMatches = shapeVersion && expected.enabled && stored == expected &&
-                                  accuracy == SHAPE_ACCURACY && statistic == SHAPE_STATISTIC &&
+        // Only version 4 carries a touch, so the statistic byte must say Nearest in versions 2 and 3.
+        const bool statisticFits = version == TOUCH_VERSION
+                                       ? orbitTrapStatisticTouches(stored.statistic) &&
+                                         statistic <= static_cast<uint8_t>(ShdPalOrbitTrapStatistic::LAST_TOUCH)
+                                       : statistic == static_cast<uint8_t>(ShdPalOrbitTrapStatistic::NEAREST);
+        const bool shapeMatches = shapeVersion && statisticFits && expected.enabled && stored == expected &&
+                                  accuracy == SHAPE_ACCURACY &&
                                   observation == SHAPE_OBSERVATION && captureStart == SHAPE_CAPTURE_START &&
                                   captureEnd == SHAPE_CAPTURE_END;
         try {

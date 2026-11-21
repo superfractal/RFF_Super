@@ -4,7 +4,7 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-27
 // Modified by ox-alpha on 2026-08-22
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-19, 2026-09-23, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-16, 2026-11-17
 //
 
 #pragma once
@@ -23,6 +23,7 @@
 #include "ShdPalOrbitTrapMapping.h"
 #include "ShdPalOrbitTrapRegion.h"
 #include "ShdPalOrbitTrapShape.h"
+#include "ShdPalOrbitTrapStatistic.h"
 #include "ShdPaletteAnimationMode.h"
 #include "ShdPalColorSmoothingMethod.h"
 #include "ShdPalColorInterpolationMethod.h"
@@ -222,11 +223,19 @@ namespace merutilm::rff2 {
         double orbitTrapRadius = 0.5;
         double orbitTrapAngle = 0.0;
         uint32_t orbitTrapSides = 5;
+        // Shape coloring only: which orbit point the trap keeps; First and Last Touch count a point within 2^Width as touching.
+        ShdPalOrbitTrapStatistic orbitTrapStatistic = ShdPalOrbitTrapStatistic::NEAREST;
         // Shape coloring only: what the trap's palette follows, and the palette turns per revolution under Angle.
         ShdPalOrbitTrapMapping orbitTrapMapping = ShdPalOrbitTrapMapping::DISTANCE;
         uint32_t orbitTrapArms = 3;
         // Cross Glow and Shape: draws the trap as a round tube of radius 2^Width lit from Slope's light; off draws as before.
         bool orbitTrapRelief = false;
+        // Cross Glow and Shape: raises the trap into Slope's surface by Height * (1 - u^2)^Roundness, u = distance / 2^Width; 0 is off, below 0 cuts a groove.
+        float orbitTrapBumpHeight = 0.0f;
+        float orbitTrapBumpRoundness = 0.5f;
+        static constexpr float ORBIT_TRAP_BUMP_HEIGHT_LIMIT = 4.0f;
+        static constexpr float ORBIT_TRAP_BUMP_ROUNDNESS_MIN = 0.15f;
+        static constexpr float ORBIT_TRAP_BUMP_ROUNDNESS_MAX = 3.0f;
         static constexpr uint32_t ORBIT_TRAP_ARMS_MAX = 64;
         static constexpr double ORBIT_TRAP_CENTER_LIMIT = 4.0;
         static constexpr double ORBIT_TRAP_RADIUS_MAX = 4.0;

@@ -1,4 +1,4 @@
-<!-- Modified by Opus 5.5 on 2026-10-13, 2026-10-16. -->
+<!-- Modified by Opus 5.5 on 2026-10-13, 2026-10-16, 2026-11-16, 2026-11-17. -->
 # Keyframe Orbit Trap Format (`.rftz`)
 
 `RFFOrbitTrapBinary::write` / `read` store a keyframe's per-pixel orbit traps beside its map, under
@@ -59,9 +59,22 @@ returned; otherwise the file is treated as version 1 and only the first four are
 Shape as with the trap off while Cross Glow and Cellular still work. Keyframe generation writes
 version 1, byte for byte as before, whenever Shape is not selected.
 
+## Version 3 (Sides) and version 4 (Touch)
+
+Version 3 is version 2 with a `uint32` sides after `captureEnd`, written only for Polygon and Star
+(`shapeKind` up to 10). Version 4 (2026-11-16) is written instead while Sample is First Touch or Last
+Touch: version 3 with sides always present (0 for the shapes that do not read it) followed by
+`touchWidth` as `float32`, the width a touch comes within as log2: Width plus the reach of the Orbit Trap bump
+(`orbitTrapBumpWiden`, 0 at Bump Height 0), so a keyframe made at another Bump Height does not match. Its `statistic` byte holds
+`ShdPalOrbitTrapStatistic` (1 First Touch, 2 Last Touch); versions 2 and 3 must hold 0 (Nearest).
+Under a touch statistic the shape planes keep the touching point instead of the nearest one, and
+`shapeStatus` stays 0 for a pixel whose orbit never touched. A reader uses the shape planes only
+when the statistic and touchWidth match the ones drawing them, as for the other header fields.
+
 ## Stability
 
 - Never change the meaning of version 1 or 2; a different layout takes a new version number.
-- The reserved version 2 fields belong to capture window, accuracy, statistic and observation settings
-  not built yet; when they arrive they must keep 0, 0, 0, 1, 0 meaning today's sampling.
+- The reserved version 2 fields belong to capture window, accuracy and observation settings not built
+  yet; when they arrive they must keep 0, 0, 1, 0 meaning today's sampling. Statistic 0 stays Nearest
+  and 1, 2 stay First and Last Touch; a new statistic takes a new number.
 - Keep the plane order in step with `OrbitTrap` and with `vk_2_map_iter_stripe.comp`'s trap buffers.

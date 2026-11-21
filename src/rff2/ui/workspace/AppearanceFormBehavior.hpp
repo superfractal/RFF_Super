@@ -1,6 +1,7 @@
 //
 // Modified by GPT-6 on 2026-10-01
-// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-08, 2026-10-09, 2026-10-16, 2026-10-20, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
@@ -98,6 +99,7 @@ namespace merutilm::rff2::workspace {
                 field.dependencies.push_back("palette.orbitTrapShape");
             if (id == "palette.orbitTrapArms" || id == "palette.orbitTrapDensity") field.dependencies.push_back("palette.orbitTrapMapping");
             if (id == "palette.orbitTrapGlowSharpness") field.dependencies.push_back("palette.orbitTrapRelief");
+            if (id == "palette.orbitTrapBumpRoundness") field.dependencies.push_back("palette.orbitTrapBumpHeight");
             const auto previous = field.enabled;
             field.enabled = [fields, id = field.id, previous](const FormDraft &draft) {
                 if (previous && !previous(draft)) return false;
@@ -176,10 +178,11 @@ namespace merutilm::rff2::workspace {
                     const int coloring = values.number<int>("palette.orbitTrapColoring").value_or(0);
                     if (coloring == int(ShdPalOrbitTrapColoring::NONE)) return false;
                     const bool shapeColoring = coloring == int(ShdPalOrbitTrapColoring::SHAPE);
-                    const bool angleMapping = shapeColoring &&
-                        values.number<int>("palette.orbitTrapMapping").value_or(0) == int(ShdPalOrbitTrapMapping::ANGLE);
+                    const auto mapping = static_cast<ShdPalOrbitTrapMapping>(
+                        values.number<int>("palette.orbitTrapMapping").value_or(int(ShdPalOrbitTrapMapping::DISTANCE)));
                     if (id == "palette.orbitTrapShape" || id == "palette.orbitTrapCenterReal" ||
-                        id == "palette.orbitTrapCenterImag" || id == "palette.orbitTrapMapping") return shapeColoring;
+                        id == "palette.orbitTrapCenterImag" || id == "palette.orbitTrapMapping" ||
+                        id == "palette.orbitTrapStatistic") return shapeColoring;
                     if (id == "palette.orbitTrapRadius" || id == "palette.orbitTrapAngle" || id == "palette.orbitTrapSides") {
                         if (!shapeColoring) return false;
                         const auto shape = static_cast<ShdPalOrbitTrapShape>(
@@ -188,10 +191,11 @@ namespace merutilm::rff2::workspace {
                         if (id == "palette.orbitTrapSides") return orbitTrapShapeUsesSides(shape);
                         return orbitTrapShapeUsesAngle(shape);
                     }
-                    if (id == "palette.orbitTrapArms") return angleMapping;
-                    if (id == "palette.orbitTrapDensity") return !angleMapping;
+                    if (id == "palette.orbitTrapArms") return shapeColoring && orbitTrapMappingUsesArms(mapping);
+                    if (id == "palette.orbitTrapDensity") return !shapeColoring || orbitTrapMappingUsesDensity(mapping);
                     const bool cellular = coloring == int(ShdPalOrbitTrapColoring::CELLULAR);
-                    if (id == "palette.orbitTrapRelief") return !cellular;
+                    if (id == "palette.orbitTrapRelief" || id == "palette.orbitTrapBumpHeight") return !cellular;
+                    if (id == "palette.orbitTrapBumpRoundness") return !cellular && number("palette.orbitTrapBumpHeight") != 0.0f;
                     if (id == "palette.orbitTrapGlowSharpness") return cellular || !on("palette.orbitTrapRelief");
                     if (id == "palette.orbitTrapCellBorderWidth" || id == "palette.orbitTrapCellBorderDarkness") return cellular;
                     return true;

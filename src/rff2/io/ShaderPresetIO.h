@@ -6,7 +6,8 @@
 // Modified by GPT-5 on 2026-08-21, 2026-08-31
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
@@ -270,6 +271,30 @@ namespace merutilm::rff2 {
 
         // Without the block Cast Shadow loads off at its defaults; another marker is left unread, a bad block fails the stream.
         static void readCastShadow(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap statistic block, written only off Nearest: uint32 ShdPalOrbitTrapStatistic.
+        static constexpr uint32_t ORBIT_TRAP_STATISTIC_MAGIC = 0x3154544F; // "OTT1"
+
+        static void writeOrbitTrapStatistic(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block the statistic loads Nearest; another marker is left unread, a bad block fails the stream.
+        static void readOrbitTrapStatistic(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the Orbit Trap bump block, written only off the defaults: float32 height, then float32 roundness.
+        static constexpr uint32_t ORBIT_TRAP_BUMP_MAGIC = 0x3142544F; // "OTB1"
+
+        static void writeOrbitTrapBump(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block the bump loads off at its default roundness; another marker is left unread, a bad block fails the stream.
+        static void readOrbitTrapBump(std::ifstream &in, ShaderAttribute &shader);
+
+        // Marks the extended Orbit Trap Mapping block, written only for mappings past Bands: uint32 mapping (3..6).
+        static constexpr uint32_t ORBIT_TRAP_MAPPING_EXTENSION_MAGIC = 0x324D544F; // "OTM2"
+
+        static void writeOrbitTrapMappingExtension(std::ostream &out, const ShaderAttribute &shader);
+
+        // Without the block OTM1's mapping stays; another marker is left unread, a bad block fails the stream.
+        static void readOrbitTrapMappingExtension(std::ifstream &in, ShaderAttribute &shader);
 
         // Marks the Orbit Trap look block: float32 offset and speed, four float32 glow color, float32 strength
         // and sharpness, uint32 blend, then float32 border width and border darkness.

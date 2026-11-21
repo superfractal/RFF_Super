@@ -6,7 +6,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-05, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-23, 2026-09-24, 2026-09-30
-// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-05, 2026-10-08, 2026-10-23, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-14, 2026-11-17
 //
 
 #version 450
@@ -31,6 +31,10 @@ layout (set = 1, binding = 0) uniform IterUBO {
     double max_value_zoomed;
     uvec2 canvas_extent;
     ivec2 canvas_offset;
+    // DescIteration's tail: the live trap planes per pixel (x), the palette pass's dz/dc switch, and where the bump's distance comes from.
+    uvec2 trap_planes;
+    uvec2 derivative_gradient;
+    uvec2 trap_distance_source;
 } iteration_info_attr;
 
 layout (set = 1, binding = 1) buffer IterSSBO {
@@ -46,6 +50,16 @@ layout (set = 1, binding = 2) buffer ReliefCacheSSBO {
 layout (set = 1, binding = 7) readonly buffer DerivativeSSBO {
     vec2 values[];
 } derivative_attr;
+
+// The live view's OrbitTrap planes, plane-major as vk_iteration_palette.frag reads them; the bump takes its distance from them.
+layout (set = 1, binding = 6) readonly buffer OrbitTrapSSBO {
+    float traps[];
+} orbit_trap_attr;
+
+// The video merge's trap log2 distance per output pixel; see orbit_trap_bump.glsl.
+layout (set = 1, binding = 8) readonly buffer TrapDistanceSSBO {
+    float distances[];
+} trap_distance_attr;
 
 layout (set = 2, binding = 0) uniform SlopeUBO {
     float depth;
@@ -615,6 +629,7 @@ vec3 load_relief_cache(uvec2 coord) {
 #define oklab_to_linear palette_oklab_to_linear
 #include "palette_sampling.glsl"
 #undef srgb_to_linear
+#include "orbit_trap_bump.glsl"
 
 // A texture layer as an equirectangular panorama: +y is straight up and +z faces the viewer; the mip level matches the spread in radians.
 vec3 studio_panorama(sampler2D image, vec3 ray, float spread) {
@@ -702,6 +717,13 @@ void shade_surface() {
     if (surface_pass_off()) {
         color = texelFetch(canvas, ivec2(iter_coord), 0);
         if (slope_attr.studio_use > 0.5 && !ordered_layers()) color.rgb = srgb_to_linear(color.rgb);
+        // Depth 0 with the Orbit Trap bump: the bump is lit relative to flat ground, so only the trap takes light and shade.
+        if (slope_attr.opacity > 0.0 && orbit_trap_bump_on()) {
+            bool linearCanvas = ordered_layers() || slope_attr.studio_use > 0.5;
+            vec3 base = linearCanvas ? color.rgb : srgb_to_linear(color.rgb);
+            vec3 lit = mix(base, orbit_trap_bump_lit(max(base, vec3(0.0)), iter_coord), clamp(slope_attr.opacity, 0.0, 1.0));
+            color.rgb = linearCanvas ? lit : linear_to_srgb(lit);
+        }
         return;
     }
 
@@ -803,6 +825,12 @@ void shade_surface() {
         coat_wave_slope = detail.xy;
         vec3 shading = coatOnlyWaves ? calm : detail;
         dzDx = shading.x; dzDy = shading.y; aoFactor = shading.z;
+    }
+    // Orbit Trap bump: the trap's own slope joins the relief's, so the light, the materials and the coat all see it.
+    if (orbit_trap_bump_on()) {
+        vec2 bump = orbit_trap_bump_slope(iter_coord);
+        dzDx += bump.x;
+        dzDy += bump.y;
     }
     SurfaceEffects surfaceEffects = surface_effects(centerIt, vec2(dx, dy), vec2(dzDx, dzDy));
     vec3 beforeEffectNormal = normalize(vec3(-dzDx, -dzDy, 1));

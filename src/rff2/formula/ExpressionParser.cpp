@@ -5,7 +5,7 @@
 // Modified by Opus 5 on 2026-08-16
 // Modified by GPT-5 on 2026-08-21
 // Modified by GPT-6 on 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-25
+// Modified by Opus 5.5 on 2026-10-25, 2026-11-15
 //
 
 #include "ExpressionParser.h"
@@ -46,6 +46,21 @@ namespace merutilm::rff2 {
             }
             return value;
         }
+        // A token and the characters it was read from, so an error can point at them.
+        struct Token {
+            std::string text;
+            size_t position;
+            size_t length;
+            bool implicit = false; // a multiplication the parser inserted, as in 2z
+        };
+
+        // Carries where a parse failed; what() keeps the English message getErrorMessage() has always given.
+        struct Failure : std::runtime_error {
+            ParseErrorDetail detail;
+            Failure(const std::string& message, ParseErrorKind kind, size_t position, size_t length,
+                    std::string token = {}, std::string other = {})
+                : std::runtime_error(message), detail{kind, position, length, std::move(token), std::move(other)} {}
+        };
     }
 
     // Shunting-yard-style parsing: Dijkstra (1961), mathematical background; see NOTICE; project license unchanged.
@@ -53,9 +68,13 @@ namespace merutilm::rff2 {
         instructions.clear();
         parseError = false;
         errorMessage.clear();
+        errorDetail = {};
+
+        // What the user typed for a token, so an error names ** rather than the ^ it became.
+        const auto written = [&](const Token& token) { return expression.substr(token.position, token.length); };
 
         try {
-            std::vector<std::string> tokens;
+            std::vector<Token> tokens;
             const size_t len = expression.length();
             for (size_t i = 0; i < len; ++i) {
                 const char c = expression[i];
@@ -65,8 +84,8 @@ namespace merutilm::rff2 {
                                            // otherwise the leading z implicit-multiplies the rhs
                     // Anything other than z as the target was dropped just as silently, so
                     // "c = z^2+c" ran as "z = z^2+c" and iterated something the user never wrote.
-                    if (tokens.size() != 1 || tokens[0] != "z") {
-                        throw std::runtime_error("Only \"z = ...\" can be assigned");
+                    if (tokens.size() != 1 || tokens[0].text != "z") {
+                        throw Failure("Only \"z = ...\" can be assigned", ParseErrorKind::BAD_ASSIGNMENT, i, 1);
                     }
                     tokens.clear();
                     continue;
@@ -90,7 +109,7 @@ namespace merutilm::rff2 {
                         !(j + 1 < len && std::isalpha(static_cast<unsigned char>(expression[j + 1])))) {
                         ++j;
                     }
-                    tokens.push_back(expression.substr(i, j - i));
+                    tokens.push_back({expression.substr(i, j - i), i, j - i});
                     i = j - 1;
                 } else if (std::isalpha(static_cast<unsigned char>(c))) {
                     // Identifier: starts with a letter, then letters/digits (so "log10",
@@ -98,20 +117,20 @@ namespace merutilm::rff2 {
                     // misparsing into log(10) / atan(2)).
                     size_t j = i;
                     while (j < len && std::isalnum(static_cast<unsigned char>(expression[j]))) ++j;
-                    tokens.push_back(expression.substr(i, j - i));
+                    tokens.push_back({expression.substr(i, j - i), i, j - i});
                     i = j - 1;
                 } else {
-                    tokens.push_back(std::string(1, c));
+                    tokens.push_back({std::string(1, c), i, 1});
                 }
             }
 
             // Treat "**" (Python-style power) as a single "^" so z**2 works.
             {
-                std::vector<std::string> collapsed;
+                std::vector<Token> collapsed;
                 collapsed.reserve(tokens.size());
                 for (size_t i = 0; i < tokens.size(); ++i) {
-                    if (tokens[i] == "*" && i + 1 < tokens.size() && tokens[i + 1] == "*") {
-                        collapsed.push_back("^");
+                    if (tokens[i].text == "*" && i + 1 < tokens.size() && tokens[i + 1].text == "*") {
+                        collapsed.push_back({"^", tokens[i].position, tokens[i + 1].position + 1 - tokens[i].position});
                         ++i;
                     } else {
                         collapsed.push_back(tokens[i]);
@@ -126,32 +145,41 @@ namespace merutilm::rff2 {
             auto isIdentTok = [](const std::string& t) {
                 return !t.empty() && std::isalpha(static_cast<unsigned char>(t[0]));
             };
-            std::vector<std::string> merged;
+            std::vector<Token> merged;
             merged.reserve(tokens.size() * 2);
             for (size_t i = 0; i < tokens.size(); ++i) {
                 if (i > 0) {
-                    const std::string& prev = tokens[i - 1];
-                    const std::string& cur = tokens[i];
+                    const std::string& prev = tokens[i - 1].text;
+                    const std::string& cur = tokens[i].text;
                     const bool prevEndsValue = prev == ")" || isNumTok(prev) || (isIdentTok(prev) && !isFunction(prev));
                     const bool curStartsValue = cur == "(" || isNumTok(cur) || isIdentTok(cur);
                     if (prevEndsValue && curStartsValue) {
-                        merged.push_back("*");
+                        merged.push_back({"*", tokens[i].position, 0, true});
                     }
                 }
                 merged.push_back(tokens[i]);
             }
 
-            std::stack<std::string> operators;
+            std::stack<Token> operators;
             bool expectUnary = true;
+            // The last token the user wrote; an inserted multiplication is never the one at fault.
+            const Token* previous = nullptr;
 
-            auto emitValue = [&](const std::string& tok) {
-                // Number with imaginary suffix (1i, 2i, 3.5i, 1e3i)
-                if (tok.size() > 1 && tok.back() == 'i' &&
-                    (std::isdigit(static_cast<unsigned char>(tok[0])) || tok[0] == '.')) {
-                    instructions.push_back({OpCode::PUSH_CONST,
-                                            std::complex<double>(0, toNumber(tok.substr(0, tok.size() - 1)))});
-                } else if (std::isdigit(static_cast<unsigned char>(tok[0])) || tok[0] == '.') {
-                    instructions.push_back({OpCode::PUSH_CONST, std::complex<double>(toNumber(tok), 0)});
+            auto emitValue = [&](const Token& token) {
+                const std::string& tok = token.text;
+                if (isNumTok(tok)) {
+                    try {
+                        // Number with imaginary suffix (1i, 2i, 3.5i, 1e3i)
+                        if (tok.size() > 1 && tok.back() == 'i') {
+                            instructions.push_back({OpCode::PUSH_CONST,
+                                                    std::complex<double>(0, toNumber(tok.substr(0, tok.size() - 1)))});
+                        } else {
+                            instructions.push_back({OpCode::PUSH_CONST, std::complex<double>(toNumber(tok), 0)});
+                        }
+                    } catch (const std::exception&) {
+                        throw Failure("Invalid number: " + tok, ParseErrorKind::INVALID_NUMBER, token.position,
+                                      token.length, tok);
+                    }
                 } else if (tok == "z") {
                     instructions.push_back({OpCode::PUSH_Z, {}});
                 } else if (tok == "c") {
@@ -167,79 +195,128 @@ namespace merutilm::rff2 {
                 } else if (tok == "e") {
                     instructions.push_back({OpCode::PUSH_CONST, std::complex<double>(std::numbers::e, 0)});
                 } else {
-                    throw std::runtime_error("Unknown token: " + tok);
+                    throw Failure("Unknown token: " + tok,
+                                  isIdentTok(tok) ? ParseErrorKind::UNKNOWN_NAME : ParseErrorKind::UNKNOWN_SYMBOL,
+                                  token.position, token.length, tok);
                 }
             };
+            // Every place below that finds no value where one is needed was already a parse failure; these only say where.
+            auto missingAfter = [&](const Token& token) {
+                return Failure("An operator or function is missing an argument", ParseErrorKind::MISSING_AFTER,
+                               token.position, token.length, written(token));
+            };
 
-            for (const std::string& tok : merged) {
+            for (const Token& token : merged) {
+                const std::string& tok = token.text;
                 if (tok == "(") {
-                    operators.push("(");
+                    operators.push(token);
                     expectUnary = true;
                 } else if (tok == ")") {
-                    while (!operators.empty() && operators.top() != "(") {
-                        instructions.push_back({getOpCode(operators.top()), {}});
+                    if (expectUnary && previous) {
+                        if (previous->text == "(") {
+                            throw Failure("Empty parentheses", ParseErrorKind::EMPTY_BRACKETS, previous->position,
+                                          token.position + 1 - previous->position);
+                        }
+                        throw missingAfter(*previous);
+                    }
+                    while (!operators.empty() && operators.top().text != "(") {
+                        instructions.push_back({getOpCode(operators.top().text), {}});
                         operators.pop();
                     }
-                    if (operators.empty()) throw std::runtime_error("Mismatched parentheses");
+                    if (operators.empty()) {
+                        throw Failure("Mismatched parentheses", ParseErrorKind::UNMATCHED_CLOSE, token.position, 1);
+                    }
                     operators.pop(); // discard "("
-                    if (!operators.empty() && isFunction(operators.top())) {
-                        instructions.push_back({getOpCode(operators.top()), {}});
+                    if (!operators.empty() && isFunction(operators.top().text)) {
+                        instructions.push_back({getOpCode(operators.top().text), {}});
                         operators.pop();
                     }
                     expectUnary = false;
                 } else if (isFunction(tok)) {
-                    operators.push(tok);
+                    operators.push(token);
                     expectUnary = true;
                 } else if (isOperator(tok)) {
                     if (tok == "-" && expectUnary) {
-                        operators.push("_");
+                        operators.push({"_", token.position, token.length});
                     } else {
+                        if (expectUnary) {
+                            if (previous && isFunction(previous->text)) {
+                                throw missingAfter(*previous);
+                            }
+                            if (previous && isOperator(previous->text)) {
+                                throw Failure("An operator or function is missing an argument",
+                                              ParseErrorKind::MISSING_BETWEEN, previous->position,
+                                              token.position + token.length - previous->position, written(*previous),
+                                              written(token));
+                            }
+                            throw Failure("An operator or function is missing an argument",
+                                          ParseErrorKind::MISSING_BEFORE, token.position, token.length, written(token));
+                        }
                         // "^" is right-associative: don't pop an equal-precedence "^".
                         const bool rightAssoc = (tok == "^");
-                        while (!operators.empty() && operators.top() != "(" &&
+                        while (!operators.empty() && operators.top().text != "(" &&
                                (rightAssoc
-                                    ? getPrecedence(operators.top()) > getPrecedence(tok)
-                                    : getPrecedence(operators.top()) >= getPrecedence(tok))) {
-                            instructions.push_back({getOpCode(operators.top()), {}});
+                                    ? getPrecedence(operators.top().text) > getPrecedence(tok)
+                                    : getPrecedence(operators.top().text) >= getPrecedence(tok))) {
+                            instructions.push_back({getOpCode(operators.top().text), {}});
                             operators.pop();
                         }
-                        operators.push(tok);
+                        operators.push(token);
                     }
                     expectUnary = true;
                 } else {
-                    emitValue(tok);
+                    emitValue(token);
                     expectUnary = false;
+                }
+                if (!token.implicit) {
+                    previous = &token;
                 }
             }
 
-            while (!operators.empty()) {
-                if (operators.top() == "(" || operators.top() == ")") {
-                    throw std::runtime_error("Mismatched parentheses");
+            if (expectUnary && previous) {
+                if (previous->text == "(") {
+                    throw Failure("Mismatched parentheses", ParseErrorKind::UNCLOSED_OPEN, previous->position, 1);
                 }
-                instructions.push_back({getOpCode(operators.top()), {}});
+                throw missingAfter(*previous);
+            }
+            while (!operators.empty()) {
+                if (operators.top().text == "(") {
+                    throw Failure("Mismatched parentheses", ParseErrorKind::UNCLOSED_OPEN, operators.top().position, 1);
+                }
+                instructions.push_back({getOpCode(operators.top().text), {}});
                 operators.pop();
             }
 
-            // Nothing above counts arguments, so "z+", "sin()" and "z++c" all came through as
-            // accepted formulas. Their programs then ran out of operands in evaluate(), which
+            // Run the program on an abstract stack before accepting it. A missing operand used
+            // to slip through - "z^" and "sin()" both parsed - and evaluate() then quietly
             // answers 0 for that - and a formula that returns 0 for every z leaves the whole
             // frame at the interior color, with no error anywhere to say why.
             int depth = 0;
             for (const Instruction& instr : instructions) {
                 const int operands = operandCount(instr.op);
                 if (depth < operands) {
-                    throw std::runtime_error("An operator or function is missing an argument");
+                    throw Failure("An operator or function is missing an argument", ParseErrorKind::INCOMPLETE,
+                                  std::string::npos, 0);
                 }
                 depth += 1 - operands;
             }
             if (instructions.empty() || depth != 1) {
-                throw std::runtime_error("The formula must work out to a single value");
+                throw Failure("The formula must work out to a single value",
+                              instructions.empty() ? ParseErrorKind::EMPTY : ParseErrorKind::INCOMPLETE,
+                              std::string::npos, 0);
             }
 
             return true;
+        } catch (const Failure& e) {
+            parseError = true;
+            errorMessage = e.what();
+            errorDetail = e.detail;
+            instructions.clear();
+            return false;
         } catch (const std::exception& e) {
             parseError = true;
             errorMessage = e.what();
+            errorDetail = {ParseErrorKind::INCOMPLETE};
             instructions.clear();
             return false;
         }

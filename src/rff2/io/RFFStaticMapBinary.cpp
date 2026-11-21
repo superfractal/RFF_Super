@@ -3,11 +3,13 @@
 // Modified by GPT-5 on 2026-08-23, 2026-09-01
 // Modified by Opus 5 on 2026-08-31
 // Modified by GPT-6 on 2026-09-22, 2026-09-25, 2026-09-26
+// Modified by Opus 5.5 on 2026-11-15
 //
 
 #include "RFFStaticMapBinary.h"
 #include <cmath>
 #include "MapLimits.hpp"
+#include "RFF2FileVersion.hpp"
 
 #include "../../vulkan_helper/core/logger.hpp"
 #include "../ui/IOUtilities.h"
@@ -46,8 +48,16 @@ namespace merutilm::rff2 {
             return DEFAULT;
         }
 
-        float lz;
-        IOUtilities::readAndDecode(in, &lz);
+        const std::optional<uint32_t> version = RFF2FileVersion::read(in, RFF2FileVersion::FLOAT_UNVERSIONED_FROM);
+        if (!version) {
+            return DEFAULT;
+        }
+        float lz = 0;
+        if (*version == 0) {
+            IOUtilities::readAndDecode(in, &lz);
+        } else if (!RFF2FileVersion::readLogZoom(in, lz)) {
+            return DEFAULT;
+        }
         uint32_t w;
         IOUtilities::readAndDecode(in, &w);
         uint32_t h;
@@ -55,8 +65,9 @@ namespace merutilm::rff2 {
         if (!in || !std::isfinite(lz) || w == 0 || h == 0 || static_cast<uint64_t>(w) * h > MAX_MAP_PIXELS) {
             return DEFAULT;
         }
+        // RFF-2.0's versioned header ends at the height; the iteration limit after it is RFF_Super's own.
         std::optional<uint64_t> maxIteration;
-        if (in.peek() != std::char_traits<char>::eof()) {
+        if (*version == 0 && in.peek() != std::char_traits<char>::eof()) {
             uint64_t value = 0;
             IOUtilities::readAndDecode(in, &value);
             if (!in) return DEFAULT;

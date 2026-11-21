@@ -2,6 +2,7 @@
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-01
 // Modified by GPT-5 on 2026-09-17
 // Modified by Opus 5.5 on 2026-10-03, 2026-10-07, 2026-10-25, 2026-11-01, 2026-11-04
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
@@ -3877,6 +3878,24 @@ namespace merutilm::rff2::workspace {
             }
             for (auto &[id, form] : workspaces) {
                 form->discardPending();
+            }
+            refresh();
+        }
+        // Reads a field's pending draft value from a workspace form, if one exists.
+        std::optional<std::wstring> draftValue(int workspaceId, const std::string &fieldId) const {
+            if (const auto found = workspaces.find(workspaceId); found != workspaces.end()) {
+                return found->second->draftValue(fieldId);
+            }
+            return std::nullopt;
+        }
+        // Refreshes a single workspace form (or only specific fields) after an external window commits a change.
+        void syncWorkspace(int workspaceId, std::initializer_list<std::string_view> fieldIds = {}) {
+            if (const auto found = workspaces.find(workspaceId); found != workspaces.end()) {
+                if (fieldIds.size() == 0) {
+                    found->second->discardPending();
+                } else {
+                    found->second->syncFields(fieldIds);
+                }
             }
             refresh();
         }

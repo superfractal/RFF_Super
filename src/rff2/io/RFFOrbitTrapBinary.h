@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-13
-// Modified by Opus 5.5 on 2026-10-16, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-16, 2026-10-29, 2026-11-16
 //
 
 #pragma once
@@ -22,6 +22,8 @@ namespace merutilm::rff2 {
         static constexpr uint16_t SHAPE_VERSION = 2;
         // Version 3 is version 2 with a trailing uint32 sides, written only for the shapes that read Orbit Trap Sides.
         static constexpr uint16_t SIDES_VERSION = 3;
+        // Version 4 is version 3 with sides always present and a trailing float32 touch width, written only for First and Last Touch.
+        static constexpr uint16_t TOUCH_VERSION = 4;
 
         [[nodiscard]] static std::filesystem::path keyframePath(const std::filesystem::path &dir, uint32_t id);
 

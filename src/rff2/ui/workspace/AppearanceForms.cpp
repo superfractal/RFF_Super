@@ -1,6 +1,7 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-19, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-29, 2026-10-01, 2026-10-07
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-16, 2026-10-17, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #include "AppearanceForms.hpp"
@@ -412,11 +413,14 @@ namespace merutilm::rff2::workspace {
                        L"Degrees the trap turns about its center; Point, Circle and Rings do not use it. Recalculates.");
         section.number("orbitTrapSides", &Settings::orbitTrapSides, L"Sides", ORBIT_TRAP_SIDES_MIN,
                        ORBIT_TRAP_SIDES_MAX, L"Polygon's sides and Star's points. Recalculates.");
+        section.choice("orbitTrapStatistic", &Settings::orbitTrapStatistic, L"Sample",
+                       L"Which orbit point colors the pixel; a touch comes within Width. Recalculates.");
         section.group = 1;
         section.choice("orbitTrapMapping", &Settings::orbitTrapMapping, L"Color Mapping",
                        L"Shape coloring only: what the trap's colors follow.");
         section.number("orbitTrapArms", &Settings::orbitTrapArms, L"Arms", uint32_t(1),
-                       Settings::ORBIT_TRAP_ARMS_MAX, L"Angle color mapping only: palette turns per revolution.");
+                       Settings::ORBIT_TRAP_ARMS_MAX,
+                       L"Angle, Polar Petals and Polar Checker color mappings: turns or sectors per revolution.");
         section.number("orbitTrapDensity", &Settings::orbitTrapDensity, L"Density",
                        -Settings::ORBIT_TRAP_DENSITY_LIMIT, Settings::ORBIT_TRAP_DENSITY_LIMIT,
                        L"Palette cycles across the trap; Angle color mapping uses Arms instead.");
@@ -430,7 +434,7 @@ namespace merutilm::rff2::workspace {
         section.group = 2;
         section.number("orbitTrapWidth", &Settings::orbitTrapWidth, L"Width",
                        Settings::ORBIT_TRAP_WIDTH_MIN, Settings::ORBIT_TRAP_WIDTH_MAX,
-                       L"log2 of the distance where the glow halves; lower it at deep zooms.");
+                       L"log2 of the distance where the glow halves; lower it at deep zooms. Under First or Last Touch it recalculates.");
         section.number("orbitTrapGlowSharpness", &Settings::orbitTrapGlowSharpness, L"Glow Sharpness",
                        Settings::ORBIT_TRAP_SHAPE_MIN, Settings::ORBIT_TRAP_SHAPE_MAX,
                        L"Higher draws thinner lines; Relief does not use it.");
@@ -439,6 +443,12 @@ namespace merutilm::rff2::workspace {
                        Settings::ORBIT_TRAP_GLOW_STRENGTH_MAX);
         section.choice("orbitTrapRelief", &Settings::orbitTrapRelief, L"Relief",
                        L"Cross Glow and Shape only: draws the trap as a lit tube of radius Width.");
+        section.number("orbitTrapBumpHeight", &Settings::orbitTrapBumpHeight, L"Bump Height",
+                       -Settings::ORBIT_TRAP_BUMP_HEIGHT_LIMIT, Settings::ORBIT_TRAP_BUMP_HEIGHT_LIMIT,
+                       L"Raises the trap into Slope's surface and widens its colour with it; below 0 cuts a groove, 0 is off.");
+        section.number("orbitTrapBumpRoundness", &Settings::orbitTrapBumpRoundness, L"Bump Roundness",
+                       Settings::ORBIT_TRAP_BUMP_ROUNDNESS_MIN, Settings::ORBIT_TRAP_BUMP_ROUNDNESS_MAX,
+                       L"The bump's cross-section: 0.50 is round, lower is pointed, higher is flat-topped.");
         section.group = 3;
         section.number("orbitTrapAmount", &Settings::orbitTrapAmount, L"Amount", 0.0f, 1.0f,
                        L"Share of the trap coloring over the iteration palette.");

@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-05, 2026-08-06, 2026-08-07, 2026-08-08, 2026-08-10, 2026-08-12, 2026-08-13, 2026-08-14, 2026-08-15, 2026-08-17, 2026-08-19, 2026-08-23, 2026-08-24, 2026-08-26, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-27, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-20, 2026-09-21, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-27, 2026-09-30, 2026-10-01
-// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-09-23, 2026-09-30, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-21, 2026-10-24, 2026-10-25, 2026-10-26, 2026-11-01, 2026-11-02, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
 //
 
 #include "NativeDialogs.hpp"
@@ -3816,6 +3816,14 @@ namespace merutilm::rff2 {
             key.shader.palette.orbitTrapCenterImag = palette.orbitTrapCenterImag;
             key.shader.palette.orbitTrapRadius = palette.orbitTrapRadius;
             key.shader.palette.orbitTrapAngle = palette.orbitTrapAngle;
+            key.shader.palette.orbitTrapSides = palette.orbitTrapSides;
+            key.shader.palette.orbitTrapStatistic = palette.orbitTrapStatistic;
+            // First and Last Touch measure against Width, so it decides the source only then.
+            if (orbitTrapStatisticTouches(palette.orbitTrapStatistic)) {
+                key.shader.palette.orbitTrapWidth = palette.orbitTrapWidth;
+                key.shader.palette.orbitTrapBumpHeight = palette.orbitTrapBumpHeight;
+                key.shader.palette.orbitTrapBumpRoundness = palette.orbitTrapBumpRoundness;
+            }
         }
         key.video = {};
         key.video.data.cameraPadding = true;

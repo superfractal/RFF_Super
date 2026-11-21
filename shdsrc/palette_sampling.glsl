@@ -5,7 +5,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23, 2026-09-25, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-29, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-07
+// Modified by Opus 5.5 on 2026-09-29, 2026-10-05, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-07, 2026-11-16, 2026-11-17
 //
 
 #define NONE 0
@@ -121,6 +121,11 @@ layout (set = PALETTE_DATA_SET, binding = 0) buffer PaletteSSBO {
     uint orbit_trap_relief;
     float orbit_trap_light_azimuth;
     float orbit_trap_light_zenith;
+    // Shape's Sample: 0 Nearest, 1 First Touch, 2 Last Touch; the touches color linearly across the trap's width.
+    uint orbit_trap_statistic;
+    // Orbit Trap bump read by the slope pass: Height (0 off) and Roundness of Height * (1 - u^2)^Roundness.
+    float orbit_trap_bump_height;
+    float orbit_trap_bump_roundness;
     vec4 palette[];
 } palette_attr;
 

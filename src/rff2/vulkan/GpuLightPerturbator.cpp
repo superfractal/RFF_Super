@@ -1,6 +1,6 @@
 //
 // Created by Merutilm on 8/24/26.
-// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29
+// Modified by Opus 5.5 on 2026-10-06, 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-29, 2026-11-16
 //
 
 // Derived from Merutilm RFF 2.3.0 CPCIterate.hpp, ComputeShaderRenderManager.hpp and RFF2::fillIterationComputeShader, GPL-3.0; see NOTICE.
@@ -47,8 +47,12 @@ namespace merutilm::rff2 {
             double trapHalfSin;
             double trapInnerX;
             double trapInnerY;
+            uint32_t trapStatistic;
+            // std430 aligns the double that follows to 8 as well.
+            uint32_t trapStatisticPad;
+            double trapTouchLimit;
         };
-        static_assert(sizeof(GpuParams) == 152);
+        static_assert(sizeof(GpuParams) == 168);
 
         struct GpuPA {
             double anr;
@@ -206,6 +210,8 @@ namespace merutilm::rff2 {
                 params.trapHalfSin = shape.halfSin;
                 params.trapInnerX = shape.innerX;
                 params.trapInnerY = shape.innerY;
+                params.trapStatistic = static_cast<uint32_t>(shape.statistic);
+                params.trapTouchLimit = shape.touchLimit;
             }
             copyOrbit(reference);
             if (const LightMPATable *mpa = perturbator.getTableOrNull(); mpa != nullptr && mpa->mpaPeriod != nullptr) {

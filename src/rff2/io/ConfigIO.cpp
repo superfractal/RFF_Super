@@ -8,7 +8,8 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-24, 2026-09-25, 2026-09-26, 2026-09-29, 2026-09-30
-// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-15
+// Modified by Opus 5.5 on 2026-09-23, 2026-10-03, 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-10, 2026-10-12, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-26, 2026-10-29, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-15, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #include "ConfigIO.h"
@@ -467,6 +468,9 @@ namespace merutilm::rff2 {
         ShaderPresetIO::writeChromaticAberration(out, attr.shader);
         ShaderPresetIO::writeCastShadow(out, attr.shader);
         TimelineIO::writeDirection(out, vi.timeline);
+        ShaderPresetIO::writeOrbitTrapStatistic(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapBump(out, attr.shader);
+        ShaderPresetIO::writeOrbitTrapMappingExtension(out, attr.shader);
         if constexpr (BUDDHABROT_AVAILABLE) writeBuddhabrot(out, fr);
 
 
@@ -940,6 +944,9 @@ namespace merutilm::rff2 {
         ShaderPresetIO::readChromaticAberration(in, t.shader);
         ShaderPresetIO::readCastShadow(in, t.shader);
         TimelineIO::readDirection(in, vi.timeline);
+        ShaderPresetIO::readOrbitTrapStatistic(in, t.shader);
+        ShaderPresetIO::readOrbitTrapBump(in, t.shader);
+        ShaderPresetIO::readOrbitTrapMappingExtension(in, t.shader);
         if (!readBuddhabrot(in, fr)) return false;
         try { AudioTimelineIO::resolvePaths(vi.timeline.audio, path); }
         catch (const std::filesystem::filesystem_error&) { return false; }

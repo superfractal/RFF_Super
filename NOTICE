@@ -1,7 +1,8 @@
 RFF Super - Third-Party Notices
 
 Notice mappings updated by GPT-6 on 2026-09-25, 2026-09-26, 2026-09-30, 2026-10-01, 2026-10-02, 2026-10-03, 2026-10-04.
-Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-26, 2026-10-29, 2026-10-31, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-14.
+Notice mappings updated by Opus 5.5 on 2026-10-02, 2026-10-03, 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-20, 2026-10-21, 2026-10-25, 2026-10-26, 2026-10-29, 2026-10-31, 2026-11-01, 2026-11-04, 2026-11-05, 2026-11-06, 2026-11-07, 2026-11-12, 2026-11-14, 2026-11-15, 2026-11-17.
+Notice mappings updated by Gemini 4 Neon on 2026-11-19, 2026-11-21.
 
 RFF Super is a modified version of RFF-2.0 by Merutilm, licensed under the
 GNU General Public License v3; see LICENSE. This file records the third-party
@@ -333,11 +334,15 @@ or change the licenses of independently written project implementations.
   was copied.
   Orbit Trap Mapping and Relief (orbit_trap_relief.glsl) are original
   RFF_Super shading of those distances (GPL-3.0-or-later). Angle colors by
-  arg(z - c) at the nearest approach; Relief treats the log2 distance as the
-  radius of a round tube lit with a Blinn half vector (see below). Both were
-  written independently; no third-party code was copied.
-- Perturbator.h implements log-log escape smoothing, with bailout normalization
-  and a locally estimated degree in the general-formula variant. Background:
+  arg(z - c) at the nearest approach, Iteration and Iteration & Distance by
+  the approach's iteration count and distance, and Polar Petals and Polar
+  Checker by polar motifs built from distance, angle and iteration; Relief
+  treats the log2 distance as the radius of a round tube lit with a Blinn
+  half vector (see below). All were written independently; no third-party
+  code was copied.
+- Perturbator.h and src/rff2/ui/FormulaStudioWindow.cpp implement log-log
+  escape smoothing, with bailout normalization and a locally estimated degree in
+  the general-formula variant. Background:
   Linas Vepstas, "Renormalizing the Mandelbrot Escape" (1997):
   https://linas.org/art-gallery/escape/escape.html
 - Relief Source dz/dc (EscapeDerivative.h, Light/DeepMandelbrotPerturbator.cpp,
@@ -361,11 +366,23 @@ or change the licenses of independently written project implementations.
   three mixing constants match that file. The file dedicates its code to the
   public domain; earlier copies pointed to CC0 1.0, and the current copy adds
   a 0BSD-style permission grant. Both terms are GPL-compatible.
-- The Burning Ship examples/RIABS operation in ExpressionParser.cpp/.h and
-  CallbackFractal.cpp refer to Michael Michelitsch and Otto E. Roessler,
+- The Burning Ship examples/RIABS operation in ExpressionParser.cpp/.h,
+  CallbackFractal.cpp and src/rff2/ui/workspace/FormulaInput.hpp refer to
+  Michael Michelitsch and Otto E. Roessler,
   "The burning ship and its quasi-Julia sets" (1992):
   https://doi.org/10.1016/0097-8493(92)90032-Q
   CallbackFractal.cpp also explains the smoothing used by Perturbator.h.
+- The Tricorn example in src/rff2/ui/workspace/FormulaInput.hpp names the set
+  of z -> conj(z)^2 + c after John Milnor, "Remarks on Iterated Cubic Maps",
+  Experimental Mathematics 1(1) (1992), pp. 5-24:
+  https://projecteuclid.org/journals/experimental-mathematics/volume-1/issue-1/Remarks-on-iterated-cubic-maps/em/1048709112.short
+- FormulaInput.hpp suggests a misspelled formula name with the edit distance of
+  Vladimir I. Levenshtein, "Binary codes capable of correcting deletions,
+  insertions, and reversals" (1966), computed by the dynamic-programming
+  recurrence of Robert A. Wagner and Michael J. Fischer, "The String-to-String
+  Correction Problem", Journal of the ACM 21(1) (1974); written for this project
+  from the published method:
+  https://en.wikipedia.org/wiki/Wagner%E2%80%93Fischer_algorithm
 - effects.glsl and orbit_trap_relief.glsl use a normal/half-vector power
   highlight. vk_slope.frag uses an artistic variation. Background: Jim Blinn, "Models of Light Reflection
   for Computer Synthesized Pictures" (1977); these are not claims of a complete
@@ -652,7 +669,8 @@ style, from Microsoft's Fluent Emoji collection.
 Source: https://github.com/microsoft/fluentui-emoji, commit
 1ffb34c752ecf5d402f04cfb4b392c77f57c54bc, "assets/File folder/Flat/
 file_folder_flat.svg", retrieved 2026-11-12.
-Full license text: extern/licenses/fluentui-emoji-MIT.txt
+Full license text: extern/licenses/fluentui-emoji-MIT.txt and
+third-party/licenses/bundled/fluentui-emoji-MIT.txt
 
 res/gallery/fluent-file-folder-flat.svg is the unmodified SVG
 (SHA-256 870727aa9758f76359181c035456aba47e87d622a619a0ee80fb60b40070fbd1).
@@ -1143,6 +1161,32 @@ credited as the technique's origin; Wolfe's grant is not assigned to Jimenez's
 2014 presentation or used to prove its earlier acquisition chain.
 https://github.com/Atrix256/IGNLDS/blob/a9f3ab9b5f4edfd0e3e186f1192dca747e7ef3bc/main.py
 Full notice and grant: extern/licenses/alan-wolfe-ign-MIT.txt.
+
+Orbit Trap bump - after the project owner's Material Lab prototype (2026-11-17)
+
+shdsrc/orbit_trap_bump.glsl, written by Opus 5.5 on 2026-11-17, raises the
+Orbit Trap into the Slope surface. Its height profile (1 - (1 - t)^2)^Roundness
+with t = exp(-u) or 1 - u, the slope from the height's central difference at 14
+per height unit per 1080 lines softened by s / (1 + 0.6 |s|), the Depth 0
+lighting rig (the prototype's studio environment of three spherical Gaussian
+lights over a dim sky, a 2.2 key of colour #fff3e2, a 0.6 rim of colour #9fc0ff
+turned 165 degrees and 22 degrees up, IOR 1.5, roughness 0.3), and the key's
+cast shadow (14 taps spaced by
+((i + jitter) / 14)^1.6 over 140, softness 0.6, depth 0.55) and contact shading
+(8 taps within 16, 0.5) follow the forms and default values of the project
+owner's own unpublished browser prototype, "Mandelbrot Material Lab". The code
+here is written anew; the prototype itself is not bundled. Inspection of the
+prototype HTML on 2026-11-21 confirmed it is an unpublished AI-generated Claude
+artifact produced for the project owner, and that none of the prototype's
+third-party shader formulas or constant tables (such as its envBRDF fit,
+Belcour/Barla glTF iridescence, ACES/AgX/PBR Neutral tone maps, blur weights,
+other environments, or external font links) were taken into RFF_Super. Web
+searches on 2026-11-17 for the profile, the shadow march and the contact shading
+found no matching public code. The GGX lobe is studio_brdf (see "Studio GGX and
+clearcoat") and the environment's reflectance openpbr_ggx_albedo; the jitter is
+the MIT-licensed IGN expression credited above. On 2026-11-17 the port was
+checked against the prototype itself, rendered headless, on the same orbit-trap
+height data.
 
 Relief cast shadow - independent height-field march (2026-11-14)
 

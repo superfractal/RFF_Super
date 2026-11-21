@@ -1,5 +1,38 @@
 # Config File Format (ConfigIO)
 
+## Orbit Trap Mapping Extension (2026-11-19)
+
+Modified by Gemini 4 Neon on 2026-11-19. Orbit Trap Mapping gains Iteration = 3, Iteration & Distance = 4,
+Polar Petals = 5 and Polar Checker = 6. OTM1 stores these mappings as a stand-in an older reader can draw:
+Iteration and Iteration & Distance as Distance (0), Polar Petals and Polar Checker as Angle (1). RFSP appends
+OTM2 (uint32 0x324D544F) after OTB1, and RFC after OTB1 and before BDB1, followed by the mapping as uint32
+(3 to 6). OTM2 is written only for a mapping past Bands, so every other file is byte-identical to before. The
+reader looks at the next marker and leaves anything other than OTM2 unread; a missing block keeps OTM1's
+mapping. A partial block or a value outside 3 to 6 rejects the load. Readers without OTM2 open such an RFSP
+with the stand-in mapping; an RFC reader that also reads BDB1 rejects the file. Versions and existing offsets
+are unchanged.
+
+## Orbit Trap Bump (2026-11-17)
+
+Modified by Opus 5.5 on 2026-11-17. Cross Glow and Shape gain Bump Height (-4 to 4, default 0 = off)
+and Bump Roundness (0.15 to 3, default 0.5). RFSP appends OTB1 (uint32 0x3142544F) after OTT1, and RFC
+after OTT1 and before BDB1, followed by the height and the roundness as float32. OTB1 is written only
+when either value is off its default, so every other file is byte-identical to before. The reader
+looks at the next marker and leaves anything other than OTB1 unread; a missing block loads the
+defaults. A partial block or a value out of range rejects the load. Readers without OTB1 open such an
+RFSP without the bump; an RFC reader that also reads BDB1 rejects the file. Versions and existing
+offsets are unchanged.
+
+## Orbit Trap Sample (2026-11-16)
+
+Modified by Opus 5.5 on 2026-11-16. Shape coloring gains Sample (0 = Nearest, the default,
+1 = First Touch, 2 = Last Touch). RFSP appends OTT1 (uint32 0x3154544F) after CSH1, and RFC after
+TRV1 and before BDB1, followed by the value as uint32. OTT1 is written only while Sample is not
+Nearest, so every other file is byte-identical to before. The reader looks at the next marker and
+leaves anything other than OTT1 unread; a missing block loads Nearest. A partial block or a value
+above 2 rejects the load. Readers without OTT1 open such an RFSP with Nearest; an RFC reader that
+also reads BDB1 rejects the file. Versions and existing offsets are unchanged.
+
 ## Timeline Reverse (2026-11-15)
 
 Modified by Opus 5.5 on 2026-11-15. The timeline gains Reverse (default off), which runs the video

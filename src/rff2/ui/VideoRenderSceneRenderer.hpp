@@ -3,7 +3,7 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-19, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-08-31
 // Modified by GPT-6 on 2026-09-11, 2026-09-16, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-26
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-09, 2026-10-21
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-05, 2026-10-06, 2026-10-09, 2026-10-21, 2026-11-17
 //
 
 #pragma once
@@ -533,6 +533,15 @@ namespace merutilm::rff2 {
 
                 vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                                           outputBuffer.buffer, 0, outputBuffer.bufferSize,
+                                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                // The Orbit Trap bump's distances, written beside the iterations and read by the slope pass.
+                const auto &trapDistance = renderer2MapIterationStripe->getDescriptor(
+                            CPC2MapIterationStripe::SET_OUTPUT_ITERATION).get
+                        <vkh::ShaderStorage>(0, SharedDescriptorTemplate::DescIteration::BINDING_SSBO_TRAP_DISTANCE)
+                        ->getBufferContext();
+                vkh::BarrierUtils::cmdBufferMemoryBarrier(cbh, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                                          trapDistance.buffer, 0, trapDistance.bufferSize,
                                                           VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
                 vkh::BarrierUtils::cmdImageMemoryBarrier(

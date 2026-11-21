@@ -4,7 +4,7 @@
 // Modified by Opus 5 on 2026-08-12, 2026-08-14, 2026-08-18, 2026-08-19, 2026-08-26, 2026-08-31
 // Modified by GPT-5 on 2026-08-18, 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-31
 // Modified by GPT-6 on 2026-09-08, 2026-09-14, 2026-09-15, 2026-09-18, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01, 2026-11-05, 2026-11-07
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-10, 2026-10-13, 2026-10-16, 2026-10-25, 2026-11-01, 2026-11-05, 2026-11-07, 2026-11-17
 //
 
 #include "NativeDialogs.hpp"
@@ -534,6 +534,15 @@ namespace merutilm::rff2 {
             if (state.interruptRequested()) {
                 return;
             }
+            // A setting changed while this keyframe is written restarts the view at this depth, so the keyframe waits for that calculation instead of moving on.
+            const auto viewMoved = [&scene, &idle](const uint64_t stamp) {
+                return scene.viewStamp() != stamp || !idle() || scene.getRequests().resizeRequested;
+            };
+            const uint64_t frameStamp = scene.viewStamp();
+            if (viewMoved(frameStamp)) {
+                nextFrame = false;
+                continue;
+            }
             if (!validNextZoom(logZoom)) {
                 message(nullptr, L"Zoom step no longer advances at this depth. Increase Zoom Step per Keyframe.",
                                        L"Keyframe generation", MB_OK | MB_ICONERROR);
@@ -550,6 +559,7 @@ namespace merutilm::rff2 {
                                        L"Keyframe generation", MB_OK | MB_ICONERROR);
                 return;
             }
+            std::vector<std::filesystem::path> written;
             auto frameSettings = settings;
             frameSettings.fractal.maxIteration = scene.getMapMaxIteration();
             if (restoreEffects.changed) {
@@ -583,6 +593,7 @@ namespace merutilm::rff2 {
                                            L"Keyframe generation", MB_OK | MB_ICONERROR);
                     return;
                 }
+                written.push_back(imagePath);
                 RFFStaticMapBinary(logZoom, scene.getIterationBufferWidth(settings),
                                    scene.getIterationBufferHeight(settings), scene.getMapMaxIteration())
                     .exportFile(mapPath);
@@ -594,6 +605,7 @@ namespace merutilm::rff2 {
                                            L"Keyframe generation", MB_OK | MB_ICONERROR);
                     return;
                 }
+                written.push_back(mapPath);
             } else {
                 const auto map = scene.generateMap();
                 const uint32_t id = keyframeId;
@@ -608,6 +620,7 @@ namespace merutilm::rff2 {
                                            L"Keyframe generation", MB_OK | MB_ICONERROR);
                     return;
                 }
+                written.push_back(path);
                 // The traps ride beside the map only while Orbit Trap Coloring is on; a stale file under this number is removed so it never pairs with the new map.
                 const auto trapPath = RFFOrbitTrapBinary::keyframePath(dir, id);
                 const auto trapPlanes = settings.shader.palette.orbitTrapColoring != ShdPalOrbitTrapColoring::NONE
@@ -620,6 +633,7 @@ namespace merutilm::rff2 {
                                                L"Keyframe generation", MB_OK | MB_ICONERROR);
                         return;
                     }
+                    written.push_back(trapPath);
                 } else {
                     std::error_code trapError;
                     std::filesystem::remove(trapPath, trapError);
@@ -630,12 +644,23 @@ namespace merutilm::rff2 {
                                        L"Keyframe generation", MB_OK | MB_ICONERROR);
                 return;
             }
+            written.push_back(configPath);
             // Asked for per run: a run writes hundreds of keyframes, and a static one has its picture already.
             if (!videoSettings.data.isStatic && PreferencesIO::thumbnailsForKeyframes()) {
                 scene.requestThumbnail(ThumbnailIO::pathFor(configPath), PreferencesIO::thumbnailWidth());
+                written.push_back(ThumbnailIO::pathFor(configPath));
                 if (!thread.waitUntil([&scene] { return !scene.getRequests().createImageRequested; })) {
                     return;
                 }
+            }
+            // Files written from a view that moved on meanwhile go, and the same number is written again from the new calculation.
+            if (viewMoved(frameStamp)) {
+                for (const auto &file : written) {
+                    std::error_code removeError;
+                    std::filesystem::remove(file, removeError);
+                }
+                nextFrame = false;
+                continue;
             }
             logZoom -= increment;
             nextFrame = true;

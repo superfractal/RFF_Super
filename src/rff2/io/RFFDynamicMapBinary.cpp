@@ -3,12 +3,13 @@
 // Modified by Opus 5 on 2026-08-14, 2026-08-23, 2026-08-26
 // Modified by GPT-5 on 2026-08-18, 2026-08-23, 2026-09-01
 // Modified by GPT-6 on 2026-09-22, 2026-09-23, 2026-09-25
-// Modified by Opus 5.5 on 2026-11-05
+// Modified by Opus 5.5 on 2026-11-05, 2026-11-15
 //
 
 #include "RFFDynamicMapBinary.h"
 #include <cmath>
 #include "MapLimits.hpp"
+#include "RFF2FileVersion.hpp"
 
 #include <cstring>
 #include <filesystem>
@@ -23,6 +24,24 @@
 namespace merutilm::rff2 {
     namespace {
         constexpr uint64_t MAX_MAP_PIXELS = MapLimits::MAX_PIXELS;
+
+        // The header of an uncompressed map, in RFF_Super's own layout or a versioned RFF-2.0 one.
+        bool readPlainHeader(std::ifstream &in, uint16_t &w, uint16_t &h, float &z, uint64_t &p, uint64_t &m) {
+            const std::optional<uint32_t> version = RFF2FileVersion::read(in, RFF2FileVersion::MAP_UNVERSIONED_FROM);
+            if (!version) {
+                return false;
+            }
+            IOUtilities::readAndDecode(in, &w);
+            IOUtilities::readAndDecode(in, &h);
+            if (*version == 0) {
+                IOUtilities::readAndDecode(in, &z);
+                IOUtilities::readAndDecode(in, &p);
+                IOUtilities::readAndDecode(in, &m);
+                return static_cast<bool>(in);
+            }
+            return in && RFF2FileVersion::readLogZoom(in, z) && RFF2FileVersion::readInteger(in, *version, p) &&
+                   RFF2FileVersion::readInteger(in, *version, m);
+        }
     }
 
     inline const RFFDynamicMapBinary RFFDynamicMapBinary::DEFAULT = RFFDynamicMapBinary(0, 0, 0, Matrix<double>(0, 0));
@@ -49,16 +68,14 @@ namespace merutilm::rff2 {
             return DEFAULT;
         }
 
-        uint16_t w;
-        IOUtilities::readAndDecode(in, &w);
-        uint16_t h;
-        IOUtilities::readAndDecode(in, &h);
-        float z;
-        IOUtilities::readAndDecode(in, &z);
-        uint64_t p;
-        IOUtilities::readAndDecode(in, &p);
-        uint64_t m;
-        IOUtilities::readAndDecode(in, &m);
+        uint16_t w = 0;
+        uint16_t h = 0;
+        float z = 0;
+        uint64_t p = 0;
+        uint64_t m = 0;
+        if (!readPlainHeader(in, w, h, z, p, m)) {
+            return DEFAULT;
+        }
         const uint64_t count = static_cast<uint64_t>(w) * h;
         if (!std::isfinite(z) || count == 0 ||
             !IOUtilities::validateReadCount(in, count, sizeof(double), MAX_MAP_PIXELS)) {
@@ -114,10 +131,16 @@ namespace merutilm::rff2 {
                     version != RFFDynamicMapBinary::COMPRESSED_VERSION) {
                     return false;
                 }
+                IOUtilities::readAndDecode(in, &width);
+                IOUtilities::readAndDecode(in, &height);
+                IOUtilities::readAndDecode(in, &logZoom);
+            } else {
+                uint64_t period = 0;
+                uint64_t maxIteration = 0;
+                if (!readPlainHeader(in, width, height, logZoom, period, maxIteration)) {
+                    return false;
+                }
             }
-            IOUtilities::readAndDecode(in, &width);
-            IOUtilities::readAndDecode(in, &height);
-            IOUtilities::readAndDecode(in, &logZoom);
             return static_cast<bool>(in) && std::isfinite(logZoom) && width > 0 && height > 0 &&
                    static_cast<uint64_t>(width) * height <= MAX_MAP_PIXELS;
         }

@@ -1,11 +1,13 @@
 //
 // Modified by GPT-6 on 2026-09-14, 2026-09-22, 2026-09-24, 2026-09-29, 2026-10-01
-// Modified by Opus 5.5 on 2026-10-26
+// Modified by Opus 5.5 on 2026-10-26, 2026-11-15, 2026-11-18
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #pragma once
 #include "WorkspaceForm.hpp"
 #include "NumericAdjustment.hpp"
+#include "FormulaInput.hpp"
 #include "../../attr/FractalAttribute.h"
 #include "../../attr/NumericSettingLimits.hpp"
 #include "../../attr/Selectable.h"
@@ -32,6 +34,7 @@ namespace merutilm::rff2::workspace {
         HistoryOrder order;
         std::function<FractalAttribute &()> attribute;
         std::function<void()> recompute;
+        std::function<bool()> referenceChangeWaits;
         FractalAttribute defaults;
         std::vector<Binding> bindings;
         std::deque<Edit> past, future;
@@ -166,17 +169,40 @@ namespace merutilm::rff2::workspace {
             if (equal(before, after)) {
                 return false;
             }
-            attribute() = after;
+            place(before, after);
             past.push_back({std::move(before), std::move(after), order.commit()});
             if (past.size() > 128) {
                 past.pop_front();
             }
             future.clear();
-            recompute();
             return true;
+        }
+        bool onlyReuseDiffers(const FractalAttribute &a, const FractalAttribute &b) const {
+            if (a.reuseReferenceMethod == b.reuseReferenceMethod) {
+                return false;
+            }
+            for (const auto &binding : bindings) {
+                if (binding.field.id != "explore.reuse" && binding.read(a) != binding.read(b)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // Reuse Reference only decides how the next calculation gets its reference, so while it waits it is not worth cutting the running one short.
+        void place(const FractalAttribute &from, const FractalAttribute &to) {
+            if (referenceChangeWaits && referenceChangeWaits() && onlyReuseDiffers(from, to)) {
+                attribute().reuseReferenceMethod = to.reuseReferenceMethod;
+                return;
+            }
+            attribute() = to;
+            recompute();
         }
 
       public:
+        // While this holds (keyframe generation), a change of Reuse Reference alone reaches the next calculation instead of restarting the current one.
+        void holdReferenceChangeWhile(std::function<bool()> condition) {
+            referenceChangeWaits = std::move(condition);
+        }
         ExploreModel(std::function<FractalAttribute &()> getter, std::function<void()> render)
             : attribute(std::move(getter)), recompute(std::move(render)), defaults(attribute()) {
             const auto real = [](const FractalAttribute &value) {
@@ -255,7 +281,7 @@ namespace merutilm::rff2::workspace {
             bindings.push_back({{"explore.formula",
                                  4,
                                  L"Custom Formula",
-                                 L"Examples: z^3+c; conj(z)^2+c. Custom formulas use manual iterations.",
+                                 L"Custom formulas use manual iterations.",
                                  {},
                                  {}},
                                 [](const FractalAttribute &a) {
@@ -369,10 +395,9 @@ namespace merutilm::rff2::workspace {
                 return false;
             }
             order.prepareUndo(future);
-            attribute() = past.back().before;
+            place(past.back().after, past.back().before);
             future.push_back(std::move(past.back()));
             past.pop_back();
-            recompute();
             return true;
         }
         bool redo() {
@@ -384,10 +409,9 @@ namespace merutilm::rff2::workspace {
                 future.clear();
                 return false;
             }
-            attribute() = future.back().after;
+            place(future.back().before, future.back().after);
             past.push_back(std::move(future.back()));
             future.pop_back();
-            recompute();
             return true;
         }
         WorkspaceForm form() {
@@ -404,6 +428,20 @@ namespace merutilm::rff2::workspace {
                     field.dependencies.push_back("explore.autoIterations");
                     field.enabled = [self, automatic](const FormDraft &) {
                         return self->attribute().autoMaxIteration == automatic;
+                    };
+                }
+                if (field.id == "explore.formula") {
+                    // Formula keys live in the standalone Formula Studio window; keep live validation on direct edits.
+                    field.validate = [](const std::wstring &text) { return FormulaInput::check(text).message; };
+                    field.errorSpan = [](const std::wstring &text) {
+                        const auto found = FormulaInput::check(text);
+                        return std::pair{found.start, found.length};
+                    };
+                    // Greyed rather than hidden while another formula type is chosen, so the keys stay where they are.
+                    field.enabled = [self](const FormDraft &draft) {
+                        const auto type = draft.find("explore.formulaType");
+                        return type != draft.end() ? type->second == number(int(FractalFormulaType::CUSTOM))
+                                                   : self->attribute().formulaType == FractalFormulaType::CUSTOM;
                     };
                 }
                 if (field.id == "explore.buddhabrotSamples" || field.id == "explore.buddhabrotMinIteration") {

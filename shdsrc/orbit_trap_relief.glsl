@@ -1,5 +1,7 @@
 //
 // Created by Opus 5.5 on 2026-10-24
+// Modified by Opus 5.5 on 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 // Orbit Trap Mapping and Relief, shared by vk_iteration_palette.frag and vk_2_map_iter_stripe.comp; reads no buffers.
@@ -10,11 +12,53 @@
 #define ORBIT_TRAP_MAPPING_DISTANCE 0u
 #define ORBIT_TRAP_MAPPING_ANGLE 1u
 #define ORBIT_TRAP_MAPPING_BANDS 2u
+#define ORBIT_TRAP_MAPPING_ITERATION 3u
+#define ORBIT_TRAP_MAPPING_ITERATION_DISTANCE 4u
+#define ORBIT_TRAP_MAPPING_POLAR_PETALS 5u
+#define ORBIT_TRAP_MAPPING_POLAR_CHECKER 6u
 
-// Palette cycles under Angle or Bands, before the trap's offset; Distance keeps its own expression in the callers.
-float trap_mapping_cycles(uint mapping, float log2_distance, float angle, float arms, float density) {
+// Mappings that read arg(z - c) from plane 6.
+bool trap_mapping_needs_angle(uint mapping) {
+    return mapping == ORBIT_TRAP_MAPPING_ANGLE || mapping == ORBIT_TRAP_MAPPING_POLAR_PETALS ||
+           mapping == ORBIT_TRAP_MAPPING_POLAR_CHECKER;
+}
+
+// Mappings that read the hit iteration from plane 5.
+bool trap_mapping_needs_iteration(uint mapping) {
+    return mapping == ORBIT_TRAP_MAPPING_ITERATION || mapping == ORBIT_TRAP_MAPPING_ITERATION_DISTANCE ||
+           mapping == ORBIT_TRAP_MAPPING_POLAR_PETALS || mapping == ORBIT_TRAP_MAPPING_POLAR_CHECKER;
+}
+
+// Palette cycles under non-Distance mappings, before the trap's offset; shade carries motif darkening in (0, 1].
+float trap_mapping_cycles(uint mapping, float log2_distance, float width, float inside_trap, bool touch,
+                          float angle, float shape_iteration, float arms, float density, out float shade) {
+    shade = 1.0;
     if (mapping == ORBIT_TRAP_MAPPING_ANGLE) {
         return arms * angle * 0.15915494309;
+    }
+    if (mapping == ORBIT_TRAP_MAPPING_BANDS) {
+        return -0.25 * density * log2_distance;
+    }
+    float iter_cycle = fract(max(shape_iteration - 1.0, 0.0) / 12.0);
+    if (mapping == ORBIT_TRAP_MAPPING_ITERATION) {
+        return density * iter_cycle;
+    }
+    if (mapping == ORBIT_TRAP_MAPPING_ITERATION_DISTANCE) {
+        return touch ? density * (iter_cycle + 0.5 * inside_trap)
+                     : density * (iter_cycle - 0.08 * log2_distance);
+    }
+    if (mapping == ORBIT_TRAP_MAPPING_POLAR_PETALS) {
+        float u = exp2(clamp(log2_distance - width, -16.0, 4.0));
+        float petal = sin(arms * angle + u * 2.8 * density);
+        shade = 0.72 + 0.28 * abs(petal);
+        return fract(max(shape_iteration - 1.0, 0.0) / 14.0) + 0.26 * petal - 0.10 * log2_distance;
+    }
+    if (mapping == ORBIT_TRAP_MAPPING_POLAR_CHECKER) {
+        float rad_idx = floor(max(-4096.0, -log2_distance * 1.15 * density));
+        float ang_idx = floor(((angle + 3.14159265) * 0.15915494309) * arms * 2.0);
+        float chk = mod(rad_idx + ang_idx, 2.0);
+        shade = chk >= 0.5 ? 1.0 : 0.44;
+        return iter_cycle + (chk >= 0.5 ? 0.0 : 0.42);
     }
     return -0.25 * density * log2_distance;
 }
@@ -23,6 +67,17 @@ float trap_mapping_cycles(uint mapping, float log2_distance, float angle, float 
 float trap_band_seam(float cycles) {
     float f = fract(cycles);
     return 0.35 + 0.65 * clamp(min(f, 1.0 - f) / 0.06, 0.0, 1.0);
+}
+
+// orbitTrapBumpWiden in OrbitTrapShape.h: how far, in log2 of Width, the trap's colour reaches once its bump stands at
+// height, out to where |height| (1 - (1 - e^-u)^2)^roundness falls to 0.1; 0 at height 0 or inside Width.
+float orbit_trap_bump_widen(float height, float roundness) {
+    float h = abs(height);
+    if (!(h > 0.1) || !(roundness > 0.0)) return 0.0;
+    float rise = pow(0.1 / h, 1.0 / roundness);
+    float t = 1.0 - sqrt(max(1.0 - rise, 0.0));
+    if (!(t > 0.0)) return 0.0;
+    return max(log2(-log(t)), 0.0);
 }
 
 // Slope's light from its azimuth and zenith in degrees, on the axes Slope lights its own relief with.

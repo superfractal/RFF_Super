@@ -2,6 +2,7 @@
 // Created by Merutilm on 2025-06-25.
 // Modified by GPT-5 on 2026-08-23, 2026-08-31, 2026-09-01
 // Modified by GPT-6 on 2026-09-23
+// Modified by Opus 5.5 on 2026-11-15
 //
 
 #include "RFFLocationBinary.h"
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <utility>
 
+#include "RFF2FileVersion.hpp"
 #include "../../vulkan_helper/core/logger.hpp"
 #include "../calc/fp_decimal_calculator.h"
 #include "../ui/IOUtilities.h"
@@ -33,10 +35,19 @@ namespace merutilm::rff2 {
         if (!in.is_open()) {
             return DEFAULT;
         }
-        float logZoom;
-        IOUtilities::readAndDecode(in, &logZoom);
-        uint64_t maxIteration;
-        IOUtilities::readAndDecode(in, &maxIteration);
+        const std::optional<uint32_t> version = RFF2FileVersion::read(in, RFF2FileVersion::FLOAT_UNVERSIONED_FROM);
+        if (!version) {
+            return DEFAULT;
+        }
+        float logZoom = 0;
+        uint64_t maxIteration = 0;
+        if (*version == 0) {
+            IOUtilities::readAndDecode(in, &logZoom);
+            IOUtilities::readAndDecode(in, &maxIteration);
+        } else if (!RFF2FileVersion::readLogZoom(in, logZoom) ||
+                   !RFF2FileVersion::readInteger(in, *version, maxIteration)) {
+            return DEFAULT;
+        }
         uint64_t realLength;
         IOUtilities::readAndDecode(in, &realLength);
         if (!IOUtilities::validateReadCount(in, realLength, sizeof(char), MAX_COORDINATE_BYTES)) {

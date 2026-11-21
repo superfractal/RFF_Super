@@ -292,5 +292,6 @@
   "licenses/bundled/erkaman-cos-palette-MIT.txt": "073a3d8a775a7e8dd804b81562dd905ab95bb1434681f832fea042e3d98bc991",
   "licenses/bundled/terminaltexteffects-rainbow-MIT.txt": "b081fda7b8f77fec4b9ac188c802593f3b9ad7f488f5872ec3b2525e2ceb779a",
   "licenses/bundled/iquilez-palettes-MIT.txt": "cb1f3389722f9e63885ca3290bd917df27e06d64fa731f365448f83bbba1c364",
-  "licenses/bundled/lowbias32-UNLICENSE.txt": "cde0692c0d96248a2ef1246cfe2835cf5d2833e64f026002395a6d8aade0069c"
+  "licenses/bundled/lowbias32-UNLICENSE.txt": "cde0692c0d96248a2ef1246cfe2835cf5d2833e64f026002395a6d8aade0069c",
+  "licenses/bundled/fluentui-emoji-MIT.txt": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383"
 }

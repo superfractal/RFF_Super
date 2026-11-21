@@ -1,4 +1,5 @@
 # Modified by GPT-6 on 2026-09-24, 2026-10-01
+# Modified by Gemini 4 Neon on 2026-11-21
 """Inventory a Windows release against installed MSYS2 package records (stdlib only)."""
 import argparse
 import gzip
@@ -15,7 +16,7 @@ crypt32.dll d3d11.dll dbghelp.dll dnsapi.dll dwmapi.dll dxgi.dll gdi32.dll gdipl
 imm32.dll iphlpapi.dll kernel32.dll mpr.dll msvcrt.dll ncrypt.dll netapi32.dll
 normaliz.dll ntdll.dll ole32.dll oleacc.dll oleaut32.dll opengl32.dll powrprof.dll
 psapi.dll rpcrt4.dll secur32.dll setupapi.dll shell32.dll shlwapi.dll user32.dll
-userenv.dll uiautomationcore.dll usp10.dll uxtheme.dll version.dll winhttp.dll
+userenv.dll uiautomationcore.dll usp10.dll uxtheme.dll version.dll windowscodecs.dll winhttp.dll
 wininet.dll winmm.dll winspool.drv ws2_32.dll wtsapi32.dll'''.split()
 )
 

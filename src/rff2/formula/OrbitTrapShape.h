@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-16
-// Modified by Opus 5.5 on 2026-10-29
+// Modified by Opus 5.5 on 2026-10-29, 2026-11-16, 2026-11-17
 //
 
 #pragma once
@@ -11,9 +11,23 @@
 
 #include "../attr/ShdPalOrbitTrapColoring.h"
 #include "../attr/ShdPalOrbitTrapShape.h"
+#include "../attr/ShdPalOrbitTrapStatistic.h"
 #include "../calc/dex.h"
 
 namespace merutilm::rff2 {
+    // How far, in log2 of Width, the trap's colour and touches reach once its bump stands at the given Height: out to where
+    // |Height| (1 - (1 - e^-u)^2)^Roundness falls to ORBIT_TRAP_BUMP_REACH, never inside Width; 0 at Height 0. Mirrored by
+    // orbit_trap_bump_widen in orbit_trap_relief.glsl.
+    constexpr double ORBIT_TRAP_BUMP_REACH = 0.1;
+    inline double orbitTrapBumpWiden(const double height, const double roundness) {
+        const double h = std::abs(height);
+        if (!(h > ORBIT_TRAP_BUMP_REACH) || !(roundness > 0.0)) return 0.0;
+        const double rise = std::pow(ORBIT_TRAP_BUMP_REACH / h, 1.0 / roundness);
+        const double t = 1.0 - std::sqrt(std::max(1.0 - rise, 0.0));
+        if (!(t > 0.0)) return 0.0;
+        return std::max(std::log2(-std::log(t)), 0.0);
+    }
+
     // The geometric trap the perturbators measure orbit points against; 2D take on GMT Fractals' geometric orbit trap, see NOTICE.
     struct TrapShapeParams {
         bool enabled = false;
@@ -35,6 +49,11 @@ namespace merutilm::rff2 {
         double halfSin = 0.0;
         double innerX = 0.0;
         double innerY = 0.0;
+        // First Touch and Last Touch: a point within 2^touchWidth of the trap touches it; touchWidth stays 0 under Nearest.
+        ShdPalOrbitTrapStatistic statistic = ShdPalOrbitTrapStatistic::NEAREST;
+        float touchWidth = 0.0f;
+        // 2^touchWidth in double, 0 where it falls below double's range so only an exact hit touches.
+        double touchLimit = 0.0;
 
         // A star's inner corners sit at this share of its radius.
         static constexpr double STAR_INNER_RATIO = 0.5;
@@ -63,6 +82,13 @@ namespace merutilm::rff2 {
                 p.innerX = inner * p.halfCos;
                 p.innerY = inner * p.halfSin;
             }
+            if (orbitTrapStatisticTouches(palette.orbitTrapStatistic)) {
+                p.statistic = palette.orbitTrapStatistic;
+                // A touch reaches as far as the bump's colour does, so raising Height widens First and Last Touch too.
+                p.touchWidth = static_cast<float>(palette.orbitTrapWidth +
+                    orbitTrapBumpWiden(palette.orbitTrapBumpHeight, palette.orbitTrapBumpRoundness));
+                p.touchLimit = std::exp2(static_cast<double>(p.touchWidth));
+            }
             return p;
         }
 
@@ -70,7 +96,8 @@ namespace merutilm::rff2 {
         bool operator==(const TrapShapeParams &other) const {
             if (!enabled || !other.enabled) return enabled == other.enabled;
             return shape == other.shape && centerReal == other.centerReal && centerImag == other.centerImag &&
-                   radius == other.radius && angleDegrees == other.angleDegrees && sides == other.sides;
+                   radius == other.radius && angleDegrees == other.angleDegrees && sides == other.sides &&
+                   statistic == other.statistic && touchWidth == other.touchWidth;
         }
 
         static void unitOf(const double degrees, double &c, double &s) {

@@ -4,7 +4,8 @@
 // Modified by Opus 5 on 2026-08-10, 2026-08-14, 2026-08-15, 2026-08-26, 2026-08-27, 2026-09-01, 2026-09-02, 2026-09-03, 2026-09-04
 // Modified by GPT-5 on 2026-08-21, 2026-08-23, 2026-08-24, 2026-08-27, 2026-08-31, 2026-09-01, 2026-09-02
 // Modified by GPT-6 on 2026-09-13, 2026-09-14, 2026-09-15, 2026-09-16, 2026-09-17, 2026-09-18, 2026-09-19, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24, 2026-09-25, 2026-09-26, 2026-10-02
-// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-18, 2026-10-21, 2026-10-25, 2026-11-01, 2026-11-07, 2026-11-15
+// Modified by Opus 5.5 on 2026-10-04, 2026-10-06, 2026-10-07, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-18, 2026-10-21, 2026-10-25, 2026-11-01, 2026-11-07, 2026-11-15, 2026-11-18
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #include "NativeDialogs.hpp"
@@ -12,6 +13,7 @@
 #include "PipelinePreparationWindow.hpp"
 #include "Application.hpp"
 #include "GalleryWindow.hpp"
+#include "FormulaStudioWindow.hpp"
 #include "CallbackShader.hpp"
 #include "CallbackFractal.hpp"
 #include "CallbackVideo.hpp"
@@ -142,8 +144,36 @@ namespace merutilm::rff2 {
                 scene->getRequests().requestResize();
                 scene->getRequests().requestRecompute();
             });
+        // A keyframe under way finishes with the reference it started with and is saved; the next one takes the new choice.
+        explore->holdReferenceChangeWhile([this] { return scene->getVideoGenerationActive(); });
         auto exploreForm = explore->form();
         exploreForm.actions = {
+            {4, L"Open Formula Studio...",
+             [this, explore] {
+                 const auto &raw = scene->getAttribute().fractal.customFormula;
+                 std::wstring initial(raw.begin(), raw.end());
+                 if (workspaceShell) {
+                     if (const auto pending = workspaceShell->draftValue(0, "explore.formula")) {
+                         initial = *pending;
+                     }
+                 }
+                 FormulaStudioWindow::open(
+                     masterWindow, initial,
+                     [this, explore](const std::wstring &formula) -> std::wstring {
+                         if (scene->isLongJobBusy()) {
+                             return UiLanguage::text(L"RFF_Super is busy with a video or keyframe job.");
+                         }
+                         workspace::FormDraft draft;
+                         draft["explore.formulaType"] = std::to_wstring(int(FractalFormulaType::CUSTOM));
+                         draft["explore.formula"] = formula;
+                         const std::wstring error = explore->apply(draft);
+                         if (error.empty() && workspaceShell) {
+                             workspaceShell->syncWorkspace(0, {"explore.formulaType", "explore.formula"});
+                         }
+                         return error;
+                     });
+             },
+             true},
             {6, L"Recompute", [this] { CallbackExplore::RECOMPUTE(*settingsMenu, *scene); }},
             {6, L"Cancel Render", [this] { CallbackExplore::CANCEL_RENDER(*settingsMenu, *scene); }},
             {6, L"Reset View", [explore] { explore->resetView(); }},
@@ -524,6 +554,7 @@ namespace merutilm::rff2 {
         const bool dark = darkSettingsMode();
         VideoWindow::applyWorkspaceTheme(dark);
         GalleryWindow::applyTheme();
+        FormulaStudioWindow::applyTheme();
         if (scene) {
         }
         applyDarkWindowFrame(masterWindow);
@@ -961,6 +992,10 @@ namespace merutilm::rff2 {
         // focus. Keys the scene leaves alone are passed on, so F10 still reaches the menu.
         window.setMessageFilter([this](const MSG &message) {
             if (!IOUtilities::isModalDialogOpen() && !documentPromptOpen &&
+                FormulaStudioWindow::filterMessage(message)) {
+                return true;
+            }
+            if (!IOUtilities::isModalDialogOpen() && !documentPromptOpen &&
                 SettingsWindow::filterSearchMessage(message)) {
                 return true;
             }
@@ -1298,6 +1333,7 @@ namespace merutilm::rff2 {
         }
         // It opens files into the scene, so it goes before the scene does.
         GalleryWindow::close();
+        FormulaStudioWindow::close();
         customMenu.reset();
         workspaceShell.reset();
         if (statusFont) {

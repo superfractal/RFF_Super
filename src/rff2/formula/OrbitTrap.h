@@ -1,6 +1,6 @@
 //
 // Created by Opus 5.5 on 2026-10-12
-// Modified by Opus 5.5 on 2026-10-16
+// Modified by Opus 5.5 on 2026-10-16, 2026-11-16
 //
 
 #pragma once
@@ -81,6 +81,23 @@ namespace merutilm::rff2 {
             return static_cast<float>(std::max(log2, OrbitTrap::HIT_LOG2));
         }
 
+        // Within 2^Width of the trap; an exact hit touches even where 2^Width fell below double's range.
+        bool touches(const double d) const {
+            return d == 0.0 || d < shape->touchLimit;
+        }
+
+        bool touches(const dex &d) const {
+            return log2Of(d) < static_cast<double>(shape->touchWidth);
+        }
+
+        void keepShape(const Num &d, const Num &dr, const Num &di, const uint64_t iteration) {
+            shapeMin = d;
+            shapeR = dr;
+            shapeI = di;
+            shapeNearest = iteration;
+            shapeSampled = true;
+        }
+
     public:
         OrbitTrapAccumulator() = default;
 
@@ -93,13 +110,17 @@ namespace merutilm::rff2 {
 
         // One orbit point inside the bailout as (Re z - Re c, Im z - Im c); only called when measuresShape().
         void sampleShape(const Num &dr, const Num &di, const uint64_t iteration) {
+            if (orbitTrapStatisticTouches(shape->statistic)) {
+                // First Touch is settled by its first touch, so the later points are not measured at all.
+                if (shapeSampled && shape->statistic == ShdPalOrbitTrapStatistic::FIRST_TOUCH) return;
+                const Num d = orbit_trap_shape::distance(dr, di, *shape);
+                if (!touches(d)) return;
+                keepShape(d, dr, di, iteration);
+                return;
+            }
             const Num d = orbit_trap_shape::distance(dr, di, *shape);
             if (shapeSampled && !less(d, shapeMin)) return;
-            shapeMin = d;
-            shapeR = dr;
-            shapeI = di;
-            shapeNearest = iteration;
-            shapeSampled = true;
+            keepShape(d, dr, di, iteration);
         }
 
         // crossDistance is min(|Re z|, |Im z|) and pointNorm is |z|^2 of one orbit point inside the bailout.

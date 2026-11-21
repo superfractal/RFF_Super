@@ -7,7 +7,7 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-02
 // Modified by GPT-6 on 2026-09-08, 2026-09-10, 2026-09-11, 2026-09-12, 2026-09-13, 2026-09-18, 2026-09-20, 2026-09-22, 2026-09-23, 2026-09-24
-// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-03, 2026-10-05, 2026-10-06, 2026-10-07, 2026-10-08, 2026-10-09, 2026-10-12, 2026-10-13, 2026-10-16, 2026-10-22, 2026-10-23, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-04, 2026-11-05, 2026-11-07, 2026-11-08, 2026-11-14, 2026-11-16, 2026-11-17
 //
 
 #pragma once
@@ -102,6 +102,10 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_UBO_ITERATION_TRAP_PLANES = 6;
         // x is 1 while the palette pass may take the band direction from dz/dc; see GPCIterationPalette::setDerivativeGradient.
         static constexpr uint32_t TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT = 7;
+        // Where the slope pass reads the trap distance for the Orbit Trap bump: x 0 none, 1 the live OrbitTrap planes, 2 BINDING_SSBO_TRAP_DISTANCE.
+        static constexpr uint32_t TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE = 8;
+        static constexpr uint32_t TRAP_DISTANCE_LIVE = 1;
+        static constexpr uint32_t TRAP_DISTANCE_MERGED = 2;
 
         static constexpr uint32_t TARGET_SSBO_ITERATION_BUFFER = 0;
 
@@ -120,6 +124,8 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t BINDING_SSBO_ORBIT_TRAP = 6;
         // Each pixel's dz/dc relief gradient, two floats per pixel, copied in from RenderSceneRenderer's staging buffer; 0 where there is none.
         static constexpr uint32_t BINDING_SSBO_DERIVATIVE = 7;
+        // The video merge's trap log2 distance per output pixel for the slope pass's Orbit Trap bump; 64 where there is none.
+        static constexpr uint32_t BINDING_SSBO_TRAP_DISTANCE = 8;
 
         // Sizes both per-pixel caches to the iteration buffer whenever it is resized; the caller then queues their bindings.
         static void resizeCaches(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
@@ -148,6 +154,18 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             const auto &info = *descriptor.get<vkh::Uniform>(0, BINDING_UBO_ITERATION_INFO);
             info.getHostObject().set<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_PLANES, {trapPlanes, 0});
             info.update(TARGET_UBO_ITERATION_TRAP_PLANES);
+            // Only the live view sizes these planes, so its slope pass reads the bump from them.
+            info.getHostObject().set<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE, {TRAP_DISTANCE_LIVE, 0});
+            info.update(TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE);
+        }
+
+        // The video merge writes one trap distance per output pixel; the caller then queues the binding.
+        static void resizeTrapDistance(vkh::DescriptorRef descriptor, const uint32_t width, const uint32_t height,
+                                       vkh::CommandPoolRef commandPool) {
+            resizeFloatCache(descriptor, BINDING_SSBO_TRAP_DISTANCE, width * height, commandPool);
+            const auto &info = *descriptor.get<vkh::Uniform>(0, BINDING_UBO_ITERATION_INFO);
+            info.getHostObject().set<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE, {TRAP_DISTANCE_MERGED, 0});
+            info.update(TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE);
         }
 
         void configure(const vkh::CoreRef core,
@@ -163,6 +181,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             infoManager->reserve<glm::ivec2>(TARGET_UBO_ITERATION_CANVAS_OFFSET);
             infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_PLANES);
             infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_DERIVATIVE_GRADIENT);
+            infoManager->reserve<glm::uvec2>(TARGET_UBO_ITERATION_TRAP_DISTANCE_SOURCE);
 
             auto bufferManager = vkh::factory::create<vkh::HostDataObjectManager>();
             bufferManager->reserveArray<double>(TARGET_SSBO_ITERATION_BUFFER, 1);
@@ -179,6 +198,7 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             descManager->appendSSBO(BINDING_SSBO_CHAOS_DEFOCUS, STAGE, createFloatCache(core));
             descManager->appendSSBO(BINDING_SSBO_ORBIT_TRAP, STAGE, createFloatCache(core));
             descManager->appendSSBO(BINDING_SSBO_DERIVATIVE, STAGE, createFloatCache(core));
+            descManager->appendSSBO(BINDING_SSBO_TRAP_DISTANCE, STAGE, createFloatCache(core));
 
             managers.emplace_back(std::move(descManager));
         }
@@ -248,7 +268,10 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
         static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_RELIEF = 32;
         static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH = 33;
         static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH = 34;
-        static constexpr uint32_t TARGET_PALETTE_COLORS = 35;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_STATISTIC = 35;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_BUMP_HEIGHT = 36;
+        static constexpr uint32_t TARGET_PALETTE_ORBIT_TRAP_BUMP_ROUNDNESS = 37;
+        static constexpr uint32_t TARGET_PALETTE_COLORS = 38;
 
         void configure(const vkh::CoreRef core,
                                       std::vector<vkh::DescriptorManager> &managers) override {
@@ -296,6 +319,10 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_RELIEF);
             bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH);
             bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH);
+            // The statistic at 304, the bump at 308 and 312, and a 4-byte pad keep the color array on the 16-byte boundary at 320.
+            bufferManager->reserve<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_STATISTIC);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_BUMP_HEIGHT);
+            bufferManager->reserve<float>(TARGET_PALETTE_ORBIT_TRAP_BUMP_ROUNDNESS, 4);
             bufferManager->reserveArray<glm::vec4>(TARGET_PALETTE_COLORS, 0);
 
             auto ssbo = vkh::factory::create<vkh::ShaderStorage>(core, std::move(bufferManager),
@@ -327,6 +354,9 @@ namespace merutilm::rff2::SharedDescriptorTemplate {
             host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_RELIEF, palette.orbitTrapRelief ? 1u : 0u);
             host.set<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_AZIMUTH, slope.azimuth);
             host.set<float>(TARGET_PALETTE_ORBIT_TRAP_LIGHT_ZENITH, slope.zenith);
+            host.set<uint32_t>(TARGET_PALETTE_ORBIT_TRAP_STATISTIC, static_cast<uint32_t>(palette.orbitTrapStatistic));
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_BUMP_HEIGHT, palette.orbitTrapBumpHeight);
+            host.set<float>(TARGET_PALETTE_ORBIT_TRAP_BUMP_ROUNDNESS, palette.orbitTrapBumpRoundness);
         }
     };
 

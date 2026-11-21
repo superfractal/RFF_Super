@@ -5,7 +5,8 @@
 // Modified by ox-alpha on 2026-08-22
 // Modified by Fable 5.1 on 2026-09-06
 // Modified by GPT-6 on 2026-09-10, 2026-09-11, 2026-09-16, 2026-09-23
-// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-07, 2026-11-14
+// Modified by Opus 5.5 on 2026-10-07, 2026-10-12, 2026-10-16, 2026-10-22, 2026-10-24, 2026-10-25, 2026-10-29, 2026-11-01, 2026-11-07, 2026-11-14, 2026-11-16, 2026-11-17
+// Modified by Gemini 4 Neon on 2026-11-19
 //
 
 #version 450
@@ -107,7 +108,9 @@ vec4 apply_orbit_trap(vec4 base, uvec2 coord, double iteration, double anim_iter
     if ((shape ? orbit_trap_attr.traps[index + 7u * pixels] : nearest_iteration) == 0.0) {
         return base;
     }
-    float width = palette_attr.orbit_trap_width;
+    // The bump widens the trap's colour with it; at Height 0 the width is Width as before.
+    float width = palette_attr.orbit_trap_width +
+                  orbit_trap_bump_widen(palette_attr.orbit_trap_bump_height, palette_attr.orbit_trap_bump_roundness);
     float density = palette_attr.orbit_trap_density;
     float sharpness = palette_attr.orbit_trap_glow_sharpness;
     vec3 glow_light = palette_attr.orbit_trap_glow_strength * palette_attr.orbit_trap_glow_color.rgb;
@@ -121,14 +124,26 @@ vec4 apply_orbit_trap(vec4 base, uvec2 coord, double iteration, double anim_iter
         // Logistic falloff in log2 distance: 1/(1 + (d/w)^sharpness), kept in log space so deep-zoom distances do not underflow.
         float glow = 1.0 / (1.0 + exp2(clamp(sharpness * (cross_log2 - width), -64.0, 64.0)));
         float cycles = -0.1 * density * cross_log2 + shift;
+        // First and Last Touch color linearly across the trap: d / 2^Width runs from 0 at its center to 1 at its edge.
+        bool touch = shape && palette_attr.orbit_trap_statistic != 0u;
+        float inside_trap = clamp(exp2(clamp(cross_log2 - width, -64.0, 0.0)), 0.0, 1.0);
         uint mapping = shape ? palette_attr.orbit_trap_mapping : ORBIT_TRAP_MAPPING_DISTANCE;
+        float mapping_shade = 1.0;
         if (mapping != ORBIT_TRAP_MAPPING_DISTANCE) {
-            float angle = mapping == ORBIT_TRAP_MAPPING_ANGLE ? orbit_trap_attr.traps[index + 6u * pixels] : 0.0;
-            cycles = trap_mapping_cycles(mapping, cross_log2, angle, palette_attr.orbit_trap_arms, density) + shift;
+            float angle = trap_mapping_needs_angle(mapping) ? orbit_trap_attr.traps[index + 6u * pixels] : 0.0;
+            float shape_iter = trap_mapping_needs_iteration(mapping) ? orbit_trap_attr.traps[index + 5u * pixels] : 0.0;
+            cycles = trap_mapping_cycles(mapping, cross_log2, width, inside_trap, touch, angle, shape_iter,
+                                         palette_attr.orbit_trap_arms, density, mapping_shade) + shift;
+        }
+        if (touch) {
+            glow = pow(1.0 - inside_trap, sharpness);
+            if (mapping == ORBIT_TRAP_MAPPING_DISTANCE) cycles = density * inside_trap + shift;
         }
         trap = get_color(1.0, true, trap_anim, double(cycles) * g_interval.r);
         if (mapping == ORBIT_TRAP_MAPPING_BANDS) {
             trap.rgb *= trap_band_seam(cycles);
+        } else if (mapping_shade != 1.0) {
+            trap.rgb *= mapping_shade;
         }
         if (palette_attr.orbit_trap_relief != 0u) {
             // Relief: outside the tube only its shadow falls on base; inside, the lit tube is blended as the glow would be.
